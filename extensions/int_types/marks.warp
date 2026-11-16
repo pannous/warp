@@ -8,7 +8,7 @@
 shown_parameter = symbol("self")
 
 # the program with its int types marked and shown
-int_types(program: Node): Node := {
+int_types(program: Node) as Node := {
 	kinds = int_type_kinds(statements_in(program))
 	if #kinds == 0 { return program }
 	statements = statements_in(program)
@@ -23,9 +23,9 @@ int_types(program: Node): Node := {
 	group_like(marked, with_int_types_shown(statements, showers, kinds))
 }
 # the function a definition defines, also one declaring its result, `color(n: int): Color := …`
-function_named(statement: Node): text? := if is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) then defined_word(Key(key_of(key_of(statement)), Op.Define, value_of(statement))) else defined_word(statement)
+function_named(statement: Node) as text? := if is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) then defined_word(Key(key_of(key_of(statement)), Op.Define, value_of(statement))) else defined_word(statement)
 # `x as Color` marks x, or calls the type's conversion of a written number where it has one; `x is Color` tests its mark
-int_type_used(n: Node, kinds: map, converters: list = []): Node := {
+int_type_used(n: Node, kinds: map, converters: list = []) as Node := {
 	if not (n is key and value_of(n) is symbol and name_of(value_of(n)) in kinds) { return n }
 	name = name_of(value_of(n))
 	kind = kinds[name]
@@ -36,27 +36,27 @@ int_type_used(n: Node, kinds: map, converters: list = []): Node := {
 	n
 }
 # `n: int as Color := body`, how a value becomes a Color (lib/color: 0xRRGGBB is opaque): the type's name, else ø
-converted_type(statement: Node, kinds: map): text? := {
+converted_type(statement: Node, kinds: map) as text? := {
 	if not (is_key(statement, Op.Define) and is_key(key_of(statement), Op.Colon) and key_of(key_of(statement)) is symbol) { return ø }
 	types = value_of(key_of(statement))
 	if is_key(types, Op.As) and value_of(types) is symbol and name_of(value_of(types)) in kinds then name_of(value_of(types)) else ø
 }
 # the conversion as the function every other `x as Color` calls, `as·Color(n: int) := body`; its own body's `as Color`
 # only marks
-converter_defined(statement: Node, kinds: map, used: function): Node := {
+converter_defined(statement: Node, kinds: map, used: function) as Node := {
 	types = value_of(key_of(statement))
 	head = call_of(converter_word(name_of(value_of(types))), [Key(key_of(key_of(statement)), Op.Colon, key_of(types))])
 	Key(head, Op.Define, bottom_up(value_of(statement), used))
 }
-converter_word(type_name: text): text := "as" + name_joiner + type_name
+converter_word(type_name: text) as text := "as" + name_joiner + type_name
 # a type's `format … as text` under its own name, format·text·Color, so that every int type has one
-shower_renamed(statement: Node): Node := {
+shower_renamed(statement: Node) as Node := {
 	head = key_of(statement)
 	Key(group_like(head, [symbol(shower_word(shower_of(statement)))] + items_of(head)[1 ..]), Op.Define, value_of(statement))
 }
-shower_word(type_name: text): text := form_method + name_joiner + type_name
+shower_word(type_name: text) as text := form_method + name_joiner + type_name
 # the program's text·shown, the classes' if it has one: a value of an int type first shown by its type's format … as text
-with_int_types_shown(statements: list, showers: list, kinds: map): list := {
+with_int_types_shown(statements: list, showers: list, kinds: map) as list := {
 	head = call_of(showing_dispatcher, [Key(shown_parameter, Op.Colon, symbol("any"))])
 	dispatchers = statements.filter(statement => is_key(statement, Op.Define) and is_group(key_of(statement)) and key_of(statement)#1 == symbol(showing_dispatcher))
 	classes = if #dispatchers > 0 then dispatchers#1 else ø
@@ -64,7 +64,7 @@ with_int_types_shown(statements: list, showers: list, kinds: map): list := {
 	shown = Key(head, Op.Define, int_types_dispatch(showers, kinds, fallback))
 	if classes == ø then statements + [shown] else statements.map(statement => if statement == classes then shown else statement)
 }
-int_types_dispatch(showers: list, kinds: map, fallback: Node): Node := {
+int_types_dispatch(showers: list, kinds: map, fallback: Node) as Node := {
 	otherwise = if #showers == 1 then fallback else int_types_dispatch(showers[1 ..], kinds, fallback)
 	test = Key(ø, Op.If, Key(call_of("int_mark_of", [shown_parameter]), Op.Eq, kinds[showers#1]))
 	Key(Key(test, Op.Then, call_of(shower_word(showers#1), [shown_parameter])), Op.Else, otherwise)

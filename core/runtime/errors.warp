@@ -8,131 +8,131 @@ use "text.warp"
 use "types.warp"
 use "error_sentences.warp"
 use "builders.warp"
-divide_by_zero(): int := {
+divide_by_zero() as int := {
 	fail()
 	0
 }
 # `error("boom")`: the Error of the message, a value, not raised
-error_node(message: Node): Node := failure_of(node_text(message))
+error_node(message: Node) as Node := failure_of(node_text(message))
 # `[e 2]` of an Error e: a list item holds no error (decision error-optional), the Error is the trap detail;
 # `q.k = e`, `{k: e}`: a field holds none
-held_list_item(item: Node): Node := {
+held_list_item(item: Node) as Node := {
 	if node_is_error(item) { a_list_item_holds_no_error(item) }
 	item
 }
-held_field(item: Node): Node := {
+held_field(item: Node) as Node := {
 	if node_is_error(item) { a_field_holds_no_error(item) }
 	item
 }
-a_list_item_holds_no_error(error: Node): int := {
+a_list_item_holds_no_error(error: Node) as int := {
 	global trap_detail = error
 	fail()
 	0
 }
-a_field_holds_no_error(error: Node): int := {
+a_field_holds_no_error(error: Node) as int := {
 	global trap_detail = error
 	fail()
 	0
 }
 # `xs#i` outside 1…count: "index out of range: i not in 1…count"
 # the runtime errors of the library words, named for the host to read off the trace
-index_out_of_range(): int := {
+index_out_of_range() as int := {
 	fail()
 	0
 }
-not_a_list(): int := {
+not_a_list() as int := {
 	fail()
 	0
 }
-not_a_text(): int := {
+not_a_text() as int := {
 	fail()
 	0
 }
 # a text, list or other value where a number is computed with, `-xs#2` of a text: a run-time error a try catches, no trap
-not_a_number(): int := {
+not_a_number() as int := {
 	fail()
 	0
 }
-not_an_int(): int := {
+not_an_int() as int := {
 	fail()
 	0
 }
-not_a_character(): int := {
+not_a_character() as int := {
 	fail()
 	0
 }
-invalid_code_point(): int := {
+invalid_code_point() as int := {
 	fail()
 	0
 }
-invalid_number(): int := {
+invalid_number() as int := {
 	fail()
 	0
 }
-a_fraction_is_no_int(): int := {
+a_fraction_is_no_int() as int := {
 	fail()
 	0
 }
-not_a_whole_number(): int := {
+not_a_whole_number() as int := {
 	fail()
 	0
 }
-not_an_exact_number(): int := {
+not_an_exact_number() as int := {
 	fail()
 	0
 }
-an_int_must_be_a_whole_number(): int := {
+an_int_must_be_a_whole_number() as int := {
 	fail()
 	0
 }
 # the run's error is the message, with its trap detail
-returned_error(message: text): int := {
+returned_error(message: text) as int := {
 	global trap_detail = held(message)
 	fail()
 	0
 }
-index_out_of_range_of(index: int, count: int): int := {
+index_out_of_range_of(index: int, count: int) as int := {
 	global trap_detail = held([index, count])
 	index_out_of_range()
 }
 # `raise X`: the run fails with X as its message
-returned_error(): int := {
+returned_error() as int := {
 	fail()
 	0
 }
 # `length(5)`, `length.([1, 2, 3])`: only a list, a text or a character has a length; the value named
-no_length(): int := {
+no_length() as int := {
 	fail()
 	0
 }
-too_big_for_int(): int := {
+too_big_for_int() as int := {
 	fail()
 	0
 }
-too_big_for_int_of(value: Node): int := {
+too_big_for_int_of(value: Node) as int := {
 	global trap_detail = value
 	too_big_for_int()
 }
 # the value a runtime error names, kept for its message: `no case for n = 4`
-held_detail(value: Node): int := {
+held_detail(value: Node) as int := {
 	global trap_detail = value
 	0
 }
-no_length_of(value: Node): int := {
+no_length_of(value: Node) as int := {
 	if node_is_error(value) { raised(value) }
 	global trap_detail = value
 	no_length()
 }
 # `sort [1, "a"]`, `3 < "x"`: numbers order with numbers, texts with texts; the two values named
-no_order(): int := {
+no_order() as int := {
 	fail()
 	0
 }
-no_order_of(a: Node, b: Node): int := {
+no_order_of(a: Node, b: Node) as int := {
 	global trap_detail = held([a, b])
 	no_order()
 }
-raised(value: Node): int := {
+raised(value: Node) as int := {
 	global trap_detail = value
 	returned_error()
 }
@@ -141,14 +141,14 @@ raised(value: Node): int := {
 dropped_value(n: Node) := if node_is_error(n) { raised(n) }
 # a value put in a plain variable (decision errors-one-rule): a failure raises, as a dropped one does; an Error held as
 # data stays (N19)
-raised_if_error(n: Node): Node := {
+raised_if_error(n: Node) as Node := {
 	if is_failure(n) { raised(n) }
 	n
 }
 # `try x catch e { y }`: e is the Error x gave back when it finished, else the one of the runtime error thrown inside
 # it, the words of the word it failed in (trap_name): a raise's is the raised value, a missing field's names it, a
 # match no case took names the value (the words whose detail is always set fresh)
-caught_error(finished: bool, value: Node): Node := {
+caught_error(finished: bool, value: Node) as Node := {
 	if finished { return value }
 	global trap_name
 	global trap_detail
@@ -156,7 +156,7 @@ caught_error(finished: bool, value: Node): Node := {
 	if name == "returned_error" or name == "missing_field" or text_starts_with(name, "no_case_") then failure_of(error_sentence(name)) else failure_of(error_words(name))
 }
 # `except T as e`: the instance the run raised, which the handler tests for its class, else the caught Error
-caught_instance(finished: bool, value: Node): Node := {
+caught_instance(finished: bool, value: Node) as Node := {
 	global trap_name
 	global trap_detail
 	if not finished and same_bytes(unboxed_text(trap_name), "returned_error") and is_class_instance(trap_detail) { return trap_detail }
@@ -164,9 +164,9 @@ caught_instance(finished: bool, value: Node): Node := {
 }
 # the caught error at the program's statement it happened in (passes/tries.warp gives trap_place, 0 for none known):
 # `e.line`, `e.column` name it; also any node parse_code builds (its `p` tag), where ø, `()` or `{}` written, holds no place
-placed_at(failure: Node, position: int): Node := if position == 0 or is_null(failure) then failure else meta_node(failure, int_quotient(position, 4096), int_remainder(position, 4096))
+placed_at(failure: Node, position: int) as Node := if position == 0 or is_null(failure) then failure else meta_node(failure, int_quotient(position, 4096), int_remainder(position, 4096))
 # `xs#i` of an i known only at run time: an int, else "index must be an integer"
-index_of_node(n: Node): int := {
+index_of_node(n: Node) as int := {
 	if is_null(n) or kind_code(n) != Kind.Int or is_ratio(n) { index_must_be_an_integer() }
 	unboxed_int(n)
 }
@@ -175,12 +175,12 @@ int_overflow() := {
 	fail()
 	0
 }
-index_must_be_an_integer(): int := {
+index_must_be_an_integer() as int := {
 	fail()
 	0
 }
 # `m.name` of a value without the field `name` known only at run time: "no field name"
-missing_field(name: text): int := {
+missing_field(name: text) as int := {
 	global trap_detail = held(name)
 	fail()
 	0
@@ -205,7 +205,7 @@ wrong_number_of_arguments() := {
 	0
 }
 # the runtime errors the run names by the function trapping
-not_a_map(): int := {
+not_a_map() as int := {
 	fail()
 	0
 }

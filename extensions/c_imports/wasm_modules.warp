@@ -29,13 +29,13 @@ REFERENCE = 100
 # the module name of the core wasm module a `use`, `import`, `require` or `include` statement names, as written or with
 # .wasm: its path in the program's folder, a `•/` path as written, which the native warp roots at the project root
 # where it runs, so a program and a module it links (greeter.wat's import) name one file alike; ø for another statement
-wasm_module_used(statement: text, folder: text): text? := {
+wasm_module_used(statement: text, folder: text) as text? := {
 	name = wasm_module_named(statement, folder)
 	# (one carrying a warp.signature is a module warp compiled, linked as a standard module is: compiler.warp own_module_beside)
 	if name != ø and section_place(bytes_if_there(wasm_file(name, folder)), section_ids.custom, SIGNATURE_SECTION) == ø then name else ø
 }
 # the core wasm module a statement names, as wasm_module_used, a module warp compiled too; ø for another statement
-wasm_module_named(statement: text, folder: text): text? := {
+wasm_module_named(statement: text, folder: text) as text? := {
 	bare = wasm_use_written(statement)
 	# (the module `warp build --module shapes.warp` writes is no library of its own: compiler.warp module_source is
 	# `use shapes`, and a shapes.wasm an older compiler left beside it, without its signature, read as one: index out of range)
@@ -55,7 +55,7 @@ wasm_module_named(statement: text, folder: text): text? := {
 WASM_WORD = "wasm "
 CARGO_WORD = "cargo "
 CRATES_FOLDER = "/crates/"
-wasm_use_written(statement: text): text? := {
+wasm_use_written(statement: text) as text? := {
 	word = if statement.starts_with(INCLUDE_WORD + " ") then statement.remove_prefix(INCLUDE_WORD + " ").trim() else used_word(statement)
 	if word == ø or word == "" { return ø }
 	# `use cargo strsim`: the crate built as a module beside its manifest, lib/crates/strsim.wasm (scripts/warp-crate wasm)
@@ -64,11 +64,11 @@ wasm_use_written(statement: text): text? := {
 	for quote in c_quotes { if written.starts_with(quote) and written.ends_with(quote) and #written > 2 { written = written.remove_prefix(quote).remove_suffix(quote) } }
 	written
 }
-unbuilt_crate(crate: text, module: text): text := "use cargo " + crate + ": no module " + module + " was built for the crate; describe its items in lib/crates/" + crate + ".warp (scripts/warp-crate scan " + crate + " drafts them), then build it: scripts/warp-crate wasm lib/crates/" + crate + ".warp"
+unbuilt_crate(crate: text, module: text) as text := "use cargo " + crate + ": no module " + module + " was built for the crate; describe its items in lib/crates/" + crate + ".warp (scripts/warp-crate scan " + crate + " drafts them), then build it: scripts/warp-crate wasm lib/crates/" + crate + ".warp"
 # the file of a module name, which is already in the program's folder (wasm_module_used): joined again, a program run
 # from another folder (`warp samples/wasm/x.warp` from the root) read samples/wasm/samples/wasm/…
-wasm_file(name: text, folder: text): text := rooted(name, folder)
-is_core_wasm(bytes: list): bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
+wasm_file(name: text, folder: text) as text := rooted(name, folder)
+is_core_wasm(bytes: list) as bool := #bytes >= #wasm_header and bytes[0 ..< #wasm_header] == wasm_header
 
 # what the module gives the program: [the declarations of its exported functions (c_declaration's form, the module's
 # path as their library), the statements giving its constant globals their values]
@@ -83,20 +83,20 @@ class WasmExports {
 # an export or word whose name holds INTERNAL_MARK is the module's own, never listed by dir or .functions
 WORDS_SECTION = "warp.words"
 INTERNAL_MARK = "__"
-wasm_words(bytes: list): list := {
+wasm_words(bytes: list) as list := {
 	place = section_place(bytes, section_ids.custom, WORDS_SECTION)
 	if place == ø { return [] }
 	utf8_text(bytes[place#1 ..< place#2]).split("\n").map(line => line.trim()).filter(line => line != "" and not line.starts_with("//"))
 }
 # the name a definition line defines
-wasm_word_name(line: text): text := line.split("(")#1.trim()
+wasm_word_name(line: text) as text := line.split("(")#1.trim()
 # the names a module exports
-wasm_export_names(bytes: list): list := wasm_vector(bytes, section_ids.export, reader => {
+wasm_export_names(bytes: list) as list := wasm_vector(bytes, section_ids.export, reader => {
 	name = read_name(reader)
 	next_number(reader)
 	name
 })
-wasm_exports(path: text, folder: text): WasmExports := {
+wasm_exports(path: text, folder: text) as WasmExports := {
 	bytes = bytes_if_there(wasm_file(path, folder))
 	types = wasm_types(bytes)
 	imported = wasm_imported(bytes)
@@ -115,7 +115,7 @@ wasm_exports(path: text, folder: text): WasmExports := {
 # A C module's types: zlib.wasm's exports take i32s, its pointers among them; the foreign lines of zlib.warp beside it,
 # `zlibVersion(): text from "zlib.wasm"`, say which cross as texts (a copy in the module's memory, its malloc's), which
 # give one back, which are unsigned (web/playground/host-foreign.js callC; natively card native-driver)
-with_c_types(functions: list, path: text, folder: text): list := {
+with_c_types(functions: list, path: text, folder: text) as list := {
 	beside = path.remove_suffix(WASM_EXTENSION)
 	header = file_text(wasm_file(beside + C_HEADER_EXTENSION, folder)) ?? ""
 	# (its foreign lines first: they say what the header cannot, zlib's unsigned long being 32 bits)
@@ -131,12 +131,12 @@ with_c_types(functions: list, path: text, folder: text): list := {
 # right after it is their length (which the call leaves out: `XXH32("hello", 0)`), `T **` an out-pointer, any other pointer the module's number; wasm32's int,
 # long and size_t are 32 bits
 C_HEADER_EXTENSION = ".h"
-header_foreign_lines(header: text, library: text): text := {
+header_foreign_lines(header: text, library: text) as text := {
 	code = header.split("\n").map(line => line.split("//")#1).filter(line => not line.trim().starts_with("#")).join(" ")
 	code.split(";").map(prototype => prototype.trim()).filter(prototype => prototype.contains("(") and prototype.ends_with(")"))
 		.map(prototype => header_foreign_line(prototype, library)).join("\n")
 }
-header_foreign_line(prototype: text, library: text): text := {
+header_foreign_line(prototype: text, library: text) as text := {
 	head = c_words(prototype.split("(")#1)
 	parameters = prototype.split("(")#2.remove_suffix(")").split(",").map(c_words).filter(words => #words > 0 and words != ["void"])
 	types = parameters.map(header_type)
@@ -151,13 +151,13 @@ header_foreign_line(prototype: text, library: text): text := {
 	head#(#head) + "(" + named.join(", ") + ")" + (if result == "void" then "" else ": " + result) + " from \"" + library + "\""
 }
 # a C declaration's words, each `*` one of them: `const char *text` → [const, char, *, text]
-c_words(code: text): list := code.replace("*", " * ").split(" ").map(word => word.trim()).filter(word => word != "")
+c_words(code: text) as list := code.replace("*", " * ").split(" ").map(word => word.trim()).filter(word => word != "")
 # a parameter's name, its last word, or p1, p2 … where the header names none (`int abs(int);`)
-header_parameter_name(words: list, index: int): text := if #words > 1 and words#(#words) != "*" and not is_c_type_word(words#(#words)) then words#(#words) else "p" + text(index + 1)
+header_parameter_name(words: list, index: int) as text := if #words > 1 and words#(#words) != "*" and not is_c_type_word(words#(#words)) then words#(#words) else "p" + text(index + 1)
 C_TYPE_WORDS = ["void", "char", "short", "int", "long", "unsigned", "signed", "float", "double", "size_t", "const", "struct"]
-is_c_type_word(word: text): bool := word in C_TYPE_WORDS
+is_c_type_word(word: text) as bool := word in C_TYPE_WORDS
 # a C type's words (a parameter's name among them, which no rule reads) → a foreign line's type word
-header_type(words: list): text := {
+header_type(words: list) as text := {
 	stars = #words.filter(word => word == "*")
 	if stars > 1 { return "out" }
 	if stars == 1 { return if "char" in words or ("const" in words and "struct" not in words) then "text" else "i32" }
@@ -169,7 +169,7 @@ header_type(words: list): text := {
 	"i32"
 }
 # the words the wasm modules a source uses give it: their functions and warp words
-wasm_module_words(source: text, folder: text): list := {
+wasm_module_words(source: text, folder: text) as list := {
 	words = []
 	for statement in c_statements(with_module_aliases(source)) {
 		path = wasm_module_named(statement, folder)
@@ -186,12 +186,12 @@ wasm_module_words(source: text, folder: text): list := {
 	words
 }
 # the number after the byte the reader is at
-next_number(reader: ByteReader): int := {
+next_number(reader: ByteReader) as int := {
 	reader.offset += 1
 	read_number(reader)
 }
 # the items of a section's vector, each read by `read`; none without the section
-wasm_vector(bytes: list, id: int, read: function): list := {
+wasm_vector(bytes: list, id: int, read: function) as list := {
 	place = section_place(bytes, id)
 	if place == ø { return [] }
 	reader = ByteReader(bytes, place#1)
@@ -200,13 +200,13 @@ wasm_vector(bytes: list, id: int, read: function): list := {
 	items
 }
 # each function type: [parameter types, result types], ø for one a foreign line can't type (a reference)
-wasm_types(bytes: list): list := wasm_vector(bytes, section_ids.type, reader => {
+wasm_types(bytes: list) as list := wasm_vector(bytes, section_ids.type, reader => {
 	reader.offset += 1
 	parameters = wasm_value_types(reader)
 	results = wasm_value_types(reader)
 	if "?" in parameters or "?" in results then ø else [parameters, results]
 })
-wasm_value_types(reader: ByteReader): list := {
+wasm_value_types(reader: ByteReader) as list := {
 	types = []
 	for i in 0 ..< read_number(reader) {
 		types += [WASM_VALUE_TYPES.get(reader.bytes[reader.offset]) ?? "?"]
@@ -221,7 +221,7 @@ class WasmImported {
 	globals: list = []
 	names: list = []
 }
-wasm_imported(bytes: list): WasmImported := {
+wasm_imported(bytes: list) as WasmImported := {
 	imported = WasmImported()
 	wasm_vector(bytes, section_ids.import, reader => {
 		imported.names += [[read_name(reader), read_name(reader)]]
@@ -259,7 +259,7 @@ skip_limits(reader: ByteReader) := {
 	if bits_and(flags, LIMITS_WITH_MAXIMUM) != 0 { read_number(reader) }
 }
 # a global's value as warp code when it is an immutable int constant, else ø; the reader past its initializer
-wasm_global_value(reader: ByteReader): text? := {
+wasm_global_value(reader: ByteReader) as text? := {
 	reader.offset += 1
 	mutable = reader.bytes[reader.offset] != 0
 	reader.offset += 1
@@ -272,7 +272,7 @@ wasm_global_value(reader: ByteReader): text? := {
 	if mutable then ø else value
 }
 # the signed LEB128 number at the reader
-sleb_read_from(reader: ByteReader): int := {
+sleb_read_from(reader: ByteReader) as int := {
 	n = 0
 	shift = 0
 	byte = 128
@@ -285,7 +285,7 @@ sleb_read_from(reader: ByteReader): int := {
 	if bits_and(byte, 64) != 0 and shift < 64 then n - (1 << shift) else n
 }
 # an exported function as a foreign line declares it, none for a type a line can't say (several results, a reference)
-wasm_declaration(name: text, path: text, type: list?): list := {
+wasm_declaration(name: text, path: text, type: list?) as list := {
 	if type == ø or #type#2 > 1 { return [] }
 	parameters = type#1
 	[[name, path, parameters, range_list(#parameters).map(i => "p" + (i + 1)), if #type#2 == 0 then "void" else type#2#1]]
@@ -296,7 +296,7 @@ wasm_declaration(name: text, path: text, type: list?): list := {
 DIR_WORD = "dir"
 FUNCTIONS_WORD = ".functions"
 # a line with each used module's qualified words bare and its word lists as list literals; uses: statement → WasmExports
-with_wasm_module_words(line: text, uses: map): text := {
+with_wasm_module_words(line: text, uses: map) as text := {
 	written = line
 	for statement in uses.keys {
 		name = module_named_by(wasm_use_written(statement))
@@ -308,11 +308,11 @@ with_wasm_module_words(line: text, uses: map): text := {
 	}
 	written
 }
-quoted_list(words: list): text := "[" + words.map(word => "\"" + word + "\"").join(", ") + "]"
+quoted_list(words: list) as text := "[" + words.map(word => "\"" + word + "\"").join(", ") + "]"
 # the statements a use of the module stands for: its constant globals' values, then an include's run of its main,
 # else nothing, which a use gives (`import fourty_two` is ø, not its last value)
 USE_GIVES = "()"
-wasm_statements(statement: text, exports: WasmExports): text := {
+wasm_statements(statement: text, exports: WasmExports) as text := {
 	runs = statement.starts_with(INCLUDE_WORD + " ") and exports.functions.any(d => d#1 == INCLUDED_MAIN)
 	if #exports.values == 0 and #exports.words == 0 and not runs { return "" }
 	(exports.words + exports.values + [if runs then INCLUDED_MAIN + "()" else USE_GIVES]).join("; ")

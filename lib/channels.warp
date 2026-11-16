@@ -52,7 +52,7 @@ global last_listener = 1048576
 machine_channel(name) := { last_listener += 1; channel_listen(last_listener, name); [name, last_listener] }
 // a receive looks for a message every 5 ms
 machine_receive(listener) := { while channel_pending(listener) == 0 { sleep(5 ms) }; channel_next(listener) }
-message_listened(name, handler: function): int := {
+message_listened(name, handler: function) as int := {
 	listener = machine_channel(name)#2
 	timer_every(MESSAGE_POLL, () => { while channel_pending(listener) > 0 { handler(channel_next(listener)) } })
 }

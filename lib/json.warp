@@ -29,16 +29,16 @@ global to_json(value: any): text := json_written(value, no)
 // `x.json` (extensions/sugar/methods.warp): the JSON text of any value; a map's own field json wins
 global json_text(value: any): any := if value is map and "json" in value then value["json"] else to_json(value)
 // the old form naming the classes whose instances are their fields: every instance is
-to_json_of_classes(value: any, classes: any): text := to_json(value)
+to_json_of_classes(value: any, classes: any) as text := to_json(value)
 // to_json under `use strict`: a fraction JSON writes only approximately is an error
-exact_json(value: any, classes: any): text := json_written(value, yes)
+exact_json(value: any, classes: any) as text := json_written(value, yes)
 
-json_refusal(source, problem): text := "" + source + " is no json: " + problem
+json_refusal(source, problem) as text := "" + source + " is no json: " + problem
 // the place of the first character after spaces and comments from at on; a character other than / starts no
 // comment, so it returns before slicing (card lib-perf-bench)
-json_space(c: text): bool := c == " " or c == "\t" or c == "\n" or c == "\r"
-json_number_char(c: text): bool := is_digit(c) or c == "+" or c == "-" or c == "." or c == "e" or c == "E"
-json_skipped(source: text, at: int): int := {
+json_space(c: text) as bool := c == " " or c == "\t" or c == "\n" or c == "\r"
+json_number_char(c: text) as bool := is_digit(c) or c == "+" or c == "-" or c == "." or c == "e" or c == "E"
+json_skipped(source: text, at: int) as int := {
 	while at <= #source {
 		if json_space(source#at) { at += 1 }
 		else if source#at != "/" { return at }
@@ -53,7 +53,7 @@ json_skipped(source: text, at: int): int := {
 	at
 }
 // [the value written at that place, the place after it]
-json_read(source: text, at: int): list := {
+json_read(source: text, at: int) as list := {
 	if at > #source { raise json_refusal(source, "it ends early") }
 	first = source#at
 	if first == "{" { return json_object_read(source, at + 1) }
@@ -64,7 +64,7 @@ json_read(source: text, at: int): list := {
 	if word#1 in JSON_LITERALS { return [JSON_LITERALS[word#1], word#2] }
 	raise json_refusal(source, "unexpected " + first)
 }
-json_object_read(source: text, at: int): list := {
+json_object_read(source: text, at: int) as list := {
 	object = {}
 	at = json_skipped(source, at)
 	while at <= #source and source#at != "}" {
@@ -79,7 +79,7 @@ json_object_read(source: text, at: int): list := {
 	if at > #source { raise json_refusal(source, "no closing }") }
 	[object, at + 1]
 }
-json_array_read(source: text, at: int): list := {
+json_array_read(source: text, at: int) as list := {
 	items = []
 	at = json_skipped(source, at)
 	while at <= #source and source#at != "]" {
@@ -91,24 +91,24 @@ json_array_read(source: text, at: int): list := {
 	[items, at + 1]
 }
 // the place after an item and its comma, at the closing bracket when none follows
-json_after_item(source: text, at: int, closing: text): int := {
+json_after_item(source: text, at: int, closing: text) as int := {
 	at = json_skipped(source, at)
 	if at <= #source and source#at == "," { return json_skipped(source, at + 1) }
 	if at <= #source and source#at != closing { raise json_refusal(source, "no , or " + closing + " after an item") }
 	at
 }
 // the place after a run of characters that need no escape handling inside a quoted text
-json_scan_plain(source: text, at: int, quote: text): int := {
+json_scan_plain(source: text, at: int, quote: text) as int := {
 	while at <= #source and source#at != quote and source#at != "\\" { at += 1 }
 	at
 }
 // skip a leading + or - of a number text
-json_skip_sign(digits: text, at: int): int := {
+json_skip_sign(digits: text, at: int) as int := {
 	if at <= #digits and (digits#at == "-" or digits#at == "+") { at += 1 }
 	at
 }
 // a run of plain characters joins the text as one slice, not character by character (card lib-perf-bench)
-json_text_read(source: text, at: int, quote: text): list := {
+json_text_read(source: text, at: int, quote: text) as list := {
 	// no-escape fast path: one slice, no builder (card lib-json-read-perf)
 	start0 = at
 	at = json_scan_plain(source, at, quote)
@@ -138,7 +138,7 @@ json_text_read(source: text, at: int, quote: text): list := {
 	[read, at + 1]
 }
 // a number: a whole one exactly, however long, one with a fraction or an exponent a float
-json_number_read(source: text, at: int): list := {
+json_number_read(source: text, at: int) as list := {
 	// integer fast path: accumulate while scanning; fall through for fraction/exponent/extra (card lib-json-read-perf)
 	end = at
 	if end <= #source and (source#end == "-" or source#end == "+") { end += 1 }
@@ -165,7 +165,7 @@ json_number_read(source: text, at: int): list := {
 }
 // JSON's number, with JSON5's leading + and a fraction without digits on one side (+1, .5, 1.): one sign, digits, no
 // leading zero, an exponent's sign only after its e (-, ++1, 1+2, 012 are none, JSONTestSuite)
-json_number_valid(digits: text): bool := {
+json_number_valid(digits: text) as bool := {
 	at = 1
 	n = #digits
 	at = json_skip_sign(digits, at)
@@ -189,7 +189,7 @@ json_number_valid(digits: text): bool := {
 	}
 	at > n
 }
-whole_number(digits: text): int := {
+whole_number(digits: text) as int := {
 	at = 1
 	negative = digits#1 == "-"
 	if negative or digits#1 == "+" { at = 2 }
@@ -204,7 +204,7 @@ whole_number(digits: text): int := {
 // not by character, so a combining mark after them (\u0000 then U+0301) stays a mark of its own; a high surrogate
 // with a low one after it is one character (\ud83d\ude00 is 😀); a lone surrogate raises, as warp texts are UTF-8
 // (python's json.loads keeps it as a lone code point)
-json_unicode_read(source: text, at: int): list := {
+json_unicode_read(source: text, at: int) as list := {
 	h = json_hex_at(source, at)
 	code = h[0]
 	next = at + 6
@@ -218,7 +218,7 @@ json_unicode_read(source: text, at: int): list := {
 	[chr(code) + h[1], next]
 }
 // the value of the 4 hex digits after a \u at the backslash, and the code points past them in the same character
-json_hex_at(source: text, at: int): list := {
+json_hex_at(source: text, at: int) as list := {
 	points = [ord(p) for p in source[at + 1..<at + 5].codepoints]
 	if count(points) < 4 { raise json_refusal(source, "a \\u escape needs 4 hex digits") }
 	n = 0
@@ -230,9 +230,9 @@ json_hex_at(source: text, at: int): list := {
 	}
 	[n, join([chr(points[i]) for i in 4 ..< count(points)], "")]
 }
-json_hex4(code: int): text := join([HEX_DIGITS[(code /! (16 ** k)) % 16] for k in [3, 2, 1, 0]], "")
+json_hex4(code: int) as text := join([HEX_DIGITS[(code /! (16 ** k)) % 16] for k in [3, 2, 1, 0]], "")
 // a bare word, a JSON5 key or a literal: up to a space or a character of JSON's syntax
-json_word_read(source: text, at: int): list := {
+json_word_read(source: text, at: int) as list := {
 	end = at
 	while end <= #source and source#end not in JSON_WORD_ENDS and source#end not in JSON_SPACE { end += 1 }
 	if end == at { raise json_refusal(source, "unexpected " + source#at) }
@@ -240,7 +240,7 @@ json_word_read(source: text, at: int): list := {
 }
 
 // the JSON text of a value, an instance its fields; exact refuses a fraction it can't write so
-json_written(value: any, exact: bool): text := {
+json_written(value: any, exact: bool) as text := {
 	if value == ø { return "null" }
 	if value is bool { return if value then "true" else "false" }
 	if value is int { return "" + value }
@@ -254,7 +254,7 @@ json_written(value: any, exact: bool): text := {
 	json_quoted("" + value)
 }
 // a fraction as its decimal digits when it ends, `-1/8` is -0.125, else as the float nearest it
-json_number(value: any, exact: bool): text := {
+json_number(value: any, exact: bool) as text := {
 	spelled = "" + value
 	if "/" not in spelled { return spelled }
 	if exact { raise "JSON has no exact " + spelled + ": it cannot be written as JSON exactly" }
@@ -264,7 +264,7 @@ json_number(value: any, exact: bool): text := {
 // or else \\u00xx in lowercase hex (as python's json.dumps), a CRLF (one character in warp) as \\r\\n; anything else,
 // DEL and non-ASCII included, as itself. The parts collect in a list joined once, a run of plain characters as one
 // slice (cards lib-perf-bench, lib-json-ctrl-and-builders; core-text-append-cost)
-json_quoted(source: text): text := {
+json_quoted(source: text) as text := {
 	if #source <= 32 {
 		quoted = "\""
 		for character in source { quoted += if json_plain(character) then character else json_escape(character) ?? character }
@@ -287,9 +287,9 @@ json_quoted(source: text): text := {
 	join(parts, "")
 }
 // a character that stands as itself without a lookup: not a control, " or \\ (the common case, checked first)
-json_plain(character: any): bool := ord(character) >= 32 and character != "\"" and character != "\\"
+json_plain(character: any) as bool := ord(character) >= 32 and character != "\"" and character != "\\"
 // the escape of one character, ø when it stands as itself; a character of several code points (a CRLF) escapes each
-json_escape(character: any): any := {
+json_escape(character: any) as any := {
 	escape = JSON_ESCAPES.get("" + character)
 	if escape != ø { return escape }
 	if ord(character) >= 32 { return ø }
@@ -297,7 +297,7 @@ json_escape(character: any): any := {
 	if count(points) == 1 { return json_control(points[0]) }
 	join([if p < 32 then json_control(p) else (JSON_ESCAPES.get(chr(p)) ?? chr(p)) for p in points], "")
 }
-json_control(code: int): text := {
+json_control(code: int) as text := {
 	if code == 8 { return "\\b" }
 	if code == 9 { return "\\t" }
 	if code == 10 { return "\\n" }
@@ -306,18 +306,18 @@ json_control(code: int): text := {
 	"\\u00" + HEX_DIGITS[code /! 16] + HEX_DIGITS[code % 16]
 }
 // a map's entries, an instance's fields, as an object
-json_fields(value: any, written: function): text := "{" + value.keys.map(key => json_quoted(json_key(key)) + ":" + written(value[key])).join(",") + "}"
-json_key(key: any): text := if key is text then key else if key is symbol then key.name else "" + key
+json_fields(value: any, written: function) as text := "{" + value.keys.map(key => json_quoted(json_key(key)) + ":" + written(value[key])).join(",") + "}"
+json_key(key: any) as text := if key is text then key else if key is symbol then key.name else "" + key
 // [[key, its JSON], …] as an object
-json_object(entries): text := "{" + entries.map(entry => json_quoted(entry#1) + ":" + entry#2).join(",") + "}"
+json_object(entries) as text := "{" + entries.map(entry => json_quoted(entry#1) + ":" + entry#2).join(",") + "}"
 // code: an entry `a: 1` an object, an operation its operator and operands, `not x` {"not":["x"]}
-json_code_key(n: any, written: function): text := {
+json_code_key(n: any, written: function) as text := {
 	if n.op in JSON_ENTRY_OPERATORS { return json_object([[json_key(n.key), written(n.value)]]) }
 	"{" + json_quoted(n.op) + ":[" + [n.key, n.value].filter(side => side != ø).map(written).join(",") + "]}"
 }
 // code in curly braces an object, its items without a key numbered by their place; a group of one its item; any
 // other list an array
-json_list(n: any, written: function): text := {
+json_list(n: any, written: function) as text := {
 	if n.bracket == "(" and #n == 1 { return written(n#1) }
 	if n.bracket != "{" { return "[" + n.map(written).join(",") + "]" }
 	entries = []
@@ -332,7 +332,7 @@ json_list(n: any, written: function): text := {
 // compiler's class_data gives it): the JSON read, each field checked by its type, missing ones defaulted (a `T?` one
 // left ø), made a T;
 // a field missing, unknown or of another type raised, naming its path (`addresses[2].city`)
-typed_json_value(value: any, described: map, path: text): any := {
+typed_json_value(value: any, described: map, path: text) as any := {
 	if type(value).name != "map" { raise (if path == "" then "expected object" else path + " must be object") + ", received " + type(value).name }
 	order = described["order"]
 	for field in keys(value) { if not order.contains(field) { raise "unknown field " + typed_json_path(path, field) } }
@@ -349,9 +349,9 @@ typed_json_value(value: any, described: map, path: text): any := {
 	}
 	described["make"](given)
 }
-typed_json_path(path: text, field: text): text := if path == "" then field else path + "." + field
+typed_json_path(path: text, field: text) as text := if path == "" then field else path + "." + field
 // a field's value by its type: a type word's, `{optional: …}` ø or its type's, `{list: …}` each item's, else a class's
-typed_json_item(value: any, item_type: any, path: text): any := {
+typed_json_item(value: any, item_type: any, path: text) as any := {
 	if item_type is text {
 		if not typed_json_is(value, item_type) { raise path + " must be " + (if item_type == "string" then "text" else item_type) + ", received " + typed_json_received(value) }
 		return value
@@ -366,12 +366,12 @@ typed_json_item(value: any, item_type: any, path: text): any := {
 	typed_json_value(value, item_type, path)
 }
 // a `T?` field's type, `{optional: T}`: missing or null it is ø
-typed_json_optional(item_type: any): bool := not (item_type is text) and item_type.has("optional")
-typed_json_is(value: any, type_word: text): bool := {
+typed_json_optional(item_type: any) as bool := not (item_type is text) and item_type.has("optional")
+typed_json_is(value: any, type_word: text) as bool := {
 	if type_word == "number" { return value is number }
 	if type_word == "int" { return value is int }
 	if type_word == "float" { return value is float }
 	if type_word == "bool" { return value is bool }
 	value is text
 }
-typed_json_received(value: any): text := if value is number then "number" else if value is text then "text" else type(value).name
+typed_json_received(value: any) as text := if value is number then "number" else if value is text then "text" else type(value).name

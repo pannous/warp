@@ -7,7 +7,7 @@ use "../host_io.warp"
 # from wherever that is now, so nothing reads the folder it was compiled in (card pure-lane-nondeterministic): that
 # folder, a build machine's, is only the last resort
 global given_library = ""
-def run_library(): text := if given_library != "" then given_library else (warp_lib() ?? library_of_core(folder_of(module_directory)))
+def run_library() as text := if given_library != "" then given_library else (warp_lib() ?? library_of_core(folder_of(module_directory)))
 # the lib option (--lib, the native warp's own), asked of the host once a compile: file_source asks for every file it gives, ~50 µs a host call
 global warp_lib_asked = no
 global warp_lib_given = ø
@@ -19,11 +19,11 @@ def warp_lib(): text? {
 	warp_lib_given
 }
 # this file lies in core/passes/, reached as core/ or as lib/'s link compiler/
-def library_of_core(core: text): text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
+def library_of_core(core: text) as text := if core.ends_with("/core") then folder_of(core) + "/lib" else folder_of(core)
 # The lib/ the run was given, which run_library answers from now on
 def use_library(folder: text) { given_library = folder }
 # whether a line is only a comment ("# …", "## …", "// …")
-def is_comment_line(line: text): bool := line == "#" or line.starts_with("# ") or line.starts_with("##") or line.starts_with("//")
+def is_comment_line(line: text) as bool := line == "#" or line.starts_with("# ") or line.starts_with("##") or line.starts_with("//")
 # lib/'s folders read as no module: core's link, extensions/ (compiled into the compiler) and the files a build makes;
 # of those, the folders the compiler reads as data while it runs: the sugar's rules, the uncertain extension's operator
 # rows, the modules' compile-time rules
@@ -31,13 +31,13 @@ UNREAD_FOLDERS = ["compiler", "data", "extensions"]
 DATA_FOLDERS = ["extensions/sugar", "extensions/uncertain", "extensions/rules/modules"]
 # a file of lib/ by its path within lib/ ("prelude.warp", "extensions/sugar/lists.warp"), read from disk: the compiler
 # carries no library text (notes/library_zero_bake.md L4), "" for none
-def library_text(within: text): text := file_source(run_library() + "/" + within) ?? ""
+def library_text(within: text) as text := file_source(run_library() + "/" + within) ?? ""
 # a data file of lib/ an extension reads the first time a program needs it (lib/entities.tsv, lib/web.webidl)
-def library_data(within: text): text := file_source(run_library() + "/" + within) ?? raise("the library " + run_library() + " has no " + within)
+def library_data(within: text) as text := file_source(run_library() + "/" + within) ?? raise("the library " + run_library() + " has no " + within)
 # a standard module's text, wherever in lib/ it lies (uses.warp std_module_path: lib/host/native_host.warp too); the
 # prelude's begins with its core part, the words the compiler itself is written with. Joined once a compile, so the
 # memos keyed by a text (prelude_words.warp definition_slices) find it as the same text, not a fresh copy compared whole
-def std_module_text(name: text): text {
+def std_module_text(name: text) as text {
 	if not std_module_texts.has(name) {
 		std_module_texts[name] = (if name == PRELUDE_MODULE then prelude_core_text else "") + (file_source(std_module_path(name)) ?? "")
 	}
@@ -45,12 +45,12 @@ def std_module_text(name: text): text {
 }
 global std_module_texts = {}
 prelude_core_text = module_source("compiler/prelude_core.warp")
-prelude_core_path(): text := module_source_path("compiler/prelude_core.warp")
+prelude_core_path() as text := module_source_path("compiler/prelude_core.warp")
 # the files of the prelude's text, in its order (where its words' positions point)
-prelude_files(): list := [prelude_core_path(), std_module_path(PRELUDE_MODULE)]
+prelude_files() as list := [prelude_core_path(), std_module_path(PRELUDE_MODULE)]
 
 # the .warp files of lib/<within> and its folders, by their paths within lib/
-def library_texts(library: text, within: text): map {
+def library_texts(library: text, within: text) as map {
 	found = {}
 	entry_names = try list_files(library + "/" + within) else []
 	# a compiler without the runtime's own listing (one an older seed built) lists nothing: it reads lib/ where it runs
@@ -95,17 +95,17 @@ global file_texts = {}
 LIBRARY_INDEX = "index.tsv"
 INDEX_SECTIONS = ["block", "global", "class", "tag", "const", "typed", "word", "needs", "host", "hash", "alias", "sugar", "slice", "operator", "provider", "nullary", "unary", "mathop"]
 # the modules beside the runtime a compile runs behind, as the modules it links (compiler.warp linked_libraries)
-index_file(): text := modules_file(LIBRARY_INDEX)
-modules_file(name: text): text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name
+index_file() as text := modules_file(LIBRARY_INDEX)
+modules_file(name: text) as text := folder_of(runtime_path()) + "/" + MODULES_FOLDER + "/" + name
 global index_sections_held = ø
-library_index_section(section: text): map := {
+library_index_section(section: text) as map := {
 	if index_sections_held == ø { index_sections_held = index_sections_read(file_text(index_file())) }
 	if not index_sections_held.has(section) { index_sections_held[section] = index_section_scanned(section) }
 	index_sections_held[section]
 }
 # an index's sections, each one it holds (empty or not, a line `section\t<name>\t` names it): a section an older
 # index lacks is scanned
-index_sections_read(index: text?): map := {
+index_sections_read(index: text?) as map := {
 	sections = {}
 	for line in (index ?? "").split("\n") {
 		fields = line.split("\t")
@@ -115,7 +115,7 @@ index_sections_read(index: text?): map := {
 	sections
 }
 SECTION_MARK = "section"
-index_section_scanned(section: text): map := match section {
+index_section_scanned(section: text) as map := match section {
 	"block": block_heads_in(library_on_disk())
 	"global": declarations_scanned(library_on_disk())["words"]
 	"class": declarations_scanned(library_on_disk())["classes"]
@@ -136,25 +136,25 @@ index_section_scanned(section: text): map := match section {
 	"mathop": math_operator_lines_scanned()
 }
 # lib/aliases.warp's entries, each word with its fields as the index holds them (parser.warp alias_rows)
-alias_entries_scanned(): map := {
+alias_entries_scanned() as map := {
 	entries = {}
 	for row in table_rows(source_parse(library_text(ALIAS_FILE))) { entries[row#1] = alias_fields_written(row#1, row#2) }
 	entries
 }
 ALIAS_FILE = "aliases.warp"
 # the sugar's rule files, extensions/sugar/<name>.warp each by its path without .warp (rewrites.warp sugar_module_names)
-sugar_modules_scanned(): map := {
+sugar_modules_scanned() as map := {
 	found = {}
 	for path in library_on_disk().keys { if path.starts_with(sugar_folder) and path.ends_with(module_extension) { found[path[0 ..< #path - #module_extension]] = "" } }
 	found
 }
 global library_on_disk_held = ø
-library_on_disk(): map := {
+library_on_disk() as map := {
 	if library_on_disk_held == ø { library_on_disk_held = library_texts(run_library(), "") }
 	library_on_disk_held
 }
 # each prebuilt module's source hash, against which it is checked: its keys are the modules `warp rebuild` prebuilt
-module_hashes(): map := {
+module_hashes() as map := {
 	hashes = {}
 	for module in prebuilt_module_names() { hashes[module] = source_hash(std_module_text(module)) }
 	hashes
@@ -163,7 +163,7 @@ module_hashes(): map := {
 # use (a prebuilt module links those, decision no-lib-reads); any other module is compiled from its source with the
 # program using it, so a core change rebuilds only these (card module-prebuild-step: all of lib/ cost the build +32 %)
 global prebuilt_modules_held = ø
-prebuilt_module_names(): list := {
+prebuilt_module_names() as list := {
 	if prebuilt_modules_held == ø {
 		names = []
 		at = 0
@@ -181,14 +181,14 @@ prebuilt_module_names(): list := {
 	prebuilt_modules_held
 }
 # whether `warp rebuild` prebuilt the module, as the index's hashes say
-is_prebuilt_module(name: text): bool := library_index_section("hash").has(name)
+is_prebuilt_module(name: text) as bool := library_index_section("hash").has(name)
 # a text's length and the host's sha256 of its bytes (djb2 in warp, ~1.3 K instructions a byte, was 5 % of a compile
 # when a compile checked lib/ against its build, card signature-sha256)
-source_hash(source: text): text := "${#source}-" + text_digest(source)
+source_hash(source: text) as text := "${#source}-" + text_digest(source)
 # the sha256 of a text, of its parts' sha256s when longer than one host word is given: a page's slim compiler shows at
 # most 64 KB of an argument, lib/sound.warp is longer (its prebuilt module failed every sound sample in the page)
 HASHED_PART = 16384
-text_digest(source: text): text := {
+text_digest(source: text) as text := {
 	if #source <= HASHED_PART { return std_pure("hash", "sha256", [source]) }
 	parts = []
 	at = 0
@@ -200,25 +200,25 @@ text_digest(source: text): text := {
 }
 # what a prebuilt module is built of: its own text, then those of the modules it uses, transitively, each once; so an
 # edit of lib/reals.warp makes units.wasm, which compiled reals in, stale as an edit of units.warp does
-built_of_texts(module: text): list := {
+built_of_texts(module: text) as list := {
 	texts = []
 	for reached in modules_reached(module, []) { texts += [std_module_text(reached)] }
 	texts
 }
 # their length, then the hash of the one text, or of each text's hash (so no host word is given more than one module's
 # text, which a page's slim compiler shows at most 64 KB of)
-texts_length(texts: list): int := {
+texts_length(texts: list) as int := {
 	length = 0
 	for t in texts { length += #t }
 	length
 }
-texts_hash(texts: list): text := {
+texts_hash(texts: list) as text := {
 	if #texts == 1 { return source_hash(texts#1) }
 	hashes = []
 	for t in texts { hashes += [source_hash(t)] }
 	"${texts_length(texts)}-" + std_pure("hash", "sha256", [hashes.join("\n")])
 }
-modules_reached(module: text, seen: list): list := {
+modules_reached(module: text, seen: list) as list := {
 	if module in seen { return seen }
 	seen += [module]
 	for used in used_modules(std_module_text(module)) { seen = modules_reached(used, seen) }
@@ -238,15 +238,15 @@ write_library_index(folder: text) := {
 	write(folder + "/" + SUGAR_RULES_FILE, packed_table(sugar_rules_held))
 	host_words_held = ø
 }
-index_lines(section: text, entries: map): list := [SECTION_MARK + "\t" + section + "\t"] + entries.keys.map(key => section + "\t" + key + "\t" + entries[key])
+index_lines(section: text, entries: map) as list := [SECTION_MARK + "\t" + section + "\t"] + entries.keys.map(key => section + "\t" + key + "\t" + entries[key])
 
 # a source's parse
-def source_parse(source: text): Node := plain_node(parsed(rules_ended(source)))
+def source_parse(source: text) as Node := plain_node(parsed(rules_ended(source)))
 # the source with each rule ending its line in `$s...` ended by `;`: the parser reads `...` at the end of a line as a
 # range going on into the next line (`rewrite loudly $s... => $s...` and the line after it as `$s ... (next line)`),
 # which swallowed the next rule or statement
 rewrite_line_start = "rewrite "
-def rules_ended(source: text): text {
+def rules_ended(source: text) as text {
 	if not source.contains(rewrite_line_start) { return source }
 	lines = source.split("\n")
 	ended = []

@@ -11,22 +11,22 @@ use "nodes.warp"
 use "errors.warp"
 use "builders.warp"
 # `a + b` of values known only at run time: lists and texts join, numbers add, a marked number's mark kept
-node_add(a: Node, b: Node): Node := if exact_ints(a, b) then grown_sum(unboxed_int(a), unboxed_int(b)) else marks_kept(node_sum(a, b), a, b)
+node_add(a: Node, b: Node) as Node := if exact_ints(a, b) then grown_sum(unboxed_int(a), unboxed_int(b)) else marks_kept(node_sum(a, b), a, b)
 # `a + b` of values known only at run time as the emitter writes it: an instance's class's own + first (decision
 # class-operators-generic), else node_add (card emitter-inlines: one call where the emitter wrote the class test at each)
-node_plus(a: Node, b: Node): Node := {
+node_plus(a: Node, b: Node) as Node := {
 	if exact_ints(a, b) { return node_add(a, b) }
 	operated = class_operated(a, b, 0)
 	if is_null(operated) then node_add(a, b) else operated
 }
 # a op b by a's class when a is an instance, else by b's, ø when that class defines no such operator; `operator` the
 # place of the operator in + - * / ^, counted from 0
-class_operated(a: Node, b: Node, operator: int): Node := if is_class_instance(a) then instance_operated(a, a, b, int_node(operator)) else if is_class_instance(b) then instance_operated(b, a, b, int_node(operator)) else ø
+class_operated(a: Node, b: Node, operator: int) as Node := if is_class_instance(a) then instance_operated(a, a, b, int_node(operator)) else if is_class_instance(b) then instance_operated(b, a, b, int_node(operator)) else ø
 # n holds a plain whole number with no type mark (no yes/no, hex or unit): the emitter's int-first operations take it
 # as the i64 it is (card untyped-counter-boxes)
-exact_int(n: Node): bool := not is_null(n) and marked_kind(n) == Kind.Int and is_plain_int(n)
-exact_ints(a: Node, b: Node): bool := exact_int(a) and exact_int(b)
-node_sum(a: Node, b: Node): Node := {
+exact_int(n: Node) as bool := not is_null(n) and marked_kind(n) == Kind.Int and is_plain_int(n)
+exact_ints(a: Node, b: Node) as bool := exact_int(a) and exact_int(b)
+node_sum(a: Node, b: Node) as Node := {
 	# ø, also `[]` in the lowered program, beside a list is a copy of that list (ø + ø the empty list), so a later
 	# `+=` growing the sum in place leaves the list untouched; a text after it shows ø ("a" + ø); ø is no start of a
 	# sum or a text, which says where to start (decisions xs-ys, empty-plus-text)
@@ -50,61 +50,61 @@ node_sum(a: Node, b: Node): Node := {
 	float_of_node(a) + float_of_node(b)
 }
 # a number, or an instance whose class makes it one (conversions.warp float_of_node)
-summable(n: Node): bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float or is_class_instance(n)
+summable(n: Node) as bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float or is_class_instance(n)
 # `users.add(x)`, `n += [2]` of a value that is no list, `{a: 1} + 2`: an error a try catches, naming both, never the
 # engine's cast trap (card list-add-trap)
-no_sum(a: Node, b: Node): int := {
+no_sum(a: Node, b: Node) as int := {
 	if held_kind_word(b) == "list" { return raised(failure_of(kind_named(a) + " is no list: add, push, append and += [x] need one")) }
 	raised(failure_of("no + between " + kind_named(a) + " and " + kind_named(b)))
 }
 # `x = ø; x += 3`: an error a try catches, saying what to start with
-absent_start(fix: text): int := raised(failure_of("ø has no +: " + fix))
-kind_named(x: Node): text := held_kind_word(x) + " " + node_text(x)
+absent_start(fix: text) as int := raised(failure_of("ø has no +: " + fix))
+kind_named(x: Node) as text := held_kind_word(x) + " " + node_text(x)
 # the result of arithmetic on boxed values keeps a marked operand's mark (decision marks-survive-arithmetic): the left
 # one's, else the right one's, where it marks a number of the result's Kind; a type's mark lies above a yes/no's,
 # which never carries
-marks_kept(result: Node, a: Node, b: Node): Node := {
+marks_kept(result: Node, a: Node, b: Node) as Node := {
 	mark = type_mark(a)
 	if mark == 0 or mark % KindUnit.Info != kind_code(result) { mark = type_mark(b) }
 	kept_mark(result, mark)
 }
 # the value's type mark (its marked kind), 0 for none: a type's mark lies above a yes/no's, which never carries
-type_mark(x: Node): int := if is_null(x) or code_bit(x) != 0 or info_byte(x) * KindUnit.Info + Kind.Int <= Marked.Bool then 0 else marked_kind(x)
+type_mark(x: Node) as int := if is_null(x) or code_bit(x) != 0 or info_byte(x) * KindUnit.Info + Kind.Int <= Marked.Bool then 0 else marked_kind(x)
 # the result marked so where the mark is of its Kind and it is a plain number, never a ratio or a big int
-kept_mark(result: Node, mark: int): Node := if mark == 0 or is_null(result) or mark % KindUnit.Info != kind_code(result) or not (kind_code(result) == Kind.Float or is_plain_int(result)) then result else with_kind(result, mark)
+kept_mark(result: Node, mark: int) as Node := if mark == 0 or is_null(result) or mark % KindUnit.Info != kind_code(result) or not (kind_code(result) == Kind.Float or is_plain_int(result)) then result else with_kind(result, mark)
 # a + b, a - b, a * b of two plain ints held boxed (nats): past 64 bits the big int they make (D16, the extended runtime's exact words), a --fast run's wrapped
-grown_sum(a: int, b: int): Node := if checks_kept() and sum_overflows(a, b) then extended_sum(a, b) else a + b
-grown_difference(a: int, b: int): Node := if checks_kept() and difference_overflows(a, b) then extended_difference(a, b) else a - b
-grown_product(a: int, b: int): Node := if checks_kept() and product_overflows(a, b) then extended_product(a, b) else a * b
+grown_sum(a: int, b: int) as Node := if checks_kept() and sum_overflows(a, b) then extended_sum(a, b) else a + b
+grown_difference(a: int, b: int) as Node := if checks_kept() and difference_overflows(a, b) then extended_difference(a, b) else a - b
+grown_product(a: int, b: int) as Node := if checks_kept() and product_overflows(a, b) then extended_product(a, b) else a * b
 # whether the run keeps its runtime checks: a --fast program drops them at its start (emitter.warp checks_dropped_code)
-checks_kept(): bool := {
+checks_kept() as bool := {
 	global checks_dropped
 	not checks_dropped
 }
-sum_overflows(a: int, b: int): bool := {
+sum_overflows(a: int, b: int) as bool := {
 	added = a + b
 	(b > 0 and added < a) or (b < 0 and added > a)
 }
-difference_overflows(a: int, b: int): bool := {
+difference_overflows(a: int, b: int) as bool := {
 	difference = a - b
 	(b > 0 and difference > a) or (b < 0 and difference < a)
 }
 # 2^63 bounds the product; one rounded to it from just below counts as past it too, loud rather than wrong
-product_overflows(a: int, b: int): bool := {
+product_overflows(a: int, b: int) as bool := {
 	estimate = float(a) * float(b)
 	bound = float(4611686018427387904) + float(4611686018427387904)
 	estimate >= bound or estimate < 0 - bound
 }
 # what a list takes of b in `xs + b`, `xs += b`: a list its items, ø none, any other value one item: `[] + 3` is [3],
 # `[1] + "a"` [1 'a']
-appended_items(b: Node): list := {
+appended_items(b: Node) as list := {
 	if is_null(b) { return new_list(0) }
 	if kind_code(b) == Kind.List { return unboxed_list(b) }
 	[b]
 }
 # `a += b` beside a class's `+` (control_flow.warp appended): b's items appended to a list a in place, yes; no for
 # any other a, which the class's `+` then adds to
-appends_in_place(a: Node, b: Node): bool := {
+appends_in_place(a: Node, b: Node) as bool := {
 	if is_null(a) or kind_code(a) != Kind.List { return no }
 	list_append(unboxed_list(a), appended_items(b))
 	yes
@@ -116,17 +116,17 @@ node_append(a: Node, b: Node) := {
 	}
 	node_add(a, b)
 }
-max_int(a: int, b: int): int := if a > b then a else b
-least_int(): int := -9223372036854775807 - 1
-min_int(a: int, b: int): int := if a < b then a else b
-power(base: int, exponent: int): int := {
+max_int(a: int, b: int) as int := if a > b then a else b
+least_int() as int := -9223372036854775807 - 1
+min_int(a: int, b: int) as int := if a < b then a else b
+power(base: int, exponent: int) as int := {
 	out = 1
 	for i in 0..exponent { out = out * base }
 	out
 }
 # `a ÷ b` of values known only at run time, floored: two plain ints in i64, numbers with a float the float quotient's
 # floor, a ratio or a big int (and the one quotient past 64 bits) by the extended runtime (card node-floor-quotient)
-node_floor_quotient(a: Node, b: Node): Node := {
+node_floor_quotient(a: Node, b: Node) as Node := {
 	if converts_to_float(a) or converts_to_float(b) { return node_floor_quotient(number_held(a), number_held(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and is_plain_int(a) and is_plain_int(b) and not (unboxed_int(a) == least_int() and unboxed_int(b) == -1) { return floored_quotient(unboxed_int(a), unboxed_int(b)) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int { return extended_floor_quotient(a, b) }
@@ -137,21 +137,21 @@ node_floor_quotient(a: Node, b: Node): Node := {
 }
 # `floor x` of a value known only at run time: an int itself, a float's floor, a ratio's or a big int's by the extended
 # runtime, an instance's by the number its float() gives (`floor(1 + √2)` of the prelude's nearest)
-node_floor(n: Node): Node := {
+node_floor(n: Node) as Node := {
 	if converts_to_float(n) { return node_floor(number_held(n)) }
 	if kind_code(n) != Kind.Int { return truncated(float_floor(unboxed_float(n))) }
 	if is_plain_int(n) { return n }
 	extended_floor(n)
 }
 # a ÷ b of ints rounded toward minus infinity: -7 ÷ 2 is -4, 7 ÷ -2 is -4
-floored_quotient(a: int, b: int): int := {
+floored_quotient(a: int, b: int) as int := {
 	if b == 0 { divide_by_zero() }
 	q = int_quotient(a, b)
 	if q * b != a and (a < 0) != (b < 0) { q -= 1 }
 	q
 }
 # `a /! b`: the Euclidean quotient that goes with `%`, a = q * b + r with 0 <= r < |b|: -7 /! 2 is -4
-floor_quotient(a: int, b: int): int := {
+floor_quotient(a: int, b: int) as int := {
 	q = int_quotient(a, b)
 	if a - q * b < 0 {
 		if b > 0 { q -= 1 } else { q += 1 }

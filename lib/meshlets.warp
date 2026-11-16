@@ -153,7 +153,7 @@ cluster_of(triangles, at) := {
 }
 
 // Consecutive triangles, 64 to a cluster. Not a spatial partition.
-cluster_triangles(triangles: list): list := {
+cluster_triangles(triangles: list) as list := {
 	if not (triangles is list) { raise "meshlets: triangles must be a list, not " + text(triangles) }
 	for triangle in triangles { meshlet_triangle("meshlets", triangle) }
 	clusters = []
@@ -171,18 +171,18 @@ cluster_triangles(triangles: list): list := {
 	clusters
 }
 
-flat_heights(cells_x: int, cells_y: int): list := {
+flat_heights(cells_x: int, cells_y: int) as list := {
 	meshlet_cells(cells_x, cells_y)
 	[0 for i in 0 ..< ((cells_x + 1) * (cells_y + 1))]
 }
 
-grid_triangles(cells_x: int, cells_y: int, heights: list): list := {
+grid_triangles(cells_x: int, cells_y: int, heights: list) as list := {
 	meshlet_heights(cells_x, cells_y, heights)
 	grid_cells(cells_x, cells_y, heights, 1)
 }
 
 // The fine grid as vertices plus a triangle index list. The triangles are grid_triangles, each index a vertex.
-grid_indexed(cells_x: int, cells_y: int, heights: list): list := {
+grid_indexed(cells_x: int, cells_y: int, heights: list) as list := {
 	meshlet_heights(cells_x, cells_y, heights)
 	vertices = []
 	j = 0
@@ -218,7 +218,7 @@ grid_indexed(cells_x: int, cells_y: int, heights: list): list := {
 }
 
 // Triangle records [a, b, c, …] as the flat index buffer a hardware draw reads. Part and anything after c stay out.
-mesh_draw_indices(indices: list): list := {
+mesh_draw_indices(indices: list) as list := {
 	if not (indices is list) { raise "meshlets: indices must be a list, not " + text(indices) }
 	flat = []
 	for tri in indices {
@@ -233,14 +233,14 @@ mesh_draw_indices(indices: list): list := {
 }
 
 // Frames a second from a counted run. The samples print this on stderr when launched with `fps`.
-frame_rate(frames: int, spent_ms: number): float := {
+frame_rate(frames: int, spent_ms: number) as float := {
 	if not (frames is int) or frames <= 0 { raise "meshlets: frames must be a positive int, not " + text(frames) }
 	if spent_ms <= 0 { raise "meshlets: the measured time must be positive, not " + text(spent_ms) }
 	frames * 1000.0 / spent_ms
 }
 
 // Level 1 is the grid. Level 2 keeps every other vertex and records the largest vertical gap.
-grid_levels(cells_x: int, cells_y: int, heights: list): list := {
+grid_levels(cells_x: int, cells_y: int, heights: list) as list := {
 	meshlet_heights(cells_x, cells_y, heights)
 	fine = grid_cells(cells_x, cells_y, heights, 1)
 	coarse = grid_cells(cells_x, cells_y, heights, 2)
@@ -248,7 +248,7 @@ grid_levels(cells_x: int, cells_y: int, heights: list): list := {
 }
 
 // Perspective pixels: error / distance * cot(half fov) * screen height / 2. Orthographic is not this.
-projected_error(error: number, distance: number, cot_half_fov: number, screen_height: number): float := {
+projected_error(error: number, distance: number, cot_half_fov: number, screen_height: number) as float := {
 	meshlet_error(error)
 	if distance <= 0 { raise "meshlets: distance must be positive, not " + text(distance) }
 	if cot_half_fov < 0 or screen_height < 0 {
@@ -268,7 +268,7 @@ meshlet_rising(error, previous, started) := {
 }
 
 // The last level whose projected error is within the threshold. 1 is the finest. Errors do not fall.
-lod_picked(errors: list, distance: number, cot_half_fov: number, screen_height: number, threshold: number): int := {
+lod_picked(errors: list, distance: number, cot_half_fov: number, screen_height: number, threshold: number) as int := {
 	meshlet_levels(errors)
 	if threshold < 0 { raise "meshlets: threshold must not be negative, not " + text(threshold) }
 	previous = 0.0
@@ -288,7 +288,7 @@ lod_picked(errors: list, distance: number, cot_half_fov: number, screen_height: 
 }
 
 // The last level whose projected error is within the threshold. Levels are fine first, errors do not fall.
-chosen_level(levels: list, distance: number, cot_half_fov: number, screen_height: number, threshold: number): int := {
+chosen_level(levels: list, distance: number, cot_half_fov: number, screen_height: number, threshold: number) as int := {
 	meshlet_levels(levels)
 	for level in levels { if not (level is MeshLevel) { raise "meshlets: a level must be a MeshLevel, not " + text(level) } }
 	lod_picked([level.error for level in levels], distance, cot_half_fov, screen_height, threshold)
@@ -335,7 +335,7 @@ meshlet_one(cluster) := {
 	if not (cluster is Cluster) { raise "meshlets: a cluster must be a Cluster, not " + text(cluster) }
 }
 
-visible_clusters(clusters: list, planes: list, camera: list): list := {
+visible_clusters(clusters: list, planes: list, camera: list) as list := {
 	meshlet_clusters(clusters)
 	meshlet_planes(planes)
 	meshlet_point("meshlets", camera)
@@ -347,7 +347,7 @@ visible_clusters(clusters: list, planes: list, camera: list): list := {
 	kept
 }
 
-triangle_count(clusters: list): int := {
+triangle_count(clusters: list) as int := {
 	meshlet_clusters(clusters)
 	n = 0
 	for cluster in clusters {
@@ -392,7 +392,7 @@ yaw_into(v, yaw) := {
 	[c * v#1 + s * v#3, v#2, -s * v#1 + c * v#3]
 }
 
-local_view(planes: list, camera: list, place: list): list := {
+local_view(planes: list, camera: list, place: list) as list := {
 	meshlet_place(place)
 	scale = place#4
 	meshlet_planes(planes)
@@ -411,20 +411,20 @@ local_view(planes: list, camera: list, place: list): list := {
 }
 
 // The same sphere and cone in world space. Yaw turns the point the other way from local_view.
-placed_point(point, place): list := {
+placed_point(point, place) as list := {
 	meshlet_place(place)
 	meshlet_point("meshlets", point)
 	turned = yaw_into(vec_scale(point, place#4), -place#3)
 	[turned#1 + place#1, turned#2, turned#3 + place#2]
 }
 
-placed_bounds(cluster, place): list := {
+placed_bounds(cluster, place) as list := {
 	meshlet_one(cluster)
 	center = placed_point(cluster.sphere.center, place)
 	[center#1, center#2, center#3, cluster.sphere.radius * place#4]
 }
 
-placed_cone(cluster, place): list := {
+placed_cone(cluster, place) as list := {
 	meshlet_one(cluster)
 	meshlet_place(place)
 	axis = yaw_into(cluster.cone.axis, -place#3)
@@ -432,24 +432,24 @@ placed_cone(cluster, place): list := {
 }
 
 // One vec4 a cluster: first index, index count, then two zeros. The index count is three times the triangles.
-cluster_ranges(clusters: list): list := {
+cluster_ranges(clusters: list) as list := {
 	meshlet_clusters(clusters)
 	for cluster in clusters { meshlet_one(cluster) }
 	[[0.0 + cluster.at * 3, 0.0 + count(cluster.triangles) * 3, 0.0, 0.0] for cluster in clusters]
 }
 
-cluster_bounds(clusters: list): list := {
+cluster_bounds(clusters: list) as list := {
 	meshlet_clusters(clusters)
 	[placed_bounds(cluster, [0.0, 0.0, 0.0, 1.0]) for cluster in clusters]
 }
 
-cluster_cones(clusters: list): list := {
+cluster_cones(clusters: list) as list := {
 	meshlet_clusters(clusters)
 	[placed_cone(cluster, [0.0, 0.0, 0.0, 1.0]) for cluster in clusters]
 }
 
 // How many clusters stay, tested where they stand. The GPU cull uses the same sphere and the stored cutoff.
-placed_visible(clusters: list, planes: list, camera: list, place: list): int := {
+placed_visible(clusters: list, planes: list, camera: list, place: list) as int := {
 	meshlet_clusters(clusters)
 	meshlet_planes(planes)
 	meshlet_point("meshlets", camera)
@@ -494,7 +494,7 @@ LOD_INSTANCE = "@binding(0) @group(0) var<storage, read_write> draws: array<vec4
 
 // "EZT1", then a u32 level count. Each level is u32 vertices, u32 triangles, f32 error, then vertices
 // (x, y, z, u, v) and triangles (u16 a, b, c, part). part 0 is bark and 1 is a leaf. notes/meshlets.md.
-tree_mesh_of(bytes: list): TreeMesh := {
+tree_mesh_of(bytes: list) as TreeMesh := {
 	if not (bytes is list) { raise "meshlets: a tree mesh is bytes, not " + text(bytes) }
 	tree_magic(bytes)
 	levels_n = u32_at(bytes, 4)
@@ -540,14 +540,14 @@ tree_mesh_of(bytes: list): TreeMesh := {
 }
 
 // a tree file that is not there names what makes it: the larger EZ Tree meshes are kept out of git
-tree_mesh(path: any): TreeMesh := {
+tree_mesh(path: any) as TreeMesh := {
 	if not exists(path) { raise "meshlets: no tree mesh " + text(path) + ": " + TREE_MESH_SOURCE }
 	tree_mesh_of(read_bytes(path))
 }
 
 // One vertex and triangle buffer for every mesh, in order. Each level's base is the first triangle there,
 // and its vertex_at is added to the level's own indices.
-pack_tree_meshes(meshes: list): MeshPack := {
+pack_tree_meshes(meshes: list) as MeshPack := {
 	if not (meshes is list) or count(meshes) == 0 { raise "meshlets: meshes must be a non-empty list, not " + text(meshes) }
 	vertices = []
 	texels = []

@@ -3,12 +3,12 @@
 # DONE Implement as class with operator overload  (card matrix-class): class Matrix below
 # (the vectors' dot product is math's)
 use math
-matrix(r: any, c: any, f: any): list := [[f() for j in 1 to c] for i in 1 to r]
-filled_matrix(r: any, c: any, v: any): list := [[v for j in 1 to c] for i in 1 to r]
-zeros(r: any, c: any): list := filled_matrix(r, c, 0)
-ones(r: any, c: any): list := filled_matrix(r, c, 1)
-random_matrix(r: any, c: any): list := [[random() for j in 1 to c] for i in 1 to r]
-identity(n: any): list := [[if i == j then 1 else 0 for j in 1 to n] for i in 1 to n]
+matrix(r: any, c: any, f: any) as list := [[f() for j in 1 to c] for i in 1 to r]
+filled_matrix(r: any, c: any, v: any) as list := [[v for j in 1 to c] for i in 1 to r]
+zeros(r: any, c: any) as list := filled_matrix(r, c, 0)
+ones(r: any, c: any) as list := filled_matrix(r, c, 1)
+random_matrix(r: any, c: any) as list := [[random() for j in 1 to c] for i in 1 to r]
+identity(n: any) as list := [[if i == j then 1 else 0 for j in 1 to n] for i in 1 to n]
 // matrix is a protocol (decision matrix-protocol): a class with rows(), cols() and element(i, j) is a matrix, every word
 // of this module takes it, converted to the default implementation, the list of rows, these words compute on
 // (extensions/protocols.warp `matrix·listed`)
@@ -25,27 +25,27 @@ class Matrix {
 	-(o) := Matrix(matrix_add(cells, scale(cells_of(o), -1)))
 }
 // a Matrix's rows, a list of rows as it is
-cells_of(m: any): list := if m is Matrix then m.cells else m
-rows(m: any): int := count(m)
-cols(m: any): int := count(m#1)
+cells_of(m: any) as list := if m is Matrix then m.cells else m
+rows(m: any) as int := count(m)
+cols(m: any) as int := count(m#1)
 alias columns => cols
-shape(m: any): list := [rows(m), cols(m)]
-transpose(m: any): list := [[m#i#j for i in 1 to rows(m)] for j in 1 to cols(m)]
+shape(m: any) as list := [rows(m), cols(m)]
+transpose(m: any) as list := [[m#i#j for i in 1 to rows(m)] for j in 1 to cols(m)]
 // `mᵀ`, the transpose as mathematics writes it (card matrix-should)
 suffix operator ᵀ(m) := transpose(m)
 public map_matrix(m: any, f: any) := [[f(x) for x in row] for row in m]
-matrix_add(a: any, b: any): list := [[a#i#j + b#i#j for j in 1 to cols(a)] for i in 1 to rows(a)]
-scale(m: any, k: any): list := map_matrix(m, x => k * x)
-matmul(a: any, b: any): list := [[sum([a#i#k * b#k#j for k in 1 to cols(a)]) for j in 1 to cols(b)] for i in 1 to rows(a)]
+matrix_add(a: any, b: any) as list := [[a#i#j + b#i#j for j in 1 to cols(a)] for i in 1 to rows(a)]
+scale(m: any, k: any) as list := map_matrix(m, x => k * x)
+matmul(a: any, b: any) as list := [[sum([a#i#k * b#k#j for k in 1 to cols(a)]) for j in 1 to cols(b)] for i in 1 to rows(a)]
 // determinant, inverse and solve (card lib-matrix-solve) share one Gauss-Jordan elimination with partial pivoting
-determinant(a: list): float := eliminated(a, [[] for i in 1 to rows(a)], "determinant")#1
-inverse(a: list): list := {
+determinant(a: list) as float := eliminated(a, [[] for i in 1 to rows(a)], "determinant")#1
+inverse(a: list) as list := {
 	reduced = eliminated(a, identity(rows(a)), "inverse")
 	if reduced#2 == ø { raise "inverse: the matrix is singular (its determinant is 0), it has no inverse" }
 	reduced#2
 }
 // x with a·x = b: b a vector gives the vector x, b a matrix (one column per right side) the matrix of the solutions
-solve(a: list, b: list): list := {
+solve(a: list, b: list) as list := {
 	vector = count(b) > 0 and not (b#1 is list)
 	reduced = eliminated(a, if vector then [[v] for v in b] else b, "solve")
 	if reduced#2 == ø { raise "solve: the matrix is singular (its determinant is 0), the system has no single solution" }
@@ -53,7 +53,7 @@ solve(a: list, b: list): list := {
 }
 // the square matrix a beside the columns of extra, as many rows each, reduced to the identity: [a's determinant,
 // extra turned into a⁻¹·extra], [0, ø] for a singular a; the row with the largest pivot comes up each column
-eliminated(a: list, extra: list, what: text): list := {
+eliminated(a: list, extra: list, what: text) as list := {
 	n = rows(a)
 	if n == 0 or any_row_length(a, n) { raise what + ": the matrix must be square, it has " + text(n) + " rows of " + text(if n == 0 then 0 else cols(a)) }
 	if rows(extra) != n { raise what + ": the right side has " + text(rows(extra)) + " rows, the matrix " + text(n) }
@@ -76,4 +76,4 @@ eliminated(a: list, extra: list, what: text): list := {
 	[det, [[m#i#k for k in n + 1 to width] for i in 1 to n]]
 }
 // a row of another length than n
-any_row_length(a: list, n: int): bool := a.any(row => count(row) != n)
+any_row_length(a: list, n: int) as bool := a.any(row => count(row) != n)

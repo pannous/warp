@@ -14,14 +14,14 @@ data_type = symbol("data")
 for_word = symbol("for")
 in_word = symbol("in")
 
-data_blocks(program: Node): Node := {
+data_blocks(program: Node) as Node := {
 	positions = data_positions_of(nodes_in(program))
 	lexical_bottom_up(program, outer_scope(program), (n, scope) => data_argued(with_loops_as_items(n, scope, positions), positions))
 }
 
-is_data_parameter(parameter: Node): bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
+is_data_parameter(parameter: Node) as bool := is_key(parameter, Op.Colon) and value_of(parameter) == data_type
 # the positions of each function's data parameters, by its name
-data_positions_of(written: list): map := {
+data_positions_of(written: list) as map := {
 	found = {}
 	for statement in written {
 		parts = definition_of(statement)
@@ -31,7 +31,7 @@ data_positions_of(written: list): map := {
 }
 # the data parameters' positions of the functions the program calls, before the modules' definitions join it: its
 # own and those of the standard module defining a word it calls (lib/markup's style, lib/sound's tune)
-data_positions_called(program: Node): map := {
+data_positions_called(program: Node) as map := {
 	written = nodes_in(program)
 	found = data_positions_of(written)
 	for word in (called_words(program) + block_heads(written)).unique().filter(word => not found.has(word)) {
@@ -41,10 +41,10 @@ data_positions_called(program: Node): map := {
 	found
 }
 # the words keying a block, glued `f{…}` and spaced `f {…}`, a statement or an item of a block
-block_heads(written: list): list := written.flat_map(n => if word_and_block(n) != ø then [key_of(n)] else if is_group(n) and #n > 1 then (1 to #n - 1).filter(i => is_curly_group(n#(i + 1))).map(i => n#i) else []).filter(word => word is symbol).map(word => name_of(word))
+block_heads(written: list) as list := written.flat_map(n => if word_and_block(n) != ø then [key_of(n)] else if is_group(n) and #n > 1 then (1 to #n - 1).filter(i => is_curly_group(n#(i + 1))).map(i => n#i) else []).filter(word => word is symbol).map(word => name_of(word))
 # the program with the arguments of its data parameters and its tags' worded attributes spliced quotes, which no rule
 # or pass rewrites
-data_spliced(program: Node, keeps_meaning: function): Node := {
+data_spliced(program: Node, keeps_meaning: function) as Node := {
 	positions = data_positions_called(program)
 	outer = outer_scope(program)
 	tagged = spaced_tags(quotes_unglued(program), outer, keeps_meaning, positions)
@@ -52,15 +52,15 @@ data_spliced(program: Node, keeps_meaning: function): Node := {
 }
 # glued `data{…}` is the quote `data {…}` (decisions data-tag-words, spaced-tag: one thing in both spellings), never
 # the pair data: {…}; an entry of a block keeps its key data, `{data: {a: 1}}`, `div{ data: {…} }`
-quotes_unglued(n: Node): Node := {
+quotes_unglued(n: Node) as Node := {
 	if is_glued_quote(n) { return List([quote_symbol, value_of(n)], Bracket.None, Separator.Space) }
 	if not is_curly_group(n) { return children(n, quotes_unglued) }
 	group_like(n, items_of(n).map(item => if is_glued_quote(item) then Key(key_of(item), op_of(item), quotes_unglued(value_of(item))) else quotes_unglued(item)))
 }
-is_glued_quote(n: Node): bool := is_key(n, Op.Colon) and key_of(n) == quote_symbol and is_curly_group(value_of(n))
+is_glued_quote(n: Node) as bool := is_key(n, Op.Colon) and key_of(n) == quote_symbol and is_curly_group(value_of(n))
 match_word = symbol("match")
 # each spaced tag and data call of the program (spaced_tagged), never among a match's arms, `match k { Int {…} Error {…} }`
-spaced_tags(n: Node, scope: map, keeps_meaning: function, data_words: map): Node := {
+spaced_tags(n: Node, scope: map, keeps_meaning: function, data_words: map) as Node := {
 	if is_group(n) and items_of(n).any(item => item == match_word) { return n }
 	seen = if is_function_definition(n) then function_scope(scope, n) else scope
 	spaced_tagged(children(n, part => spaced_tags(part, seen, keeps_meaning, data_words)), seen, keeps_meaning, data_words)
@@ -68,7 +68,7 @@ spaced_tags(n: Node, scope: map, keeps_meaning: function, data_words: map): Node
 # `ul {…}` the tag `ul{…}` is (decision spaced-tag), of a word the program does not bind, of no rule or library
 # meaning, and `style {…}` the data call `style{…}` of a word taking data; side by side, `{ style {…} body {…} }`,
 # each such pair glued, when nothing else stands among them
-spaced_tagged(n: Node, scope: map, keeps_meaning: function, data_words: map): Node := {
+spaced_tagged(n: Node, scope: map, keeps_meaning: function, data_words: map) as Node := {
 	if not ((is_spaced(n) or (is_curly_group(n) and separator_of(n) == " ")) and #n >= 2 and #n % 2 == 0) { return n }
 	tags = []
 	at = 1
@@ -80,26 +80,26 @@ spaced_tagged(n: Node, scope: map, keeps_meaning: function, data_words: map): No
 	}
 	if is_spaced(n) and #tags == 1 then tags#1 else group_like(n, tags)
 }
-is_tag_word(word: text, scope: map, keeps_meaning: function): bool := is_tag_name(word, scope) and not keeps_meaning(word)
+is_tag_word(word: text, scope: map, keeps_meaning: function) as bool := is_tag_name(word, scope) and not keeps_meaning(word)
 # a word that may name a tag: none the program binds as a value, function or type, and never the quote `data {…}`
-is_tag_name(word: text, scope: map): bool := word != quote_word and not (is_own_word(scope, word) or binds_as(scope, word, Meaning.Type))
+is_tag_name(word: text, scope: map) as bool := word != quote_word and not (is_own_word(scope, word) or binds_as(scope, word, Meaning.Type))
 # `li{ animation: pop 400ms }`: in an attribute's value, words led by one the program does not bind are data, the CSS
 # words as written, never a call of a library word (decision tag-items-calls)
-attributes_spliced(n: Node, scope: map): Node := {
+attributes_spliced(n: Node, scope: map) as Node := {
 	if not is_free_tag(n, scope) { return n }
 	items = items_of(value_of(n))
 	spliced_items = items.map(item => attribute_spliced(item, scope))
 	if same_items(spliced_items, items) then n else Key(key_of(n), op_of(n), group_like(value_of(n), spliced_items))
 }
-attribute_spliced(item: Node, scope: map): Node := if is_key(item, Op.Colon) and is_worded_value(value_of(item), scope) then Key(key_of(item), Op.Colon, spliced(value_of(item))) else item
-is_worded_value(value: Node, scope: map): bool := is_spaced(value) and #value > 1 and value#1 is symbol and not is_own_word(scope, name_of(value#1))
+attribute_spliced(item: Node, scope: map) as Node := if is_key(item, Op.Colon) and is_worded_value(value_of(item), scope) then Key(key_of(item), Op.Colon, spliced(value_of(item))) else item
+is_worded_value(value: Node, scope: map) as bool := is_spaced(value) and #value > 1 and value#1 is symbol and not is_own_word(scope, name_of(value#1))
 # a value or function of the program's own
-is_own_word(scope: map, name: text): bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function)
-spliced(argument: Node): Node := if is_spliced_quote(argument) then argument else List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
+is_own_word(scope: map, name: text) as bool := binds_value(scope, name) or binds_as(scope, name, Meaning.Function)
+spliced(argument: Node) as Node := if is_spliced_quote(argument) then argument else List([spliced_quote_symbol, argument], Bracket.Round, Separator.None)
 # the word and the block of `f{…}` (and of spaced `f {…}`, which spaced_tags glued), else ø
-word_and_block(n: Node): list? := if (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) then [key_of(n), value_of(n)] else ø
+word_and_block(n: Node) as list? := if (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and is_curly_group(value_of(n)) then [key_of(n), value_of(n)] else ø
 # `f{…}`, `f {…}` and `f(a, b)` of an f taking data: those arguments spliced quotes
-data_argued(n: Node, positions: map): Node := {
+data_argued(n: Node, positions: map) as Node := {
 	found = word_and_block(n)
 	if found != ø and positions.has(name_of(found#1)) { n = call_node(found#1, [found#2]) }
 	if not (is_round(n) and #n > 1 and n#1 is symbol and positions.has(name_of(n#1))) { return n }
@@ -108,28 +108,28 @@ data_argued(n: Node, positions: map): Node := {
 }
 
 # `div{…}` of a word the program gives no value, function or type
-is_free_tag(n: Node, scope: map): bool := {
+is_free_tag(n: Node, scope: map) as bool := {
 	# (spaced_tags made a spaced tag a pair before)
 	n is key and word_and_block(n) != ø and is_tag_name(name_of(key_of(n)), scope)
 }
-with_loops_as_items(n: Node, scope: map, positions: map): Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(as_written(item, scope)), scope), positions)))) else n
+with_loops_as_items(n: Node, scope: map, positions: map) as Node := if is_free_tag(n, scope) then Key(key_of(n), op_of(n), group_like(value_of(n), tag_items(value_of(n), scope).map(item => data_argued(as_call(loop_as_items(as_written(item, scope)), scope), positions)))) else n
 # a word the program does not bind among a tag's items, `li{ reverse }`, `p{ upper }`: the word as written (decision
 # tag-items-calls), never a library word's function value
-as_written(item: Node, scope: map): Node := if item is symbol and not is_own_word(scope, name_of(item)) then spliced(item) else item
+as_written(item: Node, scope: map) as Node := if item is symbol and not is_own_word(scope, name_of(item)) then spliced(item) else item
 # a tag's items; a block that is one phrase headed by a function, `p{ greet "Ann" }`, is that one item (decision
 # tag-items-calls), not the items greet and "Ann"
-tag_items(block: Node, scope: map): list := if is_call_phrase(block, scope) then [List(items_of(block), Bracket.None, Separator.Space)] else items_of(block)
+tag_items(block: Node, scope: map) as list := if is_call_phrase(block, scope) then [List(items_of(block), Bracket.None, Separator.Space)] else items_of(block)
 # `greet "Ann" {…}` among a tag's items: a phrase headed by a function the program binds is its call, as anywhere else
-as_call(item: Node, scope: map): Node := {
+as_call(item: Node, scope: map) as Node := {
 	# `title: greet "Ann"`: an attribute's phrase so too (card li-title-greet)
 	if is_key(item, Op.Colon) and not is_curly_group(value_of(item)) { return Key(key_of(item), Op.Colon, as_call(value_of(item), scope)) }
 	if is_group(item) and bracket_of(item) == "" and is_call_phrase(item, scope) then call_node(item#1, items_of(item)[1..]) else item
 }
-is_call_phrase(group: Node, scope: map): bool := separator_of(group) == " " and #group > 1 and group#1 is symbol and (binds_as(scope, name_of(group#1), Meaning.Function) or is_library_call(group, scope))
+is_call_phrase(group: Node, scope: map) as bool := separator_of(group) == " " and #group > 1 and group#1 is symbol and (binds_as(scope, name_of(group#1), Meaning.Function) or is_library_call(group, scope))
 # `reverse xs`: a library word of one typed parameter and its argument (the `takes one` of extensions/sugar/calls.warp)
-is_library_call(group: Node, scope: map): bool := #group == 2 and not scope.has(name_of(group#1)) and takes_one_typed_value(name_of(group#1))
+is_library_call(group: Node, scope: map) as bool := #group == 2 and not scope.has(name_of(group#1)) and takes_one_typed_value(name_of(group#1))
 # `for g in guests { li{g} }` → `[li{g} for g in guests]`, any other item as it is
-loop_as_items(item: Node): Node := {
+loop_as_items(item: Node) as Node := {
 	if not (is_group(item) and bracket_of(item) == "" and #item >= 5 and item#1 == for_word and item#3 == in_word and is_curly_group(item#(#item))) { return item }
 	block = item#(#item)
 	value = if #block == 1 then block#1 else block

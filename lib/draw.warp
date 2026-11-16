@@ -22,7 +22,7 @@ global canvas_pixels = blank_pixels(pixels_for(view_width, view_height))
 // paper, the old word for the blank canvas: clear(paper) is clear(canvas)
 paper() := canvas()
 // the pixel a coordinate falls in
-cell(v: float): int := floor(v) as int
+cell(v: float) as int := floor(v) as int
 
 // what draw_shape's kind says to shape_shader (clear_shape: gpu_canvas.rs CLEAR; test_paint_shades)
 clear_shape = 0
@@ -109,7 +109,7 @@ covered(pixels, color: int) := {
 }
 
 // the color over what is there, mixed by its alpha
-def mixed(below: int, color: int): int {
+def mixed(below: int, color: int) as int {
 	a = alpha_of(color)
 	under = if below == 0 then blank_color else below
 	if a >= 255 { return color }
@@ -118,7 +118,7 @@ def mixed(below: int, color: int): int {
 }
 
 // one channel (its place 65536, 256 or 1) of color over under, by alpha a from 0 to 255
-channel_mix(color: int, under: int, a: int, place: int): int := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
+channel_mix(color: int, under: int, a: int, place: int) as int := ((color /! place % 256) * a + (under /! place % 256) * (255 - a)) /! 255
 
 def dot(x: float, y: float, color: any) {
 	col = cell(x)

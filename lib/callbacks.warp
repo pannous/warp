@@ -28,7 +28,7 @@ export c_callback_fired(slot: int, a: int, b: int, c: int, d: int, e: int, g: in
 	if result is bool then (if result then 1 else 0) else if result is int then result else 0
 }
 // (one call a count of arguments: a closure is called with as many as it takes)
-called_with(f: function, given: list): any := {
+called_with(f: function, given: list) as any := {
 	n = #given
 	if n == 0 { return f() }
 	if n == 1 { return f(given#1) }
@@ -51,7 +51,7 @@ global js_functions = []
 global js_arities = []
 global js_handed = []
 global js_free_slots = []
-js_function(f: function, arity: int): map := {
+js_function(f: function, arity: int) as map := {
 	slot = 1
 	while slot <= #js_functions and js_functions#slot !== f { slot += 1 }
 	if slot > #js_functions and js_free_slots {
