@@ -1521,6 +1521,7 @@ rule_words = {
 	class_methods_listed: class_methods_listed,
 	class_setter: class_setter,
 	is_declared_word: is_declared_word,
+	iterated_object: iterated_object,
 	level_statements: level_statements,
 	program_functions: program_functions,
 	qualified: qualified,

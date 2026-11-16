@@ -1,0 +1,52 @@
+# An object a class-giving function makes is walked by next() too (decision for-over-iterator, cards
+# for-over-iterator and object-iterator-loop): `for e in changes()` of `changes() as WikiChanges`, or a name assigned
+# such a call. The program's and the linked modules' functions declaring a class result, and the names assigned their
+# calls, are noted once before the for loops lower; extensions/sugar/iteration.warp asks iterated_object of each loop
+
+# the functions declaring they give an instance, `countdown(n) as Counter`, and the names assigned their calls
+global instance_makers = {}
+global made_instances = {}
+# [the linked modules' names, the makers found among them]: worked out once a compile, not by each program pass
+global linked_makers_known = ["", {}]
+
+noted_instance_makers(program: Node) as Node := {
+	classes = entries_of_both(class_names_of(program), declared_classes_modules())
+	instance_makers = entries_of_both(result_classes(statements_in(program), classes), linked_makers())
+	types = assigned_types_in(outer_nodes_in(program), classes, instance_makers)
+	made_instances = {}
+	for name in types.keys { if types[name] in classes { made_instances[name] = yes } }
+	program
+}
+
+# the loop's object, when for walks it by next(): an instance the rules know (`Counter(3)`, `c = Counter(3)`), a call of
+# a function giving one, or a name assigned such a call; ø otherwise
+iterated_object(object: Node, program: Node) as any := {
+	if has_property(object, "instance") { return object }
+	if object is symbol { return if made_instances.has(name_of(object)) then object else ø }
+	if is_group(object) and is_called_name(object) and instance_makers.has(name_of(object#1)) then object else ø
+}
+
+linked_makers() as map := {
+	linked = linked_signatures.keys.join(",")
+	if linked != linked_makers_known#1 { linked_makers_known = [linked, linked_results(declared_classes_modules())] }
+	linked_makers_known#2
+}
+# the linked modules' functions declaring they give an instance of one of the classes, by their signature lines
+# (`changes(wiki: text = "") as WikiChanges` of wikipedia), each line read whole only when it ends in such a class; a
+# word some module defines giving anything else is none: `json.parse(t)` is no time.parse(t, pattern) as Instant
+linked_results(classes: map) as map := {
+	heads = []
+	others = {}
+	for signature in linked_signatures.values {
+		for slice in signature.slices {
+			head = slice#2.split("\n")#1.split(":=")#1.trim()
+			if head.split(" ").last in classes { heads += statements_in(slice_tree(slice#3, slice#4)) } else { others[slice#1] = yes }
+		}
+	}
+	found = result_classes(heads, classes)
+	kept = {}
+	for word in found.keys { if not others.has(word) { kept[word] = found[word] } }
+	kept
+}
+
+iterators_extension = Extension{name: "iterators", passes_before: {"iteration_sugar": noted_instance_makers}}
