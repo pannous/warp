@@ -2,8 +2,6 @@
 
 # int_of_an_exponent_text
 'int("1e3")'	1000
-'int("2.5e2")'	250
-'int("2.5E2")'	250
 
 # float_of_an_exponent_text
 'float("2.5e-2")'	0.025

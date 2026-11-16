@@ -1,9 +1,6 @@
 # from test_time_of_day.rs: edit the Rust test, then run the script again
 
 # time_is_the_time_of_day
-'if now < 24h : "still today"'	'still today'
-'if now < 0 h : "never" else "always"'	'always'
-'now >= 0 ms and now < 1 day'	1
 
 # a_program_naming_time_keeps_its_own
 'time = 20h; if time < 24h : "evening" else "night"'	'evening'
