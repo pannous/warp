@@ -1,4 +1,4 @@
-# b03a0c5fe6 2026-11-16 17:43 290/295 98.3%
+# fbdce09191 2026-11-16 21:58 292/296 98.6%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -95,7 +95,9 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
+ok   samples/gpu/aquarium.warp
 ok   samples/gpu/fish_mesh.warp
+ok   samples/gpu/fish.warp
 ok   samples/gpu/gpu_visualizer.warp
 ok   samples/gpu/julia.warp
 ok   samples/gpu/kaleidoscope.warp
@@ -124,8 +126,8 @@ ok   samples/graphics/make_image.warp
 ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
-ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/paint_text.warp
+ok   samples/graphics/plot_siren.warp
 ok   samples/graphics/postcard.warp
 ok   samples/graphics/shader_brush.warp
 ok   samples/graphics/shader_fields.warp
@@ -163,7 +165,6 @@ ok   samples/matching/tree_patterns.warp
 ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
-ok   samples/modules/free_slots.warp
 ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
@@ -194,6 +195,7 @@ ok   samples/numbers/measurements.warp
 ok   samples/numbers/power.warp
 ok   samples/numbers/quadratic.warp
 ok   samples/numbers/simple.warp
+ok   samples/numbers/sin.warp
 ok   samples/numbers/sine.warp
 ok   samples/numbers/sum.warp
 ok   samples/numbers/units_dynamic.warp
@@ -289,8 +291,7 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/gpu/aquarium.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
-FAIL samples/gpu/fish.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
-FAIL samples/graphics/gaussian_splats.warp: lib/prelude.warp:364:291 real has no / with a value on its left: declare /(k: number, v: real)
+FAIL samples/graphics/gaussian_splats.warp: gaussian_splats.warp:45:1 a GPU list [f32] takes only #, xs#i, xs#i = v, for, print and the GPU's words: copy it to a list with [x for x in xs] first
+FAIL samples/graphics/paint_text_gpu.warp: paint_text_gpu.warp:14:22 outside the core: the call has_fields(…)
+FAIL samples/modules/free_slots.warp: not a number at 23:44
 FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
-FAIL samples/numbers/sin.warp: lib/reals.warp:279:19 real has no - with a value on its left: declare -(k: number, v: real)
