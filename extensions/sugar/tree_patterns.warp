@@ -11,7 +11,3 @@ rewrite $x replace $p with $t => replace_matches($x, data($p), data($t))
 # the phrase as a call's argument, `count(page find {type: "text"})`, which the parser reads as count's four words
 rewrite $f($x find $p) => $f(find_matches($x, data($p)))
 rewrite $f($x replace $p with $t) => $f(replace_matches($x, data($p), data($t)))
-# `Circle{r} => …`, `Point{x: 0, y}`: a declared class's name before braces (the parser's tag `Circle: {r}`) matches or
-# builds that class, as `Circle(r)` does (decision class-name-patterns); early, before
-# the passes read the tag as a structure; a name no class has stays the tag
-rewrite $c{$fields...} => $c($fields...) where $c is symbol and $made = class_named($c, $source)

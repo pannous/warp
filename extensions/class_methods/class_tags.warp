@@ -1,0 +1,14 @@
+# A declared class's name before braces, `Circle{r}` (the parser's tag `Circle: {r}`), matches or builds that class
+# as `Circle(r)` does (decision class-name-patterns): `match s { Circle{r} => … }`, `Point{x: 0, y}`, `c = Circle{r: 2}`.
+# A name no class of the program or the library has stays the tag
+
+class_tags_called(program: Node) as Node := {
+	classes = entries_of_both(class_names_of(program), declared_classes_modules())
+	if #classes == 0 then program else class_tags_in(program, classes)
+}
+class_tags_in(n: Node, classes: map) as Node := {
+	walked = children(n, child => class_tags_in(child, classes))
+	if is_key(walked, Op.Colon) and key_of(walked) is symbol and classes.has(name_of(key_of(walked))) and is_curly_group(value_of(walked)) then call_node(key_of(walked), items_of(value_of(walked))) else walked
+}
+
+class_tags_extension = Extension{name: "class_tags", passes_before: {"definition_heads": class_tags_called}}
