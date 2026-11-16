@@ -15,8 +15,8 @@
 'quantity(440, "Hz").in("kHz") == 0.44'	true
 
 # dimension_names_come_from_the_definitions
-'type(2 m²)'	'area'
-'type(5 Hz)'	'frequency'
+'type(2 m²)'	'Area'
+'type(5 Hz)'	'Frequency'
 
 # units_come_from_unit_lines
 'text(3 meter)'	'3m'

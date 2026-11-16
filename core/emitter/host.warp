@@ -1,7 +1,7 @@
 # Host words (emitter.warp's part): the imports of the "host" module, the builders a host word makes nodes with,
 # exported functions, runtime globals
 host_module = "host"
-def host_import(name: text): list {
+def host_import(name: text) as list {
 	signature = module.host[name]
 	[if #signature > 2 then signature#3 else host_module, name, [function_type_byte] + vector(signature#1.map(host_type)) + vector(signature#2.map(host_type))]
 }
@@ -10,17 +10,17 @@ f32_type = 125
 f32_demote = 182
 f64_promote = 187
 # a node as anyref: the driver defines a host word of the import's own type, which names no module's $Node
-def host_type(kind: ValueKind): list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else if is_node_kind(kind) then [any_reference] else value_type(kind) }
+def host_type(kind: ValueKind) as list { if kind == ValueKind.I32 or kind == ValueKind.CText then [type_bytes.char] else if kind == ValueKind.F32 then [f32_type] else if is_node_kind(kind) then [any_reference] else value_type(kind) }
 
 # a host word's last parameters a call may leave out, their values: `exit()` is exit(0)
 host_defaults = {exit: [0]}
-left_out(name: text, missing: int): list := {
+left_out(name: text, missing: int) as list := {
 	defaults = host_defaults.get(name) ?? []
 	if missing > 0 and missing <= #defaults then defaults[(#defaults - missing)..] else []
 }
 # whether the host word takes that many arguments, its defaulted last ones left out: a call of another count is the
 # builtin word's of the name, web's C `read(fd, buffer, size)` beside the prelude's `read(path)` (card dev-page)
-host_takes(name: text, count: int): bool := {
+host_takes(name: text, count: int) as bool := {
 	parameters = module.host[name]#1
 	count <= #parameters and count + #(host_defaults.get(name) ?? []) >= #parameters
 }
@@ -28,10 +28,10 @@ host_takes(name: text, count: int): bool := {
 # prelude's write(path, text), card web-write-call), is one overload set picked by the arguments' types: decided
 # when the call is compiled where their kinds are known (a literal, a local), else at run time by their values, each
 # argument computed once (decision static-dispatch)
-def host_beside_function(body: Body, name: text, arguments: list): bool {
+def host_beside_function(body: Body, name: text, arguments: list) as bool {
 	name in module.host and host_takes(name, #arguments) and #arguments == #module.host[name]#1 and is_program_call(body, name, arguments) and not arguments.any(argument => is_named_argument(argument, module.functions[name].signature.parameters.map(p => p.name)))
 }
-def host_or_function(body: Body, name: text, arguments: list): TypedCode {
+def host_or_function(body: Body, name: text, arguments: list) as TypedCode {
 	wanted = module.host[name]#1
 	known = range_list(#arguments).map(i => host_fit(written_kind(body, arguments[i]), wanted[i]))
 	if known.all(fit => fit == yes) { return host_call(body, name, arguments) }
@@ -46,7 +46,7 @@ def host_or_function(body: Body, name: text, arguments: list): TypedCode {
 	TypedCode(if kind == ValueKind.Mixed then no_kind else kind, setting + condition_of(body, test, 0) + chosen)
 }
 # the kind a call's argument is known to have before it is compiled: a literal's, a local's; Unknown for any other
-def written_kind(body: Body, n: Node): ValueKind {
+def written_kind(body: Body, n: Node) as ValueKind {
 	if n is text { return ValueKind.Text }
 	if n is number { return if n is int then ValueKind.Int else ValueKind.Float }
 	if n is symbol and name_of(n) in body.names { return body.kinds[body.names[name_of(n)]] }
@@ -56,21 +56,21 @@ def written_kind(body: Body, n: Node): ValueKind {
 # node; ø when the kind is not known
 host_numbers = [ValueKind.Int, ValueKind.I32]
 host_floats = [ValueKind.Float, ValueKind.F32]
-host_fit(known: ValueKind, wanted: ValueKind): any := {
+host_fit(known: ValueKind, wanted: ValueKind) as any := {
 	if known == ValueKind.Unknown or known == ValueKind.Node or known == pending { return ø }
 	if wanted in host_numbers { return known in host_numbers }
 	if wanted in host_floats { return known in host_floats }
 	wanted == ValueKind.Node and (known == ValueKind.Text or known == ValueKind.List)
 }
 # the test, at run time, that a value is of a kind a host parameter takes
-host_kind_test(value: Node, wanted: ValueKind): Node := {
+host_kind_test(value: Node, wanted: ValueKind) as Node := {
 	if wanted in host_numbers { return call_of("is_type", [value, "int"]) }
 	if wanted in host_floats { return call_of("is_type", [value, "float"]) }
 	Key(call_of("is_type", [value, "text"]), Op.Or, call_of("is_type", [value, "list"]))
 }
 # `clock`, `sleep(ms)`: a call of the imported host word, its arguments in the kinds it takes; a host word taking or
 # giving a node builds and reads nodes through the constructors the module exports for it (host_builders)
-def host_call(body: Body, name: text, arguments: list): TypedCode {
+def host_call(body: Body, name: text, arguments: list) as TypedCode {
 	signature = module.host[name]
 	if (ValueKind.Node in signature#1 or ValueKind.Node in signature#2) and not module.prebuilding { exported_builders() }
 	arguments = arguments + left_out(name, #signature#1 - #arguments)
@@ -99,7 +99,7 @@ page_event_word = "page_event"
 def page_builders() { if page_event_word in module.functions.keys { exported_builders() } }
 # made once: each builder calls its runtime word, an i32 widened to the int it takes; returned_error fails the run with
 # the trap detail the host left
-def exported_builders(): any {
+def exported_builders() as any {
 	if module.builders.any(f => f.name == host_builders#1#1) { return ø }
 	for builder in host_builders {
 		parameters = builder#2
@@ -137,7 +137,7 @@ def exported_builders(): any {
 }
 # a node a host reads as the text print shows (runtime/text.warp shown_at), which no host walking GC objects needs:
 # the native driver's host words, and what a program raised (its trap_detail), made once
-def exported_shown_at(): any {
+def exported_shown_at() as any {
 	if module.builders.any(f => f.name == "shown_at") { return ø }
 	f = exported_function("shown_at", [ValueKind.Node], ValueKind.Int)
 	f.code = runtime_call("shown_at", [TypedCode(ValueKind.Node, [op.local_get, 0])]).code
@@ -157,17 +157,17 @@ def exported_trap_message() {
 	files = ([module.program_file] + source_files[1 ..].map(path => if named_files.has(path) or path in linked then path else "")).join("\n")
 	f.code = runtime_call("trap_sentence_at", [TypedCode(ValueKind.Text, text_bytes(files)), TypedCode(ValueKind.Int, position), TypedCode(ValueKind.Int, [op.local_get, 0])]).code
 }
-def is_compiler_source(file: text): bool := file.starts_with("core/") or "/core/" in file or "lib/compiler/" in file
+def is_compiler_source(file: text) as bool := file.starts_with("core/") or "/core/" in file or "lib/compiler/" in file
 # f at the module's next function index (results `any`: a declared Function result fails, card class-result-type),
 # the functions counted as placed, not measured: a long list's count walks it
-placed(f: Function): any := {
+placed(f: Function) as any := {
 	f.index = #module.imports + module.placed
 	module.placed += 1
 	module.order += [f]
 	f
 }
 # a function made by the emitter (no source), at the next index, its code written by the caller
-added_function(name: text, kinds: list, result: ValueKind, local_names: list): any := {
+added_function(name: text, kinds: list, result: ValueKind, local_names: list) as any := {
 	f = placed(bare_function(name))
 	f.kinds = kinds
 	f.result = result
@@ -176,7 +176,7 @@ added_function(name: text, kinds: list, result: ValueKind, local_names: list): a
 	f
 }
 # a function the host calls by its name, its code written by the caller
-exported_function(name: text, kinds: list, result: ValueKind): any := {
+exported_function(name: text, kinds: list, result: ValueKind) as any := {
 	f = added_function(name, kinds, result, range_list(#kinds).map(i => "argument" + (i + 1)))
 	f.is_runtime = yes
 	module.builders += [f]
@@ -198,7 +198,7 @@ def exported_node_word(name: text) {
 # the arguments in the kinds the host word takes. A C text has one place in linear memory (c_text), so when an
 # argument follows it, whose work may write a text of its own there, `set_system_value("window_height",
 # system_value("window_height") + 10)`, every value is worked out first and converted only right before the call
-def host_arguments(body: Body, arguments: list, kinds: list): list {
+def host_arguments(body: Body, arguments: list, kinds: list) as list {
 	values = arguments.map(argument => expression_code(body, argument))
 	code = []
 	if range_list(#kinds - 1).any(i => kinds[i] == ValueKind.CText) {
@@ -211,7 +211,7 @@ def host_arguments(body: Body, arguments: list, kinds: list): list {
 	for i in 0..<#values { code += host_argument(values[i], kinds[i]) }
 	code
 }
-def host_argument(value: TypedCode, kind: ValueKind): list {
+def host_argument(value: TypedCode, kind: ValueKind) as list {
 	if kind == ValueKind.I32 { return host_int(value) + [op.i32_wrap_i64] }
 	# a text as the C string a host word reads, `system_value("battery")`: its address in linear memory
 	if kind == ValueKind.CText { return runtime_call("c_text", [value]).code + [op.i32_wrap_i64] }
@@ -222,7 +222,7 @@ def host_argument(value: TypedCode, kind: ValueKind): list {
 # `x!`, Rust's unwrap: a number or text is itself, and so is what a function taking nothing gives, `f!` of
 # `f := {1+2}` (a node where a sum may grow); any other node is refused: `!` runs no code (decision
 # blocks-run-by-call)
-def unwrapped(body: Body, n: Node): TypedCode {
+def unwrapped(body: Body, n: Node) as TypedCode {
 	value = expression_code(body, n)
 	called = n is symbol and name_of(n) not in body.names and name_of(n) in module.functions and #module.functions[name_of(n)].signature.parameters == 0
 	if value.kind == ValueKind.Node and not called { throw "`x!` runs no code: x() runs a block, interpret x runs data" + module.emitting_at }
@@ -230,7 +230,7 @@ def unwrapped(body: Body, n: Node): TypedCode {
 }
 
 # a number a host word takes as an int: a fraction or a float rounded to the nearest: `sleep(1/60*1000)`
-def host_int(value: TypedCode): list {
+def host_int(value: TypedCode) as list {
 	if value.kind == ValueKind.Node { return runtime_call("nearest_int", [value]).code }
 	if value.kind == ValueKind.Float { return runtime_call("rounded", [value]).code }
 	converted(value, ValueKind.Int)
@@ -238,7 +238,7 @@ def host_int(value: TypedCode): list {
 
 # `global name = 0`, `= ""` or `= []` at the top of runtime.warp: a module variable of that kind its words share, from
 # the kind's zero (ø for a text, an empty list); `[]` is held behind the opaque word (is_empty_list)
-runtime_global(n: Node): any := {
+runtime_global(n: Node) as any := {
 	if not (is_key(n, Op.Colon) and key_of(n) == symbol("global")) { return ø }
 	name = name_of(key_of(value_of(n)))
 	# a table the runtime parts use for its numbers (kinds.warp, byte_codes.warp) is folded into the code, no variable

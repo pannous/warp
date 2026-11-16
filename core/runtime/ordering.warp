@@ -11,7 +11,7 @@ use "text.warp"
 use "types.warp"
 # -1, 0 or 1 as a sorts before, with or after b: texts and characters by their bytes, ints and exact rationals exactly,
 # a float on either side as floats, a class instance by its compare(other); anything else fails the run naming both
-node_order(a: Node, b: Node): int := {
+node_order(a: Node, b: Node) as int := {
 	if textual_node(a) and textual_node(b) { return text_order(node_text(a), node_text(b)) }
 	if not numeric_node(a) or not numeric_node(b) { return instance_order(a, b) }
 	if kind_code(a) == Kind.Int and kind_code(b) == Kind.Int and (is_plain_int(a) and is_plain_int(b)) { return int_order_of(unboxed_int(a), unboxed_int(b)) }
@@ -21,7 +21,7 @@ node_order(a: Node, b: Node): int := {
 # `a < b`, `a <= b`, `a > b`, `a >= b` of two values known only at run time, the order the operator's place in
 # ORDERINGS: texts and characters by their bytes, ints and exact rationals exactly, anything else as the floats it
 # holds, an instance as its float() (card emitter-inlines: one call where the emitter wrote the whole of it at each)
-node_compared(a: Node, b: Node, ordering: int): bool := {
+node_compared(a: Node, b: Node, ordering: int) as bool := {
 	if exact_ints(a, b) { return ordered_as(int_order_of(unboxed_int(a), unboxed_int(b)), ordering) }
 	if textual_node(a) and textual_node(b) { return ordered_as(text_order(node_text(a), node_text(b)), ordering) }
 	x = number_held(a)
@@ -30,51 +30,51 @@ node_compared(a: Node, b: Node, ordering: int): bool := {
 	floats_ordered(float_of_node(x), float_of_node(y), ordering)
 }
 # an order, -1, 0 or 1, as the comparison at that place in ORDERINGS takes it
-ordered_as(order: int, ordering: int): bool := floats_ordered(float(order), 0.0, ordering)
+ordered_as(order: int, ordering: int) as bool := floats_ordered(float(order), 0.0, ordering)
 # x and y as the comparison at that place in ORDERINGS takes them (NaN fails every one)
-floats_ordered(x: float, y: float, ordering: int): bool := if ordering == 0 then x < y else if ordering == 1 then x <= y else if ordering == 2 then x > y else x >= y
+floats_ordered(x: float, y: float, ordering: int) as bool := if ordering == 0 then x < y else if ordering == 1 then x <= y else if ordering == 2 then x > y else x >= y
 # an instance by its class's compare(other), as `<` orders it (decision compare-equal-hooks): `sort [dot(2), dot(1)]`;
 # no order (no_order_of) where its class declares none
-instance_order(a: Node, b: Node): int := {
+instance_order(a: Node, b: Node) as int := {
 	if not is_class_instance(a) { return no_order_of(a, b) }
 	ordered = method_called(a, "compare", list_node(Kind.List, [b]))
 	if is_null(ordered) { return no_order_of(a, b) }
 	float_order(float_of_node(ordered), 0.0)
 }
 # 1 for a boxed int, exact rational or float, else 0
-numeric_node(n: Node): bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float
+numeric_node(n: Node) as bool := kind_code(n) == Kind.Int or kind_code(n) == Kind.Float
 # -1, 0 or 1 as x is below, equal to or above y; NaN equals everything, as f64.gt - f64.lt gives
-float_order(x: float, y: float): int := if x < y then -1 else if x > y then 1 else 0
-int_order_of(x: int, y: int): int := if x < y then -1 else if x > y then 1 else 0
+float_order(x: float, y: float) as int := if x < y then -1 else if x > y then 1 else 0
+int_order_of(x: int, y: int) as int := if x < y then -1 else if x > y then 1 else 0
 # `sort xs`, `sorted "hello"`: a new list of xs's items (a new text of its characters) in ascending order
-sorted_node(xs: Node): Node := {
+sorted_node(xs: Node) as Node := {
 	if is_null(xs) { return xs }
 	sorted_like(xs, sortable_items(xs))
 }
 # `xs.sort_by(p => p.k)` as `list_sorted_by(xs, keys)`: xs's items ordered by their keys,
 # the items themselves where keys is ø or ends early
-sorted_node_by(xs: Node, keys: Node): Node := {
+sorted_node_by(xs: Node, keys: Node) as Node := {
 	if is_null(keys) { return sorted_node(xs) }
 	if is_null(xs) { return xs }
 	sorted_like(xs, unboxed_list(keys))
 }
 # xs's items ordered by keys, as a text again when xs is one
-sorted_like(xs: Node, keys: list): Node := {
+sorted_like(xs: Node, keys: list) as Node := {
 	items = sortable_items(xs)
 	sorted = sorted_items(items, sort_ranks(items, keys))
 	if kind_code(xs) == Kind.Text { return characters_text(sorted) }
 	sorted
 }
 # a list's items, a text's characters
-sortable_items(xs: Node): list := if kind_code(xs) == Kind.Text then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
+sortable_items(xs: Node) as list := if kind_code(xs) == Kind.Text then text_graphemes(unboxed_text(xs)) else unboxed_list(xs)
 # the characters of chars joined into one text
-characters_text(chars: list): text := {
+characters_text(chars: list) as text := {
 	parts = []
 	for i in 1 to #chars { parts += [node_text(chars#i)] }
 	texts_joined(parts, "")
 }
 # what each item sorts by: its key as far as keys go, the item itself after
-sort_ranks(items: list, keys: list): list := {
+sort_ranks(items: list, keys: list) as list := {
 	ranks = new_list(#items)
 	copy_items(ranks, 0, items, 0, #items)
 	copy_items(ranks, 0, keys, 0, min_int(#keys, #items))
@@ -84,7 +84,7 @@ sort_ranks(items: list, keys: list): list := {
 # recursion, whose runs of width merge pairwise into the spare lists, which then take their place. Items in order
 # already (ascending as they are, strictly descending reversed, so equal ranks keep their order) take n - 1
 # comparisons and no merging
-sorted_items(items: list, ranks: list): list := {
+sorted_items(items: list, ranks: list) as list := {
 	count = #items
 	cells = new_list(count)
 	copy_items(cells, 0, items, 0, count)
@@ -113,7 +113,7 @@ sorted_items(items: list, ranks: list): list := {
 	cells
 }
 # 1 when no rank is below the one before (sorted already), -1 when each one is (strictly descending), else 0
-run_order(ranks: list): int := {
+run_order(ranks: list) as int := {
 	if #ranks < 2 { return 1 }
 	ascending = 1
 	descending = 1
@@ -125,7 +125,7 @@ run_order(ranks: list): int := {
 }
 # the runs low..<middle and middle..<high of cells and ranks, counted from 1, merged into the same places of cells_to
 # and ranks_to
-merge_runs(cells: list, ranks: list, cells_to: list, ranks_to: list, low: int, middle: int, high: int): list := {
+merge_runs(cells: list, ranks: list, cells_to: list, ranks_to: list, low: int, middle: int, high: int) as list := {
 	left = low
 	right = middle
 	for index in low..high {
@@ -143,7 +143,7 @@ merge_runs(cells: list, ranks: list, cells_to: list, ranks_to: list, low: int, m
 }
 # 1 when the merge takes the left run's next item: the right run is done, or its next rank is not below the left's
 # (of equal ranks the left one first, which keeps the sort stable); 0 when the left run is done
-takes_left(ranks: list, left: int, middle: int, right: int, high: int): int := {
+takes_left(ranks: list, left: int, middle: int, right: int, high: int) as int := {
 	if left >= middle { return 0 }
 	if right >= high { return 1 }
 	if node_order(ranks#right, ranks#left) < 0 then 0 else 1

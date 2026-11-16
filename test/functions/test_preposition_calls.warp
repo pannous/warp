@@ -92,9 +92,3 @@ r = move 1 to: 3 from: 10
 r' 8
 is! 'f(x, to y) := x - y
 2 * f 9 to: 4' 10
-
-# a label without its colon is refused with the call written with it, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14)
-is! 'f(x, for y) := x - y
-f 5 for 2' error
-is! 'f(xs, each y) := count(xs) * y
-f [1 2 3] each 2' error

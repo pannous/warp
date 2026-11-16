@@ -11,7 +11,7 @@ EVERY_DAY = 127
 ONCE = 0
 // the days `on every friday at 17:00 {…}` names, in the mask's order; `on every day at 9:30 {…}` is each of them
 WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
-weekdays_of(day: any): int := {
+weekdays_of(day: any) as int := {
 	if name_of(day) == "day" { return EVERY_DAY }
 	at = WEEKDAYS.index_of(name_of(day))
 	if at == 0 { raise "on every ${day} at …: ${day} is no day of the week" }
@@ -31,7 +31,7 @@ rewrite on every $count $unit {} => timer_every($count $unit, () => ø)
 
 // the handlers of the program's timers, a timer's id its position
 global timer_handlers = []
-timer_started(kind: int, argument: int, handler: function): int := {
+timer_started(kind: int, argument: int, handler: function) as int := {
 	timer_handlers.add(handler)
 	timer_kinds.add(kind)
 	timer_arguments.add(argument)
@@ -53,7 +53,7 @@ FIRED = -1
 global timer_kinds = []
 global timer_arguments = []
 global timer_dues = []
-timers_ticked(wall: int): int := {
+timers_ticked(wall: int) as int := {
 	wait = -1
 	for at in 0 ..< count(timer_handlers) {
 		if timer_dues[at] == 0 { timer_dues[at] = timer_due(at, wall) }
@@ -67,9 +67,9 @@ timers_ticked(wall: int): int := {
 	}
 	wait
 }
-timer_once(at: int): bool := timer_kinds[at] == TIMER_CLOCK and timer_arguments[at] /! WEEKDAYS_SHIFT == ONCE
+timer_once(at: int) as bool := timer_kinds[at] == TIMER_CLOCK and timer_arguments[at] /! WEEKDAYS_SHIFT == ONCE
 // when timer at is next due after the wall clock's after: its period on, or its minute of the next day it runs on
-timer_due(at: int, after: int): int := {
+timer_due(at: int, after: int) as int := {
 	if timer_kinds[at] == TIMER_EVERY { return after + timer_arguments[at] }
 	weekdays = timer_arguments[at] /! WEEKDAYS_SHIFT
 	days = if weekdays == ONCE then EVERY_DAY else weekdays
@@ -81,12 +81,12 @@ timer_due(at: int, after: int): int := {
 	}
 	after + 7 * DAY_MILLISECONDS
 }
-timer_every(period: any, handler: function): int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
+timer_every(period: any, handler: function) as int := timer_started(TIMER_EVERY, floor(period / 1ms) as int, handler)
 // `every(200 ms, f)`, the call of `on every 200 ms {…}`: its period a Time, never prelude's every => all of a list
 // (card timers-every-refusal)
-every(period: Time, handler: function): int := timer_every(period, handler)
+every(period: Time, handler: function) as int := timer_every(period, handler)
 // `9:30`, the pair of an hour and its minutes
-timer_at(time: any, weekdays: int, handler: function): int := timer_started(TIMER_CLOCK, weekdays * WEEKDAYS_SHIFT + key_of(time) * 60 + value_of(time), handler)
+timer_at(time: any, weekdays: int, handler: function) as int := timer_started(TIMER_CLOCK, weekdays * WEEKDAYS_SHIFT + key_of(time) * 60 + value_of(time), handler)
 // the handler named before its call: `timer_handlers#id()` calls no function ("not a function")
 export timer_fired(id: int) := {
 	handler = timer_handlers#id

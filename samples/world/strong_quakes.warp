@@ -1,0 +1,8 @@
+#!/usr/bin/env warp
+# The ground moving: the last day's strong earthquakes as the USGS reports them (GeoJSON, updated each minute, no key).
+# The feed goes on with each new quake as it is reported; take(n) stops after n
+use earthquakes
+
+for quake in quakes(5).take(3) {
+	print quake.title + (if quake.tsunami == 1 then "  🌊 tsunami warning" else "")
+}

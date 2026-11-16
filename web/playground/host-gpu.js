@@ -228,8 +228,12 @@ async function gpuCanvas({ id, replaces }) {
 
 const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: paperColor(), storeOp: "store" });
 
+// the shader without its comments, each line where it was: a name only a comment says (`bilinear taps`) binds nothing,
+// as the pipeline's layout, which follows the code, binds nothing for it
+const uncommented = code => code.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, "")).replace(/\/\/[^\n]*/g, "");
 // the pixels the fragment shader colored, row by row; given a `canvas` id, drawn into that page canvas instead
 async function gpuRendered({ shader, width, height, values, canvas }) {
+	shader = uncommented(shader);
 	const device = await theGpuDevice();
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);

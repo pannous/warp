@@ -7,7 +7,7 @@
 // A key no language has is the error `no translation of <key>`, never an empty text; a plural map without the
 // category falls back to `other`. Plural categories of whole numbers only (CLDR's v/f operands are not modelled).
 
-translate(messages: any, language: text, key: text, values: any): text := {
+translate(messages: any, language: text, key: text, values: any) as text := {
 	let message = i18n_message(messages, language, key)
 	var chosen = message
 	if not (message is text) { chosen = i18n_plural_form(message, plural_category(language, values["count"])) }
@@ -15,7 +15,7 @@ translate(messages: any, language: text, key: text, values: any): text := {
 }
 
 // The message of a key: in the language, its base language (de for de-AT), else the first language
-i18n_message(messages: any, language: text, key: text): any := {
+i18n_message(messages: any, language: text, key: text) as any := {
 	let base = split(language, "-")[0]
 	for candidate in [language, base, keys(messages)#1] {
 		if contains(keys(messages), candidate) {
@@ -27,20 +27,20 @@ i18n_message(messages: any, language: text, key: text): any := {
 }
 
 // A plural message's form for the category, else its form other
-i18n_plural_form(forms: any, category: text): any := {
+i18n_plural_form(forms: any, category: text) as any := {
 	if contains(keys(forms), category) { return forms[category] }
 	forms["other"]
 }
 
 // The text with each {name} replaced by the value named name
-i18n_filled(message: text, values: any): text := {
+i18n_filled(message: text, values: any) as text := {
 	var out = message
 	for name in keys(values) { out = replace(out, "{" + name + "}", "" + values[name]) }
 	out
 }
 
 // The CLDR plural category of a whole number in a language: "one", "few", "other", …
-plural_category(language: text, n: int): text := {
+plural_category(language: text, n: int) as text := {
 	let base = split(language, "-")[0]
 	let last = n % 10
 	let last_two = n % 100
@@ -78,10 +78,10 @@ plural_category(language: text, n: int): text := {
 CYRILLIC_LETTERS = [["shch", "щ"], ["sch", "щ"], ["zh", "ж"], ["kh", "х"], ["ts", "ц"], ["ch", "ч"], ["sh", "ш"], ["yu", "ю"], ["ya", "я"], ["yo", "ё"], ["a", "а"], ["b", "б"], ["c", "к"], ["d", "д"], ["e", "е"], ["f", "ф"], ["g", "г"], ["h", "х"], ["i", "и"], ["j", "дж"], ["k", "к"], ["l", "л"], ["m", "м"], ["n", "н"], ["o", "о"], ["p", "п"], ["q", "к"], ["r", "р"], ["s", "с"], ["t", "т"], ["u", "у"], ["v", "в"], ["w", "в"], ["x", "кс"], ["y", "ы"], ["z", "з"]]
 
 // the text in Cyrillic letters: each Latin spelling its letter, a capital's spelling capitalized ("Sh" → "Ш")
-cyrillic(t: text): text := transliterated(t, CYRILLIC_LETTERS)
+cyrillic(t: text) as text := transliterated(t, CYRILLIC_LETTERS)
 
 // the text with each spelling of the table, matched case-blind, replaced by its letter, upper case after a capital
-transliterated(t: text, table: list): text := {
+transliterated(t: text, table: list) as text := {
 	out = ""
 	at = 0
 	n = count(t)
@@ -95,7 +95,7 @@ transliterated(t: text, table: list): text := {
 }
 
 // the letter in upper case when the character it stands for is a capital
-capitalized_like(letter: text, character: text): text := if upper(character) == character and lower(character) != character then upper(letter[0 .. 1]) + letter[1 .. count(letter)] else letter
+capitalized_like(letter: text, character: text) as text := if upper(character) == character and lower(character) != character then upper(letter[0 .. 1]) + letter[1 .. count(letter)] else letter
 
 // `name in cyrillic` is the name written so, `print name in cyrillic` prints it (no list is called cyrillic)
 rewrite ($x in cyrillic) => cyrillic($x)

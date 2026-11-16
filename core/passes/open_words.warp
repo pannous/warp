@@ -12,12 +12,12 @@
 OPEN_PREFIX = "open·"
 
 # a module being built: its calls of its open words through their slots
-open_calls(program: Node): Node := if module_written != "" then slotted(program, module_written) else program
+open_calls(program: Node) as Node := if module_written != "" then slotted(program, module_written) else program
 # a program linking modules: the slots it extends filled
-open_slots(program: Node): Node := if module_written == "" and #module.linked_images > 0 then with_slots_filled(program) else program
+open_slots(program: Node) as Node := if module_written == "" and #module.linked_images > 0 then with_slots_filled(program) else program
 
 # --- a module being built ---
-slotted(program: Node, name: text): Node := {
+slotted(program: Node, name: text) as Node := {
 	open = opened_words(program, definition_slices(std_module_text(name)).map(slice => slice#1))
 	if #open == 0 { return program }
 	called = {}
@@ -26,9 +26,9 @@ slotted(program: Node, name: text): Node := {
 	slots = called.keys.map(word => Key(symbol("global"), Op.Colon, Key(symbol(slot_name(name, word)), Op.Assign, Node.Empty)))
 	separated(bracketed(slots + statements_in(rewritten), ""), ";")
 }
-slot_name(module_name: text, word: text): text := OPEN_PREFIX + module_name + "·" + word
+slot_name(module_name: text, word: text) as text := OPEN_PREFIX + module_name + "·" + word
 # name → its parameter count, for each word the module writes once, a parameter of it open to other classes
-opened_words(program: Node, written: list): map := {
+opened_words(program: Node, written: list) as map := {
 	counts = {}
 	for statement in statements_in(program) {
 		call = definition_call(statement)
@@ -43,12 +43,12 @@ opened_words(program: Node, written: list): map := {
 # whether another standard module writes a variant of the word taking as many values, typed for a class: units'
 # milliseconds_of(duration: Quantity) beside time's. (A slotted call is a closure call whose value has no static kind:
 # every word slotted would leave a module's typed code untyped; card open-words-protocol takes a program's own classes)
-extended_elsewhere(word: text, count: int): bool := std_module_names.filter(other => other != module_written).any(other => definition_slices(std_module_text(other)).any(slice => slice#1 == word and class_typed_head(slice#2, count)))
-class_typed_head(written: text, count: int): bool := statements_in(plain_node(parsed(written))).any(statement => class_typed_call(definition_call(statement), count))
-class_typed_call(call: Node, count: int): bool := call != ø and #call - 1 == count and parameter_types(call).any(type => type != any_word and is_open_type(type))
+extended_elsewhere(word: text, count: int) as bool := std_module_names.filter(other => other != module_written).any(other => definition_slices(std_module_text(other)).any(slice => slice#1 == word and class_typed_head(slice#2, count)))
+class_typed_head(written: text, count: int) as bool := statements_in(plain_node(parsed(written))).any(statement => class_typed_call(definition_call(statement), count))
+class_typed_call(call: Node, count: int) as bool := call != ø and #call - 1 == count and parameter_types(call).any(type => type != any_word and is_open_type(type))
 # untyped, any, or a class (a capitalized name, as a class is written)
-is_open_type(type: text): bool := type == any_word or is_capitalized(type)
-slotted_calls(n: Node, open: map, name: text, called: map): Node := {
+is_open_type(type: text) as bool := type == any_word or is_capitalized(type)
+slotted_calls(n: Node, open: map, name: text, called: map) as Node := {
 	# (a definition's head names its parameters, no call)
 	if definition_call(n) != ø { return Key(key_of(n), Op.Define, slotted_calls(value_of(n), open, name, called)) }
 	# (a method call `x.f(y)` names the receiver's method, no word of the module: only its parts are slotted)
@@ -67,7 +67,7 @@ slotted_calls(n: Node, open: map, name: text, called: map): Node := {
 # each linked module's slot of a word a variant typed for a class extends, another linked module's or the program's
 # own, filled with the program's view of the word; before the modules' definitions are reached (passes.warp
 # with_used), so the fill's call brings every variant of the word
-with_slots_filled(program: Node): Node := {
+with_slots_filled(program: Node) as Node := {
 	fills = []
 	for image in module.linked_images {
 		for entry in image.globals {
@@ -83,13 +83,13 @@ with_slots_filled(program: Node): Node := {
 	if #fills == 0 then program else separated(bracketed(fills + statements_in(program), ""), ";")
 }
 # `(a1, a2) => word(a1, a2)`
-filled_lambda(word: text, count: int): Node := {
+filled_lambda(word: text, count: int) as Node := {
 	parameters = range_list(count).map(i => symbol(OPEN_PREFIX + (i + 1)))
 	Key(List(parameters, Bracket.Round, Separator.Comma), Op.Arrow, call_of(word, parameters))
 }
 # how many values a variant of the word typed for a class takes, the program's own or another linked module's than
 # the slot's; ø when none is
-extended_count(program: Node, word: text, owner: text): int? := {
+extended_count(program: Node, word: text, owner: text) as int? := {
 	definitions = statements_in(program)
 	for image in module.linked_images.filter(image => image.name != owner) {
 		for slice in linked_signature(image.name).slices.filter(slice => slice#1 == word) { definitions += statements_in(slice_tree(slice#3, slice#4)) }
