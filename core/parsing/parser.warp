@@ -1161,8 +1161,9 @@ def continued(p: Parser, left: Node, min_power: int) as Node := {
 			glued = glued_at(p, operator_start, op#1)
 			before_blanks = p.at
 			// an operator ending its line continues only onto a line indented deeper, `total := fold +` alone (decision
-			// trailing-operator-indent): the next line at the same indent is the next statement
-			if skip_blanks(p) and line_indent(p) <= p.indent {
+			// trailing-operator-indent): the next line at the same indent is the next statement; every blank counts, a
+			// top-level `then` before a line indented by spaces continues
+			if skip_blanks(p) and line_blanks(p) <= p.indent {
 				p.at = before_blanks
 				left = keyed(op#2, left, ø)
 				continue
