@@ -1541,7 +1541,7 @@ async function sendBugReport() {
 		$("bug-comment").value = "";
 		$("bug-express").checked = $("bug-quick").checked = false;
 		if (card) showBugStatus("card made: ", false, card, board);
-		else showBugStatus(`sent (${queued}): a card within minutes`);
+		else showBugStatus(`report received (${queued}); it becomes a card on the board within a few minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}
