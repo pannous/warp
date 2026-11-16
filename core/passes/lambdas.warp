@@ -571,14 +571,15 @@ declared_locally(n: Node) as list := {
 	declared
 }
 # `x=1; f=()=>x; x=2; f()` is 2: a captured variable is the same variable, so a name a lambda reads that a later
-# statement of its scope assigns is shared (decision captured-same-variable); a read-only capture stays a copy
+# statement of its scope assigns is shared (decision captured-same-variable); a read-only capture stays a copy. Its own
+# statement counts too: `fact = n => … fact(n - 1)` reads the fact it is being assigned to (card lambda-self-reference)
 captures_assigned_later(statements: list) as list := {
 	shared = []
 	last = last_assignments(statements)
 	for at in 1 to #statements {
 		for lambda in nodes_in(statements#at).filter(is_lambda) {
 			own = lambda_parameter_names(lambda_of(lambda))
-			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and (last.get(name_of(part)) ?? 0) > at and name_of(part) not in own).map(name_of)
+			shared += nodes_in(arrow_result(lambda)).filter(part => part is symbol and (last.get(name_of(part)) ?? 0) >= at and name_of(part) not in own).map(name_of)
 		}
 	}
 	shared
