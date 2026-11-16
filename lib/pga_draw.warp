@@ -5,6 +5,9 @@
 // point and a radius, a Circle a center point, the plane it lies in and a radius. meet gives the intersections PGA has
 // (line ⋏ plane a point, plane ⋏ plane a line) and the round ones as lists, empty where nothing meets: sphere ⋏ plane
 // [the circle], sphere ⋏ line [the two points], one where they touch.
+// The questions the samples ask (samples/geometry/pga_*.warp): coplanar(l, m) whether two lines meet or are parallel,
+// closest(l, m) their nearest points, distance(p, x) a point's from a line or plane, place(p) its coordinates rounded to
+// three places; caption writes the legend or names a point on the picture.
 // The camera orbits the origin: orbit(yaw, pitch) turns it, zoom(pixels_per_unit) scales the picture; z is up.
 use math
 use pga
@@ -119,6 +122,8 @@ sketch(s: Sphere, color: any) := {
 	rim = [[at#1 + outline * cos(2 * pi * i / 64), at#2 + outline * sin(2 * pi * i / 64)] for i in 0 to 64]
 	for i in 1 to 64 { trace(rim#i, rim#(i + 1), color) }
 }
+// the segment from point a to point b
+sketch(a: Multivector, b: Multivector, color: any) := stroke(coordinates(a), coordinates(b), color)
 sketch(c: Circle, color: any) := strokes(ring(coordinates(c.center), facing(c.plane), c.radius, 64), color)
 sketch(all: list, color: any) := {
 	for x in all { sketch(x, color) }
@@ -143,3 +148,33 @@ meet(s: Sphere, x: Multivector) as list := {
 	if half == 0 then [point(base)] else [point(along(base, d, -half)), point(along(base, d, half))]
 }
 infix operator ⋏(s: Sphere, x: Multivector) := meet(s, x)
+
+// the coordinates of a point rounded to three places, to print
+place(p: Multivector) as list := [round(c, 3) for c in coordinates(p)]
+// whether two lines of space lie in one plane, so meet or are parallel: the scalar of their join, their distance times
+// the sine of their angle times their norms, is 0; skew lines have none
+coplanar(l: Multivector, m: Multivector) as bool := abs(mv_scalar(join(l, m))) < 0.000000001
+// the points of lines l and m nearest each other, [on l, on m]: one point twice where they meet; parallel lines have
+// many, then l's nearest the origin and its foot on m
+closest(l: Multivector, m: Multivector) as list := {
+	a = foot(l, origin)
+	b = foot(m, origin)
+	u = direction(l)
+	v = direction(m)
+	r = [a#1 - b#1, a#2 - b#2, a#3 - b#3]
+	k = dot(u, v)
+	square = 1 - k * k
+	if square < 0.000000000001 { return [point(a), point(foot(m, point(a)))] }
+	s = (k * dot(v, r) - dot(u, r)) / square
+	t = (dot(v, r) - k * dot(u, r)) / square
+	[point(along(a, u, s)), point(along(b, v, t))]
+}
+// how far the point p is from the line or plane x: from p to its foot on x
+distance(p: Multivector, x: Multivector) as float := distance(coordinates(p), foot(x, p))
+// the legend's line n at the canvas's top left
+caption(n: int, words: any, color: any) := label(12, 10 + 18 * n, words, color, 14)
+// words beside the point p as seen
+caption(p: Multivector, words: any, color: any) := {
+	at = seen(coordinates(p))
+	label(at#1 + 7, at#2 - 7, words, color, 13)
+}
