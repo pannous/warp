@@ -43,7 +43,9 @@ class Glance { x: float; y: float; z: float; yaw: float; pitch: float; fov: floa
 class Canopy { total: int; candidate: int; submitted: int; scenery: int; nearest: int; sprites: list; eye: list; right: list; up: list; forward: list }
 // sprites are the billboards still drawn. draws and spans are one cluster each, far to near: place x, z, yaw, scale
 // and first triangle, triangle count, kind, level.
-class Grove { sprites: list; draws: list; spans: list; meshed: int; kept: int; culled: int; triangles: int; bounds: list; cones: list }
+// tables: its levels' lists (grove_tables), made on the grove's first frame and kept for the frames after it, so a
+// frame makes no new GPU lists (a GPU list's memory is never given back)
+class Grove { sprites: list; draws: list; spans: list; meshed: int; kept: int; culled: int; triangles: int; bounds: list; cones: list; tables: list = [] }
 
 forest_mix(ix, iy) := {
 	n = ix * 374761393 + iy * 668265263 + 1442695041
@@ -579,6 +581,16 @@ grove_known(seen, place) := {
 // A tree is first level, level count, and the local distance chosen_level uses.
 grove_lod(grove: Grove, kits: list, eye: list) as list := {
 	if not (grove is Grove) { raise "forest: a grove's levels need a Grove, not " + text(grove) }
+	if count(grove.tables) == 0 { grove.tables = grove_tables(grove, kits) }
+	tables = grove.tables
+	trees = [grove_tree(tables#6#i, tables#7#i, eye) for i in 1 to count(tables#6)]
+	[tables#1, tables#2, tables#3, tables#4, tables#5, trees]
+}
+// a tree's row: its first level, level count, and its distance from the eye
+grove_tree(tree: list, place: list, eye: list) as list := [tree#1, tree#2, grove_distance(eye, place#1, place#4 * 0.5, place#2) / place#4, 0.0]
+// the eye-free part of grove_lod: draws, spans, bounds and cones as GPU lists, then levels, trees (first level, level
+// count) and their places
+grove_tables(grove: Grove, kits: list) as list := {
 	grove_kits(kits)
 	draws = []
 	spans = []
@@ -607,10 +619,9 @@ grove_lod(grove: Grove, kits: list, eye: list) as list := {
 			levels.add([0.0 + first_cluster, 0.0 + count(level.mesh.clusters), level.mesh.error, 0.0])
 			n = n + 1
 		}
-		apart = grove_distance(eye, place#1, place#4 * 0.5, place#2) / place#4
-		trees.add([0.0 + first_level, 0.0 + count(kit.levels), apart, 0.0])
+		trees.add([0.0 + first_level, 0.0 + count(kit.levels)])
 	}
-	[draws, spans, bounds, cones].map(gpu_vectors) + [levels, trees]
+	[draws, spans, bounds, cones].map(gpu_vectors) + [levels, trees, seen]
 }
 
 // The baked EZ Tree atlas (samples/graphics/ez_trees/atlas.bin). Grove is entry 1,
