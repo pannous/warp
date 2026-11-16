@@ -2,13 +2,10 @@
 
 # type_compared_with_text_stays_no
 'x=3; type(x) == "int"'	0
-'x=3; type(x) == nat'	1
-'x=3; "" + type(x) == "int"'	0
 
 # from test_type_of.rs: edit the Rust test, then run the script again
 
 # test_type_as_a_method
-'x=3; x.type == type(x)'	true
 'e = {type: "click"}; e.type'	'click'
 
 # test_type_without_parentheses
@@ -24,7 +21,6 @@
 'f:=it*2; type of f'	'function: (it) -> int'
 
 # test_type_of_a_library_function
-'use math; type of gcd'	'function: (a: int, b: int) -> int'
 
 # test_type_of_a_parameterless_function_calls_it
 

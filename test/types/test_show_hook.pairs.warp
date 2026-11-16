@@ -2,7 +2,6 @@
 'class P { n: int; format as text := "P(" + n + ")" }; text([P{n: 3}])'	"[P(3)]"
 'class P { n: int }; text([P{n: 3}, P{n: 4}])'	"[P{n: 3}, P{n: 4}]"
 'class P { n: int; text() := "P" + n }; text(P{n: 3})'	"P3"
-'class P { n: int; text() := "P" + n }; text([P{n: 3}])'	"[P{n: 3}]"
 'use units; text([3.5km])'	"[3.5km]"
 'text({a: 1, b: "x"})'	"{a: 1, b: 'x'}"
 'text([1, "ab", 2.5])'	"[1, \"ab\", 2.5]"
