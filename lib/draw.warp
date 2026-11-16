@@ -263,6 +263,24 @@ def polyline(corners: list, color: any, width: float = 1) {
 		segment_pixels(corners#i#1, corners#i#2, corners#(i + 1)#1, corners#(i + 1)#2, paint, width, i == 1 and not closed)
 	}
 }
+// a function's graph from `from` to `to`, `plot(siren, 0, π)` (card plot-siren-range): sampled at each canvas column,
+// its lowest and highest value fitting the canvas within PLOT_MARGIN pixels, on cleared paper in ink, the zero line
+// pale where the graph crosses it, and shown
+PLOT_MARGIN = 12
+PLOT_WIDTH = 2
+plot(f: function, from: number, to: number) := {
+	columns = canvas_width - 2 * PLOT_MARGIN
+	xs = [from + (to - from) * 1.0 * column / columns for column in 0 to columns]
+	ys = xs.map(f)
+	low = min(ys)
+	high = max(ys)
+	span = if high == low then 1.0 else high - low
+	row = y => PLOT_MARGIN + (high - y) * (canvas_height - 2 * PLOT_MARGIN) / span
+	clear(paper)
+	if low < 0 and high > 0 { line_pixels(PLOT_MARGIN, row(0), canvas_width - PLOT_MARGIN, row(0), with_alpha(ink, 0.3), 1) }
+	polyline([[PLOT_MARGIN + column, row(ys[column])] for column in 0 to columns], ink, PLOT_WIDTH)
+	show()
+}
 // a line of a polyline: its start's round end only where `started` (the first), else the line before covered it
 segment_pixels(x1: float, y1: float, x2: float, y2: float, paint: int, width: float, started: bool) := {
 	if drawing_on_gpu { shape(SEGMENT_SHAPE, x1 + 0.5, y1 + 0.5, x2 + 0.5, y2 + 0.5, width / 2, if started then 1 else 0, paint) }

@@ -1,0 +1,7 @@
+#!/usr/bin/env warp
+# A siren's wave drawn as a graph over its first π seconds, then played (lib/draw.warp plot(f, from, to))
+use sound
+use draw
+siren(t: float) := 0.3 * sin(2π * t * (440 + 200 * sin(2π * t)))
+plot(siren, 0, π)
+play(siren, 2s)
