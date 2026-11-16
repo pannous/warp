@@ -11,3 +11,5 @@
 
 # test_index_assign_in_while_with_increment
 'i=0;pixel=(0 0 0);while(i++<3){pixel[i]=i};pixel[2]'	2
+# an item given a list, then a number (card prelude-class-shadowing)
+'c = [ø]; c[0] = [1]; c[0] = 5; c[0]'	5
