@@ -314,6 +314,8 @@ before asking a question). After a context swap, this file and your role file be
 - A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
 - Sprint (user, from 2026-11-16): a new card only when it reduces existing ones (a split that closes others, a
   shared root cause); features come only from the user.
+- A new card's title is one plain sentence the user understands without context (what goes wrong or is wanted);
+  keys, names and paths go in the body.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - Edge cases never halt progress: a lib fix that needs no rebuild, else a card in Later with the root cause, and
   you take the next card.
