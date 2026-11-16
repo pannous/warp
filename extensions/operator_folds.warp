@@ -12,8 +12,18 @@ FOLD_IDENTITIES = {"+": 0, "*": 1, "and": yes, "or": no}
 
 folded_operators(n: Node) as Node := {
 	folded = written_fold(n)
-	if folded != ø then folded else children(n, folded_operators)
+	if folded != ø then folded else children(ordering_arguments(n), folded_operators)
 }
+
+# a comparison alone as a call's argument, `sorted(xs, >)`, is the function of two it applies, `(a, b) => a > b`
+# (the arithmetic ones are already values a fold reads, `fold(xs, 0, +)`)
+ORDERING_OPERATORS = [Op.Lt, Op.Gt, Op.Le, Op.Ge]
+ordering_arguments(n: Node) as Node := {
+	if not is_called_name(n) or not items_of(n)[1 ..].any(argument => ordering_alone(argument) != ø) { return n }
+	group_like(n, [n#1] + items_of(n)[1 ..].map(argument => if ordering_alone(argument) != ø then fold_combining(ordering_alone(argument)) else argument))
+}
+# the comparison written alone, never a text naming one: `split(">")` splits at the character
+ordering_alone(n: Node) as Op? := if n is text then ø else op_alone(n, ORDERING_OPERATORS)
 
 # the fold the node writes with its operator alone, else ø
 written_fold(n: Node) as Node? := {
@@ -39,13 +49,14 @@ fold_trailing_op(n: Node) as Op? := match n {
 	_: ø
 }
 # the operator a node stands for alone, `+`, `(+ ø ø)` or the text the parser leaves of a `+` before a `;`, else ø
-fold_op_alone(n: Node) as Op? := match n {
-	Key(left, op, right): if left == ø and right == ø and op in FOLD_OPERATORS then op else ø
-	Symbol(name): fold_op_spelled(name)
-	Text(written): fold_op_spelled(written)
+fold_op_alone(n: Node) as Op? := op_alone(n, FOLD_OPERATORS)
+op_alone(n: Node, operators: list) as Op? := match n {
+	Key(left, op, right): if left == ø and right == ø and op in operators then op else ø
+	Symbol(name): op_spelled(name, operators)
+	Text(written): op_spelled(written, operators)
 	_: ø
 }
-fold_op_spelled(written: text) as Op? := if FOLD_OPERATORS.any(op => op as text == written) then written as Op else ø
+op_spelled(written: text, operators: list) as Op? := if operators.any(op => op as text == written) then written as Op else ø
 # the operator as a value, as `fold(xs, 0, +)` writes it
 fold_operator_value(op: Op) as Node := Key(ø, op, ø)
 # `(a, b) => a + b`

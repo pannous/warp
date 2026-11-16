@@ -747,7 +747,9 @@ method_dispatcher(classes: map, owners: list, spellings: list, name: text, falls
 	operated = falls_back and operator != ø and #call_arguments == 2 and spellings#1 not in position_words
 	builtin = if operated then promoted(Key(call_arguments#1, operator#2 as Op, call_arguments#2), promotions, name) else ø
 	# a commutative operator of a value and an instance, `5 * q`, is the instance's method with the value, q * 5
-	swapped = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else builtin
+	# any other operator, `3 - q`, has no reading without one the class declares: refused, as the builtin `3 - q` would
+	# hand q back to this dispatcher forever
+	swapped = if operated and operator#2 in commutative_operators then class_dispatch(deepest_first(classes, owners), called, call_arguments.reverse(), builtin, call_arguments#2) else if operated then unreflected(deepest_first(classes, owners), operator#2, call_arguments#2, builtin) else builtin
 	# an instance on the right whose class declares the operator with a value on its left, `*(k: number, v: V)`: that,
 	# before the swap
 	reflected = if operated and #reflected_owners > 0 then reflected_dispatch(classes, reflected_owners, operator#2, call_arguments, swapped) else swapped
@@ -809,6 +811,13 @@ numbers_first(operation: Node, dispatched: Node) as Node := {
 	Key(Key(Key(ø, Op.If, both_numbers), Op.Then, operation), Op.Else, dispatched)
 }
 # the reflected method of the right operand's class, `*·reflected(v, k)` of `k * v`, else the otherwise
+# a value on the left of an instance of a class without the operator for that order, `3 - q`: refused naming the
+# declaration it lacks, else the otherwise
+unreflected(owners: list, glyph: text, right: Node, otherwise: Node) as Node := {
+	if #owners == 0 { return otherwise }
+	refusal = List([symbol("raise"), "${owners#1} has no ${glyph} with a value on its left: declare ${glyph}(k: number, v: ${owners#1})"], Bracket.None, Separator.Space)
+	Key(Key(Key(ø, Op.If, instance_test(right, owners#1)), Op.Then, refusal), Op.Else, unreflected(owners[1..], glyph, right, otherwise))
+}
 reflected_dispatch(classes: map, owners: list, glyph: text, operands: list, otherwise: Node) as Node := {
 	called = {}
 	for owning_class in owners { called[owning_class] = reflected_name(glyph) }
