@@ -1,0 +1,28 @@
+// Impostor tiles of the four EZ species (notes/forest.md). A row is one species,
+// a view is a colour tile then its normal tile, and view 0 faces the tree's local +z.
+
+'use forest; impostor_rect(0, 0)'	[0, 0, 216, 256]
+
+'use forest; impostor_rect(0, 0, 1)'	[216, 0, 216, 256]
+
+'use forest; impostor_rect(1, 3, 1)'	[1512, 256, 216, 256]
+
+'use forest; impostor_rect(3, 7)'	[3024, 768, 216, 256]
+
+'use forest; impostor_view(0.0, 0.0, 10.0, 0.0, 0.0)'	[0, 1, 0]
+
+'use forest; impostor_view(0.0, 10.0, 0.0, 0.0, 0.0)'	[2, 3, 0]
+
+'use forest; impostor_view(1.5707963267948966, 0.0, 10.0, 0.0, 0.0)'	[2, 3, 0]
+
+'use forest; use math; a = pi / 8.0; impostor_view(0.0, sin(a) * 10.0, cos(a) * 10.0, 0.0, 0.0)'	[0, 1, 0.5]
+
+'use forest; impostor_view(0.0, 0.0, 0.0, 0.0, 0.0)'	[0, 1, 0]
+
+'use forest; try { impostor_rect(4, 0) } catch e { e.message }'	'forest: an impostor species is 0 to 3, not 4'
+
+'use forest; try { impostor_rect(0, 8) } catch e { e.message }'	'forest: an impostor view is 0 to 7, not 8'
+
+'use forest; impostor_radius(tree_mesh("../../samples/graphics/ez_trees/oak.eztree"))'	0.40064010360635005
+
+'use forest; [atlas_has("../../samples/graphics/ez_trees", 1), atlas_has("../../samples/graphics/ez_trees", 9), atlas_has("../../samples/graphics/no-such-atlas", 1)]'	[yes, no, no]

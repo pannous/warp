@@ -33,10 +33,13 @@ Bark003 colour with each normal just to its right, along y = 512.
 
 `near.rgba` is the close-up atlas, 4096×1536: pine, oak, ash and aspen leaves at their own 1024, then
 Bark001, Bark002 and Bark003 colour with each normal to the right, along y = 1024. A smaller grove leaf
-is a premultiplied Lanczos resize, so the alpha stays soft. `atlas.bin` is the three images, RGBA8,
-zlib-compressed (RFC 1950), so a run uploads the bytes instead
+is a premultiplied Lanczos resize, so the alpha stays soft. `atlas.bin` is those images plus the impostor
+sheet, RGBA8, zlib-compressed (RFC 1950), so a run uploads the bytes instead
 of rebuilding a float per byte. `atlas.txt` is the stamp: magic `EZAT`, version 1, the source hash, then each
-entry's id, width and height. Id 1 is the grove atlas, id 2 the ash atlas, id 3 the near atlas. The hash is the sha256 of the
+entry's id, width and height. Id 1 is the grove atlas, id 2 the ash atlas, id 3 the near atlas. Id 4 is the
+impostor sheet, 3456×1024: eight views around each of pine, oak, aspen and ash, a colour tile then its normal
+tile, baked by the same script from the hero medium meshes. Version stays 1. Regenerating keeps the compressed
+bytes of entries 1–3 when the source hash still matches, and only appends entry 4. The hash is the sha256 of the
 per-file sha256 hex lines of `atlas.sources`, joined by newlines. A run trusts the stamp (it is baked with the
 bin and shipped in one archive) and builds the floats from the `.rgba` files only without a bin of its version.
 After changing a texture, regenerate both with

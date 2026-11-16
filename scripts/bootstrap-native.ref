@@ -1,1 +1,1 @@
-674d0ff07f77e432cb03e0ac1eda51fe41c6b08f  the last commit whose core/native the v1.10.0 compiler builds (before fixed arrays, 3d4864c0a9); the full hash: a shallow checkout fetches a commit only by it
+59dfac285309014528b5ab0067de3c018e433b86  the v1.13.0 release commit: its core/native the v1.13.0 compiler builds (674d0ff07f, the v1.10.0 one, overflows linear memory under v1.13.0 on Linux); the full hash: a shallow checkout fetches a commit only by it

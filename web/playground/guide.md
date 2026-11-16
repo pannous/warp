@@ -840,7 +840,7 @@ postcard.show()
 
 Every pixel at once on the graphics card: [[#Shaders]].
 
-Examples: frames; samples: postcard, paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
+Examples: frames; samples: postcard, paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles, pga_visual
 
 ## Shaders
 

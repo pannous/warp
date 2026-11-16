@@ -1,0 +1,21 @@
+#!/usr/bin/env warp
+# What circle do a sphere and a plane cut? Its centre is the foot of the sphere's centre on the plane, its radius
+# √(r² - d²) for the centre's distance d from the plane (card pga-visualization, lib/pga_draw.warp)
+use pga_draw
+canvas.resize(480, 360)
+
+ball = sphere(point(1, 0.5, 1), 1.3)
+level = plane(0, 0, 1, -0.5) # z = 0.5
+cut = ball ⋏ level
+print(if cut == [] then "the plane misses the sphere" else "the circle's centre is " + text(place(cut#1.center)) + ", its radius " + text(round(cut#1.radius, 3)))
+
+clear(paper)
+sketch(level, gray)
+sketch(ball, purple)
+sketch(cut, red)
+for c in cut {
+	sketch(c.center, red)
+	caption(c.center, "r " + text(round(c.radius, 3)), red)
+}
+caption(0, "what circle do a sphere and a plane cut?", ink)
+show()

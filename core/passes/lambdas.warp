@@ -21,7 +21,7 @@ closure_call_word = "closure_call_"
 # the words that walk a list with a function: [the arguments between the list and the function]
 # the operators written as words, which name no function
 operator_words = {and: Op.And, or: Op.Or, xor: Op.Xor}
-iteration_extras = {"map": 0, "filter": 0, "each": 0, "for_each": 0, "forEach": 0, "find": 0, "any": 0, "all": 0, "fold": 1}
+iteration_extras = {"map": 0, "filter": 0, "each": 0, "for_each": 0, "forEach": 0, "foreach": 0, "find": 0, "any": 0, "all": 0, "fold": 1}
 
 # the items after a call's head
 arguments_of(call: list) as list := call[1..]
@@ -137,13 +137,13 @@ iteration_loop(word: text, list: Node, extras: list, apply: function) as Node :=
 	gathered = List([], Bracket.Square, Separator.Comma)
 	searching = fresh_name("searching", number)
 	match word {
-		"map": statements([set_to(result, gathered), each_of(item, list, [grown(result, called)]), result])
 		"filter": statements([set_to(result, gathered), each_of(item, list, [if_block(called, [grown(result, item)])]), result])
 		"find": statements([set_to(result, ø), set_to(searching, yes), each_of(item, list, [if_block(Key(searching, Op.And, called), [set_to(result, item), set_to(searching, no)])]), result])
 		# the answer once known, f is called no more: `[1, 0].all(x => 10 / x < 3)` never divides by 0
 		"any": statements([set_to(result, no), each_of(item, list, [if_block(Key(Key(ø, Op.Not, result), Op.And, called), [set_to(result, yes)])]), result])
 		"all": statements([set_to(result, yes), each_of(item, list, [if_block(Key(result, Op.And, Key(ø, Op.Not, called)), [set_to(result, no)])]), result])
-		_: statements([set_to(result, ø), each_of(item, list, [set_to(result, called)]), result])
+		# map and each (decision each-maps): the list of the results
+		_: statements([set_to(result, gathered), each_of(item, list, [grown(result, called)]), result])
 	}
 }
 
@@ -254,7 +254,8 @@ lowered_lambdas(n: Node, locals: Locals, lowering: Lowering) as Node := {
 		# `p as text` names a type, also where the program defines a function text()
 		Key(left, Op.As, type): Key(lowered_lambdas(left, locals, lowering), Op.As, type)
 		# a type's value names a type, `type P = int -> bool` a function type, no lambda
-		Key(left, Op.Assign, right): if is_type_view(left) then n else Key(lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
+		# `x: int = 3` names a type after the colon, also where the program defines a function int()
+		Key(left, Op.Assign, right): if is_type_view(left) then n else Key(if is_key(left, Op.Colon) and key_of(left) is symbol then left else lowered_lambdas(left, locals, lowering), Op.Assign, lowered_lambdas(assigned_values(right, locals, lowering), locals, lowering))
 		# `x=5; -x 1` parses as -(x 1) (decision negated-call): a value heads no call, the minus negates it alone, [-5, 1]
 		Key(left, Op.Sub, right): if left == ø and are_values(right, locals, lowering) then List([Key(ø, Op.Sub, right#1)] + items_of(right)[1 ..], Bracket.Square, Separator.Comma) else Key(lowered_lambdas(left, locals, lowering), Op.Sub, lowered_lambdas(right, locals, lowering))
 		Key(left, op, right): Key(lowered_lambdas(left, locals, lowering), op, lowered_lambdas(right, locals, lowering))

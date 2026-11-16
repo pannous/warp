@@ -805,6 +805,21 @@ function stopPressed() {
 	listenTo([]);
 	setStatus(STOPPED);
 }
+// ⌘ . (Ctrl . elsewhere) stops the run, as the stop button does; so does Ctrl C, as in a terminal,
+// unless some text is selected, which it copies as usual (card command-dot-shortcut)
+const selectedText = () => {
+	const field = document.activeElement;
+	if (field && "selectionStart" in field && field.selectionStart !== field.selectionEnd) return true;
+	return getSelection().toString() !== "";
+};
+const stopsRun = key => key.key === "." && (key.metaKey || key.ctrlKey) ||
+	key.key === "c" && key.ctrlKey && !key.metaKey && !selectedText();
+addEventListener("keydown", key => {
+	if (stopsRun(key)) {
+		key.preventDefault();
+		stopPressed();
+	}
+}, true);
 
 function finish(run, report) {
 	clearTimeout(run.timer);

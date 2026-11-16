@@ -1180,9 +1180,9 @@ addHostPart({
 		// undefined for any other value
 		const gpuCells = value => {
 			const place = program().gpu_list_place ? program().gpu_list_place(value) : -1n;
-			if (place < 0n) return undefined;
+			if (place === -1n) return undefined;
 			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell(value))];
-			return new Cells(program().memory.buffer, Number(place >> 32n), Number(program().gpu_list_bytes(value)) / Cells.BYTES_PER_ELEMENT);
+			return new Cells(program().memory.buffer, Number(BigInt.asUintN(64, place) >> 32n), Number(program().gpu_list_bytes(value)) / Cells.BYTES_PER_ELEMENT);
 		};
 		// gpu_compute of a map holding GPU lists: those changed where they are and given back themselves, the other
 		// arrays as new lists, all bound and read back in one job without a text of them
