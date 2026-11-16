@@ -159,15 +159,16 @@ module_hashes() as map := {
 	for module in prebuilt_module_names() { hashes[module] = source_hash(std_module_text(module)) }
 	hashes
 }
-# the modules `warp rebuild` prebuilds: the standard ones, lib/host/'s and the runtime modules, with every module they
-# use (a prebuilt module links those, decision no-lib-reads); any other module is compiled from its source with the
-# program using it, so a core change rebuilds only these (card module-prebuild-step: all of lib/ cost the build +32 %)
+# the modules `warp rebuild` prebuilds: every module of lib/ (a program pays only for its own code, card demo-slowness:
+# the site generator compiled markdown with each run, 5.8 s, now 0.6 s), lib/host/'s and the runtime modules, with every
+# module they use (a prebuilt module links those, decision no-lib-reads); lib/aliases.warp is the compiler's table of
+# alias words, no module
 global prebuilt_modules_held = ø
 prebuilt_module_names() as list := {
 	if prebuilt_modules_held == ø {
 		names = []
 		at = 0
-		pending = std_module_names + modules_in("/").keys + modules_in(HOST_MODULES).keys + hooks().runtime_modules
+		pending = std_module_names + modules_in("/").keys.filter(name => name + module_extension != ALIAS_FILE) + modules_in(HOST_MODULES).keys + hooks().runtime_modules
 		while at < #pending {
 			name = pending[at]
 			at += 1
