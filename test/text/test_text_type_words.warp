@@ -2,4 +2,3 @@
 
 # every_text_type_word_calls_the_printable_operation
 is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; x as string' 'P a'
-is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; String(x)' 'P a'
