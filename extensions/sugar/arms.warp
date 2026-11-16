@@ -16,7 +16,7 @@ rewrite match $s {$arms...} => match $s {($k: $v) for (case $k: $v) in $arms...}
 rewrite switch $s {$arms...} => match $s {$arms...}
 # `Circle{r} => …`, `Point{x: 0, y}`: a declared class's name before braces (the parser's tag `Circle: {r}`) matches or
 # builds that class, as `Circle(r)` does (decision class-name-patterns); a name no class has stays the tag
-rewrite ($c: {$fields...}) => $c($fields...) where $c is symbol and $made = class_named($c, $source)
+rewrite $c{$fields...} => $c($fields...) where $c is symbol and $made = class_named($c, $source)
 # `when` by its shape (notes/decisions.md "`when` by shape"): arms after a subject, `when x {1 -> "a"; else -> "b"}`,
 # are a match, `when ping {…}` listens as `on ping {…}` (extensions/sugar/events.warp); each says the word meant
 rewrite when $s $body: block => match $s $body where are_arms($body) and alias
