@@ -60,27 +60,32 @@ value_code(n: Node) as text := if names_a_type(n) then node_text(n) else node_co
 data_code(n: Node) as text := if names_a_type(n) then quoted_text(unboxed_text(n)) else value_code(n)
 # a one-character text reads as the character it is
 text_code(t: text) as text := if code_point_count(t) == 1 then "'" + t + "'" else quoted_text(t)
-# a text in double quotes, a `\` before each of its quotes and backslashes, so the printed list reads back (P126)
+# a text in double quotes, a `\` before each of its quotes, backslashes and carriage returns, so the printed list
+# reads back (P126)
 quoted_text(t: text) as text := {
 	escapes = 0
-	for i in 0..byte_count(t) { if is_escaped_byte(byte_at(t, i)) { escapes += 1 } }
+	for i in 0..byte_count(t) { if escape_letter(byte_at(t, i)) != 0 { escapes += 1 } }
 	out = made_text(byte_count(t) + escapes + 2, is_ascii_text(t))
 	set_byte(out, 0, Ascii.Quote)
 	at = 1
 	for i in 0..byte_count(t) {
-		b = byte_at(t, i)
-		if is_escaped_byte(b) {
+		letter = escape_letter(byte_at(t, i))
+		if letter != 0 {
 			set_byte(out, at, Ascii.Backslash)
 			at += 1
 		}
-		set_byte(out, at, b)
+		set_byte(out, at, if letter != 0 then letter else byte_at(t, i))
 		at += 1
 	}
 	set_byte(out, at, Ascii.Quote)
 	out
 }
-# the bytes of `"` and `\`, which a quoted text escapes
-is_escaped_byte(b: int) as bool := b == Ascii.Quote or b == Ascii.Backslash
+# the letter a quoted text writes after a `\` for the byte, 0 for a byte written as it is: `"` and `\` themselves, a
+# carriage return `r`, which bare before a line end would read back as a Windows line end (extensions/line_ends.warp)
+escape_letter(b: int) as int := {
+	if b == Ascii.Quote or b == Ascii.Backslash { return b }
+	if b == Ascii.Return then Ascii.LowerR else 0
+}
 # a list as `warp format` writes it, `[1, "ab"]` (decision shown-spaced)
 list_text(xs: list) as text := "[" + joined_items(xs, ", ") + "]"
 # the items of a list as a list shows them, a space between: `print a 3` writes its values so
