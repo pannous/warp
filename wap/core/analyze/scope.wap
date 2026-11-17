@@ -18,20 +18,25 @@
 
 # depth of the program's own statements: names defined there are globals and top-level functions
 PROGRAM_DEPTH = 0
+# depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
+LIBRARY_DEPTH = -1
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 class Definition { name: text; kind: text; definer: Node; depth: int }
 
-bound_program(program: Block) as Block := bound(program, [], PROGRAM_DEPTH)
+# the program bound inside the library, whose declarations (`name: signature`) it may use
+bound_program(program: Block, library: list) as Block := bound(program, library.map(library_word), PROGRAM_DEPTH)
+library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), BOUND_LIBRARY, name, LIBRARY_DEPTH) }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
 bound(n: Node, scope: list, depth: int) as Node := match n {
 	Symbol(name) => resolved(n, scope, depth)
 	Block(statements) => refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), n)
-	Define(name, parameters, body) => refitted(Define(resolved(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n)
-	Fn(parameters, body) => refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n)
-	Set(place, value) => refitted(Set(bound(place, scope, depth), bound(value, scope, depth)), n)
+	Define(name, parameters, body) => with_captures(refitted(Define(resolved(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	Number(value) => n
 	Text(value) => n
 	Char(value) => n
@@ -41,6 +46,9 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
 }
 all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
+
+# the definitions of the program and the library, the ones `global x = …` sees
+program_scope(scope: list) as list := scope.filter(definition => definition.depth <= PROGRAM_DEPTH)
 
 # A function's parameters and body, one depth further in than the function's definition, the body seeing the
 # parameters before the names around it
@@ -57,6 +65,33 @@ parameter_bound(parameter: Node, scope: list, depth: int) as Node := match param
 	Key(name, Op.Colon, type) => refitted(Key(parameter_bound(name, scope, depth), Op.Colon, type), parameter)
 	_ => resolved(parameter_symbol(parameter), scope, depth)
 }
+# A function with the fact `captures`: the names of the functions around it that its body reads, a nested function's
+# reads included (the function passes them on), each defining name once in the order first read; [] when it captures
+# nothing. A closure is built from them (core/emit/closures.wap).
+with_captures(function: Node, scope: list, depth: int) as Node := {
+	captured = []
+	for definer in captured_definers(function) {
+		if from_enclosing_function(definer, scope, depth) and not identical_in(definer, captured) { captured = captured + [definer] }
+	}
+	with_fact(function, CAPTURES, List(captured, Bracket.Square, Separator.Comma))
+}
+# the defining names of the captures read anywhere in n
+captured_definers(n: Node) as list := match n {
+	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [fact_of(n, DEFINED_AT)] else []
+	Key(left, op, right) => captured_definers(left) + captured_definers(right)
+	List(items, bracket, separator) => items.flat_map(captured_definers)
+	_ => []
+}
+# whether a defining name belongs to a function around the one at depth, not to the program or the library
+from_enclosing_function(definer: Node, scope: list, depth: int) as bool := {
+	for definition in scope { if definition.definer === definer { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
+	no
+}
+identical_in(n: Node, nodes: list) as bool := {
+	for other in nodes { if other === n { return yes } }
+	no
+}
+
 # the name a parameter defines: `x`, or the x of `x: int`
 parameter_symbol(parameter: Node) as Node := match parameter {
 	Symbol(name) => parameter
@@ -73,11 +108,32 @@ defined_in(statements: list, scope: list, depth: int) as list := {
 }
 definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Define(name, parameters, body) => [Definition(text(name), BOUND_FUNCTION, name, depth)]
-	Set(place, value) => if place is symbol and not seen_in_function(text(place), scope, depth) then [Definition(text(place), local_kind(depth), place, depth)] + definitions_made_by(value, scope, depth) else definitions_made_by(value, scope, depth)
+	Set(place, value) => assigned_variables(n, place, scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
 	Call(called, arguments) => defined_in(arguments, scope, depth)
+	Prim(operation, arguments) => defined_in(arguments, scope, depth)
 	_ => []
+}
+# The variable an assignment makes: a new one for `let x = …` and for a name its function sees no variable of;
+# none for `global x = …`, the program's, or for a variable its function has. A name that is a variable of the
+# program or of a function around reads two ways, so the assignment is refused naming both.
+assigned_variables(set: Node, place: Node, scope: list, depth: int) as list := {
+	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
+	name = text(place)
+	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
+		if seen_in_function(name, scope, depth) { return [] }
+		outer = outer_variable(name, scope, depth)
+		if outer != ø { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one${if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""}") }
+	}
+	[Definition(name, local_kind(depth), place, depth)]
+}
+# the variable of that name the program or a function around the one at depth defines, ø when the name is none
+outer_variable(name: text, scope: list, depth: int) as Definition? := {
+	for definition in scope {
+		if definition.name == name { return if definition.depth > LIBRARY_DEPTH and definition.depth < depth and definition.kind != BOUND_FUNCTION then definition else ø }
+	}
+	ø
 }
 local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then BOUND_GLOBAL else BOUND_LOCAL
 seen_in_function(name: text, scope: list, depth: int) as bool := {
@@ -86,13 +142,14 @@ seen_in_function(name: text, scope: list, depth: int) as bool := {
 }
 
 # a name with what it refers to, as seen from depth: its own function's names as they were defined, the program's
-# globals and functions as such, an enclosing function's names as captures, anything else a library word
+# globals and functions and the library's words as such, an enclosing function's names as captures; a name nothing
+# defines is refused
 resolved(name: Node, scope: list, depth: int) as Node := {
 	for definition in scope {
 		if definition.name == text(name) {
-			kind = if definition.depth == depth or definition.depth == PROGRAM_DEPTH then definition.kind else BOUND_CAPTURE
+			kind = if definition.depth == depth or definition.depth <= PROGRAM_DEPTH then definition.kind else BOUND_CAPTURE
 			return with_fact(with_fact(name, BINDING, symbol(kind)), DEFINED_AT, definition.definer)
 		}
 	}
-	with_fact(name, BINDING, symbol(BOUND_LIBRARY))
+	refused(name, "nothing defines this name, neither the program nor the library")
 }

@@ -48,6 +48,13 @@ PASSIVE_SEGMENT = 0x01
 DATA_ALIGNMENT = 8
 
 # Instructions, each its opcode bytes; `instruction(opcode, indices)` adds the unsigned immediates it takes.
+BLOCK = [0x02]
+LOOP = [0x03]
+IF = [0x04]
+BRANCH = [0x0C]
+BRANCH_IF = [0x0D]
+# the type of a block that takes and leaves nothing
+VOID_BLOCK = [0x40]
 CALL = [0x10]
 DROP = [0x1A]
 LOCAL_GET = [0x20]
@@ -55,14 +62,27 @@ LOCAL_SET = [0x21]
 LOCAL_TEE = [0x22]
 GLOBAL_GET = [0x23]
 GLOBAL_SET = [0x24]
+I32_STORE = [0x36]
+I32_STORE8 = [0x3A]
+MEMORY_SIZE = [0x3F]
+MEMORY_GROW = [0x40]
 I32_CONST = [0x41]
 I64_CONST = [0x42]
 F64_CONST = [0x44]
+I32_GT_S = [0x4A]
+I32_GE_U = [0x4F]
+I32_ADD = [0x6A]
+I32_SUB = [0x6B]
+I32_DIV_U = [0x6E]
 REF_NULL = [0xD0]
 END = [0x0B]
 STRUCT_NEW = [0xFB, 0x00]
 STRUCT_GET = [0xFB, 0x02]
 ARRAY_NEW_DATA = [0xFB, 0x09]
+ARRAY_GET_U = [0xFB, 0x0D]
+ARRAY_LEN = [0xFB, 0x0F]
+# a memory's size in pages
+PAGE_BYTES = 0x10000
 
 # A module in the making. Imports come first among the functions, so a function's index is counted after them.
 class Module {

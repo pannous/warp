@@ -1,0 +1,51 @@
+# The primitives the emitter performs (notes/kernel.md "Primitives"): where warp ends and wasm or the host begins.
+#
+# Input: a Prim's operation and the code of its arguments; output: the code of the operation. Only the preload
+# writes a Prim, as the body of a built-in (wap/preload/prelude.wap), so each operation here is named once, in the
+# definition that gives it a warp signature. An operation that needs more than a few instructions is a helper
+# function of the module, emitted once.
+
+# print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
+# answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
+STDOUT = 1
+NEWLINE = 10
+IOVEC_ADDRESS = 0
+WRITTEN_ADDRESS = 8
+BYTES_ADDRESS = 16
+
+# the code of a primitive, its arguments checked against what the operation takes
+primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
+	if operation == symbol("print_text") { return helper_call(form, arguments, [nullable(text_type(p.m))], helper(p, "print_text", printing_function)) }
+	refused(form, "no primitive of this name")
+}
+
+# a call of a helper that takes these types and leaves no value
+helper_call(form: Node, arguments: list, takes: list, index: int) as Code := {
+	if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
+	Code([], arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
+}
+# the helper function of an operation, added by `build` the first time
+helper(p: Program, operation: text, build: function) as int := {
+	for each in p.helpers { if each#1 == operation { return each#2 } }
+	index = build(p)
+	p.helpers += [[operation, index]]
+	index
+}
+
+# The helper of print_text: the text's bytes and a line end copied into the memory, grown as needed, then written.
+# Its locals: 0 the text, 1 its length, 2 a count.
+printing_function(p: Program) as int := {
+	text_type_index = text_type(p.m)
+	the_text = instruction(LOCAL_GET, [0])
+	length = instruction(LOCAL_GET, [1])
+	count = instruction(LOCAL_GET, [2])
+	byte_at_count = i32_const(BYTES_ADDRESS) + count + I32_ADD
+	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
+	# pages short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
+	grown = i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [2]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + count + instruction(MEMORY_GROW, [0]) + DROP + END
+	copied = i32_const(0) + instruction(LOCAL_SET, [2]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + length + I32_GE_U + instruction(BRANCH_IF, [1]) + byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]) + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [2]) + instruction(BRANCH, [0]) + END + END
+	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
+	written = i32_const(STDOUT) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
+	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written)
+}

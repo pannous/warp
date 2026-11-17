@@ -25,3 +25,7 @@ pattern Fn = (Fn $parameters: List $body: Node)
 
 # a value given to a place, a name, `p.x` or `xs#i`: `x = 1`, `p.x = 2`, `x += 1` are Set(x, 1) …, (Set x 1)
 pattern Set = (Set $place: Node $value: Node)
+
+# an operation the emitter performs itself, the leaf where warp ends and wasm or the host begins; only the preload
+# writes one, as a built-in's body: `print(t: text) := prim print_text(t)` is Define(print, [t: text], Prim(print_text, [t]))
+pattern Prim = (Prim $operation: Symbol $arguments...: Node)
