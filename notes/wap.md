@@ -70,7 +70,11 @@ wap/
       patterns.wap            matching a rule's pattern: holes, typed holes, rests, guards
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
-      lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the extensions' rules
+      lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the rule files
+
+    sugar/                    rule files of the spellings wap's own source uses, one per topic
+      loops.wap               for, until, loop, n times → While
+      conditions.wap          unless, a if c, a ? b : c → If
 
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
@@ -83,10 +87,10 @@ wap/
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
       wasm.wap                the wasm binary format: modules, sections, instructions; knows no warp form
 
-  extensions/                 rule files, one per topic, loaded like modules: no hook table
-    loops.wap                 for, until, loop, n times → While
-    conditions.wap            unless, a if c, a ? b : c → If
-    …                         one file per topic as the forms arrive (units, ranges, match sugar …)
+  extensions/                 rule files no compiler needs, one per topic, loaded like modules: no hook table
+    units.wap                 3km, 90km/h: a unit multiplied in
+    durations.wap             2 weeks, 3ms
+    …                         one file per topic as the forms arrive (inline html, other languages' spellings …)
 
 lib/                          the library, warp's own, shared and used as it is
 test/wap/                     wap's outcome tests: a program compiled by wap, run, its output checked
@@ -98,7 +102,10 @@ What each file may know:
 - **core/rules/** knows patterns and templates, no particular form: every form it handles comes from a rule file.
 - **core/analyze/** reads, never rewrites.
 - **core/emit/** reads only the kernel; `wasm.wap` reads not even that.
-- **extensions/** holds rules only; a rule that needs code calls a function in lib/.
+- **core/sugar/** and **extensions/** hold rules only; a rule that needs code calls a function in lib/.
+
+Which of the two a rule file belongs in is measured, not argued: wap compiles itself with extensions/ switched off.
+A rule file is in core/sugar/ exactly when wap's own source uses its spelling; when that changes, the file moves.
 
 ## Rules for every file
 
@@ -121,4 +128,4 @@ Next, in order:
 1. kernel/primitives.wap and `print` as a library function (pays the debt)
 2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
 3. Define and Name, then If and While, each with an outcome test
-4. core/rules/ taking over lowering.wap; the first rule files in extensions/
+4. core/rules/ taking over lowering.wap; the first rule files in core/sugar/ and extensions/
