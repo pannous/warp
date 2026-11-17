@@ -271,6 +271,8 @@ def polyline(corners: list, color: any, width: float = 1) {
 PLOT_MARGIN = 0.05
 PLOT_WIDTH = 2
 PLOT_SAMPLES = 16
+// over a range, `plot(siren, 0 to π)`
+plot(f: function, over: Range) := plot(f, over.start, over.end)
 plot(f: function, from: number, to: number) := {
 	margin = max(1, round(min(canvas_width, canvas_height) * PLOT_MARGIN) as int)
 	columns = canvas_width - 2 * margin

@@ -21,11 +21,10 @@ present_part(t: text, part: text) := { if not (part in t) { raise "ValueError: \
 // the sum of the items, an index loop (a fold of the copied rest through a + closure took 2.8 times as long, card
 // sum-list-fold): a program's own sum replaces it (the Rust compiler still expands its own sum:
 // rust-harness:src/lowering/words/library_words.rs)
-// `list or number`, not `list`: a list parameter gets the items as a $list, so a range would make all of them first;
-// not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
+// `list or number`: not `any`, which takes a yes/no: `sum xs == 3` would be sum(xs == 3) (card xs-sum). Of one number that number, as max
 // A list sums from its first item, so a class's own + adds its items (decision class-operators-generic):
 // `sum([5km, 1500m])` is 6.5km; an empty list sums to 0
-sum(xs: list or number) := if is_range(xs) then range_sum(xs) else if xs is number then xs else if count(xs) == 0 then 0 else {
+sum(xs: list or number) := if xs is number then xs else if count(xs) == 0 then 0 else {
 	total = xs#1
 	for k in 2...count(xs) { total = total + xs#k }
 	total

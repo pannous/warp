@@ -1,12 +1,9 @@
-# A range as a value (notes/layers.md, sugar): `a to b` (also `a … b`) is the list of the ints from a through b, `a..b`
-# the same without b, each end computed once. A loop over a range counts without the list (extensions/sugar/iteration.warp), and the
-# rest of a list pattern, `rest...`, has no end. A range of whole numbers holds only its two ends (decision
-# lazy-range-value, runtime/lists.warp range_value): count, #, sum and r#i answer from them, any other list word makes
-# its items
-rewrite $a to $b => range_value($a, $b) where $a is int and $b is not missing
-rewrite $a .. $b => range_value($a, $b - 1) where $a is int and $b is not missing
-rewrite $a to $b => ($xs = ø; $i = $a; $end = $b; while $i <= $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
-rewrite $a .. $b => ($xs = ø; $i = $a; $end = $b; while $i < $end { $xs += [$i]; $i++ }; $xs) where $a is not missing and $b is not missing
+# A range as a value (wiki/range.md): `a to b` (also `a … b`, `a through b`) the Range from a through b, `a upto b`
+# (`a..b`) the same without b (lib/prelude.warp class Range). A loop over a range counts without one
+# (extensions/sugar/iteration.warp). A rule, not an `infix operator` of the prelude: the rest of a list pattern,
+# `rest...`, is the same operator with no end, which an operator's parameter cannot leave out
+rewrite $a to $b => Range($a, $b, yes) where $a is not missing and $b is not missing
+rewrite $a .. $b => Range($a, $b, no) where $a is not missing and $b is not missing
 
 # A round group of items left as a value is the list of its items (decision immutable-tuple: round brackets are a plain
 # list, card triage-round-groups): `(1, 2) == (3, 2)`, `([1, 2], [3, 4])[1][0]`, `f((1, 2))`. In the late sugar, after

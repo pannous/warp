@@ -21,9 +21,9 @@ Marked = {Bool: 257, Path: 259, Map: 8, SquareList: 264, UnbracketedList: 1288, 
 # 8), a list's separator (SEPARATOR_SHIFT 48), a list's kind (two bits from 1 << 52, ListKind), the code mark
 # (CODE_MARK, 1 << 56), two bits of a list kind's own (from 1 << 57, a GPU list's cell type)
 KindUnit = {Info: 256, Separator: 281474976710656, ListKind: 4503599627370496, Code: 72057594037927936, ListCell: 144115188075855872}
-# the kinds of a list node whose data is no $list (notes/core_extensions_roadmap.md "Hook table design"): a range's
-# two ends (runtime/lists.warp), the core's; the next rows an extension's (core/extension.warp list_kind: GPU lists 2)
-ListKind = {Listed: 0, Range: 1}
+# the kinds of a list node whose data is no $list (notes/core_extensions_roadmap.md "Hook table design"): the rows
+# after 0 an extension's (core/extension.warp list_kind: GPU lists 2)
+ListKind = {Listed: 0}
 # the first mark in an Int's or Float's info byte a number type takes (extensions/int_types/marks.warp): 1 is a yes/no's (a map,
 # as the runtime reads this file's maps only)
 TypeMark = {First: 2}

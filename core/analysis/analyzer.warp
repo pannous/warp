@@ -197,7 +197,6 @@ is_data(n: Node) as bool := {
 
 kind_of_key(n: Node, scope: Scope) as ValueKind := {
 	op = op_of(n)
-	if op == ".." or op == "..<" or op == "to" or op == "…" { return ValueKind.List }
 	if op == "±" { return ValueKind.Data }
 	# `p.code`: a field, whose kind the emitter knows from the class (a node at run time here); `xs.length` counts
 	if op == "." and value_of(n) is symbol { return if name_of(value_of(n)) in counting_words then ValueKind.Int else ValueKind.Data }

@@ -32,7 +32,6 @@ list_append(a: list, b: list) as list := {
 node_at(n: Node, index: int) as Node := {
 	if is_null(n) { index_out_of_range_of(index, 0) }
 	if is_extended_list(n) { return extended_list_at(n, index) }
-	if is_range(n) { return range_at(n, index) }
 	if kind_code(n) == Kind.List { return unboxed_list(n)#index }
 	if kind_code(n) == Kind.Text { return text_char(unboxed_text(n), index) }
 	# a one-character text given as a value known only at run time is a character: ":"#1 is ':'
@@ -45,19 +44,19 @@ node_at(n: Node, index: int) as Node := {
 }
 # a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
 # (card p1-default-position), read from its struct; its extra fields after them, also a declared field
-# holding ø, from its entries. A class's own position function is to come (card class-position-index)
-instance_position(instance: Node, index: int) as Node := instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
+# holding ø, from its entries; a class with its own at(i) gives that, `(2 to 5)#1` is 2
+instance_position(instance: Node, index: int) as Node := method_called(instance, "at", list_node(Kind.List, [fresh_int_node(index)])) ?? instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: Node) as int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
 	if is_null(n) { return 0 }
 	if is_extended_list(n) { return extended_list_count(n) }
-	if is_range(n) { return range_count(n) }
 	if kind_code(n) == Kind.List { return #unboxed_list(n) }
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
 	if kind_code(n) == Kind.Key { return 2 }
-	no_length_of(n)
+	counted = method_called(n, "count", list_node(Kind.List, []))
+	if is_null(counted) then no_length_of(n) else unboxed_int(counted)
 }
 # `xs.pop()`: the last item, dropped from xs in place by lowering its count, so every alias
 # sees the shorter list
@@ -192,36 +191,14 @@ forget_map_index(entries: list) as int := {
 	if slot > 0 { index_covered#slot = -1 }
 	0
 }
-# a list node's kind (kinds.warp ListKind): 0 of a list holding its $list, else the row of a range or an extension's list
+# a list node's kind (kinds.warp ListKind): 0 of a list holding its $list, else the row of an extension's list
 list_kind(n: Node) as int := if is_null(n) or kind_code(n) != Kind.List then 0 else int_remainder(int_quotient(marked_kind(n), list_kind_unit()), 4)
-# kinds.warp's KindUnit.ListKind, KindUnit.ListCell and ListKind.Range as numbers: the seed that builds the runtime
-# first knows only its own tables' keys (card once-refreshed)
+# kinds.warp's KindUnit.ListKind and KindUnit.ListCell as numbers: the seed that builds the runtime first knows only
+# its own tables' keys (card once-refreshed)
 list_kind_unit() as int := 4503599627370496
 list_cell_unit() as int := 144115188075855872
-range_kind() as int := 1
 # a list of an extension's kind, whose words runtime/bridge.warp's list hooks reach (a GPU list: extensions/gpu_lists)
-is_extended_list(n: Node) as bool := list_kind(n) > range_kind()
-# A range `1 to n`, `1..n` (decision lazy-range-value): a list node of ListKind.Range holding its two ends and no
-# items; #, xs#i and sum answer from the ends, any other list word makes its items (unlisted_items)
-range_value(first: int, last: int) as Node := keyed(Kind.List + BracketCode.Square * KindUnit.Info + range_kind() * list_kind_unit(), fresh_int_node(first), fresh_int_node(last))
-is_range(n: Node) as bool := list_kind(n) == range_kind()
-range_first(n: Node) as int := unboxed_int(entry_key(n))
-range_count(n: Node) as int := max_int(unboxed_int(key_value(n)) - range_first(n) + 1, 0)
-range_at(n: Node, index: int) as Node := {
-	if index < 1 or index > range_count(n) { index_out_of_range_of(index, range_count(n)) }
-	fresh_int_node(range_first(n) + index - 1)
-}
-range_items(n: Node) as list := {
-	out = new_list(range_count(n))
-	for i in 1 to #out { out#i = range_at(n, i) }
-	out
-}
-# Gauss's sum, count · (first + last) / 2, halving whichever of the two is even
-range_sum(n: Node) as Node := {
-	count = range_count(n)
-	ends = range_first(n) + unboxed_int(key_value(n))
-	if int_remainder(count, 2) == 0 then grown_product(int_quotient(count, 2), ends) else grown_product(count, int_quotient(ends, 2))
-}
-# the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, an extension's as its
-# kind gives them (a GPU list refuses)
-unlisted_items(n: Node) as list := if is_range(n) then range_items(n) else extended_list_unlisted(n)
+is_extended_list(n: Node) as bool := list_kind(n) > 0
+# the items of a list node whose data is no $list (emitter unboxed_list_code), as its extension's kind gives them (a
+# GPU list refuses)
+unlisted_items(n: Node) as list := extended_list_unlisted(n)
