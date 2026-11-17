@@ -29,3 +29,16 @@ with_parts(n: Node, f: function) as Node := match n {
 	List(items, bracket, separator) => List(items.map(f), bracket, separator)
 	_ => n
 }
+
+# Facts a stage learns about a node (notes/backbone.md "Stage languages"): a name's binding, a type, the overload a
+# call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
+# from stage to stage. A later fact of the same name replaces the earlier.
+with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
+# the fact of that name, ø when no stage has learned it
+fact_of(n: Node, name: text) as Node? := {
+	found: Node? = ø
+	for fact in attributes_of(n) {
+		match fact { Key(Symbol(fact_name), Op.Colon, value) => if fact_name == name { found = value }; _ => ø }
+	}
+	found
+}
