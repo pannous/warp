@@ -14,6 +14,8 @@ extended_text(n: Node): text from runtime
 extended_type_word(n: Node): text from runtime
 # ordering and equality: -1, 0 or 1 as a is below, equal to or above b, two Int nodes, one an exact ratio
 extended_order(a: Node, b: Node): int from runtime
+# whether a < b (ordering 0), a <= b (1), a > b (2) or a >= b (3) holds of two times (extensions/times time_holds)
+extended_time_holds(a: Node, b: Node, ordering: int): bool from runtime
 # arithmetic: the sum, difference and product of two Int nodes, one an exact ratio or both plain ints past 64 bits
 extended_sum(a: Node, b: Node): Node from runtime
 extended_difference(a: Node, b: Node): Node from runtime
