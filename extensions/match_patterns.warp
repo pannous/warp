@@ -213,8 +213,7 @@ tested_subject(test: Node, patterns: map) as Node? := {
 # a parameter `p: Point`. The narrowed type `type If < Node = (head cond: Node yes: Node no: Node)` is the named pattern
 # of its body; a body of Node other than a node case is code, quoted, its holes `cond: Node` the quote's `$cond`.
 
-pattern_word = "pattern"
-node_type_word = "Node"
+pattern_keyword = "pattern"
 
 # `type X < Base = pattern` after the type's name, as `pattern X = pattern`, else ø with the parser where it was
 read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
@@ -229,13 +228,13 @@ read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
 	}
 	p.at = blank_end(p, equals + 1)
 	body = expression(p, 0)
-	List([symbol(pattern_word), Key(name, Op.Assign, if base == node_type_word then node_pattern(body) else body)], Bracket.None, Separator.Space)
+	List([symbol(pattern_keyword), Key(name, Op.Assign, if base == node_type then node_pattern(body) else body)], Bracket.None, Separator.Space)
 }
 # a node case's pattern as written, `Key(head: Node, Op.Define, body: Node)`, any other body the code it quotes; a hole
 # of type Node, any part of a node, is the bare name, `$cond` in code
 node_pattern(body: Node) as Node := if case_pattern(body) != ø then node_holes(body, "") else List([quote_symbol, node_holes(body, "$")], Bracket.Round, Separator.None)
 node_holes(n: Node, mark: text) as Node := match n {
-	Key(Symbol(name), Op.Colon, Symbol(kind)): if kind == node_type_word then symbol(mark + name) else Key(symbol(mark + name), Op.Colon, symbol(kind))
+	Key(Symbol(name), Op.Colon, Symbol(kind)): if kind == node_type then symbol(mark + name) else Key(symbol(mark + name), Op.Colon, symbol(kind))
 	Key(left, op, right): Key(node_holes(left, mark), op, node_holes(right, mark))
 	List(items, bracket, separator): List(items.map(item => node_holes(item, mark)), bracket, separator)
 	_: n
@@ -256,7 +255,7 @@ built_value(pattern: Node) as Node := match pattern {
 	_: pattern
 }
 # each name's parameter, typed as the pattern types it: `a: int`
-hole_parameters(pattern: Node, holes: list) as list := holes.map(hole => typed_hole(pattern, hole) ?? symbol(hole))
+hole_parameters(pattern: Node, holes: list) as list := holes.map(hole => hole_typed(pattern, hole) ?? symbol(hole))
 hole_typed(pattern: Node, hole: text) as Node? := {
 	for n in nodes_in(pattern) {
 		if is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) in [hole, "$" + hole] and value_of(n) is symbol { return Key(symbol(hole), Op.Colon, value_of(n)) }
@@ -266,8 +265,8 @@ hole_typed(pattern: Node, hole: text) as Node? := {
 
 # `pattern Point = [x, y]` also defines `Point(x, y) := [x, y]`; a pattern without names or with an open part builds
 # nothing
-pattern_constructors(program: Node) as Node := if is_statement_sequence(program) then group_like(program, statements_in(program).flat_map(statement => [statement] + constructor_of(statement))) else program
-constructor_of(statement: Node) as list := {
+pattern_constructors(program: Node) as Node := if is_statement_sequence(program) then group_like(program, statements_in(program).flat_map(statement => [statement] + pattern_constructor(statement))) else program
+pattern_constructor(statement: Node) as list := {
 	named = named_pattern(statement)
 	if named == ø { return [] }
 	holes = pattern_holes(named#2)
@@ -297,11 +296,11 @@ renamed_holes(n: Node, holes: list, places: list) as Node := match n {
 # `f(n: If) := n.cond`: a parameter typed by a named pattern reads its names, `match n { If => cond }`
 with_hole_reads(n: Node, patterns: map) as Node := {
 	if not is_key(n, Op.Define) { return n }
-	typed = typed_parameters(leftmost_part(key_of(n)), patterns)
-	if not typed then n else Key(key_of(n), Op.Define, bottom_up(value_of(n), part => hole_read(part, typed)))
+	typed = pattern_parameters(leftmost_part(key_of(n)), patterns)
+	if not typed then n else Key(key_of(n), Op.Define, bottom_up(value_of(n), part => pattern_read(part, typed)))
 }
 # parameter name → the pattern its type names
-typed_parameters(call: Node, patterns: map) as map := {
+pattern_parameters(call: Node, patterns: map) as map := {
 	typed = {}
 	if not is_round(call) { return typed }
 	for parameter in items_of(call)[1 ..] {
@@ -309,7 +308,7 @@ typed_parameters(call: Node, patterns: map) as map := {
 	}
 	typed
 }
-hole_read(n: Node, typed: map) as Node := match n {
+pattern_read(n: Node, typed: map) as Node := match n {
 	Key(Symbol(name), Op.Dot, Symbol(field)): if name in typed and field in pattern_holes(typed[name]) then pattern_match(key_of(n), [Key(typed[name], Op.Colon, value_of(n))]) else n
 	_: n
 }
