@@ -14,6 +14,8 @@ global writes_templates = no
 code_templates(program: Node) as Node := if writes_templates then templated(program) else program
 
 templated(n: Node) as Node := {
+	# `pattern If = data((if $cond $then_part $else_part))`: a named pattern's body is a pattern, never a template
+	if is_pattern_definition(n) { return n }
 	if is_quote(n) { return template_of(n) }
 	if is_matcher_call(n) { return n }
 	if is_key(n, Op.Eq) and is_quote(value_of(n)) { return Key(templated(key_of(n)), Op.Eq, value_of(n)) }

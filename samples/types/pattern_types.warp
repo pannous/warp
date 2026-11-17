@@ -1,0 +1,20 @@
+#!/usr/bin/env warp
+# A named pattern is a type: one declaration builds the value, tests it, matches it and reads its parts
+pattern Pair = [a: int, b: int]
+
+p = Pair(3, 4)                       # build: [3, 4]
+print p is Pair                      # test: yes
+print [3, "x"] is Pair               # no: b is no int
+
+area(r: Pair) := r.a * r.b           # read the parts of a Pair by name
+print area(p)                        # 12
+
+# match by place: the names bind in order
+print match [5, 6] { Pair(x, y) => x + y; _ => 0 }    # 11
+
+# The body may be code, its holes marked with $: here a small expression tree
+pattern Choice = data((choose $cond $then_part $else_part))
+
+c = Choice(parse("ready"), parse("1"), parse("2"))
+print c                              # (choose ready 1 2)
+print match c { Choice(test, _, otherwise) => otherwise; _ => 0 }    # 2

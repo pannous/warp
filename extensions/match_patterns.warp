@@ -1,13 +1,51 @@
-# Match arms past the core's cases, values, types and `_` (core/passes/node_matches.warp):
-# - a guard `n if n > 5 => e` tests its pattern and then its condition, the pattern's names bound
-# - a bare name `n => "hi " + n` binds the subject
-# - a structural pattern, a list `[a, ...rest]`, a map `{name}`, a text cut `"/u/" + id: int`, quoted code
-#   `data($f($x))`, is fitted at run time by the prelude's matcher: `(match·bound = pattern_bindings(n, data(pattern)))
-#   != ø`, each name bound `x = match·bound#"x"`
-# Each such arm becomes the arm `_` whose result chooses by its test, else what the arms after it give.
-# A named pattern `pattern Definition = Key(head, Op.Define, body)` (decision node-refinements: a named refinement of a
-# node case) leaves the program, and its name stands for the pattern in an arm `Definition: …`, which binds head and
-# body, in a test `n is Definition`, and as the type `d: Definition`, any node.
+# Patterns
+#
+# A pattern describes the shape of a value: "a list of two things", "a map with a name", "a number above 5". Matching
+# a value against a pattern answers two questions at once: does the value have this shape, and what are its parts?
+# The parts a pattern names are bound as variables:
+#
+#   match [3, 4] {
+#     [x, y] => x + y        // a list of two items: yes, so x = 3 and y = 4, and the result is 7
+#     _ => 0                 // `_` fits anything and binds nothing
+#   }
+#
+# The core compiler (core/passes/node_matches.warp) only knows the simplest arms: a value (`1 =>`), a type
+# (`int =>`), a case of a node (`Key(left, op, right) =>`) and `_`. This compiler extension adds every other kind
+# of pattern, by turning each such arm into a plain test plus the variables it binds.
+#
+# What this file adds, from simple to advanced:
+#
+#   [x, y] => …                 a list pattern; `[first, ...rest]` takes the remaining items as a list
+#   {name} => …                 a map pattern: any map with the key name, bound as name
+#   n if n > 5 => …             a guard: the pattern fits, then the condition must hold too
+#   n => …                      a bare name fits anything and binds the whole value
+#   "/user/" + id: int => …     a text cut: the text starts with "/user/", the rest read as an int
+#   data($f($x)) => …           quoted code: a call of anything with one argument (for programs about programs)
+#
+# A pattern known whole at compile time, like `[a, b]`, is tested right where it stands; the others are handed
+# to a matcher in the prelude that fits the value at run time.
+#
+# A pattern can also get a name, so it can be used in many places, like a type:
+#
+#   pattern Point = [x, y]
+#   [3, 4] is Point                        // yes
+#   match v { Point => x + y }             // the arm uses the pattern's names x and y
+#
+# Such a named pattern is a type with fields, its names. Since the fields are known, it also builds a value, binds its
+# fields by place in an arm, and lets a parameter of its type read them by name:
+#
+#   Point(3, 4)                            // [3, 4]
+#   match v { Point(a, b) => a * b }       // a is the first name of the pattern (x), b the second (y)
+#   length(p: Point) := sqrt(p.x * p.x + p.y * p.y)
+#
+# The body may be code too, quoted with `$` before its holes, and matching code against it is how a compiler's rules
+# take programs apart (warp's own core names node shapes this way, core/passes/node_patterns.warp):
+#
+#   pattern Choice = data((choose $cond $then_part $else_part))
+#   Choice(c, a, b)                        // builds the code `(choose c a b)`
+#   match n { Choice(c, a, b) => … }       // takes such code apart
+#
+# How named patterns build, bind and read is explained in "Named patterns" at the end of this file.
 
 # whether the core lowers the arm itself
 is_core_arm(arm: Node, variants: map) as bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
@@ -171,20 +209,27 @@ with_named_patterns(n: Node, patterns: map) as Node := match n {
 }
 
 # `match subject { pattern: yes, _: no }`
-pattern_test(subject: Node, pattern: Node) as Node :=
-	node_match(List([symbol("match"), subject, List([Key(pattern, Op.Colon, yes), Key(symbol(other_arm), Op.Colon, no)], Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space), {})
+pattern_test(subject: Node, pattern: Node) as Node := pattern_match(subject, [Key(pattern, Op.Colon, yes), Key(symbol(other_arm), Op.Colon, no)])
+pattern_match(subject: Node, arms: list) as Node := node_match(List([symbol("match"), subject, List(arms, Bracket.Curly, Separator.Semicolon)], Bracket.None, Separator.Space), {})
 
 named_arm(arm: Node, patterns: map) as Node := match arm {
-	Key(Symbol(name), Op.Colon, result): if name in patterns then Key(patterns[name], Op.Colon, result) else arm
-	Key(Symbol(name), Op.Arrow, result): if name in patterns then Key(patterns[name], Op.Arrow, result) else arm
+	Key(pattern, Op.Colon, result): Key(arm_named_pattern(pattern, patterns), Op.Colon, result)
+	Key(pattern, Op.Arrow, result): Key(arm_named_pattern(pattern, patterns), Op.Arrow, result)
 	_: arm
+}
+# `Definition: …` the pattern itself, `If(c, _, no): …` the pattern with its names bound by place to c, nothing and no
+arm_named_pattern(pattern: Node, patterns: map) as Node := match pattern {
+	Symbol(name): patterns.get(name) ?? pattern
+	List(call, Bracket.Round, Separator.None): if #call > 1 and call#1 is symbol and name_of(call#1) in patterns then placed_holes(patterns[name_of(call#1)], call[1 ..]) else pattern
+	_: pattern
 }
 
 # the program with its named patterns put where their names stand, right before node_matches lowers the matches
 named_patterns(program: Node) as Node := {
 	patterns = named_patterns_of(program)
 	if not patterns { return program }
-	tests = bottom_up(without_named_patterns(program), n => with_subject_carried(n, patterns))
+	read = bottom_up(without_named_patterns(program), n => with_hole_reads(n, patterns))
+	tests = bottom_up(read, n => with_subject_carried(n, patterns))
 	bottom_up(tests, n => with_named_patterns(n, patterns))
 }
 # `it is Pair and StartsAtOne`, read `(it is Pair) and StartsAtOne`: a pattern's name is no value, so the subject of
@@ -200,4 +245,97 @@ tested_subject(test: Node, patterns: map) as Node? := {
 	if is_key(test, Op.And) or is_key(test, Op.Or) then tested_subject(key_of(test), patterns) else ø
 }
 
-match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], passes: {"code_templates": named_patterns}}
+
+# ── Named patterns ────────────────────────────────────────────────────────────────────────────────────────────────
+# A named pattern with names is a type with fields (user 2026-11-17: `pattern` is the one spelling, no
+# `type X < Base = pattern`): built by its names, tested with `is`, matched by name or by place, its names read off a
+# parameter of that type.
+#
+#   pattern Pair = [a: int, b: int]
+#   pattern Choice = data((choose $cond $then_part $else_part))
+#   pattern Definition = Key(head, Op.Define, body)
+#
+#   build  Choice(c, a, b)             the code `(choose c a b)`, a Pair(1, 2) the list [1, 2]
+#   test   n is Choice                 whether n fits the pattern
+#   match  n { Choice(c, _, e) => … }  its names bound by place, `_` binding none; `Choice => cond` binds them by name
+#   read   f(n: Choice) := n.cond      a parameter of the type reads its names
+
+# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((choose $cond $then_part $else_part))` → cond, then_part,
+# else_part.
+# These are the type's fields and the constructor's parameters. A capitalized word (`Key`, `Op.Define`) is a case, a
+# type or an enum, and `_` binds nothing: neither is a name.
+pattern_holes(pattern: Node) as list := structural_names(pattern, no).filter(is_hole_word)
+is_hole_word(name: text) as bool := name != other_arm and name#1.lower() == name#1
+
+# `pattern Point = [x, y]` also defines `Point(x, y) := [x, y]`, right before the definitions are read. The body is
+# the pattern with each name as its value; a typed name types its parameter, `Pair(a: int, b: int) := [a, b]`. A
+# pattern without names, or with a part still open once its names are values (`_`, a rest `..` or `*xs`, a type alone
+# as in `{port: int}`), describes no single value and builds nothing.
+pattern_constructors(program: Node) as Node := if is_statement_sequence(program) then group_like(program, statements_in(program).flat_map(statement => [statement] + pattern_constructor(statement))) else program
+pattern_constructor(statement: Node) as list := {
+	named = named_pattern(statement)
+	if named == ø { return [] }
+	pattern = named#2
+	holes = pattern_holes(pattern)
+	value = built_value(pattern, holes)
+	if #holes == 0 or nodes_in(value).any(is_open_part) { return [] }
+	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, value)]
+}
+# `_`, a rest word `*xs`, a type word (`int`; a capitalized `Key` is a case), or an operator missing a side, the rest `..` of `[1, ..]`
+is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") or (is_hole_word(name_of(part)) and is_tested_type_word(name_of(part))) else part is key and (key_of(part) == ø or value_of(part) == ø)
+# the value the pattern describes: each typed hole `a: int` (in code `$a: int`) as the name alone
+built_value(pattern: Node, holes: list) as Node := pattern_rebuilt(pattern, part => match part {
+	Key(Symbol(name), Op.Colon, Symbol(kind)): if name in holes or (name.starts_with("$") and name[1 ..] in holes) then symbol(name) else part
+	_: part
+})
+# the parameter of a name, typed as the pattern types it: `a: int`, else the bare name
+typed_parameter(pattern: Node, hole: text) as Node := {
+	for part in nodes_in(pattern) {
+		if is_key(part, Op.Colon) and key_of(part) is symbol and name_of(key_of(part)) in [hole, "$" + hole] and value_of(part) is symbol { return Key(symbol(hole), Op.Colon, value_of(part)) }
+	}
+	symbol(hole)
+}
+
+# The arm `If(c, _, e) => …`: the pattern with its names, in order, renamed to the arm's, so `c` binds cond and `e`
+# binds else_part. A place in a value pattern may hold any pattern (`Pair(1, y)`); a hole of code takes a name or `_`.
+placed_holes(pattern: Node, places: list) as Node := {
+	holes = pattern_holes(pattern)
+	if #places != #holes { raise "the pattern binds " + #holes + " names, " + holes.join(", ") + ": an arm names each by its place" }
+	placed = {}
+	for at in 1 to #holes { placed[holes#at] = places#at }
+	pattern_rebuilt(pattern, part => if part is symbol then placed_hole(name_of(part), placed) ?? part else part)
+}
+# Each part of a pattern changed by f, bottom up, the inside of a quoted pattern too: bottom_up leaves quoted code
+# alone, as it must for code that is data, but a quoted pattern's holes are exactly what is to change.
+pattern_rebuilt(pattern: Node, f: function) as Node := if is_quote(pattern) then group_like(pattern, [pattern#1, bottom_up(pattern#2, f)]) else bottom_up(pattern, f)
+# the place of a name, `$cond` in code as `$c`; ø for a word that is no name of the pattern
+placed_hole(name: text, placed: map) as Node? := {
+	if name in placed { return placed[name] }
+	hole = name[1 ..]
+	if not (name.starts_with("$") and hole in placed) { return ø }
+	if placed[hole] is symbol then symbol("$" + name_of(placed[hole])) else raise "a hole of code binds a name, not " + placed[hole]
+}
+
+# `f(n: Choice) := n.cond`: in a function, a parameter typed by a named pattern reads its names. Each read matches the
+# parameter against the pattern, `match n { Choice => cond }`; a value that does not fit is refused there ("no case for
+# value"), never read as ø. Reads after a test (`if n is Choice { n.cond }`) are not narrowed yet.
+with_hole_reads(n: Node, patterns: map) as Node := {
+	if not is_key(n, Op.Define) { return n }
+	typed = pattern_parameters(leftmost_part(key_of(n)), patterns)
+	if not typed then n else Key(key_of(n), Op.Define, bottom_up(value_of(n), part => pattern_read(part, typed)))
+}
+# each parameter whose type is a named pattern: its name → the pattern
+pattern_parameters(call: Node, patterns: map) as map := {
+	typed = {}
+	if not is_round(call) { return typed }
+	for parameter in items_of(call)[1 ..] {
+		if is_key(parameter, Op.Colon) and key_of(parameter) is symbol and value_of(parameter) is symbol and name_of(value_of(parameter)) in patterns { typed[name_of(key_of(parameter))] = patterns[name_of(value_of(parameter))] }
+	}
+	typed
+}
+pattern_read(n: Node, typed: map) as Node := match n {
+	Key(Symbol(name), Op.Dot, Symbol(field)): if name in typed and field in pattern_holes(typed[name]) then pattern_match(key_of(n), [Key(typed[name], Op.Colon, value_of(n))]) else n
+	_: n
+}
+
+match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], passes_before: {"definition_heads": pattern_constructors}, passes: {"code_templates": named_patterns}}
