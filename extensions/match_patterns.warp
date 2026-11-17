@@ -1,25 +1,53 @@
-# Patterns: the compiler extension that lets a program describe the shape of a value and name it.
+# Patterns
 #
-# This file does two jobs.
+# A pattern describes the shape of a value: "a list of two things", "a map with a name", "a number above 5". Matching
+# a value against a pattern answers two questions at once: does the value have this shape, and what are its parts?
+# The parts a pattern names are bound as variables:
 #
-# 1. Rich match arms. The core's `match` only knows simple arms: a value (`1 =>`), a type (`int =>`), a node case
-#    (`Key(l, op, r) =>`) and `_`. Everything else is lowered here into a test plus the names it binds:
-#      match x {
-#        n if n > 5 => "big"          a guard: the pattern, then a condition
-#        [first, ...rest] => first    a list, a map `{name}`, a text cut `"/u/" + id: int`, quoted code `data($f($x))`
-#        n => "other: " + n           a bare name: binds the whole value
-#      }
-#    Shapes known whole at compile time (`[a, b]`) are tested in place; the rest go to the prelude's run-time matcher.
+#   match [3, 4] {
+#     [x, y] => x + y        // a list of two items: yes, so x = 3 and y = 4, and the result is 7
+#     _ => 0                 // `_` fits anything and binds nothing
+#   }
 #
-# 2. Named patterns and pattern types. A shape gets a name and then works like a type:
-#      pattern Point = [x, y]                       // or as a narrowed type:
-#      type If < Node = (if cond: Node yes: Node no: Node)
-#      Point(3, 4)                  build   → [3, 4]
-#      v is Point                   test
-#      match v { Point(a, b) => … } match, its names bound by place
-#      f(p: Point) := p.x           read a name off a parameter of that type
-#    This is the mechanism the new compiler declares its kernel with: every kernel form is such a type of Node
-#    (notes/backbone.md). The details are in "Pattern types" at the end of this file.
+# The core compiler (core/passes/node_matches.warp) only knows the simplest arms: a value (`1 =>`), a type
+# (`int =>`), a case of a node (`Key(left, op, right) =>`) and `_`. This compiler extension adds every other kind
+# of pattern, by turning each such arm into a plain test plus the variables it binds.
+#
+# What this file adds, from simple to advanced:
+#
+#   [x, y] => …                 a list pattern; `[first, ...rest]` takes the remaining items as a list
+#   {name} => …                 a map pattern: any map with the key name, bound as name
+#   n if n > 5 => …             a guard: the pattern fits, then the condition must hold too
+#   n => …                      a bare name fits anything and binds the whole value
+#   "/user/" + id: int => …     a text cut: the text starts with "/user/", the rest read as an int
+#   data($f($x)) => …           quoted code: a call of anything with one argument (for programs about programs)
+#
+# A pattern known whole at compile time, like `[a, b]`, is tested right where it stands; the others are handed
+# to a matcher in the prelude that fits the value at run time.
+#
+# A pattern can also get a name, so it can be used in many places, like a type:
+#
+#   pattern Point = [x, y]
+#   [3, 4] is Point                        // yes
+#   match v { Point => x + y }             // the arm uses the pattern's names x and y
+#
+# Such a named pattern is a type with fields, its names. Since the fields are known, it also builds a value, binds its
+# fields by place in an arm, and lets a parameter of its type read them by name:
+#
+#   Point(3, 4)                            // [3, 4]
+#   match v { Point(a, b) => a * b }       // a is the first name of the pattern (x), b the second (y)
+#   length(p: Point) := sqrt(p.x * p.x + p.y * p.y)
+#
+# The same thing can be written as a narrowed type, `type Point < list = [x: int, y: int]`. With the base type Node,
+# the body is a piece of code with holes, and this is how the new compiler will declare its kernel: each form the
+# backend understands is one such type (notes/backbone.md "Kernel forms are narrowed types of Node with a pattern
+# body"):
+#
+#   type If < Node = (if cond: Node yes: Node no: Node)
+#   If(c, a, b)                            // builds the code `(if c a b)`
+#   match n { If(c, a, b) => … }           // takes such code apart
+#
+# How the named patterns and pattern types work is explained in "Pattern types" at the end of this file.
 
 # whether the core lowers the arm itself
 is_core_arm(arm: Node, variants: map) as bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
