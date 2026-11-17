@@ -1,0 +1,27 @@
+# A narrowed type whose body is a pattern with named holes, the named pattern of that body: built by its names, tested
+# with `is`, matched by name or by place, its names read off a parameter of that type (notes/backbone.md "Kernel forms
+# are narrowed types of Node with a pattern body", user 2026-11-17)
+
+# a list
+is! 'type Pair < list = [a: int, b: int]; Pair(1, 2)' [1, 2]
+is! 'type Pair < list = [a: int, b: int]; [1, 2] is Pair' true
+is! 'type Pair < list = [a: int, b: int]; [1, "x"] is Pair' false
+is! 'type Pair < list = [a: int, b: int]; match [3, 4] { Pair(x, y) => x * y; _ => 0 }' 12
+is! 'type Pair < list = [a: int, b: int]; sum(p: Pair) := p.a + p.b; sum([3, 4])' 7
+
+# code: a body of Node other than a node case is quoted, its holes the parts of the code
+is! 'type If < Node = (choose cond: Node yes: Node no: Node); text(If(parse("c"), parse("1"), parse("2")))' '(choose c 1 2)'
+is! 'type If < Node = (choose cond: Node yes: Node no: Node); parse("(choose c 1 2)") is If' true
+is! 'type If < Node = (choose cond: Node yes: Node no: Node); parse("(pick c 1 2)") is If' false
+is! 'type If < Node = (choose cond: Node yes: Node no: Node); match parse("(choose c 1 2)") { If(c, _, no) => no; _ => 0 }' 2
+is! 'type If < Node = (choose cond: Node yes: Node no: Node); yes_of(n: If) := n.yes; yes_of(parse("(choose c 1 2)"))' 1
+
+# a node case
+is! 'type Definition < Node = Key(head: Node, Op.Define, body: Node); parse("g := 1") is Definition' true
+is! 'type Definition < Node = Key(head: Node, Op.Define, body: Node); match parse("g := 1") { Definition(h, b) => b; _ => 0 }' 1
+is! 'type Definition < Node = Key(head: Node, Op.Define, body: Node); body_of(d: Definition) := d.body; body_of(parse("g := 2"))' 2
+is! 'type Definition < Node = Key(head: Node, Op.Define, body: Node); Definition(parse("g"), parse("3")) is Definition' true
+
+# a named pattern builds and binds by place too
+is! 'pattern Point = [x, y]; Point(3, 4)' [3, 4]
+is! 'pattern Point = [x, y]; match [3, 4] { Point(a, _) => a }' 3
