@@ -15,4 +15,7 @@ check "an If's value as a function's result" "$(ran result 'pick(c: bool) := if 
 pick(yes)')" "10"
 check "an if in round brackets is one phrase" "$(ran grouped 'x = (if no then 1 else 2)
 x')" "2"
+check "not turns a condition round" "$(ran not 'if not no then print "a" else print "b"
+if !yes then print "c" else print "d"')" "a
+d"
 exit $((failures > 0))

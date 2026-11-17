@@ -3,3 +3,9 @@
 
 rule while $condition... $body: Braces => While($condition, $body)
 rule return $value... => Return($value)
+rule until $condition... $body: Braces => While(not $condition, $body)
+
+# A loop over each item of a list or each int of a range, as While (wiki/keyword.md for). Its count goes up before the
+# body, so `continue` moves on; the names the rule binds itself are fresh, never the program's.
+rule for $item in $from to $last $body: Braces => { $item = $from - 1; while $item < $last { $item = $item + 1; $body } }
+rule for $item in $items $body: Braces => { held = $items; at = 0; while at < #held { at = at + 1; $item = held#at; $body } }
