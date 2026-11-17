@@ -2,3 +2,5 @@
 # else (card alias-follows-redefinition)
 'square(x):=x*x*10; 3 squared'	90
 'square(x):=x*x*10; squared(2)'	40
+# a function's own local of an alias's name binds it only there: another function's xs.push keeps the alias (sample usdcraft)
+'f() := { push = 3; push }; g() := { xs = [1]; xs.push(2); xs }; [f(), g()]'	[3, [1, 2]]
