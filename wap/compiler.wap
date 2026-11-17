@@ -9,6 +9,7 @@
 #   read      text → notation       core/parse/reader.wap
 #   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
 #   lower     operated → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
@@ -19,10 +20,12 @@ use "core/parse/reader.wap"
 use "core/parse/operators.wap"
 use "core/format.wap"
 use "core/rules/lowering.wap"
+use "core/analyze/scope.wap"
 use "core/emit/wasm.wap"
+use "core/emit/values.wap"
 use "core/emit/emitter.wap"
 
-compiled(source: text) as list := module_bytes(emitted(lowered_program(operated(notation(source)))))
+compiled(source: text) as list := module_bytes(emitted(bound_program(lowered_program(operated(notation(source))))))
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
 if args#1 == "format" { print formatted(operated(notation(read(args#2)))) } else { write_bytes(args#2, compiled(read(args#1))) }
