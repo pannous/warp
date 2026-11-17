@@ -1,24 +1,19 @@
 # The kernel: the forms wap's emitter understands, and nothing else (notes/kernel.md).
 #
-# Each form is a class with typed fields (user 2026-11-17: proper classes for the kernel). A program's code is Node,
-# the notation; the kernel is records, and the lowering (core/rules/lowering.wap) is where one becomes the other. A
-# form is built by its class, `Call(print, [Literal("Hello")])`, tested, `form is Call`, taken apart by its fields,
-# `Call(called, arguments) => …` (the leading fields by place) or `Call{arguments} => …` (any by name), and read,
-# `form.called`.
+# Each form is a named pattern of Node, code with holes (user 2026-11-17: kernel forms are patterns, positions ride
+# in the nodes' metadata). One declaration builds a form, `Call(print, ["Hello"])`, tests it, `n is Call`, takes it
+# apart, `Call(called, arguments) => …`, and reads it, `n.called` of a parameter `n: Call`.
 #
-# Every form's last field, `origin`, is the code it was lowered from: where the program wrote it, and what an error
-# quotes. The stage walker (core/stage.wap) fills it in; nothing else sets it. It is the last field so that places in
-# a pattern bind the form's own fields; each class declares it, since an inherited field would come first.
-#
-# Milestone 1 (`print "Hello"`) needs three forms; the others of notes/kernel.md join as programs need them.
+# A form's head is its own name, `(Call print ["Hello"])`: readable when printed and never a keyword. Only the
+# lowering builds kernel nodes, so a program's own `(Call …)` group never reaches the emitter as one. Literals (texts,
+# numbers) are the Node cases themselves and need no declaration. Milestone 1 (`print "Hello"`) needs two forms; the
+# others of notes/kernel.md join as programs need them.
 
-# a value written in the program: a text, a number
-class Literal { value: Node; origin: Node = ø }
-# a call of a function with its arguments, each a form: `print "Hello"` is Call(print, [Literal("Hello")])
-class Call { called: Node; arguments: list; origin: Node = ø }
+# a call of a function with its arguments, a list of forms: `print "Hello"` is Call(print, ["Hello"])
+pattern Call = data((Call $called $arguments))
 # type Call < Node = (Call callee: Symbol arguments: list)
 # type Call < Node { tag: Symbol arguments: list }
 
 # forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
 # list value, a block runs a, then b
-class Block { statements: list; origin: Node = ø }
+pattern Block = data((Block $statements))

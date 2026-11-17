@@ -19,41 +19,40 @@ Read first: notes/first_principles.md. The plan this belongs to: notes/backbone.
 
 ## How a kernel form is declared
 
-Each form is a class with typed fields (wap/kernel/forms.wap; user 2026-11-17: proper classes for the kernel). The
-program's code is Node, the notation; the kernel is records, and the lowering is where one becomes the other:
+Each form is a named pattern of `Node`, code with holes (wap/kernel/forms.wap; user 2026-11-17: kernel forms are
+patterns, no classes):
 
 ```warp
-class If { cond: Form; then_part: Form; else_part: Form; origin: Node = ø }
+pattern If = data((If $cond $then_part $else_part))
 ```
 
-One declaration gives four uses:
+One declaration gives four uses (extensions/match_patterns.warp, test/types/test_pattern_types.warp):
 
 ```warp
-If(c, a, b)                        // build
-form is If                         // test
-match form { If(c, a, b) => … }    // take apart, the leading fields by place
-match form { If{cond} => … }       // or any field by name
-form.cond                          // read
+If(c, a, b)                        // build: the node (If c a b)
+node is If                         // test
+match node { If(c, a, b) => … }    // take apart, the holes bound by place
+emit_if(n: If) := … n.cond …       // read a hole off a parameter of the type
 ```
 
-and the emitter is one function over the closed union:
+and the emitter is one function over the forms, refusing any other node:
 
 ```warp
-type Form = Literal | Name | Quote | Define | Get | Set | Fn | Call | Prim | If | Block | While | Break | Continue | Return | Record | Case | Try
-emit(form: Form) := match form { If(c, a, b) => …; While(c, body) => …; … }
+emit(n: Node) := match n { If(c, a, b) => …; While(c, body) => …; …; _ => refused(n, "not a kernel form") }
 ```
 
-Two details:
-- **`origin` is every form's last field:** the code the form was lowered from, so an error found in any later stage
-  names the line the program wrote and quotes it. The stage walker (wap/core/stage.wap) sets it; no rule does. It is
-  last so that places in a pattern bind the form's own fields, and each class declares it, since an inherited field
-  would come first.
-- **Fields are named by what they hold, never by a keyword or a type word:** `yes`, `no`, `then`, `else`,
-  `function` read as values, keywords or types in a pattern, so `If` has `then_part` and `else_part`, and `Call`
-  has `called` (the function called; a callee would be the one doing the calling).
-
-Rules still match the program's code with pattern types (`type X < Node = pattern`, extensions/match_patterns.warp):
-those describe notation, the classes describe the kernel.
+Three details:
+- **Positions ride in the nodes.** A form is a Node, so it carries the line and column the program wrote, in its
+  metadata like any parsed node. The stage walker (wap/core/stage.wap) gives every node a rewrite builds the position
+  of the node it rewrote; the parts it reused, a pattern's holes, keep their own. Matching looks through the
+  metadata. No form declares a position field, and no rule handles positions.
+- **The head is the form's own name** (`(If c a b)`, `(Call f args)`): readable when printed, and never a keyword
+  (`(if …)` inside a pattern would read as warp's own `if`). A program's own `(If a b)` group cannot pass for a
+  kernel form, because only the rewrite stages build kernel nodes and the emitter sees nothing else.
+- **Holes are named by what they hold, never by a keyword or a type word:** `yes`, `no`, `then`, `else`,
+  `function` read as values, keywords or types, so `If` has `then_part` and `else_part`, and `Call` has `called`
+  (the function called; a callee would be the one doing the calling). Typed holes (`$called: Symbol`) come with
+  card typed-holes-check.
 
 ## The forms
 

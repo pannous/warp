@@ -1,7 +1,7 @@
 # Refusals: a form wap does not take, reported where the program wrote it (notes/wap.md).
 #
 # Every stage refuses through here, never with a bare `raise`, so every message has the same shape and points at the
-# user's code, whichever stage found it. A stage working on kernel forms passes the form's origin, the code it was
+# user's code, whichever stage found it. Kernel forms carry the position of the code they were
 # lowered from (core/stage.wap):
 #
 #   line 2:1: the emitter takes no call but print of a text yet: print 3
