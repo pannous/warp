@@ -224,8 +224,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open, not built yet
 
-- **Binding:** a bare `global x` (a function declaring it means the program's x, without a value); the late-binding
-  check of wiki/Footguns.md, where a free variable changed after the definition must be declared `global`.
+- **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
+  names the module is not built.
 
 ## Debts
 
