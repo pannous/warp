@@ -69,6 +69,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => postponed(form, p, f)
 	Set(place, value) => set_code(form, declared_name(place), code(value, p, f), p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), code(then_part, p, f), code(else_part, p, f))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
@@ -83,6 +84,14 @@ block_code(statements: list, p: Program, f: Frame) as Code := {
 	for waiting in p.pending.filter(w => function_key(w) in keys) { if function_key(waiting) in p.pending.map(function_key) { emitted_function(waiting, p) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
+}
+
+# A choice by a condition, yes or no (an i32). With both parts of one type it has the chosen part's value, otherwise
+# none: each part's value is dropped, as a missing else part's ø is.
+if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code := {
+	if condition.type != I32 { refused(form, "a condition is yes or no") }
+	if then_part.type == else_part.type and not then_part.type is empty { return Code(then_part.type, condition.instructions + IF + then_part.type + then_part.instructions + ELSE + else_part.instructions + END) }
+	Code([], condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
 }
 
 # the instructions of code whose value nobody takes

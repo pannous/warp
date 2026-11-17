@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# wap's If (notes/kernel.md: If; wiki/keyword.md): `if c then a else b`, `if c { a } else { b }`, the else optional. With
+# both parts of one type an If has the chosen part's value.
+# Run it with bash test/wap/test_conditions.sh
+source "$(dirname "$0")/compile.sh"
+
+check "the then part when yes" "$(ran then 'if yes then print "a" else print "b"')" "a"
+check "the else part when no" "$(ran else 'if no { print "a" } else { print "b" }')" "b"
+check "no else part" "$(ran none 'if no { print "a" }
+print "c"')" "c"
+check "else if chains" "$(ran chain 'if no then print "a" else if yes then print "b" else print "c"')" "b"
+check "an If's value given to a name" "$(ran value 'x = if no then 1 else 2
+x')" "2"
+check "an If's value as a function's result" "$(ran result 'pick(c: bool) := if c then 10 else 20
+pick(yes)')" "10"
+exit $((failures > 0))

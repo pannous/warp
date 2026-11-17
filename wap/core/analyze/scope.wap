@@ -26,7 +26,8 @@ class Definition { name: text; kind: text; definer: Node; depth: int }
 
 # the program bound inside the library, whose declarations (`name: signature`) it may use
 bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.map(library_word), PROGRAM_DEPTH))
-library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), BOUND_LIBRARY, name, LIBRARY_DEPTH) }
+# a library's word: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature ø)
+library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH) }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
 bound(n: Node, scope: list, depth: int) as Node := match n {
@@ -37,6 +38,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
+	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Number(value) => n
 	Text(value) => n
@@ -120,6 +122,7 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Fn(parameters, body) => []
 	Call(called, arguments) => defined_in(arguments, scope, depth)
 	Prim(operation, arguments) => defined_in(arguments, scope, depth)
+	If(condition, then_part, else_part) => defined_in([condition, then_part, else_part], scope, depth)
 	_ => []
 }
 # The variable an assignment makes: a new one for `let x = …` and for a name its function sees no variable of;
