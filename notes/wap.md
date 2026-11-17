@@ -19,19 +19,19 @@ text
  │ read                       core/parse/        the notation: data and code alike, no keyword meanings
  ▼
 notation (Node: atoms, keys, lists, phrases)
- │ shape rules                core/rewrite/      stage 1: rules that ask only the shape
+ │ shape rules                core/rules/        stage 1: rules that ask only the shape
  ▼
 surface (any warp)
  │ declare                    core/analyze/declarations.wap
  ▼
 surface + declarations
- │ signature rules            core/rewrite/      stage 2: rules that ask declared signatures; every phrase decided
+ │ signature rules            core/rules/        stage 2: rules that ask declared signatures; every phrase decided
  ▼
 kernel (kernel/forms.wap)
  │ scope, typing              core/analyze/
  ▼
 typed kernel
- │ kind rules                 core/rewrite/      stage 3: rules that ask inferred types, output re-checked
+ │ kind rules                 core/rules/        stage 3: rules that ask inferred types, output re-checked
  ▼
 typed kernel
  │ emit                       core/emit/
@@ -66,7 +66,7 @@ wap/
       operators.wap           the operator table read from lib/aliases.warp: fixities, precedence groups sorted
                               topologically, aliases to canonical words; unrelated mixes refused
 
-    rewrite/                  the rule engine: rewriting by rules
+    rules/                    the rule engine
       patterns.wap            matching a rule's pattern: holes, typed holes, rests, guards
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
@@ -95,7 +95,7 @@ test/wap/                     wap's outcome tests: a program compiled by wap, ru
 What each file may know:
 - **kernel/** knows Node and nothing of the stages.
 - **core/parse/** knows characters and the operator table, no keyword: `if`, `for` and `class` are words to it.
-- **core/rewrite/** knows patterns and templates, no particular form: every form it handles comes from a rule file.
+- **core/rules/** knows patterns and templates, no particular form: every form it handles comes from a rule file.
 - **core/analyze/** reads, never rewrites.
 - **core/emit/** reads only the kernel; `wasm.wap` reads not even that.
 - **extensions/** holds rules only; a rule that needs code calls a function in lib/.
@@ -111,7 +111,7 @@ What each file may know:
 ## State
 
 Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Seq), core/parse/reader.wap (warp's
-`parse`), core/rewrite/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap and
+`parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap and
 core/emit/wasm.wap. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
 in the emitter (a debt).
 
@@ -121,4 +121,4 @@ Next, in order:
 1. kernel/primitives.wap and `print` as a library function (pays the debt)
 2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
 3. Define and Name, then If and While, each with an outcome test
-4. core/rewrite/ taking over lowering.wap; the first rule files in extensions/
+4. core/rules/ taking over lowering.wap; the first rule files in extensions/
