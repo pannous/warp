@@ -20,4 +20,19 @@ check "global changes the program's" "$(ran global 'x = 1
 f() := { global x = 2 }
 f()
 x')" "2"
+# a function that declares `global x` reads and changes the program's x, as it is when called (wiki/Footguns.md
+# "Closures capturing loop variables": late binding with an explicit `global`)
+check "global x changes the program's" "$(ran global_named 'x = 1
+f() := { global x
+  x = 5 }
+f()
+x')" "5"
+check "global x reads the program's as it is when called" "$(ran late 'x = 1
+f() := { global x
+  x }
+x = 5
+f()')" "5"
+check "a variable that never changes needs no global" "$(ran unchanged 'x = 1
+f() := x
+f()')" "1"
 exit $((failures > 0))
