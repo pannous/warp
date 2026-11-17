@@ -19,10 +19,11 @@
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
+# the canonical words of the literals, the kernel forms they are
+LITERAL_WORDS = {"yes": True, "no": False, "ø": Empty}
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
-LOCAL_WORD = "let"
-GLOBAL_WORD = "global"
+VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
 
 # the program as one Block of its statements
 lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
@@ -36,7 +37,7 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => if name == "yes" then True else if name == "no" then False else if name == "ø" then Empty else n
+	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
@@ -68,7 +69,7 @@ assigned(place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
 	_ => Set(place, value)
 }
-variable_named_by(word: Node, n: Node) as text := if word == symbol(LOCAL_WORD) then BOUND_LOCAL else if word == symbol(GLOBAL_WORD) then BOUND_GLOBAL else not_lowered(n)
+variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
 # `f(x) := body` defines a function, `n := 1` a constant
 defined(n: Node, head: Node, body: Node) as Node := match head {

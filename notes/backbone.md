@@ -63,8 +63,9 @@ The languages, each a set of Node shapes:
 - **notation:** what the reader makes and nothing else (notes/reader.md, wap/core/parse/reader.wap):
   - atoms: `Number` (int, or float when written with a point or a negative exponent; `-1` glued at an item's start
     is a negative Number, `a-1` is not), `Char` (a text of one code point), `Text` (escapes read; a template's `${…}`
-    and an extension's `\:name` kept as written), `Symbol` (a word, or an operator: a glyph with its repeats and one
-    `=`, `<=` `==` `...`; `:=`, `=>`, `and`, `yes`, `null` are all plain Symbols);
+    and an extension's `\:name` kept as written; a URL, a word glued to `://` up to a blank, bracket or separator),
+    `Symbol` (a word, or an operator: a glyph with its repeats and one `=`, `<=` `==` `...`; `:=`, `=>`, `and`,
+    `yes`, `null` are all plain Symbols);
   - three keys (reader.md Q1, Q11): `Key(key, Op.Colon, value)` and `Key(key, Op.Assign, value)` by the same rules,
     `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and `x = a + b` all before and after;
     `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
@@ -227,9 +228,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
-- **A URL is no atom yet: `http://x` reads as the key `http: //x`** (wap/core/parse/reader.wap), and `wap format`
-  prints it so, which reads back with `//x` as a comment. Bends "never degrade the input". Reason: the wiki says
-  nothing yet of URLs in code; a URL becomes one atom once a wiki page decides its spelling.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **A program's `operator` declarations don't extend the table yet** (wap/preload/operators.wap, read by
@@ -250,3 +248,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A definition's file is the emitter's guess** (wap/core/emit/emitter.wap `place_key`): a definition is known by its
   file and position, and positions carry no file, so the emitter takes a name's definition to be in the file of the
   function naming it (the preload for a library name). Paid off when positions carry their file.
+- **The emitter reads a literal as its parameter's type until typing does** (wap/core/emit/values.wap `literal_as`):
+  a one-character text, which the reader gives as a Char, becomes a text where a parameter wants one. Bends "one job
+  per stage": checking a value against its expected type is the typing stage's. Paid off by core/analyze/types.wap,
+  which then removes literal_as.
