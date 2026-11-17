@@ -40,6 +40,8 @@ format_check 'a b(c)' 'a b(c)'
 format_check "div{ class:'bold' 'text'}" 'div{class:"bold" "text"}'
 format_check "body(style='blue'){a(link)}" 'body(style = "blue"){a(link)}'
 format_check '#[0 1 2 3]' '#[0 1 2 3]'
+# a URL is one text, whatever its scheme
+format_check '[http://x.com/a?b=1, file:///tmp/x]' '["http://x.com/a?b=1", "file:///tmp/x"]'
 format_check 'f(x)(y) quiet()' 'f(x)(y) quiet()'
 format_check '1 m + 1km' '1 m + 1km'
 # signs: glued to digits where an item starts a number, else an operator; operators join repeats and one `=`
