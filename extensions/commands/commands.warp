@@ -76,7 +76,7 @@ command_name(entry: list) as text := entry#1.split(" ")#1
 host_commands = ["repl-step", "test-list", "test-verdicts"]
 # the commands it answers that help leaves out, the user-facing list kept short: the shown stages, the REPL, and
 # parse-code, which parse_code and eval call (core/native/driver.warp, web/playground/driver.js)
-hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "readings", "inspect"]
+hidden_commands = ["repl", "parse", "signature", "data", "parse-code", "lower", "uses", "readings", "inspect", "kernel"]
 # the commands this extension answers (its Extension row, extensions/extensions.warp)
 command_words() as list := command_help.map(command_name).filter(word => not word.starts_with("<")) + host_commands + hidden_commands + running_commands + native_commands
 
@@ -232,6 +232,7 @@ extension_command(command: text) := match command {
 	"lower": show_lowered()
 	"uses": show_uses()
 	"readings": show_readings()
+	"kernel": show_kernel_report()
 	"inspect": show_inspected()
 	"parse-code": write_parse_code(args#2, args#3)
 	"build": build(args[1 ..< #args])
