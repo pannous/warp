@@ -72,7 +72,7 @@ operator_spelled(spelling: text) as Operator? := {
 
 # the group an operator spelled so has in that fixity, "" when it has no such fixity
 group_of(spelling: text, fixity: Fixity) as text := {
-	if fixity == Fixity.Infix and spelling.ends_with("=") and compound_assignment(spelling) == spelling { return compound_assignment_group }
+	if fixity == Fixity.Infix and compound_assignment(spelling) == spelling { return compound_assignment_group }
 	operator = operator_spelled(spelling)
 	if operator == ø { return "" }
 	match fixity { Fixity.Infix => operator.infix; Fixity.Prefix => operator.prefix; Fixity.Postfix => operator.postfix; _ => "" }
@@ -99,7 +99,7 @@ class Token { item: Node, glued_before: bool, glued_after: bool }
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
 operated(n: Node) as Node := staged(n, operated_form)
 operated_form(n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.None) => phrase_read(glued_tokens(items, no, no))
+	List(items, Bracket.None, Separator.None) => phrase_read(glued_tokens(items))
 	List(items, bracket, Separator.Space) => bracketed(phrase_read(tokens_of(items)), bracket)
 	List(items, bracket, separator) => List(items.map(operated), bracket, separator)
 	Key(left, Op.Colon, right) => Key(operated(left), Op.Colon, operated(right))
@@ -125,7 +125,7 @@ tokens_of(items: list) as list := {
 	tokens = []
 	for item in items {
 		match item {
-			List(run, Bracket.None, Separator.None) => tokens = tokens + glued_tokens(run, no, no)
+			List(run, Bracket.None, Separator.None) => tokens = tokens + glued_tokens(run)
 			_ => tokens.add(Token(item, no, no))
 		}
 	}
@@ -133,10 +133,10 @@ tokens_of(items: list) as list := {
 }
 
 # the tokens of a glued run, adjacent glyphs joined to the longest operator the table knows (`=` `>` is `=>`)
-glued_tokens(run: list, glued_before: bool, glued_after: bool) as list := {
+glued_tokens(run: list) as list := {
 	items = joined_glyphs(run)
 	tokens = []
-	for i in 1 to #items { tokens.add(Token(items#i, i > 1 or glued_before, i < #items or glued_after)) }
+	for i in 1 to #items { tokens.add(Token(items#i, i > 1, i < #items)) }
 	tokens
 }
 
