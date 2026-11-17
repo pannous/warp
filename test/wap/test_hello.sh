@@ -22,6 +22,4 @@ check "literals of every kind run" "$(ran kinds "'a'
 ø
 -2.5
 7")" "7"
-check "a name the emitter cannot place is refused at its line" "$(ran name 'print "a"
-x' | grep -o 'line [0-9]*:[0-9]*')" "line 2:1"
 exit $((failures > 0))

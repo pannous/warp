@@ -52,6 +52,7 @@ CALL = [0x10]
 DROP = [0x1A]
 LOCAL_GET = [0x20]
 LOCAL_SET = [0x21]
+LOCAL_TEE = [0x22]
 GLOBAL_GET = [0x23]
 GLOBAL_SET = [0x24]
 I32_CONST = [0x41]
@@ -109,6 +110,15 @@ i64_const(n: int) as list := I64_CONST + signed(n)
 f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
 # the null reference of a heap type, `ref.null any`
 null_of(heap_type: list) as list := REF_NULL + heap_type
+
+# the value a variable of that type starts with: zero, or the null reference
+default_of(value_type: list) as list := {
+	if value_type == I64 { return i64_const(0) }
+	if value_type == F64 { return f64_const(0.0) }
+	if value_type == I32 { return i32_const(0) }
+	if value_type#1 == NULLABLE_REFERENCE { return REF_NULL + value_type[1 ..] }
+	REF_NULL + value_type
+}
 
 # a reference to the declared type of that index, or null
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)

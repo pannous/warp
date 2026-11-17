@@ -209,3 +209,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   without asking whether the library declares it. Bends "refuse, never guess": a misspelled name is not refused by
   the binding analysis. Reason: the preload's declarations are not read yet. Paid off when the declare stage reads
   them; then a name neither the program nor the library defines is refused, naming where it was written.
+- **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), until the typing stage gives
+  types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
+  function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
+  (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.

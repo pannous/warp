@@ -1,6 +1,6 @@
 # The value layout (notes/self_hosting.md "Value layout"): which wasm type holds which kind of warp value.
 #
-# Input: a literal of the kernel (Number, Char, Text, True, False, Empty); output: the instructions that leave its
+# Input: a literal of the kernel (Number, Char, Text, True, False, Empty) or a type's name; output: the instructions that leave its
 # value on the stack, and that value's wasm type. Values stay plain where their kind is known: an int an i64, a float
 # an f64, yes/no and a character an i32, a text a GC array of its UTF-8 bytes, ø a null reference. Boxing into a
 # $Node, where a kind is known only at run time, joins with the first form that needs it.
@@ -22,6 +22,12 @@ literal(n: Node, m: Module) as Code? := match n {
 	False => Code(I32, i32_const(0))
 	Text(value) => text_literal(value, m)
 	Empty => Code(ANYREF, null_of(ANY_HEAP))
+	_ => ø
+}
+
+# the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet
+layout_of(type_name: Node, m: Module) as list? := match type_name {
+	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else ø
 	_ => ø
 }
 
