@@ -8,6 +8,7 @@
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
 #   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
+#   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, core/sugar/ and the program
 #   declare   operated → declared   core/analyze/declarations.wap, the names the top level defines, as facts
 #   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
 #   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
@@ -21,6 +22,9 @@ use "core/parse/reader.wap"
 use "core/parse/operators.wap"
 use "core/format.wap"
 use "core/analyze/declarations.wap"
+use "core/rules/patterns.wap"
+use "core/rules/templates.wap"
+use "core/rules/stages.wap"
 use "core/rules/lowering.wap"
 use "core/analyze/scope.wap"
 use "core/emit/wasm.wap"
@@ -28,14 +32,18 @@ use "core/emit/values.wap"
 use "core/emit/emitter.wap"
 use "core/emit/primitives.wap"
 
+# the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap"]
+for file in RULE_FILES { rules_loaded(operated_program(notation(read(program.folder + "/" + file)))) }
+
 # the standard language every program gets, as definitions (preload/prelude.wap), declared once: what it declares is
 # the library every program is bound in
 PRELOAD = program.folder + "/preload/prelude.wap"
 preload = declared(read(PRELOAD))
 library = declarations_of(preload)
 
-# source text read and its operators read, then declared
-declared(source: text) as Node := declared_program(operated_program(notation(source)))
+# source text read, its operators read, its spellings rewritten by the shape rules, then declared
+declared(source: text) as Node := declared_program(shaped_program(operated_program(notation(source))))
 # declared code lowered and bound inside the library: the program and the preload alike
 prepared(code: Node) as Block := bound_program(lowered_program(code), library)
 compiled(source: text) as list := module_bytes(emitted(prepared(declared(source)), prepared(preload)))
