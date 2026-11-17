@@ -7,10 +7,13 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   operator stage and taken in when loaded: `pattern Name = shape` declares a pattern, `rule P => T` a rule. So a
   pattern is written in exactly the language it matches (operated code: `$a ÷ $b` is `(Call ÷ $a $b)`). The rule and
   pattern lines leave the program; what stays is surface.
-- **Holes:** `$x`, `$x: Shape`, `$xs...` (the reader keeps a rest hole one word). A typed hole before more items,
-  `(If $c: Node $then: Node …)`, reads as a colon key holding the rest of the phrase; normalization turns it back
-  into a hole with a `type` fact and puts the items after it back in the list. v1 guards are shapes only (Node,
-  Symbol, List, Key, Text, Number, Char, a declared pattern); a value type is refused until typing exists.
+- **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
+  type, so `(If $c: Node $then: Node …)` is three typed holes). The type rides as the hole's `type` fact. A shape
+  type (Node, Symbol, List, Key, Text, Number, Char, a declared pattern) is checked here; a value type (`$k: int`,
+  `$xs: list<int>`) makes a stage-3 rule, kept in `typed_rules` and checked by typing (`value_type_fits`, the one
+  seam to core/analyze/types.wap `fits_type`). Stage 1 runs `shape_rules` only.
+- **Stages share one walker:** `rewritten_by(rules, code) as Fired` gives the code and whether any rule fired, so
+  typing can run again after stage 3.
 - **Constructors come from patterns.** In a template (and a pattern), `If($c, ø, $body)` names a declared pattern
   and builds its node `(If $c ø $body)`; any other capitalized call stays a call (a class constructor).
 - **Indexed by head:** a phrase's first word, a form's name with its first word (`Call/+`), a key's operator; a
