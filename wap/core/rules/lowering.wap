@@ -15,6 +15,8 @@
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
+#   while c { b }            a loop → While(c, b)
+#   return x                 → Return(x); a bare `return` → Return(ø)
 #   if c then a else b       a condition, also `if c { a } else { b }`, the else optional → If(c, a, b), If(c, a, ø)
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
 # the rule engine: `unless c { a }`, `c ? a : b`, `a if c`.
@@ -26,6 +28,11 @@ LITERAL_WORDS = {"yes": True, "no": False, "ø": Empty}
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
 VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
+# the words of a loop and of a return
+WHILE_WORD = "while"
+RETURN_WORD = "return"
+# the words that are a kernel form standing alone
+STATEMENT_WORDS = {"return": Return(Empty)}
 # the words of a condition: if c then a else b
 IF_WORD = "if"
 THEN_WORD = "then"
@@ -43,7 +50,7 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else n
+	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else if STATEMENT_WORDS.has(name) then STATEMENT_WORDS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
@@ -64,6 +71,8 @@ phrase_lowered(items: list, n: Node) as Node := {
 	if not items#1 is symbol { return not_lowered(n) }
 	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(items#2, n) }
 	if items#1 == symbol(IF_WORD) { return conditional(items[1 ..], n) }
+	if items#1 == symbol(WHILE_WORD) { return looped(items[1 ..], n) }
+	if items#1 == symbol(RETURN_WORD) { return Return(phrase_part(items[1 ..], n)) }
 	Call(items#1, items[1 ..].map(lowered))
 }
 primitive_of(operation: Node, n: Node) as Node := match operation {
@@ -86,6 +95,9 @@ conditional(words: list, n: Node) as Node := {
 	if else_at > 0 and symbol(IF_WORD) in then_words { refused(n, "this else may belong to either if: put the inner if in braces") }
 	If(phrase_part(before_else[.. split_at - 1], n), phrase_part(then_words, n), else_part)
 }
+# `while c { b }`, the words after `while`: the condition, then the body, a block
+looped(words: list, n: Node) as Node := if #words >= 2 and is_block(words.last) then While(phrase_part(words[.. #words - 1], n), lowered(words.last)) else not_lowered(n)
+
 # some words of a phrase as one form: a word alone, several a phrase of their own
 phrase_part(words: list, n: Node) as Node := {
 	if words is empty { return not_lowered(n) }
