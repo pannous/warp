@@ -10,4 +10,14 @@ print "Hello"')" "Hello"
 # a typed parameter binds its name, its type left as written
 check "a typed parameter" "$(ran typed 'keep(x: int) := { y = x }
 print "Hello"')" "Hello"
+# wiki/Footguns.md "Closures capturing loop variables": a function's `x = …` of a program's variable reads two ways;
+# `let` makes the function its own, `global` changes the program's
+check "let makes a new variable" "$(ran let 'x = 1
+f() := { let x = 2 }
+f()
+x')" "1"
+check "global changes the program's" "$(ran global 'x = 1
+f() := { global x = 2 }
+f()
+x')" "2"
 exit $((failures > 0))

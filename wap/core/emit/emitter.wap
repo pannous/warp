@@ -10,14 +10,13 @@
 # when nothing calls it. What is still unknown, a function calling itself or a global read before it is set, is
 # refused, never guessed.
 #
-# Milestone 1 writes texts through WASI's fd_write, which the native warp and the browser both answer. That `print`
-# is recognized here by name is a debt (notes/backbone.md "Debts"): print becomes a library function whose body is a
-# host primitive once the kernel has Prim.
+# The emitter knows no library word: a name bound to the library is a definition of the preload
+# (wap/preload/prelude.wap), emitted like the program's own functions, and a built-in's body is a Prim
+# (core/emit/primitives.wap).
 
-STDOUT = 1
-NEWLINE = 10
-# fd_write(fd, iovecs, count, written) → error: where it stores the count written
-WRITTEN_ADDRESS = 0
+# the files definitions come from: the program and the preload; a definition is known by its file and position
+PROGRAM_FILE = "program"
+PRELOAD_FILE = "preload"
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
 # the bindings whose variables live in the function's frame
@@ -27,10 +26,11 @@ FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 # warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
 # values show themselves (notes/backbone.md "Debts"); the host's float digits are not warp's (0.1 as
 # 0.10000000000000001).
-emitted(program: Block) as Module := {
+emitted(program: Block, preload: Block) as Module := {
 	m = Module()
 	p = Program(m, imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32]))
-	f = Frame()
+	p.pending = library_of(preload).map(definition => Waiting(definition, PRELOAD_FILE))
+	f = Frame(PROGRAM_FILE)
 	body = code(program, p, f)
 	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
 	exported(m, "main", FUNCTION_KIND, function_of(m, [], shown, f))
@@ -45,13 +45,22 @@ class Program {
 	output: int
 	functions: list = []
 	globals: list = []
-	# the Define forms whose body is not emitted yet
+	# the definitions whose body is not emitted yet, each a Waiting; the preload's wait from the start
 	pending: list = []
+	# the helper functions primitives call, each [operation, index]
+	helpers: list = []
 }
-# The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
+# The function being emitted: the file it was written in, its parameters, then its locals, each a Placed numbered
+# as wasm numbers them
 class Frame {
+	file: text
 	slots: list = []
 	parameter_count: int = 0
+}
+# a Define whose body waits, and the file it was written in
+class Waiting {
+	form: Node
+	file: text
 }
 # A definition where wasm keeps it: its index, the type of its value (a function's result) and, for a function,
 # its parameters' types. Its key is where the program defined it.
@@ -67,9 +76,10 @@ class Placed {
 # the code of a kernel form
 code(form: Node, p: Program, f: Frame) as Code := match form {
 	Block(statements) => block_code(statements, p, f)
-	Define(name, parameters, body) => postponed(form, p)
+	Define(name, parameters, body) => postponed(form, p, f)
 	Set(place, value) => set_code(form, place, code(value, p, f), p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
+	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
@@ -79,7 +89,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 # nothing called are emitted at its end.
 block_code(statements: list, p: Program, f: Frame) as Code := {
 	codes = statements.map(s => code(s, p, f))
-	for statement in statements { if statement in p.pending { emitted_function(statement, p) } }
+	for waiting in p.pending.filter(w => w.file == f.file and w.form in statements) { if waiting in p.pending { emitted_function(waiting, p) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }
@@ -88,33 +98,33 @@ block_code(statements: list, p: Program, f: Frame) as Code := {
 dropped(c: Code) as list := c.instructions + (if c.type is empty then [] else DROP)
 
 # a function defined, its body emitted later; the definition leaves no value
-postponed(form: Node, p: Program) as Code := {
-	p.pending += [form]
+postponed(form: Node, p: Program, f: Frame) as Code := {
+	p.pending += [Waiting(form, f.file)]
 	Code()
 }
 # the function a name defines, its body emitted now if it waits
-pending_function(p: Program, called: Node) as Placed? := {
-	key = defining_key(called)
-	for waiting in p.pending { if place_key(defined_name(waiting)) == key { return emitted_function(waiting, p) } }
+pending_function(p: Program, called: Node, f: Frame) as Placed? := waiting_function(p, defining_key(called, f))
+waiting_function(p: Program, key: text) as Placed? := {
+	for waiting in p.pending { if place_key(defined_name(waiting.form), waiting.file) == key { return emitted_function(waiting, p) } }
 	ø
 }
 defined_name(form: Define) as Node := match form { Define(name, parameters, body) => name }
 
 # A function: its parameters the first slots of a new frame, its body's value its result. It waits no longer, so a
 # call inside its own body finds it neither waiting nor placed.
-emitted_function(form: Define, p: Program) as Placed := {
-	p.pending = p.pending.filter(waiting => waiting != form)
-	match form { Define(name, parameters, body) => function_placed(name, parameters, body, p) }
+emitted_function(waiting: Waiting, p: Program) as Placed := {
+	p.pending = p.pending.filter(other => other != waiting)
+	function_placed(waiting.form, waiting.file, p)
 }
-function_placed(name: Node, parameters: List, body: Node, p: Program) as Placed := {
-	f = Frame()
-	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(parameter), #f.slots, parameter_type(parameter, p), [], yes)] }
+function_placed(form: Define, file: text, p: Program) as Placed := match form { Define(name, parameters, body) => {
+	f = Frame(file)
+	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(parameter, file), #f.slots, parameter_type(parameter, p), [], yes)] }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
 	value = code(body, p, f)
-	p.functions += [Placed(place_key(name), function_of(p.m, types, value, f), value.type, types)]
+	p.functions += [Placed(place_key(name, file), function_of(p.m, types, value, f), value.type, types)]
 	p.functions.last
-}
+} }
 parameters_of(parameters: List) as list := match parameters { List(items, bracket, separator) => items }
 # the wasm function of a frame and its body, its value the result: its index
 function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
@@ -146,50 +156,52 @@ name_code(name: Node, p: Program, f: Frame) as Code := {
 # frame, a global in the module
 variable_of(name: Node, p: Program, f: Frame) as Placed? := {
 	binding = binding_of(name)
-	if binding in FRAME_BINDINGS { return placed_for(f.slots, name) }
-	if binding == BOUND_GLOBAL { return placed_for(p.globals, name) }
+	if binding in FRAME_BINDINGS { return placed_for(f.slots, name, f) }
+	if binding == BOUND_GLOBAL { return placed_for(p.globals, name, f) }
 	refused(name, "the emitter reads and sets parameters, locals and globals, not a ${binding} yet")
 }
 added_variable(name: Node, type: list, p: Program, f: Frame) as Placed := {
 	if binding_of(name) == BOUND_GLOBAL {
-		p.globals += [Placed(defining_key(name), added_global(p.m, type, MUTABLE, default_of(type)), type)]
+		p.globals += [Placed(defining_key(name, f), added_global(p.m, type, MUTABLE, default_of(type)), type)]
 		return p.globals.last
 	}
-	f.slots += [Placed(defining_key(name), #f.slots, type, [], yes)]
+	f.slots += [Placed(defining_key(name, f), #f.slots, type, [], yes)]
 	f.slots.last
 }
 fetched(held: Placed) as list := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
 # a value stored, and left on the stack
 kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
 
-# A call of a function the program defined, its arguments of its parameters' types; print, the one library word
-# (a debt), prints a text
+# A call of a function the program or the preload defined, its arguments of its parameters' types; a literal
+# argument is read as the type its parameter wants (core/emit/values.wap)
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
-	binding = binding_of(called)
-	if binding == BOUND_LIBRARY and called == symbol("print") and #arguments == 1 and arguments#1 is text { return Code([], printed(arguments#1, p.m, p.output)) }
-	if binding != BOUND_FUNCTION { refused(form, "the emitter calls the program's own functions and print of a text, not this yet") }
-	function = placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
-	given = arguments.map(argument => code(argument, p, f))
+	function = called_function(form, called, p, f)
+	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
+	given = (1 to #arguments).map(at => literal_as(arguments#at, function.parameters#at, p.m) ?? code(arguments#at, p, f))
 	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
 	Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index]))
 }
+called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
+	binding = binding_of(called)
+	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }
+	placed_for(p.functions, called, f) ?? pending_function(p, called, f) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
+}
+
+# The preload's definitions, which library names refer to; the preload holds nothing else
+library_of(preload: Block) as list := match preload { Block(statements) => statements.map(s => if s is Define then s else refused(s, "the preload holds only definitions")) }
 
 # what a bound name refers to: local, parameter, capture, global, function or library
 binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
 # the definition a bound name refers to, among those placed so far
-placed_for(placed: list, name: Node) as Placed? := {
-	key = defining_key(name)
+placed_for(placed: list, name: Node, f: Frame) as Placed? := placed_by_key(placed, defining_key(name, f))
+placed_by_key(placed: list, key: text) as Placed? := {
 	for each in placed { if each.key == key { return each } }
 	ø
 }
-defining_key(name: Node) as text := place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"))
-# a definition's key: where the program wrote it
-place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${line_of(definer)}:${column_of(definer)}"
-
-# a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
-printed(line: text, m: Module, output: int) as list := {
-	bytes = line.bytes + [NEWLINE]
-	text_address = added_data(m, bytes)
-	iovec = added_data(m, little_endian(text_address, 4) + little_endian(#bytes, 4))
-	i32_const(STDOUT) + i32_const(iovec) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [output]) + DROP
+# a bound name's definition is in the preload for a library name, else in the file of the function that names it
+defining_key(name: Node, f: Frame) as text := {
+	file = if binding_of(name) == BOUND_LIBRARY then PRELOAD_FILE else f.file
+	place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"), file)
 }
+# a definition's key: the file and the place it was written
+place_key(definer: Node, file: text) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file}:${line_of(definer)}:${column_of(definer)}"

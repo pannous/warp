@@ -13,8 +13,9 @@
 # Later the stamp also carries the name of the rule or stage that built the node, for errors like
 # `line 4: unless … (rule extensions/…:3): …`.
 
-# n rewritten by the stage's rewrite, every node it built placed where n was written
-staged(n: Node, rewrite: function) as Node := placed_like(rewrite(n), n)
+# n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
+# also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
+staged(n: Node, rewrite: function) as Node := with_facts_of(placed_like(rewrite(n), n), n)
 
 # The new node a rewrite built, and each of its new parts, given the position of the code it replaced (a rebuilt node
 # keeps its own: refitted); a part that has a position already was reused, and the walk stops there. An origin
@@ -22,16 +23,21 @@ staged(n: Node, rewrite: function) as Node := placed_like(rewrite(n), n)
 placed_like(built: Node, origin: Node) as Node := {
 	# Empty (and an empty `{}` or `()`, Empty in warp) carries no metadata
 	if built == ø or line_of(built) != ø or line_of(origin) == ø { return built }
-	positioned(with_parts(built, part => placed_like(part, origin)), line_of(origin), column_of(origin))
+	with_facts_of(positioned(with_parts(built, part => placed_like(part, origin)), line_of(origin), column_of(origin)), built)
 }
 
 # The same node rebuilt, its parts replaced, as a stage that only learns facts rebuilds it (binding, typing): it keeps
 # its own position and the facts earlier stages learned. A new node a rewrite built takes only the position of the
 # code it replaced, placed_like.
 refitted(built: Node, original: Node) as Node := {
-	placed = if line_of(original) == ø then built else positioned(built, line_of(original), column_of(original))
-	for fact in attributes_of(original) { placed = with_attribute(placed, fact) }
-	placed
+	with_facts_of(if line_of(original) == ø then built else positioned(built, line_of(original), column_of(original)), original)
+}
+
+# n with each fact of the original it does not hold yet
+with_facts_of(n: Node, original: Node) as Node := {
+	held = attributes_of(n)
+	for fact in attributes_of(original) { if not held.contains(fact) { n = with_attribute(n, fact) } }
+	n
 }
 
 # a node with each of its direct parts changed by f
@@ -64,3 +70,13 @@ BOUND_CAPTURE = "capture"
 BOUND_GLOBAL = "global"
 BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
+# on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
+# BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
+ASSIGNS = "assigns"
+# a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
+CAPTURES = "captures"
+
+# The facts of the declaration prescan, core/analyze/declarations.wap: DECLARES on a top-level definition,
+# `name: signature`; DECLARATIONS on the program, the list of them
+DECLARES = "declares"
+DECLARATIONS = "declarations"

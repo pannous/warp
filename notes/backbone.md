@@ -87,20 +87,24 @@ The languages, each a set of Node shapes:
   call (`=` → Set, `:=` → Define, `=>` → Fn), a phrase headed by a word, `{…}`, the literal words `yes` `no` `ø`.
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
-- **declared:** surface, unchanged, plus facts: each definition's `Meta` names what it declares, and the program's
-  block holds the table of declared names and signatures.
+- **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
+  a value's signature ø), and on the program `declarations`, the list of them (core/analyze/declarations.wap).
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
   `parameter`, `capture` of an enclosing function's name, `global`, `function` or `library`), and `defined_at`, the
-  defining name itself, positioned (core/analyze/scope.wap).
+  defining name itself, positioned (core/analyze/scope.wap); a library word is one the preload declares, a name
+  nothing defines is refused. Each `Define` and `Fn` also learns `captures`, the defining names it reads from the
+  functions around it, its nested functions' reads included.
 - **typed kernel:** bound kernel plus each form's type, and on each `Call` the overload chosen.
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
 through core/stage.wap (`with_fact(n, name, value)`, `fact_of(n, name)`), so a kernel form keeps the same holes from
 stage 2 to the emitter and a pattern written for one stage matches in the next. A stage that only learns facts
-(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker.
+(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker. A
+rewrite's result stands for what it replaced: it takes that node's position and facts (a definition's declaration
+survives its lowering), while the new parts inside it take only the position.
 
 **Handoffs.** A worker hands a stage over with an outcome test in test/wap/ (a program compiled by wap, run, its output
 checked) and a line here when its language changed. The lead reviews it against this table before it lands.
@@ -212,6 +216,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 3. ~~Folder~~: decided, wap/ (kernel/, core/; preload and library later).
 4. **The kernel list:** start the case-by-case discussion from notes/kernel.md's 13 forms plus primitives?
 
+## Open, not built yet
+
+- **Binding:** a bare `global x` (a function declaring it means the program's x, without a value); the late-binding
+  check of wiki/Footguns.md, where a free variable changed after the definition must be declared `global`.
+
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)
@@ -221,9 +230,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
-- **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
-  any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
-  function whose body is a host primitive.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
   operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
   stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
@@ -232,15 +238,14 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
   Paid off when values show themselves through the runtime's show words, boxed into a $Node.
-- **A name the program binds nowhere is taken for a library word** (wap/core/analyze/scope.wap, `binding: library`)
-  without asking whether the library declares it. Bends "refuse, never guess": a misspelled name is not refused by
-  the binding analysis. Reason: the preload's declarations are not read yet. Paid off when the declare stage reads
-  them; then a name neither the program nor the library defines is refused, naming where it was written.
 - **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), until the typing stage gives
   types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
   function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
   (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.
-- **A definition is known by its line and column** (wap/core/emit/emitter.wap `place_key`): the emitter finds the
-  function, local or global a bound name refers to by where its definer was written. Two files' definitions at the
-  same line and column would collide. Reason: wap compiles one file so far. Paid off when positions carry their file,
-  or the binding fact names its definition uniquely.
+- **A definition's file is the emitter's guess** (wap/core/emit/emitter.wap `place_key`): a definition is known by its
+  file and position, and positions carry no file, so the emitter takes a name's definition to be in the file of the
+  function naming it (the preload for a library name). Paid off when positions carry their file.
+- **The emitter reads a literal as its parameter's type until typing does** (wap/core/emit/values.wap `literal_as`):
+  a one-character text, which the reader gives as a Char, becomes a text where a parameter wants one. Bends "one job
+  per stage": checking a value against its expected type is the typing stage's. Paid off by core/analyze/types.wap,
+  which then removes literal_as.

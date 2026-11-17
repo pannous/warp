@@ -1,0 +1,63 @@
+# The declaration prescan: surface → declared (notes/backbone.md "Stage languages").
+#
+# Before any phrase is decided (it reads operated code), the program's interface is known: the names its top level defines, each with its
+# signature. Signature rules (stage 2) ask it (`$f takes value`), a phrase is read by it (`print x` is a call because
+# print is a function), and so does a module that `use`s this one. It learns facts only, the program keeps its shape:
+#   declares        on each top-level definition: name: signature
+#   declarations    on the program: the list of them, in the order written
+#
+#   x := 3                  x: ø               a value
+#   f(a: int, b) := a       f: [a: int, b]     a function and its parameters, as written
+#   g() := 1                g: []              a function of no parameters
+#
+# Only the top level declares: names inside a function belong to its scopes, which the binding analysis resolves
+# (core/analyze/scope.wap). A statement that defines nothing declares nothing.
+
+declared_program(program: Node) as Node := {
+	statements = top_level_statements(program).map(declared_statement)
+	declarations = []
+	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
+	with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
+}
+
+# what a declared program declares, `name: signature` each
+declarations_of(program: Node) as list := match fact_of(program, DECLARATIONS) {
+	List(items, bracket, separator) => items
+	_ => []
+}
+
+# a statement with what it declares, if it defines a name
+declared_statement(statement: Node) as Node := {
+	declaration = declaration_of(statement)
+	if declaration == ø then statement else with_fact(statement, DECLARES, declaration)
+}
+
+# name: signature of a definition, ø of any other statement: `f(a, b) := …`, `n := 1`, `x = 1` as operated code reads
+# them, (Call := f(a, b) …), (Call = x 1)
+declaration_of(statement: Node) as Node? := match statement {
+	Call(called, arguments) => if text(called) == ":=" then signature_of(arguments#1) else if text(called) == "=" then value_named(arguments#1) else ø
+	_ => ø
+}
+# what `f(a, b)` or `n` before := declares: a function with its parameters, or a value
+signature_of(head: Node) as Node? := match head {
+	Key(name, Op.None, group) => match name { Symbol(word) => Key(name, Op.Colon, List(arguments_of(group), Bracket.Square, Separator.Comma)); _ => ø }
+	_ => value_named(head)
+}
+# the value a name before = declares, also of `let x` and `global x`
+value_named(place: Node) as Node? := match place {
+	Symbol(name) => Key(place, Op.Colon, Empty)
+	List(items, Bracket.None, Separator.Space) => if #items == 2 then value_named(items#2) else ø
+	_ => ø
+}
+
+# the program's statements, and the program put back from them: lines, `;` statements, or the one statement
+top_level_statements(program: Node) as list := match program {
+	List(items, Bracket.None, Separator.Newline) => items
+	List(items, Bracket.None, Separator.Semicolon) => items
+	_ => [program]
+}
+rebuilt_statements(program: Node, statements: list) as Node := match program {
+	List(items, Bracket.None, Separator.Newline) => List(statements, Bracket.None, Separator.Newline)
+	List(items, Bracket.None, Separator.Semicolon) => List(statements, Bracket.None, Separator.Semicolon)
+	_ => statements#1
+}
