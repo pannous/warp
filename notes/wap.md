@@ -16,7 +16,7 @@ and the stage that should have removed it.
 
 ```
 text
- │ read                       core/parse/      the notation: data and code alike, no keyword meanings
+ │ read                       core/parse/        the notation: data and code alike, no keyword meanings
  ▼
 notation (Node: atoms, keys, lists, phrases)
  │ shape rules                core/rules/        stage 1: rules that ask only the shape
