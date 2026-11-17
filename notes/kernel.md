@@ -68,7 +68,7 @@ Three details:
 | Fn | `parameters body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
 | Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
 | Prim | `operation arguments` | nothing directly: library bodies (below) |
-| If | `cond then_part else_part` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
+| If | `cond then_part else_part` | `if`, `if … then … else`, `unless`, `a ? b : c`, `a if c`, `a or b` |
 | Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
 | While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
 | Break, Continue, Return | none, none, `value` | the same words |
@@ -117,7 +117,7 @@ pattern asks:
 
 | stage | runs | the pattern may ask | examples |
 |---|---|---|---|
-| 1 shape | right after reading | the shape only | `for` → `While`, `unless` → `If`, `a ?: b`, ranges |
+| 1 shape | right after reading | the shape only | `for` → `While`, `unless` → `If`, `try x else y`, `a ?: b`, `Color::Red`, comprehensions, ranges |
 | 2 signature | after the declarations are collected | declared signatures and types (`takes value`, `is function`, `$x: Meters` of a declared parameter) | `print -1`, `x is T`, overloads by arity |
 | 3 kind | after typing, on kernel code | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
 
