@@ -33,6 +33,8 @@ LATER_ESCAPES = «$({:»
 OTHER_GLYPHS = "¬±×÷·‖…′″"
 # operator glyph ranges beyond ASCII: superscripts and subscripts, arrows, math operators, technical
 GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], ['∟', '⌙'], ['¹', '¹'], ['²', '³']]
+# what ends a rest hole, `$items...` (first_principles.md "Holes")
+REST_MARK = "..."
 # what ends a URL: a blank, a bracket, a separator or a quote
 URL_ENDS = " \t\n\r()[]{},;\"'`"
 # a line comment starts with `//`, or with `#` before a blank, `!` or `#`
@@ -309,11 +311,12 @@ dedent(r: Reader) := {
 
 # ── atoms ──
 
-# a run of name characters: a word, `$hole` and `π` included
+# a run of name characters: a word, `$hole` and `π` included; a rest hole `$items...` is one word, its dots no glyphs
 name_read(r: Reader) := {
 	end = r.at
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
 	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
+	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
 	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 }
 
