@@ -121,6 +121,18 @@ CAPTURES = "captures"
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
 TYPE = "type"
 SIGNATURE = "signature"
+# a list's TYPE as the reader reads `list<int>`: the word list glued to its item type in angle brackets
+LIST_TYPE = "list"
+list_type(item: Node) as Node := Key(symbol(LIST_TYPE), Op.None, List([item], Bracket.Less, Separator.None))
+# the item type of a list's type, ø for any other type
+item_type(type: Node?) as Node? := match type {
+	Key(name, Op.None, group) => if name == symbol(LIST_TYPE) then only_item(group) else ø
+	_ => ø
+}
+only_item(group: Node) as Node? := match group {
+	List(items, Bracket.Less, separator) => if #items == 1 then items#1 else ø
+	_ => ø
+}
 
 # The facts of the declaration prescan, core/analyze/declarations.wap: DECLARES on a top-level definition,
 # `name: signature`; DECLARATIONS on the program, the list of them

@@ -19,7 +19,7 @@ class Declared { name: text, shape: Node, holes: list, matcher: Matcher }
 declared_patterns = {}
 
 # what a part of a pattern asks of the code at its place
-enum Test { Hole, Literal, Sequence, Pair }
+enum Test { Hole, Literal, Sequence, Pair, Repeat }
 class Matcher { test: Test, name: text = "", type: Node = Empty, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list = [] }
 
 # ---- holes
@@ -58,8 +58,18 @@ compiled_pattern(n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
 	Key(left, op, right) => pair_matcher(n, left, op, right)
-	List(items, bracket, separator) => Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(compiled_pattern))
+	List(items, Bracket.None, Separator.None) => if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else sequence_matcher(items, Bracket.None, Separator.None)
+	List(items, bracket, separator) => sequence_matcher(items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
+}
+sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher := Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(compiled_pattern))
+
+# Repetition, as in macros by example: `($p => $r)...` in a pattern takes items that each fit `$p => $r`, binding $p
+# and $r to the sequences of their matches (as a rest hole binds, under `$p...`); in a template `Arm($p, $r)...`
+# writes one Arm per match. The part repeated, ø when the node is no repetition.
+repeated_part(n: Node) as Node? := match n {
+	List(items, Bracket.None, Separator.None) => if #items == 2 and items#2 is symbol and spelling_written(items#2) == canonical(REST_MARK, Fixity.Anywhere) then items#1 else ø
+	_ => ø
 }
 
 pair_matcher(n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(left), compiled_pattern(right)])
@@ -103,6 +113,7 @@ matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
 	Test.Hole => hole_matches(m, n, bindings)
 	Test.Literal => same_atom(m.literal, n)
 	Test.Sequence => sequence_matches(m, n, bindings)
+	Test.Repeat => repeat_matches(m.parts#1, [n], bindings)
 	Test.Pair => match n { Key(left, op, right) => op == m.op and matches(m.parts#1, left, bindings) and matches(m.parts#2, right, bindings); _ => no }
 }
 
@@ -132,10 +143,24 @@ parts_match(parts: list, items: list, bindings: map) as bool := {
 	if not part.rest { return #items > 0 and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
 	known = bindings.keys
 	for taken in 0 to #items {
-		if rest_matches(part, items[.. taken], bindings) and parts_match(parts[1 ..], items[taken ..], bindings) { return yes }
+		if taken_by(part, items[.. taken], bindings) and parts_match(parts[1 ..], items[taken ..], bindings) { return yes }
 		for name in bindings.keys { if not known.contains(name) { bindings.remove(name) } }
 	}
 	no
+}
+
+taken_by(m: Matcher, items: list, bindings: map) as bool := if m.test == Test.Repeat then repeat_matches(m.parts#1, items, bindings) else rest_matches(m, items, bindings)
+
+# each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
+repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
+	met = {}
+	for item in items {
+		own = {}
+		if not matches(part, item, own) { return no }
+		for name in own.keys { met[name] = (if met.has(name) then met[name] else []) + [own[name]] }
+	}
+	for name in met.keys { bindings[name + REST_MARK] = List(met[name], Bracket.None, Separator.Space) }
+	yes
 }
 
 rest_matches(m: Matcher, items: list, bindings: map) as bool := {

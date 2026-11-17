@@ -1,0 +1,5 @@
+# Data reached other ways, as Get (notes/kernel.md "Data"): the spellings wap's own source uses.
+
+# a list's item by its place, counting from 1: `xs#2`
+rule ($subject#$key) => Get($subject, $key)
+

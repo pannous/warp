@@ -47,6 +47,8 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
 	Continue() => n
+	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Number(value) => n
 	Text(value) => n
@@ -133,6 +135,8 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	If(condition, then_part, else_part) => defined_in([condition, then_part, else_part], scope, depth)
 	While(condition, body) => defined_in([condition, body], scope, depth)
 	Return(value) => defined_in([value], scope, depth)
+	Get(subject, key) => defined_in([subject, key], scope, depth)
+	List(items, Bracket.Square, separator) => defined_in(items, scope, depth)
 	_ => []
 }
 # The variable an assignment makes: a new one for `let x = …` and for a name its function sees no variable of;
