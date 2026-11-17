@@ -13,9 +13,11 @@ wap/core/parse/operators.wap, the printer wap/core/format.wap. What the code dec
   else infix (`1- -3`); both or neither → infix. At the start of a phrase or after an operator, prefix.
 - **Unrelated on purpose:** shifts and arithmetic (`a << 1 + 2`), bit operators and comparisons (`a & b == c`).
   Comparisons, equality and ranges refuse chaining (`a < b < c`).
-- **The English name is not an alias.** A row gives the symbol and its name (`+`, add); `add(a, b)` stays a call of
-  add, and the binding stage knows add and `+` are one function from the row. An alias maps a spelling to a
-  canonical word in a fixity (`plus` only infix), or anywhere (`≤`, `true`, `length` → count, `string` → text).
+- **An operator's English name is a second name of the same function, joined by the row, never an alias** (lead,
+  2026-11-17). A row gives the symbol and its name (`+`, add); neither is rewritten into the other: `add(a, b)` stays
+  a call of add, `a + b` a call of `+`, and binding joins them from the row. As an alias, `add(a, b)` would read as
+  prefix `+` of a tuple. An alias maps a spelling to a canonical word in a fixity (`plus` only infix), or anywhere
+  (`≤`, `true`, `length` → count, `string` → text).
 - **Glyph runs join in the stage:** the reader splits `=>` into `=` `>`; a glued run of symbols joins to the longest
   spelling the table knows. `x ⊛= y` of any infix ⊛ is a compound assignment without a row of its own.
 - **Spelled out by format:** a later item of a space list led by a sign spacing decided prints `[a, -1]` in brackets
