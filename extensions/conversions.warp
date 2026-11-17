@@ -119,9 +119,9 @@ taker_name = "taker·named"
 place_refusal_word = "place_refused"
 # whether an instance or a map has every one of the fields (lib/prelude.warp has_fields)
 fields_fit(it: Node, fields: list) as Node := Key(Key(call_of(instance_test_word, [it]), Op.Or, Key(it, Op.Is, symbol("map"))), Op.And, call_of("has_fields", [it, List(fields.map(field => Text(field)), Bracket.Square, Separator.Comma)]))
-# the prelude words a class place's check calls (core/passes/prelude_words.warp extension_writes): a program declaring
-# a type, a class or one an extension makes a class of (`type Meters < int`, extensions/int_types)
-class_place_words(program: Node) as list := if statements_in(program).any(is_type_declaration) then [place_refusal_word, "has_fields", "with_article"] else []
+# the prelude words a class place's check calls (core/passes/prelude_words.warp extension_writes): of a program
+# declaring a class, or a subtype extensions/int_types makes one of (`type Meters < int`)
+class_place_words(program: Node) as list := if statements_in(program).any(statement => class_view(statement) != ø or class_subtype_of(statement) != ø) then [place_refusal_word, "has_fields", "with_article"] else []
 # each class the program declares, not an enum: name → its Declared (core/passes/classes.warp)
 class_declarations(program: Node) as map := {
 	enums = declarations_found(program, declared_enum, {})
