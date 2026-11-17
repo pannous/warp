@@ -25,12 +25,12 @@ pattern Define = (Define $name: Node $parameters: List $body: Node)
 # a function value without a name: `x => x + 1`, `{ it * 2 }`, `|x| …` are Fn([x], x + 1), (Fn [x] …)
 pattern Fn = (Fn $parameters: List $body: Node) # todo: rename to Lambda
 
-# a value's part by its key: `p.x` is Get(p, "x"), `xs#i` Get(xs, i), (Get p "x"); a text key is a field of the
-# subject's record type, else the function of that name taking the subject (a zero-argument method read is its call),
-# else a map's key, as typing settles it
+# the value a place holds, a list's item or a record's field: `xs#2` is Get(xs, 2), counting from 1, and `p.x` is
+# Get(p, "x"), the field's name a text, as a map's key is (`m.a` is `m#"a"`); a text key that names no field is the
+# function of that name taking the subject (`xs.sum` is sum(xs)), as typing settles it
 pattern Get = (Get $subject: Node $key: Node)
 
-# a value given to a place, a name, `p.x` or `xs#i`: `x = 1`, `p.x = 2`, `x += 1` are Set(x, 1) …, (Set x 1)
+# a value given to a place, a name or a Get: `x = 1`, `xs#1 = 2`, `x += 1` are Set(x, 1), Set(Get(xs, 1), 2) …, (Set x 1)
 pattern Set = (Set $place: Node $value: Node)
 
 # an operation the emitter performs itself, the leaf where warp ends and wasm or the host begins; only the preload

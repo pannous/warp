@@ -80,12 +80,13 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Set(place, value) => set_typed(n, place, value, s, f)
 	Call(called, arguments) => call_typed(n, called, arguments, s, f, expected)
 	Prim(operation, arguments) => prim_typed(n, operation, arguments, s, f)
-	Get(subject, key) => part_typed(n, subject, key, s, f, expected)
 	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
 	While(condition, body) => refitted(While(condition_typed(condition, s, f), typed_form(body, s, f, ø)), n)
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
+	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
+	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
 	Symbol(name) => name_typed(n, s, f)
 	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
@@ -138,7 +139,11 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 }
 
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
-set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
+	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
+	_ => name_set_typed(n, place, value, s, f)
+}
+name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
 	wanted = declared_type(place) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
@@ -146,6 +151,32 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	remembered(name, type, s, f)
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
+}
+
+# a list's item given a value of the list's item type; the Set itself gives none
+item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+	wanted = value_type(place)
+	given = typed_form(value, s, f, wanted)
+	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the list holds ${wanted}") }
+	refitted(Set(place, given), n)
+}
+
+# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
+# list takes the type its place wants.
+list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
+	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
+	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
+}
+
+# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
+	held = typed_form(subject, s, f, ø)
+	item = item_type(value_type(held)) ?? refused(subject, "this has no items to take by their place")
+	place = typed_form(key, s, f, symbol(INT_TYPE))
+	if not fits_type(place, symbol(INT_TYPE)) { refused(key, "an item's place is an int") }
+	with_type_of(refitted(Get(held, place), n), item)
 }
 
 # a name's value: a parameter, local or global, of the type given to it
@@ -174,13 +205,11 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
-	chosen = function_chosen(n, called, candidates, given, s, expected)
-	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), given), n), chosen.result)
-}
-# the function a name calls with these typed arguments, among these candidates, typed for their types
-function_chosen(n: Node, called: Node, candidates: list, given: list, s: TypingState, expected: Node?) as TypedFunction := {
-	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
-	function_typed(chosen_definition(n, called, candidates, types, expected), types, s, n)
+	meant = chosen_definition(n, called, candidates, given, expected)
+	wanted = parameters_in(meant).map(type_given)
+	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then typed_form(arguments#at, s, f, wanted#at) else given#at)
+	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
 # A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
 # Get then calls (records and maps come with Record and Map)
@@ -188,7 +217,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	typed = typed_form(subject, s, f, ø)
 	named = s.definitions.filter(definition => text(declared_name(written_name(definition))) == text(key))
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
-	chosen = function_chosen(n, key, named, [typed], s, expected)
+	chosen = function_typed(chosen_definition(n, key, named, [typed], expected), [value_type(typed)], s, n)
 	called = with_fact(with_fact(refitted(Get(typed, key), n), BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
 	with_type_of(called, chosen.result)
 }
@@ -203,18 +232,23 @@ definition_at(definer: Node, s: TypingState) as Node := {
 	refused(definer, "the typing stage found no definition here")
 }
 
-# The one definition that takes these argument types, by them, then by the type expected; none or several refused
-chosen_definition(n: Node, called: Node, candidates: list, types: list, expected: Node?) as Node := {
-	fitting = candidates.filter(definition => takes(definition, types))
+# The one definition that takes these typed arguments, by their types, then by the type expected; none or several
+# refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
+chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?) as Node := {
+	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
+	fitting = candidates.filter(definition => takes(definition, given))
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
-takes(definition: Node, types: list) as bool := {
+takes(definition: Node, given: list) as bool := {
 	parameters = parameters_in(definition)
-	#parameters == #types and (1 to #types).all(at => type_given(parameters#at) == ø or same_type(type_given(parameters#at), types#at))
+	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
 }
+fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+# a one-character text literal, typed a char, where a text is wanted
+reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result written or

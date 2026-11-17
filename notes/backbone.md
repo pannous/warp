@@ -265,6 +265,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   "everything warp prints uses the canonical word": wiki/function.md names `as` canonical and `:` its alias. Reason:
   internally the typed head `f(x): T` is the one shape (core/sugar/definitions.wap rewrites `as` into it). Paid off
   when format prints a typed definition head with `as`.
+- **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
+  gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
+  wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.
 - **A used module's functions are emitted even when nothing calls them** (wap/compiler.wap: a module's bound statements
   go first in the program's Block), while the preload's uncalled definitions are left out. Bends "smaller and faster".
   Reason: a module is code whose statements must run, so it joins the program whole. Paid off when typing leaves out
@@ -280,3 +283,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
+- **`#xs` counts only lists of ints** (wap/preload/prelude.wap `#(xs: list<int>)`). Reason: the preload cannot write
+  one `#` for every item type until a type may be written with a variable; one copy per item type would repeat it.
+  Paid off with type variables (`#(xs: list<T>): int`).
