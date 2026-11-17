@@ -17,4 +17,8 @@ check "a list given to a function" "$(ran given 'second(xs: list<int>): int := x
 second [4, 5, 6]')" "5"
 check "a list's type in words" "$(ran in_words 'second(xs: list of int) as int := xs#2
 second [1, 2]')" "2"
+check "a list of any items counted" "$(ran count_texts 'names = ["ann", "bo", "cy"]
+#names')" "3"
+check "for over a list of texts" "$(ran for_texts 'for name in ["ann", "bo"] { print name }')" "ann
+bo"
 exit $((failures > 0))

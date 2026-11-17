@@ -30,7 +30,7 @@ literal(n: Node, m: Module) as Code? := match n {
 
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet
 layout_of(type_name: Node, m: Module) as list? := match type_name {
-	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else ø
+	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else ø
 	_ => if list_index(type_name, m) == ø then ø else nullable(list_index(type_name, m))
 }
 

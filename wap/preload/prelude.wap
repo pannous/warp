@@ -6,8 +6,8 @@
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
 
-# how many items a list holds (lists of other items join once a type may be written with a variable)
-#(xs: list<int>): int := prim array_len(xs)
+# how many items a list holds, a list of any items: a bare `list` fits every list<T>
+#(xs: list): int := prim array_len(xs)
 
 # arithmetic and comparisons of ints and of floats, each one wasm instruction; a call picks the overload its
 # arguments' types fit
