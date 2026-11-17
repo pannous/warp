@@ -93,6 +93,8 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Return(value) => return_code(form, value, p, f)
+	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
+	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
@@ -127,7 +129,7 @@ while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Cod
 	inner = labelled(f, [EXIT_LABEL, NEXT_LABEL], () => {
 		test = code(condition, p, f)
 		checked_condition(form, test)
-		Code([], test.instructions + I32_EQZ + instruction(BRANCH_IF, [jump(f, EXIT_LABEL)]) + dropped(code(body, p, f)) + instruction(BRANCH, [jump(f, NEXT_LABEL)]))
+		Code([], test.instructions + I32_EQZ + instruction(BRANCH_IF, [jump(form, f, EXIT_LABEL)]) + dropped(code(body, p, f)) + instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	})
 	Code([], BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + inner.instructions + END + END)
 }
@@ -148,10 +150,10 @@ labelled(f: Frame, labels: list, emit: function) as Code := {
 	emitted_code
 }
 # how many labels out the innermost label of that kind is, as br counts
-jump(f: Frame, label: text) as int := {
+jump(form: Node, f: Frame, label: text) as int := {
 	innermost = 0
 	for at in 1 to #f.labels { if f.labels#at == label { innermost = at } }
-	if innermost == 0 { refused(Empty, "no ${label} label is open") }
+	if innermost == 0 { refused(form, "this jumps out of a loop, and no loop is around it") }
 	#f.labels - innermost
 }
 

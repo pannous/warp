@@ -40,3 +40,9 @@ pattern While = (While $condition: Node $body: Node)
 
 # the function left at once with a value: `return x` is Return(x), a bare `return` Return(ø)
 pattern Return = (Return $value: Node)
+
+# the innermost loop left at once: `break`
+pattern Break = (Break)
+
+# the innermost loop's next run started at once: `continue`
+pattern Continue = (Continue)

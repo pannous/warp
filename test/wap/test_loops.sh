@@ -24,4 +24,14 @@ sum = sum + i }
 sum')" "15"
 check "a comparison chooses" "$(ran compare 'x = 3
 if x == 3 then print "three" else print "other"')" "three"
+check "break leaves the loop" "$(ran break 'i = 0
+while yes { i = i + 1
+if i == 3 then break }
+i')" "3"
+check "continue starts the next run" "$(ran continue 'i = 0
+sum = 0
+while i < 6 { i = i + 1
+if i == 2 then continue
+sum = sum + i }
+sum')" "19"
 exit $((failures > 0))
