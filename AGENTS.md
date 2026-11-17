@@ -156,7 +156,7 @@ never an AskUserQuestion popup, never a question to the user in your own output.
 
 At night (until the user is back, usually 10:00) notes/agents/night.md applies too: decide yourself, log, never wait.
 
-Startup reading is this file (loaded automatically) plus your role file, nothing more. Everything else is
+Startup reading is this file (loaded automatically), notes/first_principles.md and your role file, nothing more. Everything else is
 looked up when a task needs it: notes/agents/handbook.md (the detailed procedures: worktree build tweak,
 gate tiers, bisects, try lines, the Done checklist), notes/welcoming.md (how warp treats unclear input),
 wiki/Footguns.md (decided language rules: grep it, never read it whole), notes/decisions.md (grep a key or a topic
