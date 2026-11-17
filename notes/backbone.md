@@ -32,7 +32,7 @@ aliases), the language and compiler principles, and how agents work by them. Eve
 
 ## Layers
 
-A proposal, to be decided:
+Decided (user 2026-11-17): four layers.
 
 | Layer | Holds | Rule of thumb |
 |---|---|---|
@@ -41,9 +41,30 @@ A proposal, to be decided:
 | **extensions** | rule sets, one file per topic (`for`, units, ranges, `unless`, match sugar) | rules only, no compiled-in hook table; loaded like modules |
 | **library** | functions, classes, enums, operator prototypes with primitive bodies, aliases, the operator table | plain warp |
 
-The question for the user: do extensions stay a layer of their own, as rules only, or merge into the library, with
-rules as just another kind of library declaration? The recommendation is to merge: then "library" covers both
-functions and rules, and the core shrinks to the machinery alone.
+### Kernel forms are narrowed types of Node with a pattern body
+
+`Node` stays the plain notation enum (True … Type); no `If` or `Call` variant is added to it. A kernel form is a
+**subtype of Node whose body is a pattern** (user 2026-11-17: combine the subtype and shape ideas). It is the same
+mechanism as `type Meters < int`, with a pattern instead of "any int":
+
+```warp
+type Meters < int                                   // any int, a new name
+type Even < int where it % 2 == 0                   // narrowed by a condition
+type If < Node = (·if cond: Node yes: Node no: Node)  // narrowed by a pattern with named holes
+type Call < Node = (·call f: Node args: [Node]...)
+
+kernel = If | Call | Define | …                     // the emitter's input language, a closed union
+```
+
+One declaration gives all four uses:
+- **build:** `If(c, a, b)` makes the Node `(·if c a b)`;
+- **test:** `node is If`;
+- **match:** `case node { If(c, a, b) => … }`;
+- **read:** `node.cond`, after narrowing.
+
+Kernel types live in the kernel layer, and surface types (`For`, `Unless`) live in extensions beside their rules.
+Core declares none. The emitter takes `kernel`, so its coverage is checked, and refuses any other Node. Core cost:
+patterns as the body of a narrowed type, which typed rules need anyway.
 
 ## Operators: a core feature done properly
 
@@ -142,7 +163,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open questions for the user
 
-1. **Layers:** do extensions merge into the library, as rules being library declarations? Recommended: merge.
+1. ~~Layers~~: decided, four layers; kernel forms are narrowed types of Node with a pattern body.
 2. **The reader:** reuse it for milestone 1 and rewrite it as a pure notation reader before milestone 2?
    Recommended: yes.
 3. **Folder:** where the new backbone lives until the switch, for example `backbone/`, then it replaces core/.
