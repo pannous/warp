@@ -320,8 +320,8 @@ pattern_constructor(statement: Node) as list := {
 	if #holes == 0 or nodes_in(value).any(is_open_part) { return [] }
 	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, value)]
 }
-# `_`, a rest word `*xs`, a type word, or an operator missing a side, the rest `..` of `[1, ..]`
-is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") or is_tested_type_word(name_of(part)) else part is key and (key_of(part) == ø or value_of(part) == ø)
+# `_`, a rest word `*xs`, a type word (`int`; a capitalized `Key` is a case), or an operator missing a side, the rest `..` of `[1, ..]`
+is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") or (is_hole_word(name_of(part)) and is_tested_type_word(name_of(part))) else part is key and (key_of(part) == ø or value_of(part) == ø)
 # the value the pattern describes: each typed hole `a: int` (in code `$a: int`) as the name alone
 built_value(pattern: Node, holes: list) as Node := pattern_rebuilt(pattern, part => match part {
 	Key(Symbol(name), Op.Colon, Symbol(kind)): if name in holes or (name.starts_with("$") and name[1 ..] in holes) then symbol(name) else part
