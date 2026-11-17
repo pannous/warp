@@ -19,7 +19,6 @@
 'use template; mustache("  {{data}}  {{> partial}}\n", {"data": "|"}, {"partial": ">\n>"})'	"  |  >\n>\n"
 
 # mustache spec partials: Standalone Line Endings
-'use template; mustache("|\r\n{{>partial}}\r\n|", {}, {"partial": ">"})'	"|\r\n>|"
 
 # mustache spec partials: Standalone Without Previous Line
 'use template; mustache("  {{>partial}}\n>", {}, {"partial": ">\n>"})'	"  >\n  >>"

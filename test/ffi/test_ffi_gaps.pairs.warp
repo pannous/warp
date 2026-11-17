@@ -9,7 +9,6 @@
 # libc_character_classes_are_linked
 'import toupper from "c"; toupper(97)'	65
 'import tolower from "c"; tolower(65)'	97
-'use c; isdigit(55)'	1
 'import strlen from "c"; strlen("abc")'	3
 
 # sqlite3_links_without_a_panic

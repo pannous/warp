@@ -1,0 +1,18 @@
+'s=0; for 1…3: s+=it*it; s'	14
+'s=""; for ["a" "b"]: s+=it; s'	"ab"
+
+# a whole number n counts 1 to n: `for i in 3` is `for i in 1 to 3` (card range-loop-syntax)
+'s=0; for i in 3 { s += i }; s'	6
+'s=0; for i in 0 { s += 1 }; s'	0
+'s=[]; for i in 2 { s = s + [i] }; s'	[1, 2]
+
+# a map's loop names key and value as a pair or as an entry (card for-kv-iteration, user todo.md)
+'m = {a: 1, b: 2}; s = 0; for (k, v) in m { s += v }; s'	3
+'m = {a: 1, b: 2}; s = ""; for k: v in m { s += k }; s'	"ab"
+'m = {a: 1, b: 2}; s = 0; for k, v in m { s += v }; s'	3
+'ps = [(1, 2), (3, 4)]; s = 0; for (a, b) in ps { s += a * b }; s'	14
+
+# an object whose class has next() walks in a for loop until next() gives ø (decision for-over-iterator)
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; out = []; for x in C(3) { out += [x] }; out'	[3, 2, 1]
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; s = 0; for x in C(5) { if x == 4 { continue }; s += x }; s'	11
+'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; c = C(4); s = 0; for x in c { if x == 2 { break }; s += x }; s'	7

@@ -12,21 +12,37 @@ WARP=${WARP:-$warp_binary}
 STORE=$warp_store
 FALLBACK=$(git rev-parse --show-toplevel)/test/results.txt
 
-compiler_hash=$(cut -d' ' -f1 "$(dirname "$(readlink -f "$WARP")")/warp.wasm.inputs" 2>/dev/null)
-baseline=$STORE/$compiler_hash/warp.record/results.txt
-if [ -n "$compiler_hash" ] && [ -f "$baseline" ]; then
-	echo "baseline: compiler $compiler_hash (full suite at $(cat "${baseline%.txt}.commit" 2>/dev/null))" >&2
+if [ -n "${BASELINE_RESULTS:-}" ]; then
+	# a probe may name a results file (card results-nul-bytes: a temp copy, not the tracked one)
+	baseline=$BASELINE_RESULTS
+	echo "baseline: $baseline" >&2
 else
-	# installs outpace the hour-long full suite, so main's compiler often has no results yet: the newest stored ones
-	newest=$(ls -t "$STORE"/*/warp.record/results.txt 2>/dev/null | head -1)
-	if [ -n "$newest" ]; then
-		echo "baseline: no stored results for main's compiler ${compiler_hash:-?}; using the newest, compiler $(basename "$(dirname "$(dirname "$newest")")") (full suite at $(cat "${newest%.txt}.commit" 2>/dev/null)): a red line there may be fixed since" >&2
-		baseline=$newest
+	compiler_hash=$(cut -d' ' -f1 "$(dirname "$(readlink -f "$WARP")")/warp.wasm.inputs" 2>/dev/null)
+	baseline=$STORE/$compiler_hash/warp.record/results.txt
+	if [ -n "$compiler_hash" ] && [ -f "$baseline" ]; then
+		echo "baseline: compiler $compiler_hash (full suite at $(cat "${baseline%.txt}.commit" 2>/dev/null))" >&2
 	else
-		echo "baseline: no stored results in $STORE; using $FALLBACK (a commit's, not this compiler's)" >&2
-		baseline=$FALLBACK
+		# installs outpace the hour-long full suite, so main's compiler often has no results yet: the newest stored ones
+		newest=$(ls -t "$STORE"/*/warp.record/results.txt 2>/dev/null | head -1)
+		if [ -n "$newest" ]; then
+			echo "baseline: no stored results for main's compiler ${compiler_hash:-?}; using the newest, compiler $(basename "$(dirname "$(dirname "$newest")")") (full suite at $(cat "${newest%.txt}.commit" 2>/dev/null)): a red line there may be fixed since" >&2
+			baseline=$newest
+		else
+			echo "baseline: no stored results in $STORE; using $FALLBACK (a commit's, not this compiler's)" >&2
+			baseline=$FALLBACK
+		fi
 	fi
 fi
+
+# grep treats a file with a NUL as binary and prints too few lines (card results-nul-bytes).
+# Warn loudly, then always read as text (grep -a): stored results still contain NULs until the
+# next full suite, and undercounting is worse than continuing.
+say_if_nuls() {
+	local file=$1
+	if [ -f "$file" ] && [ "$(tr -cd '\0' < "$file" | wc -c)" -gt 0 ]; then
+		echo "baseline: $file contains NUL bytes; reading it as text so counts are not short (card results-nul-bytes)" >&2
+	fi
+}
 
 # a result line without its leading mark, and a failure's without what it got: the test's place, code and expectation,
 # the same in both files
@@ -34,10 +50,12 @@ case_of() { sed -e 's/^[^ ]* //' -e 's/: got .*$//'; }
 
 if [ "${1:-}" = --regressions ]; then
 	[ -f "${2:-}" ] || { echo "usage: $0 --regressions <results file>" >&2; exit 2; }
-	regressions=$(comm -12 <(grep '^✓' "$baseline" | case_of | sort) <(grep '^✗' "$2" | case_of | sort))
+	say_if_nuls "$baseline"; say_if_nuls "$2"
+	regressions=$(comm -12 <(grep -a '^✓' "$baseline" | case_of | sort) <(grep -a '^✗' "$2" | case_of | sort))
 	[ -z "$regressions" ] && { echo "baseline: no regressions" >&2; exit 0; }
 	echo "$regressions"
 	exit 1
 fi
 [ $# -gt 0 ] || { echo "usage: $0 <test paths…> | --regressions <results file>" >&2; exit 2; }
-for path in "$@"; do grep -F " ${path%/}" "$baseline"; done
+say_if_nuls "$baseline"
+for path in "$@"; do grep -a -F " ${path%/}" "$baseline"; done

@@ -8,23 +8,23 @@ MARKED_KINDS = {int: Kind.Int, float: Kind.Float, text: Kind.Text, string: Kind.
 # the types whose subtypes are only marked, never a class
 MARKED_ONLY_KINDS = ["float", "text", "string"]
 # `type Color < int`, `type Angle < float`: Color, Angle; ø for any other statement
-int_type_name(statement: Node): text? := {
+int_type_name(statement: Node) as text? := {
 	subtype = subtype_of(statement)
 	if subtype != ø and subtype#2 in MARKED_KINDS then subtype#1 else ø
 }
 # `type Years = Age`: [Years, Age], the type declared and the one word it names; ø for any other statement
-type_alias_of(statement: Node): list? := {
+type_alias_of(statement: Node) as list? := {
 	view = alias_view(statement)
 	if view != ø and base_of(view#2) == "" then [declared_type_name(view#2), name_of(value_of(statement))] else ø
 }
 # `type Color < int`: [Color, int], the subtype declared and its type, read as an alias whose name extends its type
 # (core/parsing/parser.warp subtype_read, decision subtype-less-than); ø for any other statement
-subtype_of(statement: Node): list? := {
+subtype_of(statement: Node) as list? := {
 	view = alias_view(statement)
 	if view != ø and base_of(view#2) != "" then [declared_type_name(view#2), base_of(view#2)] else ø
 }
 # the view ["type", name, ø] of `type X = Y`; ø for any other statement
-alias_view(statement: Node): any := {
+alias_view(statement: Node) as any := {
 	if not is_key(statement, Op.Assign) or not (value_of(statement) is symbol) { return ø }
 	declared = key_of(statement)
 	if not (is_key(declared, Op.Colon) and key_of(declared) == opaque_symbol) { return ø }
@@ -33,7 +33,7 @@ alias_view(statement: Node): any := {
 }
 # each number type the statements declare, its marked kind: the number's Kind with the type's mark above it, the
 # marks numbered in order of declaration (int_types.warp marks the values, the emitter the values it holds unboxed)
-int_type_kinds(statements: list): map := {
+int_type_kinds(statements: list) as map := {
 	kinds = {}
 	for statement in statements {
 		name = int_type_name(statement)
@@ -45,7 +45,7 @@ int_type_kinds(statements: list): map := {
 # a value of Color its text, read as `format·text(c: Color) := …`, a class's shown form's name (core/passes/classes.warp
 # form_method), before any pass takes it for a call of lib/text format. Of a class of the program, `format Point p as
 # text := …`, it is the class's own `format as text`, its p the instance
-formatted_definitions(program: Node): Node := {
+formatted_definitions(program: Node) as Node := {
 	statements = statements_in(program).map(formatted_definition)
 	classes = statements.map(class_view).filter(view => view != ø).map(view => declared_type_name(view#2))
 	formats = statements.filter(statement => shower_of(statement) in classes)
@@ -53,23 +53,23 @@ formatted_definitions(program: Node): Node := {
 	statements_as(program, statements.filter(statement => statement not in formats).map(statement => with_class_formats(statement, formats)))
 }
 # the statements as the program held its own: a program of one statement, `div{ "clamp" }`, is that statement
-statements_as(program: Node, statements: list): Node := {
+statements_as(program: Node, statements: list) as Node := {
 	if is_statement_sequence(program) { return group_like(program, statements) }
 	if #statements == 1 then statements#1 else List(statements, Bracket.None, Separator.Newline)
 }
 # a class declaration with the formats of its class among its members
-with_class_formats(statement: Node, formats: list): Node := {
+with_class_formats(statement: Node, formats: list) as Node := {
 	view = class_view(statement)
 	if view == ø { return statement }
 	owned = formats.filter(format => shower_of(format) == declared_type_name(view#2)).map(format => view_of(instance_format(format)))
 	if #owned == 0 then statement else Key(key_of(statement), op_of(statement), [view#1, view#2, view#3 + owned])
 }
 # `format·text(p: Point) := …` as Point's method `format·text() := …`, p its this
-instance_format(format: Node): Node := {
+instance_format(format: Node) as Node := {
 	instance = key_of(key_of(format)#2)
 	Key(call_of(form_method, []), Op.Define, bottom_up(value_of(format), n => if n == instance then symbol("this") else n))
 }
-formatted_definition(statement: Node): Node := {
+formatted_definition(statement: Node) as Node := {
 	if not is_key(statement, Op.Define) or not is_group(key_of(statement)) { return statement }
 	words = items_of(key_of(statement))
 	if not (#words == 5 and words.all(word => word is symbol)) { return statement }
@@ -78,12 +78,12 @@ formatted_definition(statement: Node): Node := {
 }
 # the type a module's line `format Angle a as text := …` gives its text, "" of any other line: the hook is a slice of
 # Angle's, reached with the type (core/passes/prelude_words.warp name_defined_in)
-formatted_type(line: text): text := {
+formatted_type(line: text) as text := {
 	words = line.split(":=")#1.split(" ").filter(word => word != "")
 	if line.contains(":=") and #words == 5 and words#1 == "format" and words#4 == "as" and words#5 == "text" then words#2 else ""
 }
 # `format·text(c: Color) := …`: Color; ø for any other statement
-shower_of(statement: Node): text? := {
+shower_of(statement: Node) as text? := {
 	if not is_key(statement, Op.Define) { return ø }
 	head = key_of(statement)
 	if not (is_group(head) and #head == 2 and head#1 == symbol(form_method) and is_key(head#2, Op.Colon)) { return ø }
@@ -91,7 +91,7 @@ shower_of(statement: Node): text? := {
 	if typed is symbol then name_of(typed) else ø
 }
 # the statements showing a value of one of the program's int types
-int_type_showers(statements: list): list := {
+int_type_showers(statements: list) as list := {
 	types = statements.map(int_type_name).filter(name => name != ø)
 	statements.filter(statement => shower_of(statement) in types)
 }

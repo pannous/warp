@@ -1,0 +1,37 @@
+# A declared class's name before braces in a pattern, `Circle{r} => …`, matches that class as `Circle(r: r)` does
+# (decision class-name-patterns): `match s { Circle{r} => … }`, `Point{x: 0, y}`, nested `Line{start: Point{x, y}}`.
+# A field written alone binds its own name. Outside patterns `Circle{r: 2}` builds the class as before
+
+class_tags_called(program: Node) as Node := {
+	classes = entries_of_both(class_names_of(program), declared_classes_modules())
+	if #classes == 0 then program else class_patterns_in(program, classes)
+}
+class_patterns_in(n: Node, classes: map) as Node := {
+	walked = children(n, child => class_patterns_in(child, classes))
+	if is_key(walked, Op.Arrow) then Key(class_pattern(key_of(walked), classes), Op.Arrow, value_of(walked)) else walked
+}
+class_pattern(n: Node, classes: map) as Node := {
+	walked = children(n, child => class_pattern(child, classes))
+	if is_class_tag(walked, classes) then call_node(key_of(walked), items_of(value_of(walked)).map(field_pattern)) else walked
+}
+is_class_tag(n: Node, classes: map) as bool := (is_key(n, Op.Colon) or is_key(n, Op.None)) and key_of(n) is symbol and classes.has(name_of(key_of(n))) and is_curly_group(value_of(n))
+field_pattern(field: Node) as Node := if field is symbol then Key(field, Op.Colon, field) else field
+
+# Braces before `=` taking a field under another name or apart again, `{y: b, x: a} = p`, `{start: Point{x, y}, end} =
+# l`: the value once, then each field into its pattern; braces of plain names are extensions/sugar/tuples.warp's rule
+fields_taken(program: Node) as Node := bottom_up(program, taken_apart)
+taken_apart(n: Node) as Node := if is_key(n, Op.Assign) and is_curly_group(key_of(n)) and items_of(key_of(n)).any(field => is_key(field, Op.Colon)) then List(destructured(key_of(n), value_of(n)), Bracket.Round, Separator.Semicolon) else n
+destructured(fields: Node, value: Node) as list := {
+	held = fresh_name("taken", fresh_number())
+	[Key(held, Op.Assign, value)] + items_of(fields).flat_map(field => field_assigned(field, held))
+}
+# `y: b` assigns b the field y, `start: Point{x, y}` takes the field apart, `end` assigns end the field end
+field_assigned(field: Node, held: Node) as list := {
+	name = if is_key(field, Op.Colon) then key_of(field) else field
+	pattern = if is_key(field, Op.Colon) then value_of(field) else field
+	read = Key(held, Op.Dot, name)
+	fields = if is_curly_group(pattern) then pattern else if pattern is key and is_curly_group(value_of(pattern)) then value_of(pattern) else ø
+	if fields != ø then destructured(fields, read) else [Key(pattern, Op.Assign, read)]
+}
+
+class_tags_extension = Extension{name: "class_tags", passes_before: {"definition_heads": class_tags_called, "rules_rewritten": fields_taken}}

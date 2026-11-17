@@ -6,8 +6,8 @@
 
 use sound
 
-write_midi("tune.mid", [[0, C4, 0.5, 100], [0.5, E4, 0.5, 90], [1, G4, 1, 80]])
-for note in read_midi("tune.mid") { print note }
+save(MidiFile([[0, C4, 0.5, 100], [0.5, E4, 0.5, 90], [1, G4, 1, 80]]), "tune.mid")
+for note in midi_file("tune.mid").notes { print note }
 
 midi_on C4        # a key down on channel 1, velocity 100
 midi_off C4
@@ -19,4 +19,4 @@ play(C3, beat 1)                 # the message waits for this sound to end
 midi_note(C4, beat(1/2))          # on now, off half a beat later
 midi_note(E4, beat(1/2), 90)
 at beats(3) { midi_note(G4, beat 1) }
-wait_sound()
+wait(sound)

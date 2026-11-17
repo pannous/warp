@@ -1,0 +1,3 @@
+# the orderings of values known only at run time (wiki operator.md): texts by their bytes, whole numbers and ratios
+# exactly, an int beside a float as floats
+'f(a, b) := [a < b, a <= b, a > b, a >= b]; [f("b", "a"), f(2, 2.5), f(3, 3), f(1/3, 1/2)]'	[[no, no, yes, yes], [yes, yes, no, no], [no, yes, no, yes], [yes, yes, no, no]]

@@ -22,5 +22,5 @@
 's = 0; for i in 1 to 3 { s += 0.0000000000000000001 }; s'	0.0000000000000000003
 # card rational-overflow-big: a ratio whose parts leave 64 bits grows into a big ratio, never wraps nor traps (D16)
 'y = 1; for i in 0..14 { y = y / 1.18 }; text(y)'	'610351562500000000000000/6193386212891813387462761'
-'3000000000 + 1/2'	3000000000.5
+'3000000000 + 1/2'	6000000001/2
 # card big-literal-units: a big literal with a unit is a quantity

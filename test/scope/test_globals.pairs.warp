@@ -11,3 +11,19 @@
 
 # test_global_reassignment
 'global x=5; global x=10; x'	10
+
+# A program's global named like a word does not reach into a used module: the module's own words keep their meaning
+# (program > used module > prelude for the program's names only)
+
+# lib/random's choice counts its list with count; the program's `count = 3` after it is the program's own
+«use random; x = choice([7]); count = 3; [x, count]»	[7, 3]
+# assigned before the call too
+«use random; count = 3; choice([5, 5])»	5
+# lib/scene's scene counts its things with #; a global count and size of the program stay theirs
+«use scene; count = 3; size = 4; placed = scene("{rock, car}"); [#placed, count, size]»	[2, 3, 4]
+
+# a program's global named like one of the runtime's (core/runtime/walks.warp's counted, nodes.warp's
+# runtime_spelling_lists) is the program's own (card runtime-global-shadowing)
+'counted = 5; bump() := { global counted; counted += 1 }; bump(); bump(); counted'	7
+'runtime_spelling_lists = [1, 2]; f() := count(runtime_spelling_lists); f()'	2
+'counted = 5; bump() := { global counted; counted += 1 }; bump(); "abc".upper() + counted'	"ABC6"

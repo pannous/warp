@@ -10,4 +10,4 @@ footer, and with none of complex-key explicit-key tag local-tag unknown-tag dire
 error duplicate-key empty-key edge upto-1.2; and whose in.yaml has no line starting with % ? or !, no " !" tag and no
 tab character (lib/yaml refuses tags, complex keys, directives and tab indentation by design).
 
-    WARP_LIB=$PWD/lib test/yaml/yaml_test.py [--fails TAG|all]
+    WARP="warp --lib $PWD/lib" test/yaml/yaml_test.py [--fails TAG|all]

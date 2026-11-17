@@ -14,7 +14,7 @@
 
 # random_of_a_whole_number_variable_stays_whole
 'n = 6; x = random n; x >= 0 and x < 6'	true
-'n = 6; x = random n; type x'	'int'
+'n = 6; x = random n; type x'	'nat'
 'use prelude; random_of(1)'	0
 
 # random_compared_takes_the_first_comparand
@@ -22,3 +22,8 @@
 'random 1..4 < 4'	true
 'xs = [1, 2]; random xs < 3'	true
 'random 2.5 < 2.5 and yes'	true
+
+# random_asked_as_a_float_draws_a_fraction (decision default-variant, user 11-11): plain calls stay whole
+'x: float = random(50, 550); x > 50 and x < 550 and x != round(x)'	true
+'random(50, 550) is int'	true
+'(random(50, 550) * 1.0) is int'	true

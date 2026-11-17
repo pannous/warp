@@ -1,0 +1,12 @@
+# a text, character or comment its closer never ends is refused, naming where it opened, as an unclosed group is (user, card missing-quotes-error)
+"\"hi\"\\:world\""	error	the last quote opens a text that never closes
+"\"hi"	error	the closing quote is missing: the text opened at 1:1
+"print \"hi"	error	refused, not printed
+"'a"	error	an unclosed character
+"«hi"	error	an unclosed guillemet text
+"\"\"\"hi"	error	the third quote opens a text
+"1 /* note"	error	`*/` is missing: the comment opened at 1:3
+# closed ones are unchanged
+"\"hi\"\"there\""	["hi", "there"]
+"\"a\\\"b\""	"a\"b"
+"1 /* note */ + 1"	2

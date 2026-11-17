@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-# a typed declaration, then a little arithmetic with π
-real x
-x = 3
-x * x
-2 + 2π

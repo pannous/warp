@@ -1,0 +1,8 @@
+# a type word's subscript is the typed array even where the program's classes define position(p) (card use-sound)
+'class B { xs: list; position(p) := xs#p }; f(x: list) := { z = float[#x]; z }; f([1, 2])'	[0.0, 0.0]
+'class B { xs: list; position(p) := xs#p }; b = B([5, 6]); b#2'	6
+
+# from test_typed_list_insert.rs: edit the Rust test, then run the script again
+
+# insert_checks_declared_element_type
+'xs: [int] = [1]; xs.insert(3, at: 0); xs'	[3, 1]

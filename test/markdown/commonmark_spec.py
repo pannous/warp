@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # CommonMark 0.31.2 spec examples through markdown_html (lib/markdown.warp); not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/markdown/commonmark_spec.py [--fails SECTION|all] [--out FILE]
+# usage: [WARP="warp --lib $PWD/lib"] test/markdown/commonmark_spec.py [--fails SECTION|all] [--out FILE]
 # prints passed/total per section and in all; by design: raw HTML is escaped, not passed through
-import json, os, subprocess, sys, tempfile, collections
+import json, os, subprocess, sys, tempfile, collections, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__))
 ex = json.load(open(os.path.join(here, "commonmark-0.31.2.json")))
 W = lambda s: '"' + s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\t", "\\t") + '"'
 prog = "use markdown\nxs = [" + ", ".join(W(e["markdown"]) for e in ex) + "]\nfor x in xs { print(markdown_html(x)); print(\"@@END@@\") }\n"
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False) as f: f.write(prog)
-out = subprocess.run(["warp", f.name], capture_output=True, text=True).stdout.split("@@END@@\n")
+out = subprocess.run([*WARP, f.name], capture_output=True, text=True).stdout.split("@@END@@\n")
 args = sys.argv[1:]
 if "--out" in args: open(args[args.index("--out") + 1], "w").write(json.dumps(out))
 tot, ok = collections.Counter(), collections.Counter()

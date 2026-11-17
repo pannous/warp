@@ -36,13 +36,13 @@ trap 'rm -rf "$lock"' EXIT
 started=$(date +%s)
 echo "promote-self: $(date '+%Y-%m-%d %H:%M:%S %Z') self test of $compilers/warp.wasm"
 # a compile of compiler.warp runs for minutes: an exported short limit must not cut it
-said=$(WARP_TIME_LIMIT=${WARP_PROMOTE_TIME_LIMIT:-7200} "$scripts/rebuild.sh" self "$tree" 2>&1)
+said=$("$scripts/rebuild.sh" self "$tree" 2>&1)
 status=$?
 took=$(($(date +%s) - started))
 sha() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-16; }
 # the promoted build runs a program (decision no-fixpoint: it compiles compiler.warp again and that build runs hello)
 if [ $status = 0 ]; then
-	hello=$(cd "$tree" && WARP_LIB=$tree/lib warp self samples/hello/hello.warp 2>&1)
+	hello=$(cd "$tree" && warp --lib "$tree/lib" self samples/hello/hello.warp 2>&1)
 	echo "$hello" | grep -q Hello || { echo "promote-self: PROMOTED BUT BROKEN: warp self runs no hello: $(echo "$hello" | tail -1 | cut -c1-300)"; exit 0; }
 fi
 if [ $status = 0 ]; then

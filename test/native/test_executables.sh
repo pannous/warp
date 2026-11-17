@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # `warp build` of a GC program writes an executable, the warp-runtime stub carrying its machine code, which prints the
 # program's value and calls C as warp does (texts, handles). Run it with bash test/native/test_executables.sh; the warp
-# under test is WARP (default the warp on PATH), its stub beside it or in WARP_RUNTIME_STUB
+# under test is WARP (default the warp on PATH), its stub beside it
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0
@@ -15,9 +15,20 @@ built() { # built <name> <expected> <code>: the program built as an executable p
 	got=$("$stage/$1")
 	if [ "$got" = "$2" ]; then echo "✓ $1"; else echo "✗ $1: got $got, expected $2"; failures=$((failures + 1)); fi
 }
+# ships <name> <module> <code>: the built executable has the module it loads at run time beside it, in a folder of its own
+ships() {
+	mkdir -p "$stage/$1" && printf '%b\n' "$3" >"$stage/$1/$1.warp"
+	(cd "$stage/$1" && "$warp" build "$1.warp" >build.log 2>&1)
+	if [ -s "$stage/$1/modules/$2.wasm" ]; then echo "✓ $1 ships $2"; else echo "✗ $1: no modules/$2.wasm beside it"; tail -2 "$stage/$1/build.log"; failures=$((failures + 1)); fi
+}
 
-built hello "Hello 🌍2026" '"Hello " + "🌍" + (2000 + 26)'
+built hello '"Hello 🌍2026"' '"Hello " + "🌍" + (2000 + 26)'
 built printing "hi" 'print "hi"'
 built text_to_c 5 'use c\nstrlen("hello")'
-built handles warp "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sqlite3_prepare_v2(db, \"select 'warp'\", -1)\nsqlite3_step(stmt)\nsqlite3_column_text(stmt, 0)"
+built handles '"warp"' "use sqlite3\ndb = sqlite3_open(\":memory:\")\nstmt = sqlite3_prepare_v2(db, \"select 'warp'\", -1)\nsqlite3_step(stmt)\nsqlite3_column_text(stmt, 0)"
+built power 1267650600228229401496703205376 'print 2 ^ 100'
+built distances 2.03km 'use units\nprint 2 km + 30 m'
+built accents yes 'print "\0303\0251" == "e\0314\0201"'
+ships comparing unicode 'print "\0303\0251" == "e\0314\0201"'
+ships sounding native_host 'use sound\nif no 1 { play A4 }'
 exit $((failures > 0))

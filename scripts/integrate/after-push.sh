@@ -28,7 +28,6 @@ MAIN_CHECKOUT=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 TREE=/Volumes/Worktrees/integrate2
 SLOW_TREE=/Volumes/Worktrees/integrate-slow
 EXPECTED=Hello
-PAGE_SMOKE=(samples/hello/hello.warp samples/web/component_totals.warp)  # the page's check after each refresh: hello and markup
 SEED=$(dirname "$MAIN_WARP")/warp-seed.wasm  # the seed refresh-seed.sh installs beside the shared binary
 BUILDS=$HOME/dev/bin/warp-builds  # one folder: the installed native warp with its lib/, no other builds or links
 
@@ -39,6 +38,10 @@ script_sum=$(shasum <"$0")
 [ "${1-}" = --slow ] && { slow=1; shift; }
 scripts=$(cd "$(dirname "$0")/.." && pwd)
 cd "$MAIN_CHECKOUT" || exit 1  # todo finds the board through the checkout's repo (the cron starts in ~)
+# cron has no keychain, so gh would go unauthenticated (60 calls an hour) and each todo waits out the rate limit,
+# holding the install for hours (11-13): the cron token, as the vitals cron uses it
+GH_TOKEN_FILE=$HOME/.config/gh/cron-token
+[ -z "${GH_TOKEN-}" ] && [ -r "$GH_TOKEN_FILE" ] && export GH_TOKEN=$(<"$GH_TOKEN_FILE")
 installed_state=$TREE/data/integrate
 state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
@@ -105,6 +108,7 @@ red() {
 # neither compared nor kept as a baseline. Clean builds of one stretch stay within ±3%.
 COST_JUMP_PERCENT=10
 COST_HISTORY=10
+COST_SINCE=f1de0e5d93  # a record before it counts no instructions of the modules step (card module-prebuild-step): no baseline
 cost_watched() {
 	local record=$1 hash timing now lowest history
 	history=$state/cost-$record
@@ -113,11 +117,19 @@ cost_watched() {
 	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
 	[ -n "$now" ] || return
 	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && return
-	lowest=$(sort -n "$history" 2>/dev/null | head -1 | cut -d' ' -f1)
+	lowest=$(cost_comparable "$history" | sort -n | head -1)
 	{ echo "$now ${tip:0:10}"; head -n $((COST_HISTORY - 1)) "$history" 2>/dev/null; true; } >"$history.new" && mv "$history.new" "$history"
 	if [ -n "${lowest:-}" ] && [ $((now * 100)) -gt $((lowest * (100 + COST_JUMP_PERCENT))) ]; then
 		red "build cost: $record $(cost_in_tera "$lowest") T (lowest of the last $COST_HISTORY) → $(cost_in_tera "$now") T at ${tip:0:10} (+$(((now - lowest) * 100 / lowest))%)" --urgent
 	fi
+}
+# cost_comparable <history>: the counts of its builds of COST_SINCE or later
+cost_comparable() {
+	local count commit
+	[ -f "$1" ] || return 0
+	while read -r count commit; do
+		git -C "$TREE" merge-base --is-ancestor "$COST_SINCE" "$commit" 2>/dev/null && echo "$count"
+	done <"$1"
 }
 cost_in_tera() { awk -v n="$1" 'BEGIN {printf "%.2f", n / 1e12}'; }
 
@@ -129,7 +141,7 @@ copy_compilers() {
 	inputs=$(cut -d' ' -f1 "$from/warp.wasm.inputs")
 	for name in runtime.wasm warp.wasm warp-self.wasm; do
 		if [ $name = warp-self.wasm ] && [ "$(cut -d' ' -f1 "$from/$name.inputs" 2>/dev/null)" != "$inputs" ]; then
-			rm -f "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
+			rm -rf "$folder/$name" "$folder/$name.cwasm"  # an older pair's: `warp self` says it is missing instead of running it
 			continue
 		fi
 		[ -d "$from/$name.kept" ] && mkdir -p "$folder/$name.kept" && cp -R "$from/$name.kept/." "$folder/$name.kept/"
@@ -171,7 +183,7 @@ install_compilers() {
 			"$TREE/lib/" "$folder/" && site_scripts_copied "$TREE" "$folder" || red "compilers of ${tip:0:10}: the copy into $folder failed" --urgent
 	for lane in pure self; do
 		[ $lane = self ] && [ ! -f "$folder/warp-self.wasm" ] && continue
-		got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
+		got=$(cd "$MAIN_CHECKOUT" && WARP_WINDOW=0 footprint_run "$TREE/data/hello-footprint" 300 "$MAIN_WARP" $lane samples/hello/hello.warp 2>&1 | tail -1)
 		[[ $got == *$EXPECTED* ]] || { red "installed $lane compiler: hello got ${got:0:120}"; continue; }
 		# main's hello is the record every smoke compares its branch's with (scripts/lib/hello-footprint.sh)
 		[ $lane = pure ] && footprint_recorded "$(cat "$TREE/data/hello-footprint" 2>/dev/null)" "$tip"
@@ -214,7 +226,7 @@ NATIVE_PREFIX=native-
 # put_back <folder>: the folder set aside as <folder>.old in its place again, the failed new one gone
 put_back() { [ -d "$1.old" ] || { rm -rf "$1"; return; }; rm -rf "$1" && mv "$1.old" "$1"; }
 native_built() {
-	(cd "$1/compiler/native" && WARP_NO_WINDOW=1 WARP_LIB=$1 "$2" build native warp.warp >/dev/null 2>&1) &&
+	(cd "$1/compiler/native" && WARP_WINDOW=0 "$2" --lib "$1" build native warp.warp >/dev/null 2>&1) &&
 		mv "$1/compiler/native/warp" "$1/warp"
 }
 # install_native [early]: early, before the tip's compilers are built, with the tree's compilers of the last install
@@ -238,18 +250,19 @@ install_native() {
 	# after-push-stage: 677282ce44's reals.warp on b5eb834c40's compilers made π / 2 'no field coefficient' for 30 min)
 	if [ -n "$early" ]; then
 		local installed
+		# (and the tip's wasmtime C API, which its native warp may call more of)
 		installed=$(installed_folder) && rsync -aL --exclude /warp "$installed/" "$folder.new/" &&
-			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/"
+			rsync -aL "$TREE/lib/compiler/native/" "$folder.new/compiler/native/" && cp "$TREE/lib"/libwarp_wasmtime.* "$folder.new/"
 	else
 		rsync -aL --exclude /data "$TREE/lib/" "$folder.new/"
-	fi || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
+	fi && cp "$TREE/scripts/warp-crate" "$folder.new/" || { "${failed[@]}" "native warp: lib/ did not copy" --urgent; rm -rf "$folder.new"; return 1; }
 	native_built "$folder.new" "$MAIN_WARP" ||
 		{ "${failed[@]}" "native warp: warp build native core/native/warp.warp failed" --urgent; rm -rf "$folder.new"; return 1; }
 	# a folder of this tip already there (the installed one, a second install of one tip) is set aside and put back when
 	# the new one fails its checks: removed, ~/dev/bin/warp would point nowhere (card after-push-leave)
 	rm -rf "$folder.old" && { [ ! -d "$folder" ] || mv "$folder" "$folder.old"; } && mv "$folder.new" "$folder" ||
 		{ put_back "$folder"; return 1; }
-	got=$(cd "$MAIN_CHECKOUT" && WARP_NO_WINDOW=1 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$MAIN_CHECKOUT" && WARP_WINDOW=0 timeout 300 "$folder/warp" samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { "${failed[@]}" "native warp: hello got ${got:0:120}" --urgent; put_back "$folder"; return 1; }
 	made=$("$scripts/prebuilt-parts.sh" "$folder" 2>&1) || { "${failed[@]}" "native warp: ${made:0:200}" --urgent; put_back "$folder"; return 1; }
 	rm -rf "$folder.old"
@@ -276,6 +289,16 @@ gate_failures() {
 	{ grep -a '^FAIL' "$1" || grep -a '^tier .*: RED' "$1"; } | head -3 | tr -s ' ' | paste -sd ';' -
 }
 
+# the cards the cloud merge queue landed since the last tip (.github/workflows/land.yml): it has no board, so each closes
+# here at its merge commit "Merge branch 'land/<card>' (card <card>)"; a card closed already (a Mac landing) stays as is
+closed_landed_cards() {
+	local key commit
+	git -C "$TREE" log --merges --format='%H %s' "$since..$tip" | sed -n "s|^\([0-9a-f]*\) Merge branch 'land/[^']*' (card \([^)]*\)).*|\2 \1|p" |
+		while read -r key commit; do
+			todo show "$key" 2>/dev/null | head -1 | grep -q '^\[Done\]' || todo done "$key" "$commit" >/dev/null || say "card $key did not close"
+		done
+}
+
 # watch <commit>: install its compilers, then (unless main moved on meanwhile) the slow tiers
 watch() {
 	tip=$1
@@ -285,12 +308,13 @@ watch() {
 	# the repeats main still holds, listed for cards (card repeated-code-check)
 	"$scripts/repeated-code.sh" "$TREE" --report
 	echo "$tip" >"$state/handled"
+	[ -z "$slow" ] && closed_landed_cards
 	# every stage builds with the installed native warp: without one, nothing installs (relink ~/dev/bin/warp by hand)
 	local missing
 	missing=$(installed_folder 2>&1 >/dev/null) || { red "$missing" --urgent; return 1; }
-	# warp's wasmtime C API in the user's lib/ too, where native builds link it from (card wasmtime-bundled); the tree's
-	# lib/ gets it from rebuild.sh
-	"$scripts/wasmtime-c-api.sh" "$MAIN_CHECKOUT/lib" ||
+	# warp's wasmtime C API of the tip, in the user's lib/, where native builds link it from (card wasmtime-bundled), and
+	# in the tree's, which stage one's native warp links before rebuild.sh runs
+	"$scripts/wasmtime-c-api.sh" --from "$TREE" "$MAIN_CHECKOUT/lib" "$TREE/lib" ||
 		red "wasmtime C API: scripts/wasmtime-c-api.sh failed" --urgent
 	# stage one: the native warp at once, when the tip's compilers are not in the store yet
 	local early=
@@ -301,7 +325,7 @@ watch() {
 	echo "$built"
 	# the card names the failed step and its log in the store (rebuild.sh), so nobody builds the hash again to read it
 	[ $status = 0 ] || { red "rebuild pure failed: $(echo "$built" | tail -1)" --urgent; return 1; }
-	got=$(cd "$TREE" && WARP_NO_WINDOW=1 WARP_LIB=$TREE/lib timeout 300 "$MAIN_WARP" pure samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$TREE" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$TREE/lib" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { red "smoke test: pure hello got ${got:0:120}" --urgent; return 1; }
 	# stage two: its compilers beside it, else the whole native warp
 	{ if [ -n "$early" ]; then install_compilers; else install_native; fi; } && { installed_compilers_are_trees || red "the installed warp.wasm is not the one built from ${tip:0:10}" --urgent; }
@@ -316,26 +340,26 @@ watch() {
 
 # the user's playground (web/playground/warp-lib) runs the compilers of the tip just installed, not the ones of its last
 # manual build (card after-push-refresh): built in the tree at that tip, so main moving meanwhile cannot make build.sh
-# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout
+# refuse it, kept in the installed folder (pruned with it) and linked from the user's checkout, whose served-files.js is
+# written anew: a lib file newer than its last full build was unserved, "the library … has no ecmascript.webidl" (card
+# after-push-page-smoke-1112)
 playground_refreshed() {
 	local folder log=$state/playground-build.log built=$TREE/web/playground/warp-lib page=$MAIN_CHECKOUT/web/playground/warp-lib
 	folder=$(installed_folder) || return 1
-	WARP_LIB=$TREE/lib "$TREE/web/playground/build.sh" compiler >"$log" 2>&1 &&
+	"$TREE/web/playground/build.sh" --lib "$TREE/lib" compiler >"$log" 2>&1 &&
 		rm -rf "$folder/playground-lib" && mv "$built" "$folder/playground-lib" &&
 		{ [ -L "$page" ] || rm -rf "$page"; } && linked "$folder/playground-lib" "$page" &&
+		"$MAIN_CHECKOUT/web/playground/build.sh" served >>"$log" 2>&1 &&
 		page_smoked ||
 		say "the user's playground not refreshed: $(tail -1 "$log" | cut -c1-160)"
 }
 
-# page_smoked: the refreshed playground runs PAGE_SMOKE as the native warp does (card after-push-playground); a host
-# import the page lacks fails every sample here, hello first (canonical_text), so this is the import check too. The
-# native side runs anew first: the checkout's stored outputs were days old (component_totals before its html sweep
-# was DIFF from 1f11efe450 on, card after-push-page-smoke-1110)
+# page_smoked: the refreshed playground runs scripts/page-smoke.sh's samples as the native warp does (card
+# after-push-playground), the native side anew (the checkout's stored outputs were days old, card
+# after-push-page-smoke-1110); landings run the same check before their push
 page_smoked() {
 	local got
-	nice -n 10 "$scripts/samples.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" >/dev/null
-	got=$(nice -n 10 "$scripts/samples-web.sh" "$MAIN_CHECKOUT" "${PAGE_SMOKE[@]}" 2>&1 | tail -1)
-	[[ $got == *"${#PAGE_SMOKE[@]} of ${#PAGE_SMOKE[@]} print"* ]] || red "page smoke: ${got:0:160}"
+	got=$("$scripts/page-smoke.sh" --built "$MAIN_CHECKOUT") || red "${got:0:180}"
 	return 0
 }
 

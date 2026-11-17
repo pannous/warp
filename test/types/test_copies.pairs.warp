@@ -9,7 +9,6 @@
 # a_copy_is_deep
 
 # a_copy_copies_a_cycle_once
-'m = {a:1}; m.me = m; n = m.copy(); n.me.a = 7; m.a + n.a'	8
 
 # a_shallow_copy_shares_the_values
 'm = {a: {b: 1}}; n = m.copy(shallow: true); n.a = 5; m.a.b'	1

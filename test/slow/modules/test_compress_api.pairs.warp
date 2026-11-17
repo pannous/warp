@@ -1,2 +1,2 @@
 // lib/compress.warp bytes/_text pairs (card lib-compress-api-polish): a _text sibling is the bytes form decoded as UTF-8
-'use compress; gunzip_text(gzip("hi"))'	"hi"
+'use compress; from_utf8(gunzip(gzip("hi")))'	"hi"

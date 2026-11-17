@@ -29,3 +29,8 @@
 'type(sqrt(2).nearest(rational))'	'rational'
 'x = 0.1; x.nearest(rational) == 1/10'	true
 'x = sqrt(2.0); x.nearest(rational, within: 0.001) == 41/29'	true
+
+# from test_nearest_quiet.rs: edit the Rust test, then run the script again
+
+# nearest_warns_nothing_of_the_prelude
+'nearest(0.75, rational) == 3/4'	true

@@ -1,0 +1,2 @@
+# lib/integers.warp (decision core-takes-what-it-uses): gcd of two ints, whatever their signs
+'use integers; [gcd(12, 18), gcd(-12, 18), gcd(12, -18), gcd(0, 5), gcd(0, 0)]'	[6, 6, 6, 5, 0]

@@ -2,9 +2,9 @@
 # A global or main-level variable named as one of the program's functions is refused naming the word and each place
 # it is declared, in one file or across the files it uses (card template-holes-duplicate). A loop variable of the name
 # is its own. Run it with bash test/errors/test_variable_named_as_function.sh; the warp under test is WARP (default
-# the warp on PATH), its compiler from WARP_LIB as usual
+# the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 status=0
 folder=$(mktemp -d) && trap 'rm -rf "$folder"' EXIT
 gives() {

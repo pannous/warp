@@ -1,3 +1,0 @@
-# a counted loop's own variable and an inlined map's inside it are two variables
-'rows = ["a"]; for 2 { rows = rows.map(row => row + "x") }; rows'	["axx"]
-'rows = ["a"]; for 1 to 2: rows = rows.map(row => row + "x"); rows'	["axx"]

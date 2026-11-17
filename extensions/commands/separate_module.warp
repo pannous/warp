@@ -7,36 +7,39 @@ runtime_module_name = "warp_runtime"
 sub_byte = 80
 sub_final_byte = 79
 # an import of runtime.wasm's: its export of this name, of this kind and description
-def runtime_import(name: text, kind: int, description: list): list { name_bytes(runtime_module_name) + name_bytes(name) + [kind] + description }
+def runtime_import(name: text, kind: int, description: list) as list { name_bytes(runtime_module_name) + name_bytes(name) + [kind] + description }
 # the runtime's names by function index, as warp.runtime gives them
-def runtime_function_names(): map {
+def runtime_function_names() as map {
 	names = {}
 	for name in module.runtime_image.words.keys { names[module.runtime_image.words[name]#1] = name }
 	names
 }
 # the entries after the count of one of runtime.wasm's sections
-def runtime_entries(id: int): list {
+def runtime_entries(id: int) as list {
 	content = runtime_part(id)
 	content[uleb_read(content, 0)#2 ..]
 }
 # the host words and C functions the program calls, then the runtime functions it calls, each by its index as behind
 # the runtime (called), each type moved to the linked numbering (types), then the linked modules' words it calls; the
-# runtime's memory, error tag and globals, then the linked modules' globals
-def linked_imports(c_first_type: int, called: list, types: Move, word_imports: list, linked_globals: list): list {
+# runtime's memory and error tag, then the globals the program uses, each [name, its module] (ø: the runtime's)
+def linked_imports(c_first_type: int, called: list, types: Move, word_imports: list, globals_used: list) as list {
 	words = runtime_import_entries().map(entry => entry#1 + uleb(moved(types, entry#2))) + c_import_entries(c_first_type)
 	names = runtime_function_names()
 	function_types = runtime_function_types()
 	functions = called.map(index => if index < #module.imports then words[index] else runtime_import(names[index - runtime_shift()], export_function_byte, uleb(moved(types, function_types[index - #module.imports]))))
 	memory = runtime_import("memory", export_memory_byte, [0] + uleb(memory_pages))
 	tag = runtime_import(error_tag_name, export_tag_byte, [0] + uleb(moved(types, runtime_tag_type())))
-	globals = module.runtime_image.globals.map(entry => runtime_import(entry#1, export_global_byte, value_type(entry#2) + [mutable]))
-	theirs = linked_globals.map(entry => name_bytes(module_import_name(entry#2)) + name_bytes(exported_global_name(entry#1)) + [export_global_byte] + value_type(module.globals[entry#1]#2) + [mutable])
-	vector(functions + word_imports + [memory, tag] + globals + theirs)
+	vector(functions + word_imports + [memory, tag] + globals_used.map(entry => global_import(entry#1, entry#2)))
+}
+# a global's import: the runtime's by its name, a linked module's as that module exports it
+def global_import(name: text, owner: any) as list {
+	from = if owner == ø then [runtime_module_name, name] else [module_import_name(owner), exported_global_name(name)]
+	name_bytes(from#1) + name_bytes(from#2) + [export_global_byte] + value_type(module.globals[name]#2) + [mutable]
 }
 # the type of runtime.wasm's error tag (its one tag: an attribute 0, then the type)
-runtime_tag_type(): int := uleb_read(runtime_entries(section_ids.tag), 1)#1
+runtime_tag_type() as int := uleb_read(runtime_entries(section_ids.tag), 1)#1
 # the type of each of runtime.wasm's functions, in order
-def runtime_function_types(): list {
+def runtime_function_types() as list {
 	content = runtime_part(section_ids.function)
 	at = uleb_read(content, 0)#2
 	types = []
@@ -49,7 +52,7 @@ def runtime_function_types(): list {
 }
 # runtime.wasm's function types, each entry's bytes, from the first behind its fixed GC types (the same entries the
 # program declares: canonical_type_entries)
-def runtime_function_type_entries(canonical: list): list {
+def runtime_function_type_entries(canonical: list) as list {
 	content = runtime_part(section_ids.type)
 	at = uleb_read(content, 0)#2
 	if content[at ..< at + #canonical] != canonical { throw "runtime.wasm of other GC types: warp rebuild writes it anew" }
@@ -66,7 +69,7 @@ def runtime_function_type_entries(canonical: list): list {
 # where a vector of value types that starts at `at` ends: a reference type's heap type a signed LEB128 after it
 ref_null_type_byte = 99
 ref_type_byte = 100
-def value_types_end(content: list, at: int): int {
+def value_types_end(content: list, at: int) as int {
 	count = uleb_read(content, at)
 	at = count#2
 	for i in 0..<count#1 {
@@ -84,7 +87,7 @@ def value_types_end(content: list, at: int): int {
 # (imported from `warp/<module>` by name), its own functions; the fixed GC types, the runtime's function types used,
 # each linked module's classes, its own classes, its own function types; its texts
 # behind the runtime's and the linked modules' segments (card wasm-module-linking, L5c)
-def linked_bytes(functions: list, entry: text = "main"): list {
+def linked_bytes(functions: list, entry: text = "main") as list {
 	calls = relocated_operands(functions, relocated.calls)
 	called = range_list(#module.imports + module.runtime_image.functions).filter(index => calls.has(index))
 	words = linked_words_called(calls)
@@ -116,45 +119,57 @@ def linked_bytes(functions: list, entry: text = "main"): list {
 	type_entries = fixed_entries + used.map(type => runtime_types[type - fixed]) + class_types + functions.map(function_type) + c_types + words.map(word => function_type(word#3))
 	types = section(section_ids.type, vector(type_entries))
 	declared = section(section_ids.function, vector(range_list(#functions).map(k => uleb(first_own_type + k))))
+	# the globals: those of the runtime and the linked modules the code uses (and the ones the program exports again),
+	# then its own
+	runtime_globals = #module.runtime_image.globals
 	linked_globals = linked_globals_imported()
-	own_globals = module.global_order[#module.runtime_image.globals + #linked_globals ..]
+	first_own_global = runtime_globals + #linked_globals
+	own_globals = module.global_order[first_own_global ..]
+	global_uses = relocated_operands(functions, relocated.globals)
+	exported = exported_globals.filter(name => name in module.globals).map(name => module.globals[name]#1)
+	used_globals = range_list(first_own_global).filter(index => global_uses.has(index) or index in exported)
+	globals_used = used_globals.map(index => if index < runtime_globals then [module.global_order[index], ø] else linked_globals[index - runtime_globals])
+	global_numbering = {}
+	for k in 0..<#used_globals { global_numbering[used_globals[k]] = k }
+	for k in 0..<#own_globals { global_numbering[first_own_global + k] = #used_globals + k }
 	globals = section(section_ids.globals, vector(own_globals.map(global_entry)))
 	elements = element_section(references_declared(functions.map(f => [f.name, numbering[f.index]])))
-	moves = [Move(0, numbering), types_move, shifted(0), shifted(-module.runtime_image.data)]
+	moves = [Move(0, numbering), types_move, Move(0, global_numbering), shifted(-module.runtime_image.data)]
 	codes = section(section_ids.code, vector(functions.map(f => moved_body(f, moves))))
 	texts = section(section_ids.data, vector(text_segments()))
 	word_imports = range_list(#words).map(k => name_bytes(module_import_name(words[k]#2)) + name_bytes(words[k]#3.name) + [export_function_byte] + uleb(first_word_type + k))
-	imports = section(section_ids.import, linked_imports(first_own_type + #functions, called, types_move, word_imports, linked_globals))
+	imports = section(section_ids.import, linked_imports(first_own_type + #functions, called, types_move, word_imports, globals_used))
 	# the exports and names by the linked numbering
 	for f in functions { f.index = numbering[f.index] }
+	for name in module.global_order { if global_numbering.has(module.globals[name]#1) { module.globals[name] = [global_numbering[module.globals[name]#1], module.globals[name]#2] } }
 	parts = [types, imports, declared, globals, section(section_ids.export, vector(program_exports(functions, entry, numbering, own_globals))), elements, section(section_ids.data_count, uleb(#module.texts)), codes, texts]
 	names = vector(functions.map(f => index_name(f.index, f.name)))
 	wasm_header + concatenated(parts) + section(section_ids.custom, name_bytes("name") + subsection(names_subsections.functions, names)) + program_marks()
 }
 # the instance a linked module's items are imported from (core/native/driver.warp instance_path): a standard
 # module's by its name, a program's own module by its file's path (uses.warp own_module)
-def module_import_name(image: LibraryImage): text := own_module_wasm.get(image.name) ?? "warp/" + image.name
+def module_import_name(image: LibraryImage) as text := own_module_wasm.get(image.name) ?? "warp/" + image.name
 # the linked modules' words the code calls, each [its index behind the runtime, its module, the word], in index order
-def linked_words_called(calls: map): list {
+def linked_words_called(calls: map) as list {
 	words = []
 	for image in module.linked_images { for k in 0..<#image.functions { if calls.has(linked_index(image, k)) { words += [[linked_index(image, k), image, image.functions[k]]] } } }
 	words
 }
 # the linked modules' globals the program declared behind the runtime's, each [name, its module]: imported from that
 # module, so the module's code and the program's read one global
-def linked_globals_imported(): list {
-	behind = module.global_order[#module.runtime_image.globals ..]
+def linked_globals_imported() as list {
+	owners = {}
+	for image in module.linked_images { for entry in image.globals { if not owners.has(entry#1) { owners[entry#1] = image } } }
 	owned = []
-	for name in behind {
-		owner = module.linked_images.filter(image => image.globals.any(entry => entry#1 == name))
-		if #owner == 0 { return owned }
-		owned += [[name, owner#1]]
+	for name in module.global_order[#module.runtime_image.globals ..] {
+		if not owners.has(name) { return owned }
+		owned += [[name, owners[name]]]
 	}
 	owned
 }
 # the classes, each linked module's, then the program's own; each group in one order (by name, each class behind its
 # supertype, which a type of its own group must follow: module_layout.warp type_entries)
-def class_groups(fixed: int): list {
+def class_groups(fixed: int) as list {
 	# (the images come dependencies first: a class two carry, sound's copy of units' Length, is the first's)
 	theirs = []
 	seen = {}
@@ -172,16 +187,16 @@ def class_groups(fixed: int): list {
 	}
 	(theirs + [module.gc_order[fixed ..].filter(name => not seen.has(name))]).map(canonical_order)
 }
-def canonical_order(group: list): list {
+def canonical_order(group: list) as list {
 	order = []
 	for name in group.sorted { order = parents_first(name, group, order) }
 	order
 }
 # the order with the class appended behind its supertype, when that is of the group and not yet in it
-def parents_first(name: text, group: list, order: list): list {
+def parents_first(name: text, group: list, order: list) as list {
 	if name in order { return order }
 	parent = supertype_of(gc_definition(name))
 	(if parent != ø and parent in group then parents_first(parent, group, order) else order) + [name]
 }
 # the supertype a GC type's definition names (`sub` or `sub final`, one supertype), ø for none
-def supertype_of(definition: list): any := if #definition > 2 and (definition#1 == sub_byte or definition#1 == sub_final_byte) and definition#2 == 1 and definition#3 is text then definition#3 else ø
+def supertype_of(definition: list) as any := if #definition > 2 and (definition#1 == sub_byte or definition#1 == sub_final_byte) and definition#2 == 1 and definition#3 is text then definition#3 else ø

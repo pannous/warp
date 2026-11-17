@@ -35,7 +35,7 @@
 
 # test_map_and_element_wise_over_int_arrays
 'xs=[1,2,3]; ys = xs.map(x => x*x); ys#3'	9
-'xs=[1,2,3]; each xs {it*10}'	30
+'xs=[1,2,3]; each xs {it*10}'	[10, 20, 30]
 
 # test_int_arrays_inside_functions
 'def total(){xs=int[5]; for i in 1..5 {xs[i]=i}; sum xs}; total()'	10

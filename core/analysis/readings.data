@@ -1,0 +1,4 @@
+# The readings of the warp compiler (core/analysis/diagnostics.warp): what it chose where the program left it unwritten,
+# never said on a run; `warp readings` lists them and `warp format` writes each fix over the word at its place
+# a list made for the GPU alone, the GPU list it is made (extensions/rules/gpu_packing.warp gpu_inferred_declaration)
+gpu_list_inferred($name, $cell)	"{name} is made a GPU list [{cell}]"	"{name}: [{cell}]"

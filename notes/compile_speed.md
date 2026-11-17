@@ -2,31 +2,40 @@
 
 ## How to measure
 - Profiling, first: `scripts/profile.sh [-s <seconds>] <warp words…>`, e.g. `scripts/profile.sh -s 90 rebuild pure`
-  (WARP_LIB/WARP_SEED as for any run). The run gets WARP_PROFILE=perfmap (the native driver writes
+  (--lib/--seed as for any run). The run gets --profile (the native driver writes
   /tmp/perf-<pid>.map), macOS's sample takes its main thread's stacks, and the script prints each wasm function's own
   samples and those with its callees: no rebuild, no markers. `-r <pid>` reports a kept data/profile/<pid>.sample
   again. sample manages ~30 ms a sample on wasmtime's threads, so profile a minute or more.
-  Cost (bench.warp on parser.warp, ~94 s CPU): WARP_PROFILE=perfmap alone changes nothing (93.3 vs 93.5 s
+  Cost (bench.warp on parser.warp, ~94 s CPU): --profile alone changes nothing (93.3 vs 93.5 s
   CPU); `sample` attached for the whole run keeps CPU the same (94.0 s) and adds ~10–15% wall (108 vs 94–95 s) while
   it pauses the thread. On that run it took 76 k main-thread samples in 108 s, ~1.4 ms each.
 - Phase markers (card phase-markers): `timed(label)` (core/passes/passes.warp) prints `§T <milliseconds> <label>`
-  when WARP_TIMES is set, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses,
+  under --times, silent otherwise, where a phase starts: compiler.warp's compile (implicit uses,
   checked_program, emit, emit done), with_used's steps, with_uses' (used files, module texts, each file's parse), each
-  baked table's computing, each pure pass by name. A build run with WARP_TIMES=1 keeps them in its record's build.log
+  baked table's computing, each pure pass by name. A build run with --times keeps them in its record's build.log
   (notes/compiler_rebuilds.md "Build records"; stage two's record for compiler.warp compiled by the tree's own
   compiler); `scripts/phase-times.py <build.log>…` sums the wall spans per label, biggest first, up to `emit done`.
   CPU and hotspots are the record's time and profile.txt: never build again to measure.
-- WARP_TIMES also prints `§R <path>` for each file a compile reads (library.warp file_source): the audit tool of
+- --times also prints `§R <path>` for each file a compile reads (library.warp file_source): the audit tool of
   no-lib-reads.
 - A synthetic program at 100/200/400/1600 statements shows superlinear terms quickly with the installed warp
   (`/usr/bin/time -p`, user CPU): `def gN(xs: list): int := xs.f(N) + 1` against `f(N) + 1`.
   test/bench/compile_scaling.sh measures it (instructions retired, warm): hello beside 400 more indexed words, and
   generated programs of 100/1000/2000 lines (four statement shapes, each using the ones before).
-- Rules in extensions/sugar/ are not baked: switching one off in a worktree's lib (WARP_LIB) needs no rebuild, so a rule's
+- Rules in extensions/sugar/ are not baked: switching one off in a worktree's lib (--lib) needs no rebuild, so a rule's
   cost is bisected in seconds.
 - The wasmtime CLI profiler trapped on the compiler (card wasmtime-cli-refusal); the markers need no profiler.
-- Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use WARP_TIMES phases
-  for it, or a longer program.
+- Profiling hello: `sample` attaches ~0.2 s late, so profile.sh catches only a hello's tail; use --times phases
+  for it, or a longer program. Profiling `warp test` doesn't help either: each case runs in a forked child, and the
+  sampled main thread only waits (usleep). For a short compile, compare the --times phases per millisecond against
+  hello's, averaged over a few runs, and read its §R lines: a linked module whose .warp source shows up there is
+  being read twice (use-units-cost: `use units; 1` +128 ms over hello, mostly implicit uses' signature reads).
+  profile.sh takes the run's own options after `--`: `scripts/profile.sh -- --one-thread test <folder>`.
+- Stage 3 by hand, for a change to how the compiler emits code (a pass, the emitter): only a compiler the changed
+  compiler emitted shows it. The store's warp.wasm and warp-self.wasm both run the seed's code (warp-self.wasm is a
+  copy). `warp --lib <tree>/lib --seed <store>/<hash>/warp.wasm rebuild pure to seed` in each tree (main's and the
+  branch's) leaves its stage-2 compiler as lib/warp.wasm.new; move it aside, then time both under `/usr/bin/time -l`
+  as `--seed` compiling the same tree, a few runs each (the first is cold). node-kind-bits, 11-14: 3.171 → 3.079 T.
 - Exact call counts per function aren't measurable today: wasmtime counts nothing, and binaryen's --log-execution
   needs an import the driver doesn't answer. Summed samples over many runs stand in.
 
@@ -46,7 +55,7 @@ once per program, never per node or call site. Cheap `where` guards don't save a
   web/playground/driver.js). A host keeping one compiler instance across compiles would grow it: clear it there.
 - Pitfall: a text holding wasm bytes is asked for its byte_size, never compared (`== ""`): text equality
   normalizes (NFC) and trapped on the bytes.
-- WARP_HINTS=0 / --no-hints only filters hints when printing (core/compiler.warp said_at); the checks still run, and
+- --no-hints only filters hints when printing (core/compiler.warp said_at); the checks still run, and
   skipping their producers would save under 0.5 %: not built.
 
 ### Emit
@@ -60,8 +69,23 @@ once per program, never per node or call site. Cheap `where` guards don't save a
   is_subtype 8.5% → 1.4%, 254.6 → 242.2 s CPU. The rest is the cast to the open $Node of a $MetaNode or an instance
   (node_equal, node_text). Measure an emitter change at stage 3: stage 2 runs the seed's code, and the store's
   warp-self.wasm is a copy of warp.wasm.
+- The libcall's cost was the exit from JIT code, not the check (the store kept a hash cache over an O(1) display).
+  crates/wasmtime-capi/patches/subtype-display.patch (card subtype-inline; upstream FIXME #13484) moves the display
+  where compiled code reads it: the store keeps 8 u32 per VMSharedTypeIndex (the type's supertypes by depth, itself
+  at its own, then a filled flag), VMStoreContext points at them, and ref.test/ref.cast against an open type of
+  depth < 7 emit `row(a)[depth(b)] == b` inline (depth(b) is known when compiling); only an unfilled row leaves for
+  the libcall, which fills it. Patches wasmtime, wasmtime-environ, wasmtime-internal-cranelift; machine code is kept
+  under version 50.0.0+warp-subtype-display, so code from another wasmtime is compiled anew, loudly, once.
+  A one-entry cache per call site was weighed and not built: it needs per-site storage in each module's VMContext
+  and still calls out on every miss; the display answers misses inline too.
+  Measured 11-13 (instructions retired, lowest of 2-3, data/bench in the card's worktree): stage 3 self build main
+  3.369 → 3.108 T (−7.7%); 'use units; 1' −3.1%, bytes.warp −2.0%, chars.warp −1.2%. AsciiText step 3
+  (asciitext-compile-3 on main) stage 3 3.288 → 3.126 T, so +0.6% over main once both run on the patch (inside the 3%
+  gate it was parked at); its chars.warp 1.192 G vs main's 1.686 G (−29%).
+  Pitfall when comparing two wasmtimes on one lib/: each rewrites the other's .cwasm files (version mismatch), so
+  interleaved runs all compile cold; run one library's repetitions together.
 - 19% is the copying collector (gc_alloc_raw → do_gc → collect_increment, CopyingHeap::forward/scan_field): a bigger
-  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector.
+  initial GC heap (warp_config_gc_heap_initial_size_set) for the compiler may cut it, card wasmtime-copying-collector. Measured 11-13: 2 GiB cuts stage 3 by 4.2% of its instructions (card builder-heap-2g); the rest of wasmtime's costs and what to patch next: notes/wasmtime_tweaks.md.
 - The emitter's own top paths: compile_function → statement → effects → joint_kind → instance_of_fields →
   forwarded_kinds → no_field_unshared → call_values (60%), field·class_defaults 44%, emitter_kind 46%; one widening
   round only. By markers: 2975 functions, median 4.4 ms; a one-line function ~1.5 ms, a lambda ~0.3 ms.
@@ -69,9 +93,9 @@ once per program, never per node or call site. Cheap `where` guards don't save a
 ## Marker pitfalls
 - A marker must stand before the work it names: `f(label, computed)` prints after `computed` ran (timed_bake did).
 - phase-times.py stops at a log's first `emit done`.
-- The marks are printed (stdout): WARP_TIMES set for a test or gate run makes every case's output differ; set it only
+- The marks are printed (stdout): --times given to a test or gate run makes every case's output differ; set it only
   for the build or self-check measured.
-- WARP_TIMES marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not the next pass's.
+- --times marks are printed where a phase *starts*, so the time after `pass sugar` is sugar's, not the next pass's.
 
 ## The compiler's machine code (card wasm-becomes, measured on warp.wasm 2.5 MB, wasmtime 50)
 - warp.wasm compiles to 38.7 MB of Cranelift output: .text 26.3 MB, then .wasmtime.stackmap 4.5, .addrmap 4.0, .traps

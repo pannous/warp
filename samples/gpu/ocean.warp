@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two cloud layers, aerial perspective and AgX tone mapping, 
-# all pur warp functions that paint(ocean, width, height) compiles to one fragment shader. 
+# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two cloud layers, aerial perspective and AgX tone mapping,
+# all pur warp functions that paint(ocean, width, height) compiles to one fragment shader.
 # Each pixel casts a ray from the camera: it marches down onto the waves or goes up into the sky.
 # web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each one dragging the next along (cheap, and the crests stay sharp)
 use math
@@ -86,7 +86,7 @@ heading(angle) := [sine(angle), -cosine(angle)]
 # one sharp-crested wave, an exp(sin − 1) profile, at p after time: [height, slope along x, slope along z, rise]
 wave_at(p, direction, length, amplitude) := {
 	frequency = tau / length
-	speed = sqrt(9.81 / frequency)
+	speed = √(9.81 / frequency)
 	phase = dot(p, direction) * frequency - time * speed * frequency
 	crest = exponential(sine(phase) - 1)
 	rise = crest * cosine(phase)
@@ -208,7 +208,7 @@ water(ray, distance) := {
 	facing = max(dot(normalize(mix(n, [0, 1, 0], 0.45)), view), 0)
 	fresnel = 0.02 + 0.98 * (1 - facing) ^ 5
 	# the facets' slopes: the glitter's roughness, rougher where the waves too fine for a pixel tilt them
-	roughness = sqrt(0.09 * 0.09 + surface.w)
+	roughness = √(0.09 * 0.09 + surface.w)
 	mirrored = reflect(ray, n)
 	lifted = normalize([mirrored.x, abs(mirrored.y) * 0.4 + max(mirrored.y, 0) * 0.6, mirrored.z])
 	reflection = sky(lifted, pixel_angle + roughness * reflection_blur)

@@ -13,6 +13,7 @@ height = 1080
 bands = 16
 # any wav, mp3, ogg, flac, aiff or m4a file plays and lights the bars the same; this one lies beside the program
 tune = "tune.mp3"
+# tune = "mozart.mp3"
 song = program.folder + "/" + tune
 # how much the quiet spectrum is turned up before it lights the bars
 loudness = 15
@@ -125,9 +126,7 @@ tunnel(x, y) := {
 	(vignetted ./ (1 .+ vignetted)) .^ 0.85
 }
 
-on key {
-	if key == ESC { exit() }
-}
+on ESC { exit }
 
 # the song over and over while the window is open (headless once), or as many seconds as the command line gives:
 # `warp samples/sound/gpu_visualizer_warp.warp 3`; measuring it decodes the song before it plays, so the first frame
@@ -142,7 +141,7 @@ while time < seconds or (count(args) == 0 and window_open()) {
 		play song
 		plays = plays + 1
 	}
-	levels = [min(1.0, sqrt(level * loudness)) for level in spectrum(song, time - (plays - 1) * song_seconds, bands)]
+	levels = [min(1.0, √(level * loudness)) for level in spectrum(song, time - (plays - 1) * song_seconds, bands)]
 	bass = (levels#1 + levels#2 + levels#3 + levels#4) / 4
 	treble = (levels#11 + levels#12 + levels#13 + levels#14) / 4
 	paint(tunnel, width, height)

@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+# Version numbers compare part by part, as whole numbers: 1.9 comes before 1.10
+print 1.2.3 < 1.10.0               # yes
+print version 1.9 < version 1.10   # yes
+print 1.2.0 == 1.2                 # yes, a missing part counts as 0

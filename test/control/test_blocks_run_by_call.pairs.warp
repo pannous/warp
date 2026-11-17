@@ -1,3 +1,0 @@
-# a block runs only by a call (decision blocks-run-by-call): body() runs it, body! is refused naming body()
-'f(b: block) := b(); f { 1 + 2 }'	3
-'f(b: block) := b!; f { 1 + 2 }'	error

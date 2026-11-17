@@ -1,0 +1,5 @@
+#!/usr/bin/env warp
+use math
+# simple-most shader: assign a color to each pixel 
+stripes(x, y) := [sin x, cos y, 1] # RGB 0-1
+paint(stripes, 64, 32)

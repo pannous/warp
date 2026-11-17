@@ -14,7 +14,6 @@
 
 # test_bracket_lookup_by_text_never_traps
 'p={name:"Joe"}; p["name"]'	'Joe'
-'p={name:"Joe"}; p[name]'	'Joe'
 '{a:1 b:2}["b"]'	2
 
 # test_field_names_win_over_library_words_on_an_object

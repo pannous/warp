@@ -11,7 +11,7 @@ Alan Turing,alan@bletchley.uk,Manchester,<script>alert(1)</script>
 Émilie du Châtelet,emilie@paris.fr,Paris,5 > 3 & café"
 
 rows = csv_maps(recipients)
-print(str(count(rows)) + " letters")
+print(text(count(rows)) + " letters")
 print("")
 print(table_text([[row["name"], row["email"], row["city"]] for row in rows], {headers: ["name", "email", "city"], align: ["left", "left", "left"]}))
 
@@ -31,5 +31,5 @@ page = page + "
 print("")
 print(page)
 print("")
-print("no live script tag: " + str(not page.contains("<script>")))
-print("escaped ampersand: " + str(page.contains("Hello &amp; thanks")))
+print("no live script tag: " + text(not page.contains("<script>")))
+print("escaped ampersand: " + text(page.contains("Hello &amp; thanks")))

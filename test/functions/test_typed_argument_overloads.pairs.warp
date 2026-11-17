@@ -1,0 +1,5 @@
+# wiki/polymorphism.md "multiple dispatch": a call picks its method by its arguments' types, which a typed parameter
+# and a text joined with + tell when the compile knows them; storage's run(db, sql) beside os's run(module, list)
+'class Box { bytes: any }; run(module: Box, arguments: list) := "alpha"; run(db: int, query: text, values: list = []) := "beta"; make(db: any, name: text) := run(db, name); make(5, "t")'	"beta"
+'class Box { bytes: any }; run(module: Box, arguments: list) := "alpha"; run(db: int, query: text, values: list = []) := "beta"; d: any = 5; n = "t"; run(d, "x" + n)'	"beta"
+'class Box { bytes: any }; run(module: Box, arguments: list) := "alpha"; run(db: int, query: text, values: list = []) := "beta"; run(Box(1), [2])'	"alpha"

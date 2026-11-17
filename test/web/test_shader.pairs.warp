@@ -1,0 +1,22 @@
+# a complex number of lib/complex in a painted function is a vec2f, its + - * / ^ the complex ones (card paint-shader)
+'c = -0.8 + 0.156ⅈ; f(x, y) := { z = x + y * ⅈ; z = z² + c; abs(z) < 2 }; shader_of(f).contains("z = (complex_times(z, z) + values.c);")'	yes
+'f(x, y) := (Complex(x, y) / (1 + ⅈ)).im; shader_of(f).contains("return (complex_over(vec2f(x, y), ((vec2f(1.0, 0.0) + vec2f(0.0, 1.0))))).y;")'	yes
+
+# hash(cell): a number 0 ..< 1 that stays the same for a cell, a word of every shader and on the CPU (decision shader-hash)
+'use shaders; h = hash([3, 4]); h >= 0 and h < 1 and h == hash([3, 4])'	yes
+'use shaders; hash([3, 4]) != hash([4, 3])'	yes
+
+# a function brought by `use`, and the functions it calls, quoted into one shader
+# (extensions/rules/modules/shaders.warp, extensions/rules/rule_words.warp definitions_reached, test/web/quote_helper.warp)
+'use ./quote_helper.warp; made = shader_of(quote_helper); made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
+'use ./quote_helper.warp; made = shader_of(quote_deeper); made.contains("fn quote_deeper") and made.contains("fn quote_helper")'	yes
+'use ./quote_helper.warp; ink(x, y) := quote_helper(x, y); made = shader_of(ink); made.contains("fn ink") and made.contains("fn quote_helper") and made.contains("values.quote_bias")'	yes
+
+# the WGSL of paint and shader_of is made at run time (lib/shaders.warp, decision shaders-in-lib): a program value the
+# shader reads takes the width of the value it holds then, however the program computed it
+'tint = [1, 2, 3].map(v => v / 3); f(x, y) := tint .* x; shader_of(f).contains("fn f(x: f32, y: f32) -> vec3f")'	yes
+'tint = [1, 2, 3].map(v => v / 3); f(x, y) := tint .* x; shader_of(f).contains("values.tint")'	yes
+
+# `n++` in a while condition or as a statement: WGSL has no ++ as a value, the loop tests each condition in order (card julia-wgsl)
+'f(x, y) := { n = 0.0; while n < x and n++ { y = y + 1 }; [n, y, 0] }; shader_of(f).contains("\tloop {\n\t\tif (!((n < x))) { break; }\n\t\tn = (n + 1.0);\n\t\tif (n == 0.0) { break; }")'	yes
+'f(x, y) := { n = x; n++; [n, y, 0] }; shader_of(f).contains("n = (n + 1.0);")'	yes

@@ -25,7 +25,6 @@
 # usage:
 #   scripts/samples_check.sh
 #   scripts/samples_check.sh /path/to/warp samples/servers/server.warp 18080
-#   WARP_LIB=/path/to/lib scripts/samples_check.sh
 #
 # exit 0 green (or known-core SKIP), 1 red (prints a FAIL line).
 set -euo pipefail
@@ -49,10 +48,9 @@ cd "$tree" || exit 2
 [ -f "$PROGRAM" ] || { echo "FAIL samples_check: no program $PROGRAM" >&2; exit 1; }
 
 # Prefer the tree's compilers when present (gate/smoke do the same).
-if [ -f "$tree/lib/warp.wasm" ]; then
-	export WARP_LIB=${WARP_LIB:-$tree/lib}
-fi
-export WARP_NO_WINDOW=1 WARP_HINTS=${WARP_HINTS:-0}
+options=(--no-hints)
+[ -f "$tree/lib/warp.wasm" ] && options+=(--lib "$tree/lib")
+export WARP_WINDOW=0
 
 # Ephemeral port when 0: pick one that is free right now.
 if [ "$PORT" = 0 ]; then
@@ -64,7 +62,7 @@ rm -f "$db_path"
 
 log=$(mktemp)
 err=$(mktemp)
-# Temp program: append an explicit serve(WARP_PORT) so the probe still listens when the
+# Temp program: append an explicit serve(<port>) so the probe still listens when the
 # program→routes_end rewrite does not fire on this native tip (sample source stays auto-serve).
 run_program=$(mktemp --suffix=.warp)
 SERVER=
@@ -84,12 +82,11 @@ trap cleanup EXIT
 	# Only append when the sample does not already call serve( — keep the rich demo source clean.
 	if ! grep -Eq '^[[:space:]]*serve[[:space:]]*\(' "$PROGRAM"; then
 		printf '\n# samples_check: explicit serve so the probe listens if routes_end rewrite is skipped\n'
-		printf 'port = env("WARP_PORT")\n'
-		printf 'serve(if port == ø then 8080 else int(port))\n'
+		printf 'serve(%s)\n' "$PORT"
 	fi
 } >"$run_program"
 
-WARP_PORT=$PORT "$WARP" "$run_program" >"$log" 2>"$err" &
+"$WARP" "${options[@]}" "$run_program" --port "$PORT" >"$log" 2>"$err" &
 SERVER=$!
 
 base="http://127.0.0.1:$PORT"
@@ -238,5 +235,5 @@ if [ "$fail" != 0 ]; then
 	echo "FAIL samples_check: one or more route checks failed ($PROGRAM on $base)" >&2
 	exit 1
 fi
-echo "samples_check: ok ($PROGRAM on $base, WARP_LIB=${WARP_LIB:-installed})"
+echo "samples_check: ok ($PROGRAM on $base, ${options[*]})"
 exit 0

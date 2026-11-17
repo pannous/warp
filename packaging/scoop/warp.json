@@ -1,0 +1,17 @@
+{
+    "version": "VERSION",
+    "description": "warp: a data format and wasm-first language",
+    "homepage": "https://warp.pannous.com/",
+    "license": "AGPL-3.0-or-later AND MIT",
+    "url": "https://github.com/pannous/warp/releases/download/vVERSION/warp-vVERSION-x86_64-pc-windows-gnu.zip",
+    "hash": "HASH",
+    "bin": "warp.exe",
+    "suggest": {
+        "sh lines and warp test": "git",
+        "warp build native": ["llvm-mingw", "wabt"]
+    },
+    "checkver": "github",
+    "autoupdate": {
+        "url": "https://github.com/pannous/warp/releases/download/v$version/warp-v$version-x86_64-pc-windows-gnu.zip"
+    }
+}

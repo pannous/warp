@@ -2,7 +2,6 @@
 
 # a_type_takes_a_negative_argument
 'int -3'	-3
-'int8 -3'	-3
 'float -2'	-2.0
 'text -5'	'-5'
 

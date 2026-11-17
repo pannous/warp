@@ -1,0 +1,12 @@
+# from test_variable_kind_clash.rs: edit the Rust test, then run the script again
+
+# kinds_that_mix_stay_allowed
+'x = 1; x = 2.5; x'	2.5
+«x = "a"; x = 'b'; x»	'b'
+'x = 1; x = 2; x'	2
+'xs = [1]; xs = [2 3]; xs#2'	3
+
+# a variable named like a library word stays a value when range-indexed (variable-named-like-2)
+'slice = "abc"; slice[1 ..]'	"bc"
+'f() := { slice = [1, 2, 3]; slice[1 ..] }; f()'	[2 3]
+'t = "hello"; t[1 ..] + "!"'	"ello!"

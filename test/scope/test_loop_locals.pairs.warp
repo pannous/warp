@@ -1,0 +1,7 @@
+# a loop variable and a `let` are the function's own, never a global of that name; a function changes another file's
+# global only where it declares it `global` (decision loop-locals, wiki/Footguns.md "Closures capturing loop variables")
+'global view = 7; cleared() := { for view in [1, 2] { }; 0 }; cleared(); view'	7
+'global view = 7; f() := { let view = 3; view }; f() + view'	10
+'use "../fixtures/window_view.warp"; released() := { view = 3; 0 }; released(); view'	error
+'use "../fixtures/window_view.warp"; released() := { global view; view = 3; 0 }; released(); view'	3
+'use "../fixtures/window_view.warp"; released() := { let view = 3; view }; released() + view'	10

@@ -1,3 +1,0 @@
-# a result's type must be a type: an undeclared word after as in a head is refused, with the fix (card render-pdf-string, Interviewer screen 11-08)
-'render(t) as pdf := "pdf:"+t; render("x") as pdf'	error	pdf is no type: declare type pdf = text
-'type pdf = text; render(t) as pdf := "pdf:"+t; render("x")'	"pdf:x"

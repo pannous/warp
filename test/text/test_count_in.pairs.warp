@@ -1,8 +1,0 @@
-# from test_count_in.rs: edit the Rust test, then run the script again
-
-# count_occurrences
-'count bytes in "äb"'	3
-# one value, the emitter's count beside the prelude's count_in (card triage-count-in)
-'xs = [1, 2, 3]; count xs'	3
-'count([1, 2, 2], 2)'	2
-'[1, 2, 2].count(2)'	2

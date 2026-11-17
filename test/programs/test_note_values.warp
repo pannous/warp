@@ -4,9 +4,9 @@
 is! 'use sound
 note(C4)' 'C4'
 is! 'use sound
-note(C♯4)' 'C#4'
+note(C♯4)' C#4
 is! 'use sound
-note("Eb5")' 'D#5'
+note("Eb5")' D#5
 is! 'use sound
 note(445Hz)' 'A4+20c'
 is! 'use sound
@@ -23,7 +23,7 @@ n.name()' 'C#'
 
 # semitones_move_a_note
 is! 'use sound
-note(C♯4) + 2' 'D#4'
+note(C♯4) + 2' D#4
 is! 'use sound
 n = note(C4)
 m = n + 7

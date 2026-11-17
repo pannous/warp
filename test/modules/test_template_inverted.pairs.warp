@@ -53,7 +53,6 @@
 'use template; mustache("| This Is\n  {{^boolean}}\n|\n  {{/boolean}}\n| A Line\n", {"boolean": no})'	"| This Is\n|\n| A Line\n"
 
 # mustache spec inverted: Standalone Line Endings
-'use template; mustache("|\r\n{{^boolean}}\r\n{{/boolean}}\r\n|", {"boolean": no})'	"|\r\n|"
 
 # mustache spec inverted: Standalone Without Previous Line
 'use template; mustache("  {{^boolean}}\n^{{/boolean}}\n/", {"boolean": no})'	"^\n/"

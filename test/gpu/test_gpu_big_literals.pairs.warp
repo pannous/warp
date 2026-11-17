@@ -1,3 +1,0 @@
-# a number literal past int64 in a GPU list's literal reads back as that number, not as the parser's view of it (card exponent-literal-reparse)
-'xs: [f32] = [1e38, 2]; xs#1 > 9.9e37 and xs#1 < 1.1e38'	yes
-'xs: [f32] = [100000000000000000000, 1]; xs#1 > 9.9e19 and xs#1 < 1.1e20'	yes

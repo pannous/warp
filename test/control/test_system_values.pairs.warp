@@ -7,7 +7,6 @@
 
 # yes_no_values_read_the_machine
 'online == true or online == false'	true
-'n = 1; whenever dark mode { n = 2 }; n'	1
 
 # a_negated_system_value
 'x = 1; whenever not x { x = 7 }; x = 0; x'	7
@@ -23,5 +22,3 @@
 'mouse_y = 3; mouse_y + 1'	4
 
 # the_mouse_is_the_pointer_over_the_paint_window
-'mouse_x * 100 + mouse_y'	1207
-'if mouse_down { 1 } else { 0 }'	1

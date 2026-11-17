@@ -83,32 +83,40 @@ const STATUS_MARKS = { ok: "✓ ok", missing: "– missing", rejected: "✗ reje
 function showStatus(id, state, detail = "") {
 	Object.assign($(id), { textContent: STATUS_MARKS[state], className: `status ${state}`, title: detail });
 }
-// the answer's status as the mark: accepted, refused, or neither (a service in trouble)
+// an answer's status as the mark: accepted, refused, or neither (a service in trouble; 0: no answer at all)
 // FORBIDDEN is playground.js's, read when a check runs
-const markOfAnswer = answer => answer.ok ? "ok" : [UNAUTHORIZED, FORBIDDEN].includes(answer.status) ? "rejected" : "unreachable";
+const answered = status => status >= 200 && status < 300;
+const markOfStatus = status => answered(status) ? "ok" : [UNAUTHORIZED, FORBIDDEN].includes(status) ? "rejected" : "unreachable";
+const showAnswerStatus = (id, status) => showStatus(id, markOfStatus(status), answered(status) ? "" : status ? `HTTP status ${status}` : "no answer");
 async function checkService(id, request, missing) {
 	if (missing) return showStatus(id, "missing", missing);
 	showStatus(id, "checking");
-	try {
-		const answer = await request();
-		showStatus(id, markOfAnswer(answer), answer.ok ? "" : `HTTP status ${answer.status}`);
-	} catch (failure) { showStatus(id, "unreachable", failure.message); }
+	try { showAnswerStatus(id, (await request()).status); }
+	catch (failure) {
+		console.warn(`the ⋯ menu's ${id} check failed:`, failure.message);
+		showStatus(id, "unreachable", failure.message);
+	}
 }
+// every request with the key marks it, not only the menu's check: Ask ✦, completion and a program's `agent "…"`
+// (worker.js "key answered"); the latest answer wins (cards api-key-unreachable, unreachable-display-bug)
+const keyAnswered = status => showAnswerStatus("api-key-status", status);
 const checkApiKey = () => checkService("api-key-status", () => serviceFetch(`${API_ORIGIN}/v1/models?limit=1`, { headers: API_HEADERS(apiKey().trim()) }),
 	apiKey().trim() ? "" : "no key: completion and Ask use the playground's proxy");
-const checkOwnerToken = () => checkService("owner-token-status", () => postJson(`${PROXY_ORIGIN}/session`, { owner_token: stored(OWNER_TOKEN_STORAGE) }),
-	stored(OWNER_TOKEN_STORAGE) ? "" : "open the page once with ?bug_token=<token> (python3 scripts/bug_report.py token)");
+const checkOwnerToken = () => checkService("owner-token-status", () => postJson(`${PROXY_ORIGIN}/session`, { owner_token: stored(BUG_TOKEN_KEY) }),
+	stored(BUG_TOKEN_KEY) ? "" : OWNER_TOKEN_HINT);
 const checkServices = () => { checkApiKey(); checkOwnerToken(); };
 
 // Claude's answer for one of assistant.json's tasks, as text: with a pasted key straight from the API, else from the proxy
 async function askClaude({ task, messages, program }) {
 	const { tokens, thinking } = (await assistantSettings()).tasks[task];
 	const key = apiKey().trim();
-	const reply = await replyOf(key ? await postJson(MESSAGES_URL, {
+	const answer = key ? await postJson(MESSAGES_URL, {
 		model: task === "chat" ? CHAT_MODEL : COMPLETION_MODEL,
 		system: await systemPrompt(task, program),
 		messages, max_tokens: tokens, thinking: thinking === false ? NO_THINKING : undefined,
-	}, API_HEADERS(key)) : await askProxy({ task, messages, program }));
+	}, API_HEADERS(key)) : await askProxy({ task, messages, program });
+	if (key) keyAnswered(answer.status);
+	const reply = await replyOf(answer);
 	const text = reply.content?.filter(part => part.type === "text").map(part => part.text).join("") ?? "";
 	if (!text && reply.stop_reason === "max_tokens") throw new Error(`Claude's answer ran out of its ${tokens} tokens before any text.`);
 	return text;
@@ -126,18 +134,18 @@ async function askProxy(request, renewed = false) {
 	return askProxy(request, true);
 }
 
-// the owner's token (the bug button's, kept by ?bug_token=…) opens the session without the bot check
-const OWNER_TOKEN_STORAGE = "warp-playground-bug-token";
-
+// the owner's token (the bug button's, kept by ?bug_token=…, playground.js BUG_TOKEN_KEY) opens the session without the
+// bot check
 async function openProxySession() {
-	const ownerToken = stored(OWNER_TOKEN_STORAGE);
+	const ownerToken = stored(BUG_TOKEN_KEY);
 	const credential = ownerToken ? { owner_token: ownerToken } : { turnstile: await turnstileToken() };
 	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, credential))).session;
 }
 
+// (loaded for CORS, which Cloudflare allows: an error of its script then says what failed, not a bare "Script error.")
 let turnstileLoaded;
 const loadTurnstile = () => turnstileLoaded ??= new Promise((resolve, reject) => document.head.append(element("script", {
-	src: TURNSTILE_SCRIPT, onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
+	src: TURNSTILE_SCRIPT, crossOrigin: "anonymous", onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
 })));
 
 // Turnstile's token, invisible unless Cloudflare wants the visitor to click

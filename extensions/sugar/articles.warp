@@ -1,4 +1,5 @@
 # Articles (decision article-optional): `x is a number`, `x is an int` is the type test `x is number`; early sugar, so
 # the type tests pass (core/analysis/type_tests.warp) reads the test without its article. A program binding `a` or `an`
-# keeps its own `x is a`
+# keeps its own `x is a`; before a type, `x is a number`, it reads two ways and is refused
 rewrite $x is $article $t => $x is $t where $article in [a, an] and $article is unbound
+rewrite $x is $article $t => $refused where $article is symbol and $t is type and $refused = article_readings($x, $article, $t)

@@ -1,0 +1,2 @@
+# a global another file of the program changes (test/scope/test_loop_locals.pairs.warp, decision loop-locals)
+global view = 7

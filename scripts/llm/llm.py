@@ -173,7 +173,7 @@ def run_batch(tool, stage, requests, input_tokens_each, output_tokens_each):
 # ---- running warp ----
 
 def run_warp(code):
-    """Run a program the way a user would (WARP_NO_WINDOW keeps paint() off the screen); its whole output"""
+    """Run a program the way a user would (--no-window keeps paint() off the screen); its whole output"""
     os.makedirs(SCRATCH, exist_ok=True)
     handle, path = tempfile.mkstemp(".warp", dir=SCRATCH)  # one file per run: parallel runs may share code
     with os.fdopen(handle, "w", encoding="utf-8") as file:
@@ -182,7 +182,7 @@ def run_warp(code):
         done = subprocess.run([WARP, *WARP_FLAGS, "run", path], capture_output=True, text=True, errors="replace", cwd=SCRATCH,
                               stdin=subprocess.DEVNULL, timeout=RUN_TIMEOUT_SECONDS,
                               # Rust until the pure pipeline covers enough (board card llm-pure)
-                              env=dict(os.environ, WARP_NO_WINDOW="1", WARP_PIPELINE="rust"))
+                              env=dict(os.environ, WARP_WINDOW="0"))
         output = (done.stdout + done.stderr).strip()
     except subprocess.TimeoutExpired:
         output = f"TIMEOUT after {RUN_TIMEOUT_SECONDS} s"

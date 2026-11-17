@@ -1,0 +1,24 @@
+# many bytes of C memory at once, a `bytes` result read back as a text, and a text's bytes written there (lib/c.warp
+# field_bytes, set_field_bytes; card warp-gpu-source)
+
+'import (calloc, field_bytes, set_field_bytes) from "c"\nm = calloc(1, 8)\nset_field_bytes(m, 2, "warp")\nfield_bytes(m, 2, 4)'	"warp"
+'import (calloc, field_bytes, set_field_i32) from "c"\nm = calloc(1, 8)\nset_field_i32(m, 0, 258)\nt = field_bytes(m, 0, 3)\n[byte_at(t, i) for i in 0 ..< 3]'	[2, 1, 0]
+'memcpy(into: handle, from: f32s, size: length): handle from "c"\nimport (calloc, field_f32) from "c"\nm = calloc(4, 4)\nmemcpy(m, [1.5, -2, 0.25])\n[field_f32(m, 4 * i) for i in 0 ..< 4]'	[1.5, -2, 0.25, 0]
+'memcpy(into: handle, from: i32s, size: length): handle from "c"\nimport (calloc, field_i32) from "c"\nm = calloc(2, 4)\nmemcpy(m, [7, -9])\n[field_i32(m, 0), field_i32(m, 4)]'	[7, -9]
+
+# a warp function passed to C as a function pointer, C calling it back (card ffi-callbacks, lib/callbacks.warp)
+# c_function_pointers — native only: the page's libc.wasm takes no function pointers
+'qsort(base: handle, count: i64, size: i64, compare: handle): void from "c"\nimport (calloc, field_i64, set_field_i64) from "c"\nm = calloc(4, 8)\nfor i in 0 ..< 4 { set_field_i64(m, i * 8, [3, 9, 1, 7]#(i + 1)) }\nqsort(m, 4, 8, c_callback((a, b) => field_i64(a, 0) - field_i64(b, 0), ["handle", "handle"]))\n[field_i64(m, i * 8) for i in 0 ..< 4]'	[1, 3, 7, 9]
+'c_callback(x => x, ["f64"])'	error	a float argument never reaches a callback
+
+# a program's own C declaration among other statements on its line, `;` between them (card program-own)
+'strlen(s: text): i64 from "c"; strlen("abc")'	3
+'x = 1; close(fd: i32): i32 from "c"; close(99) + x'	0
+'print "a; b from c"; 2'	2
+
+# a C i64 parameter takes a boxed int exactly, a list item or map value as a written one (a tagged pointer past 2^53 of
+# lib/native_host/webview.warp), and rounds a float (card list-item)
+'use c; m = calloc(1, 8); xs = [-5524291356107002598]; set_field_i64(m, 0, xs#1); field_i64(m, 0)'	-5524291356107002598
+'use c; m = calloc(1, 8); d = {p: 9007199254740993}; set_field_i64(m, 0, d.p); field_i64(m, 0)'	9007199254740993
+'use c; m = calloc(1, 8); xs = [2.6]; set_field_i64(m, 0, xs#1); field_i64(m, 0)'	3
+'use c; m = calloc(1, 8); set_field_i64(m, 0, -5524291356107002598); field_i64(m, 0)'	-5524291356107002598

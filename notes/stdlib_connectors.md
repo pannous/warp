@@ -9,8 +9,8 @@ that allows access to anything.
 |---|---|---|
 | C / native | header FFI: `import f from "lib"` / `use lib` reads the headers, dlopen, one wasmtime wrapper per signature shape | extensions/c_imports/imports.warp, core/native/driver.warp, lib/native/foreign.c; handles: wiki/c.md |
 | C compiled to wasm | `import lib.wasm` with a header beside it: texts, out-pointers, buffers cross; same results natively and in the browser | notes/wasm_modules.md "How to add a C library" |
-| Python | natively libpython through `use python` (python_import, python_call); in the playground Pyodide 0.29.5 | lib/native/python.warp, web/playground/foreign_python.py |
-| JavaScript | `use js Math`: the webview natively, the page's globalThis in the browser | extensions/js_globals.warp, lib/host/native_host/webview.warp, host-foreign.js foreignCall |
+| Python | `use python json` (`use json from python`), `json.dumps(x)`: libpython natively, Pyodide 0.29.5 in the playground, both through lib/native/python.warp | extensions/foreign_globals.warp, lib/native/python.warp |
+| JavaScript | `use js Math`: the webview natively, the page's globalThis in the browser | extensions/foreign_globals.warp, lib/host/native_host/webview.warp, host-foreign.js foreignCall |
 | Rust crates | `use cargo regex`: a WebAssembly module of the crate with its warp.words section | scripts/warp-crate, lib/crates/, notes/crate_adapter.md |
 | WebAssembly components | `load_wasm(./lib.wasm)`, `wasm_call(m, "f", [x])` | lib/wasm.warp |
 
@@ -18,9 +18,11 @@ that allows access to anything.
 _string.h is read with its `_LIBC_CSTR` annotations dropped).
 
 ## Foreign calls (Python, JS)
-- Lowering: `use js Math` lowers in extensions/js_globals.warp, `Math.max(1, 5)` → `foreign_call("js", "Math", "max",
-  1, [1, 5])`, `Math.PI` a read (`call` 0). The same form for `use python "math"` (`math.sqrt(2)`, `use python
-  "os.path" as path`) is not lowered by the self-hosted compiler yet (test/ffi/test_foreign_handles.pairs.warp red).
+- Lowering: `use js Math` lowers in extensions/foreign_globals.warp, `Math.max(1, 5)` → `foreign_call("js", "Math", "max",
+  1, [1, 5])`, `Math.PI` a read (`call` 0). `use python json` lowers through its library instead, the same in both
+  hosts: `json.dumps(x)` → `python_member(python_import("json"), "dumps", 1, [x])`; a value it gives stays Python's
+  (`f = fractions.Fraction(1, 2); f.numerator`). A runtime reached so is one row of LIBRARY_RUNTIMES plus its
+  <runtime>_import and <runtime>_member. `use python "os.path" as path` is not lowered yet.
 - Values: JSON both ways. Exact rationals cross as floats; integers beyond 64 bits exact (`{"$int": "digits"}`);
   booleans yes/no; None ø; dicts objects; tuples/sets lists; numpy arrays via tolist(); integral numpy types as Ints,
   numpy floats as Floats.

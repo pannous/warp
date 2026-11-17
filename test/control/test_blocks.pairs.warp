@@ -7,3 +7,7 @@
 '([1, 2], [3, 4])[1][0]'	3
 
 # test_matrix_comma_index
+
+# a block runs only by a call (decision blocks-run-by-call): body() runs it, body! is refused naming body()
+'f(b: block) := b(); f { 1 + 2 }'	3
+'f(b: block) := b!; f { 1 + 2 }'	error

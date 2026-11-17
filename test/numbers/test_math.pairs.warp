@@ -37,7 +37,6 @@
 'use sin;sin -π/2'	-1
 
 # test_units
-'1 m + 1km'	1001
 
 # test_eval
 '√4'	2

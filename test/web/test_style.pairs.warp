@@ -1,0 +1,18 @@
+# a style sheet and an inline style are data: a selector stays a word, a style reading a changed variable is live (card tour-style-selectors)
+'use web; done = no; page = style{ .done{ color: "green" } }; render page'	'<style>.done { color: green }</style>'
+'use web; done = no; page = style{ .done { color: "green" } }; render page'	'<style>.done { color: green }</style>'
+'use web; d = no; page: html = div{ button{ on click { d = yes }, "x" } p{ style: { color: (if d then "white" else "black") } "a" } }; render page; click "x"'	'<div><button data-warp-click="1">x</button><p style="color: white">a</p></div>'
+'use web; dark = no; page: html = div{ style{ ".card": { padding: 8 } } button{ on click { dark = not dark }, "dark" } p{ class: "card" "a" } }; render page'	'<div><style>.card { padding: 8px }</style><button data-warp-click="1">dark</button><p class="card">a</p></div>'
+
+# a selector's # before a word and its block stays the id selector, though the program binds the word
+'use markup; main = [1 2]; to_html(style{ #main { color: red } })'	"<style>#main { color: red }</style>"
+'use markup; main = "ab"; to_html(style{ #main{ color: red } })'	"<style>#main { color: red }</style>"
+'xs = [1 2 3]; {n: #xs}'	{n: 3}
+# a descendant selector is a text key, as written (night decision on style-ul, card should-dot)
+'use markup; to_html(style{ "ul .done": { color: red } })'	"<style>ul .done { color: red }</style>"
+
+# a style sheet's lengths as CSS writes them: 6px, 2em, 1.5rem (card style-css-length)
+'use markup; to_html(style{ td { padding: 6px } })'	'<style>td { padding: 6px }</style>'
+'use markup; to_html(style{ td { padding: 6px 14px } })'	'<style>td { padding: 6px 14px }</style>'
+'use markup; to_html(style{ p { margin: 2em } })'	'<style>p { margin: 2em }</style>'
+'use markup; to_html(style{ td { border-bottom: 1px solid silver } })'	'<style>td { border-bottom: 1px solid silver }</style>'

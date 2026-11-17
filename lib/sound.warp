@@ -5,6 +5,7 @@
 // WebAudio. Loaded when a program calls one of its words (rust-harness:src/modules.rs SOUND_WORDS)
 use units
 use reals
+use bits
 use os
 use file
 use tasks
@@ -322,30 +323,42 @@ note_hertz(name) := {
 class Note {
 	key: int
 	cents: int
+	// how many times the play's duration it holds: C4 ~ 2 twice as long, C4 ~ ½ half (decision note-frequency-duration)
+	length: number = 1
 	hertz() := midi_hertz(key) * 2 ^ (cents / 1200.0)
 	octave() := floor(key / 12) as int - 1
 	name() := note_names[key % 12]
-	text() := name() + string(octave()) + cents_text(cents)
+	text() := name() + string(octave()) + cents_text(cents) + length_text(length)
 	// a run's value shows as written, E4 or C#4 (decision show-hook)
 	format as text := text()
 	// a note added sounds with it (decision notes-are-notes): C4 + E4 is a Chord, C4 + chord a bigger one; a number moves
 	// it up that many semitones, a part of one the cents: C4 + 4 is E4, note(C4) + 2.25 is D4+25c
 	plus(other) := if other is Note then Chord([this, other]) else if other is Chord then Chord([this] + other.notes) else moved(other)
-	moved(semitones) := if semitones is int then Note(key + semitones, cents) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
+	moved(semitones) := if semitones is int then Note(key + semitones, cents, length) else nearest_note(hertz() * 2 ^ (semitones / 12.0))
+	// the tie: C4 ~ 2 holds twice as long. `~` also spells ≈, which a note answers by its frequency: the same nearest
+	// key, C4 ≈ C4+20c
+	similar(factor) := Note(key, cents, length * factor)
+	approximately(other) := midi(other) == key
 	minus(semitones) := moved(-semitones)
 	// times a number is its frequency times it (C4 * 100 is 26163); the frequency itself hertz(C4)
 	times(factor) := hertz() * factor
-	// a Note equals its name text (decision class-text): note("C#4") == "C#4"
-	equals(o) := (o is Note and key == o.key and cents == o.cents) or (o is text and o == text())
+	// a Note is a number, its frequency, that shows by name (decision notes-not-frequencies, as a Color is a number):
+	// A4 as float is 440, A4 == 440
+	float() := hertz()
+	// a Note equals its name text (decision class-text): note("C#4") == "C#4", and its frequency
+	equals(o) := (o is Note and key == o.key and cents == o.cents and length == o.length) or (o is text and o == text()) or (o is number and hertz() == o)
 }
 // notes sounding together (decision notes-are-notes): C4 + E4, and a note more, chord + G4; a number moves every note
 // that many semitones. It plays its notes together, play(C4+E4, 1s), and shows as written, C4+E4+G4
 class Chord {
 	notes: list
+	length: number = 1
 	count() := count(notes)
 	plus(other) := if other is Note then Chord(notes + [other]) else if other is Chord then Chord(notes + other.notes) else Chord(notes.map(note => note + other))
-	format as text := notes.map(note => "" + note).join("+")
-	equals(o) := (o is Chord and notes == o.notes) or o == notes
+	format as text := if length == 1 then notes.map(note => "" + note).join("+") else "(" + notes.map(note => "" + note).join("+") + ")" + length_text(length)
+	equals(o) := (o is Chord and notes == o.notes and length == o.length) or o == notes
+	similar(factor) := Chord(notes, length * factor)
+	approximately(other) := other is Chord and notes.map(midi) == other.notes.map(midi)
 }
 // the frequency of a note or of any pitch, in Hz: hertz(C4) + 1 is frequency math (decision notes-are-notes)
 public hertz(pitch) := hertz_of(pitch)
@@ -361,6 +374,33 @@ F = PitchClass(5)
 G = PitchClass(7)
 A = PitchClass(9)
 B = PitchClass(11)
+length_text(length) := if length == 1 then "" else "~" + text(length)
+// a silent step of a melody, tied longer as a note is: [C4, rest, E4, rest ~ 2]
+class Rest {
+	length: number = 1
+	similar(factor) := Rest(length * factor)
+	format as text := "rest" + length_text(length)
+}
+rest() := Rest()
+// pause, taking nothing, is a rest too: play(pause, 1s) is a second of silence (pause job holds a task, lib/tasks.warp)
+pause() := rest
+// how many times the play's duration a step holds, 1 for a plain pitch
+held_length(pitch) := if pitch is Note or pitch is Chord or pitch is Rest then pitch.length else 1
+// the melody words on lists: euclid(C5, 3, 8) three C5 spread over eight steps as evenly as they go, the rest rests;
+// alternate([G4, A4]) one of them each time the melody plays, in turn; maybe(C5, 0.3) C5 in about 30 % of the plays,
+// chosen by melody_seed, the same each run
+euclid(step, hits: int, steps: int) := [if (i * hits) % steps < hits then step else rest for i in 0..steps]
+class Alternate {
+	options: list
+	format as text := "alternate(" + text(options) + ")"
+}
+alternate(options: list) := Alternate(options)
+class Maybe {
+	step: any
+	share: number
+	format as text := "maybe(" + text(step) + ", " + text(share) + ")"
+}
+maybe(step, share = 0.5) := Maybe(step, share)
 cents_text(cents) := if cents == 0 then "" else if cents > 0 then "+" + string(cents) + "c" else string(cents) + "c"
 note(pitch) := nearest_note(hertz_of(pitch))
 nearest_note(frequency) := {
@@ -385,8 +425,8 @@ chord_intervals = {major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], au
 scale_intervals = {major: [0, 2, 4, 5, 7, 9, 11, 12], minor: [0, 2, 3, 5, 7, 8, 10, 12], ionian: [0, 2, 4, 5, 7, 9, 11, 12], dorian: [0, 2, 3, 5, 7, 9, 10, 12], phrygian: [0, 1, 3, 5, 7, 8, 10, 12], lydian: [0, 2, 4, 6, 7, 9, 11, 12], mixolydian: [0, 2, 4, 5, 7, 9, 10, 12], aeolian: [0, 2, 3, 5, 7, 8, 10, 12], locrian: [0, 1, 3, 5, 6, 8, 10, 12], pentatonic: [0, 2, 4, 7, 9, 12], minor_pentatonic: [0, 3, 5, 7, 10, 12], blues: [0, 3, 5, 6, 7, 10, 12], chromatic: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]}
 // chord(C4, major) the Chord of that kind on C4; the notes sounding together are play(C4+E4+G4, 3000ms)
 // (cards rename-play, play-c4). One definition: an enum-typed parameter beside a list one is no overload the
-// dispatch tells apart yet (card enum-overload-dispatch)
-chord(root, kind) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
+// dispatch tells apart yet (card enum-overload-dispatch); `ChordKind or any` names the kinds bare, chord(C4, major7)
+chord(root, kind: ChordKind or any) := if root is list then play(Chord(root), kind) else if kind is Note then hinted_chord([root, kind]) else Chord(transpose_each(root, chord_intervals[kind]))
 // chord([C4 E4 G4]), chord(C4, E4, G4, B4, D5), `chord C4 E4 G4`: the Chord of those notes, as many as given (decision
 // gathering), with a note that the word isn't needed (decision chord-word-hint): C4+E4+G4 is that Chord
 chord(notes: [Note]) := hinted_chord(notes)
@@ -408,7 +448,7 @@ SINE_TABLE = 2048
 sine_table = [sin(2 * pi * (i as float) / (SINE_TABLE as float)) for i in 0 ..< SINE_TABLE]
 // (typed, as are wave and the envelope: each runs once a sample, and untyped a 4-note bar took 3 s to make, card
 // timing-second-play)
-sine_at(p: float): float := sine_table[(p * SINE_TABLE) as int % SINE_TABLE]
+sine_at(p: float) as float := sine_table[(p * SINE_TABLE) as int % SINE_TABLE]
 public wave(shape: text, p: float, dt: float = 0.0): float := if shape == "square" then (if p < 0.5 then 1.0 else - 1.0) + step_smoothing(p, dt) - step_smoothing((p + 0.5) % 1, dt)
 else if shape == "triangle" then 1 - 4 * abs(p - 0.5)
 else if shape == "sawtooth" then 2 * p - 1 - step_smoothing(p, dt)
@@ -416,20 +456,20 @@ else if shape == "noise" then 2 * random() - 1
 else sine_at(p)
 // the correction of a wave's upward jump of 2 at phase 0 within a sample of it (PolyBLEP): a sharp jump has harmonics
 // above half the sample rate, which fold back as an inharmonic buzz (880 Hz beep at 22050 samples a second)
-step_smoothing(p: float, dt: float): float := if p < dt then (p / dt) * (2 - p / dt) - 1
+step_smoothing(p: float, dt: float) as float := if p < dt then (p / dt) * (2 - p / dt) - 1
 else if p > 1 - dt then ((p - 1) / dt) * ((p - 1) / dt + 2) + 1
 else 0.0
 // the seconds at sample i: a float source (decision exact-decimals), so the samples' math runs in f64, not in ratios
 sample_time(i) := i / (sample_rate as float)
 // how far a ramp of that many samples has come after steps: 0 to 1
-ramp(steps: float, samples: float): float := if samples <= 0 then 1.0 else min(1.0, steps / samples)
+ramp(steps: float, samples: float) as float := if samples <= 0 then 1.0 else min(1.0, steps / samples)
 // the level of sample i of n (ADSR): 0 at both ends
 public envelope(i, n) := envelope_at(float(i), float(n), attack_samples(), decay_samples(), release_samples(), float(sustain))
 // the envelope's attack, decay and release in samples, read once a sound
-attack_samples(): float := float(attack) * sample_rate
-decay_samples(): float := float(decay) * sample_rate
-release_samples(): float := float(release) * sample_rate
-envelope_at(i: float, n: float, rise: float, fall: float, end: float, kept: float): float := {
+attack_samples() as float := float(attack) * sample_rate
+decay_samples() as float := float(decay) * sample_rate
+release_samples() as float := float(release) * sample_rate
+envelope_at(i: float, n: float, rise: float, fall: float, end: float, kept: float) as float := {
 	held = if i < rise then 1.0 else 1 - (1 - kept) * ramp(i - rise, fall)
 	ramp(i, rise) * held * ramp(n - 1 - i, end)
 }
@@ -740,9 +780,10 @@ distort(signal, drive = 0.5) := effected(signal, ["distort", drive])
 gain(signal, share) := [share * x for x in signal]
 // two to four signals summed sample by sample, to the longest (a list of signals walked in a loop was quadratic: card
 // list-call-copy)
-mix(a, b) := added(a, b)
-mix(a, b, c) := added(added(a, b), c)
-mix(a, b, c, d) := added(added(a, b), added(c, d))
+// (typed: math's mix(a, b, t) blends two values, and a program may load both)
+mix(a: [float], b: [float]) := added(a, b)
+mix(a: [float], b: [float], c: [float]) := added(added(a, b), c)
+mix(a: [float], b: [float], c: [float], d: [float]) := added(added(a, b), added(c, d))
 // a bus (card shared-buses): one effect chain that every sound sent to it goes through together, from the program and
 // its tasks, processed once on their mix as they play (rust-harness:src/sound/effects.rs), so a reverb rings on after the last:
 // room = bus() |> reverb(0.4) |> delay(0.25), then osc(C4, 1s) |> room (call(b: Bus, signal): out(osc(C4, 1s), room)) or
@@ -848,7 +889,12 @@ mkdir(path: text, mode: i32): i32 from 'c'
 SOUND_FOLDER = "warp-sound"
 PCM_FORMAT = 1
 BITS_PER_SAMPLE = 16
-// the sound's handle: its number in the run, for stop_sound(handle)
+// what play gives: the sound's number in the run and its length, for stop(h) and fade(h, …); shows as ♪ 0.5 s
+class Sound {
+	number: int
+	duration: float
+	format as text := "♪ " + round(duration * 100) / 100 + " s"
+}
 sounded(speakers, rate, channels) := {
 	sounds_made = sounds_made + 1
 	seconds = count(speakers) / channels / rate
@@ -856,7 +902,7 @@ sounded(speakers, rate, channels) := {
 	recorded = recorded + [RecordedSound(start_and_place#2, rate, channels, speakers, sounds_made)]
 	waited_till(start_and_place#1)
 	if not heard_directly(speakers, rate, channels) { played(sound_file(speakers, rate, channels, seconds)) }
-	sounds_made
+	Sound(sounds_made, seconds)
 }
 sound_file(speakers, rate, channels, seconds) := {
 	if sound_files_made == 0 { swept_sound_files() }
@@ -871,11 +917,12 @@ sound_file(speakers, rate, channels, seconds) := {
 // stay silent) skips the wait without taking the WAV path (getpid / sound_file), so headless samples-web stays under
 // its run_seconds (card samples-page-sound-pipes)
 PLAY_AHEAD_SECONDS = 0.5 as float
+// main waits running the tasks due meanwhile, so a task's sounds join main's as they start; a task queues its sounds
+// unwaited, as its wait would hold main and the other tasks too (a task's wait splits it only at its own sleeps)
 def waited_till(start) {
-	if not muted() and run_option("sound-nopace") == ø {
-		ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
-		if ahead > clock() { sleep_ms(ahead - clock()) }
-	}
+	if muted() or run_option("sound-nopace") != ø or running_task != ø { return ø }
+	ahead = start - (round(PLAY_AHEAD_SECONDS * 1000) as int)
+	if ahead > clock() { tasks_run_while(ø, ahead) }
 }
 
 // Playing (decision sound-system-player): a sound starts when its voice reaches it (the clock paces the program till
@@ -907,15 +954,27 @@ played(file) := {
 
 // The voice's clock (card sound-native-clock): where its queued sounds end in real time (clock() milliseconds) and its
 // place, the seconds of sound since its first, which save sound mixes by; `at` moves both for its block
-// a task's voice (extensions/sugar/tasks.warp): it starts where its starter's stands, which goes on after it as before
-task_context() := [voice_end, voice_place]
-task_context_back(context) := {
-	voice_end = context#1
-	voice_place = context#2
-}
 global voice_end = 0
 global voice_place = 0.0 as float
 global voice_origin = 0
+// a task's voice (lib/tasks.warp task_part_kept): it starts where its starter's stands, which goes on after it as before;
+// the page keeps a voice clock of its own, which goes along (web/playground/host-tasks.js keptVoice; natively none)
+sound_voice_kept(): int from host
+sound_voice_back(voice: int): int from host
+sound_voice_joined(voice: int): int from host
+voice_kept() := [voice_end, voice_place, sound_voice_kept()]
+voice_back(voice: list) := {
+	voice_end = voice#1
+	voice_place = voice#2
+	sound_voice_back(voice#3)
+}
+// an awaited task's voice taken into this one: it goes on after the later of their queued sounds
+voice_joined(voice: list) := {
+	voice_end = max(voice_end, voice#1)
+	voice_place = max(voice_place, voice#2) as float
+	sound_voice_joined(voice#3)
+}
+global voice_kept_by_tasks = task_part_kept(voice_kept, voice_back, voice_joined)
 global before_at = []
 // the seconds added behind the voice's queued sounds: [their start in real time, their place]
 scheduled(seconds) := {
@@ -975,7 +1034,7 @@ sound_folder() := {
 	temporary = env("TMPDIR") ?? /tmp
 	(if ends_with(temporary, "/") then temporary else temporary + "/") + SOUND_FOLDER
 }
-sound_file_name(process, handle) := "sound-" + str(process) + (if handle == 1 then "" else "-" + str(handle)) + ".wav"
+sound_file_name(process, handle) := "sound-" + text(process) + (if handle == 1 then "" else "-" + text(handle)) + ".wav"
 // the files of processes no longer running (kill(pid, 0) fails for them)
 swept_sound_files() := {
 	folder = sound_folder()
@@ -993,15 +1052,13 @@ wav_bytes(speakers, rate, channels) := {
 	format = little_endian(PCM_FORMAT, 2) + little_endian(channels, 2) + little_endian(rate, 4) + little_endian(rate * block, 4) + little_endian(block, 2) + little_endian(BITS_PER_SAMPLE, 2)
 	codes("RIFF") + little_endian(36 + count(data), 4) + codes("WAVEfmt ") + little_endian(count(format), 4) + format + codes("data") + little_endian(count(data), 4) + data
 }
-pcm_bytes(speakers) := [byte for sample in speakers for byte in pcm_pair(pcm_sample(sample))]
+pcm_bytes(speakers) := [byte for sample in speakers for byte in little_endian(pcm_sample(sample), 2)]
 // a sample crossing as amplitude + 32768, as the 16 bits of the signed amplitude, low byte first (typed: once a sample)
-pcm_sample(sample: int): int := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
-pcm_pair(code: int): list := [code % 256, code /! 256]
-little_endian(n, width) := [(n / (256 ** i)) as int % 256 for i in 0..width]
+pcm_sample(sample: int) as int := (min(max(sample - sample_offset, -32768), 32767) + 65536) % 65536
 codes(t) := [ord(c) for c in t]
 hundredths(x) := {
 	n = round(x * 100) as int
-	str(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + str(n % 100)
+	text(n / 100 as int) + "." + (if n % 100 < 10 then "0" else "") + text(n % 100)
 }
 // a line on stderr
 said(line) := {
@@ -1025,7 +1082,7 @@ public plain_hertz(pitch) := {
 	if pitch is Note { return pitch.hertz() }
 	if pitch is number { return pitch as float }
 	if pitch is text and is_note_name(pitch) { return note_hertz(pitch) }
-	raise "not a pitch: " + str(pitch)
+	raise "not a pitch: " + text(pitch)
 }
 // one word plays every sound (decision play-one-word; tone, melody and tune are its aliases), in `shape`: a note, a
 // frequency or a note name one tone `duration` long, `play(440Hz, 0.5s, "square")`; a Chord together,
@@ -1033,15 +1090,17 @@ public plain_hertz(pitch) := {
 // sounding together, `play([C4+E4 G4], 250ms)`, `play([[C4 E4] G4], 250ms)`; a score written as data so,
 // `play { c4 e4 [c4 g4] }`; a signal function, `play(hum, 2s)`, or a pair of them [left, right] the signal (user
 // 2026-10-12: no snake case for signals); a Sample the clip; any other text a sound file's path
-global play(tone) := play(tone, note_seconds)
+global play(tone) := play(tone, if tone is text and written_steps(tone) then bar_seconds(1) else note_seconds)
 play(tone, for duration) := music_played(tone, duration, wave_shape)
 play(tone, for duration, shape: text) := music_played(tone, duration, shape)
 // the overloads call it by this name, an untyped music would take play(fill: …) (card overload-untyped-function)
 music_played(music, duration, shape) := {
-	if is_signal(music) { return play_signal(music, duration) }
-	if music is Sample { return play_sample(music, 1) }
-	if music is text and not is_note_name(music) { return play_file(music) }
+	if is_signal(music) { return signal_played(music, duration) }
+	if music is Sample { return sample_played(music, 1) }
+	if music is text and not is_note_name(music) { return if written_steps(music) then steps_played(notes_written(music), si_amount(duration), shape) else file_played(music) }
 	if music is list { return sound(melody_samples(music, si_amount(duration), shape)) }
+	// a rest alone, `play(rest, 1s)`, is the melody of that one silent step
+	if music is Rest { return music_played([music], duration, shape) }
 	sound(chord_samples(pitches_of(music), si_amount(duration), shape))
 }
 // block-wise (decision music-plain-details): hum(block: samples, t) := for i in 1 to #block { block#i = 0.3 * sin(2 * pi *
@@ -1076,14 +1135,14 @@ class samples {
 // nullary words: a class method reaches no module value
 cell_bytes() := 8
 page_bytes() := 65536
-cell_at(address: int): float := wasm f64.load
+cell_at(address: int) as float := wasm f64.load
 set_cell(address: int, value: float) := wasm f64.store
-count_at(address: int): int := wasm i64.load
+count_at(address: int) as int := wasm i64.load
 set_count_at(address: int, count: int) := wasm i64.store
-memory_pages(): int := wasm memory.size
-grown_pages(pages: int): int := wasm memory.grow
+memory_pages() as int := wasm memory.size
+grown_pages(pages: int) as int := wasm memory.grow
 // n zeroed samples (grown memory is zeroed), never freed
-new_samples(n: int): samples := {
+new_samples(n: int) as samples := {
 	address = memory_pages() * page_bytes
 	grown_pages(cell_bytes * (n + 1) /! page_bytes + 1)
 	set_count_at(address, n)
@@ -1094,21 +1153,27 @@ is_signal(tone) := tone is function or tone is list and count(tone) == 2 and ton
 play(tone, for duration, bus: Bus) := sent_back(sent_to(bus), music_played(tone, duration, wave_shape))
 // a music file in the background (wav, mp3, ogg, flac, aiff, m4a): play ./song.mp3, through the system's player as
 // it is, its line on stderr `sound file: song.mp3`
-public play_file(path) := {
+play(sound_file: path) := file_played(sound_file)
+file_played(path) := {
 	if not exists(path) { raise "no sound file " + path }
 	said("sound file: " + path)
 	played(path)
 }
-// play gives the sound's handle: h = play(C4, 2s); stop_sound(h) stops that one alone, stop_sound (handle 0) all
-global stop_sound(handle = 0) := {
-	fade_sound(handle, 0, 0)
+// play gives the sound's handle, a Sound shown as ♪ 2 s: h = play(C4, 2s); stop(h) stops that one alone, stop(sound)
+// every sound made
+global stop(one: Sound) := stopped(one.number)
+global stop(made: Recording) := stopped(0)
+stopped(handle) := {
+	faded(handle, 0, 0)
 	std_io("sound", "stop", [handle])
 }
 // a playing sound's gain ramps to gain (1 as played, 0 silent) over the seconds, sample by sample: h = play(C4, 4s);
-// fade_sound(h, 0, 2) fades it out over 2 seconds; handle 0 fades all. save sound writes the fade too
-public fade_sound(handle, gain, seconds = 0.05) := {
-	if handle > sounds_made { raise "fade_sound(" + handle + "): no sound " + handle + " in this run, which played " + sounds_made }
-	if not (gain >= 0 and gain <= 1) or si_amount(seconds) < 0 { raise "fade_sound(" + handle + ", " + gain + ", " + seconds + "): the gain is 0…1 and the seconds not negative" }
+// fade(h, 0, 2) fades it out over 2 seconds; fade(sound, 0, 2) every sound made. save sound writes the fade too
+public fade(one: Sound, gain, seconds = 0.05) := faded(one.number, gain, seconds)
+public fade(made: Recording, gain, seconds = 0.05) := faded(0, gain, seconds)
+faded(handle, gain, seconds) := {
+	if handle > sounds_made { raise "fade(" + handle + "): no sound " + handle + " in this run, which played " + sounds_made }
+	if not (gain >= 0 and gain <= 1) or si_amount(seconds) < 0 { raise "fade(" + handle + ", " + gain + ", " + seconds + "): the gain is 0…1 and the seconds not negative" }
 	sound_fades = sound_fades + [[handle, voice_place - sound_queued(), gain, si_amount(seconds)]]
 	std_io("sound", "fade", [handle, gain, si_amount(seconds)])
 }
@@ -1122,9 +1187,9 @@ faded_gain(fades, place) := {
 }
 ramped_gain(fade, from, at) := from + (fade[2] - from) * (if fade[3] > 0 then min(1, max(0, (at - fade[1]) / fade[3])) else 1)
 // a signal (card real-time): hum(t) := 0.3 * sin(2 * pi * 220 * t), of a float to a float by the parameter's type;
-// play(hum, 2s) (play([left, right], 2s) in stereo, or play_signal) calls hum for every sample in turn, t its time in
+// play(hum, 2s) (play([left, right], 2s) in stereo) calls hum for every sample in turn, t its time in
 // seconds, 1 the loudest; its handle
-public play_signal(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
+signal_played(signal, seconds) := if signal is list then stereo_signal(signal[0], signal[1], seconds) else mono_signal(signal, seconds)
 mono_signal(signal: (float) -> float, seconds) := signal_sound([signal(t) as float for t in sample_times(seconds)], 1)
 // left and right interleaved, each sample's left first
 stereo_signal(left: (float) -> float, right: (float) -> float, seconds) := signal_sound([side(t) for t in sample_times(seconds) for side in [left, right]], 2)
@@ -1132,16 +1197,16 @@ sample_times(seconds) := [(i / sample_rate) as float for i in 0 ..< round(si_amo
 // amplitudes of a signal, 1 the loudest, as a sound of the channels
 signal_sound(amplitudes, channels) := sounded(clamped_samples([a * loudest_sample for a in amplitudes]), sample_rate, channels)
 // block-wise: `linear hum_block = float[512]`, hum(t) := { for i in 1 to #hum_block { hum_block#i = 0.3 * sin(2 * pi *
-// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play_blocks(hum, linear_address(hum_block), 2s) calls hum
+// 220 * (t + (i - 1) / sample_rate)) }; 0 }; play(hum, linear_address(hum_block), 2s) calls hum
 // once a block to fill the program's linear float array, t its first sample's time; [left, right] addresses in stereo.
 // A linear array (extensions/sugar/declarations.warp) is a list of floats, its address the list itself (card linear-parameters)
 public linear_address(block) := block
-play_blocks(fill: (float) -> any, blocks, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
+play(fill: (float) -> any, blocks: list, seconds) := played_blocks(fill, if blocks is list and count(blocks) > 0 and blocks[0] is list then blocks else [blocks], seconds)
 
 // play returns at once, its sound queued behind those before it: sound_queued() is how many seconds its voice still sounds,
-// wait_sound waits for them (a program's end does too)
+// wait(sound) waits for them (a program's end does too)
 public sound_queued() := max(0, voice_end - clock()) / 1000
-global wait_sound() := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
+global wait(made: Recording) := if count(sound_players()) > 0 and voice_end > clock() then sleep_ms(voice_end - clock())
 // the sounds since the last save (or the start), which `save sound as: ./song.wav` (or `save(sound, ./song.wav)`)
 // writes one after another in one WAV file, offline (also without speakers), giving its seconds (card save-sound)
 // `sound.seconds` how long they last, the seconds of the voice's clock since the last save: [C4 E4 G4] of 100 ms each
@@ -1153,15 +1218,15 @@ class Recording {
 // Recording
 sound() := Recording()
 save(made: Recording, as file) := rendered(file)
-// the old name, with a note naming save (std_aliases.rs)
-render_sound(path) := save(Recording(), path)
 // `at beats(2) { play C4 }`, `at bar(1) { … }` (card sample-accurate): the block's sounds start that many seconds after
 // the voice's first sound, exactly so in save sound; the voice goes on where it stood
 at(time, actions: block) := { sound_at(time); actions(); sound_at_end() }
 public sound_at(seconds) := clock_at(si_amount(seconds))
 public sound_at_end() := clock_at_end()
-// silence of that length on the voice's clock: the next sound or MIDI message follows (host sound.silence; card sound-native-clock)
-public silence(seconds) := scheduled(si_amount(seconds))
+// a rest of that length on the voice's clock: the next sound or MIDI message follows (card sound-native-clock; the
+// musician's word, card rest-keyword); silence(seconds) says the same
+public rest(seconds) := scheduled(si_amount(seconds))
+alias silence => rest
 // a live loop says this first each cycle: the playground hands the loop over to the next run at its next cycle (card
 // playground-live), natively it does nothing
 live_cycle_started(name) := std_io("sound", "live_cycle", [name])
@@ -1170,9 +1235,9 @@ live_cycle_started(name) := std_io("sound", "live_cycle", [name])
 // live_loop(drums, 4)` is the voice to await
 // (the name read before the go: inside it cycle.name is read as a Note's, card go-function-type)
 live_loop(cycle: function, cycles) := { name = cycle.name; go { for counted in 0..cycles { live_cycle_started(name); cycle() } } }
-live_loop(cycle: function) := { name = cycle.name; go { for counted in 0.. { live_cycle_started(name); cycle() } } }
+live_loop(cycle: function) := { name = cycle.name; go { while true { live_cycle_started(name); cycle() } } }
 // an audio file's samples to play (card sound-samples): kick = sample(./kick.wav) (wav, mp3, ogg, flac, aiff, m4a; the
-// playground reads wav), play(kick); play_sample(kick, 2) twice as fast and an octave up, as a sampler plays it;
+// playground reads wav), play(kick); play(kick, 2) twice as fast and an octave up, as a sampler plays it;
 // sample_slice(kick, 0.1s, 0.3s) the part between, sample_slices(kick, 4) four equal parts, sample_looped(kick, 4s, 0.5s,
 // 1s) four seconds: up to 1 s, then from 0.5 s to 1 s again and again. Its frames are whole numbers as sound_samples
 // takes them, channels interleaved. Not through the effects: a sample sounds as recorded
@@ -1193,7 +1258,7 @@ DECODED_VALUES_AT = 2
 global decoded_sounds = {}
 decoded_sound(path: text, rate, channels) := {
 	if not exists(path) { raise path + ": no such sound file" }
-	key = path + "\t" + str(rate) + "\t" + str(channels)
+	key = path + "\t" + text(rate) + "\t" + text(channels)
 	if not decoded_sounds.has(key) { decoded_sounds[key] = sound_file_decoded(path, rate, channels) }
 	decoded = decoded_sounds[key]
 	if decoded is text { raise decoded }
@@ -1215,14 +1280,55 @@ def sample_repeated(clip: Sample, seconds, from, to) {
 	Sample(clip.rate, clip.channels, frames[0..end])
 }
 sample_looped(clip: Sample, seconds, from, to) := sample_repeated(clip, si_amount(seconds), si_amount(from), si_amount(to))
-play_sample(clip: Sample, rate) := {
+// a clip at a rate, `play(kick, 2)` twice as fast and an octave up (one-play: play is the only playing word)
+play(clip: Sample) := sample_played(clip, 1)
+play(clip: Sample, rate) := sample_played(clip, rate)
+sample_played(clip: Sample, rate) := {
 	sounded(clip.frames, round(clip.rate * rate) as int, clip.channels)
 }
-// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md)
+// plain seconds: the unit check reads a quantity parameter in a loop as unsupported (wiki/unit.md). A note or chord tied
+// longer holds that many times the seconds: play([C4, E4 ~ 2, (C4+E4+G4) ~ 4], 100ms)
+// each step its seconds, the length it is tied to; swing (0 to 1) delays every second step, 1 to a triplet feel
 public melody_samples(notes, seconds, shape = wave_shape) := {
+	steps = melody_steps(notes, melody_cycle(text(notes)))
 	samples = []
-	for pitch in notes { samples = samples + chord_samples(pitches_of(pitch), seconds, shape) }
+	elapsed = 0.0
+	done = 0
+	for k in 0..count(steps) {
+		step = steps[k]
+		length = seconds * held_length(step)
+		elapsed = elapsed + length + swing * length / 3 * (if k % 2 == 1 then -1 else if k + 1 < count(steps) then 1 else 0)
+		target = round(elapsed * sample_rate) as int
+		took = (target - done) / sample_rate
+		if target > done { samples = samples + (if step is Rest then silent_samples(target - done) else chord_samples(pitches_of(step), took, shape)) }
+		done = target
+	}
 	samples
+}
+silent_samples(n) := [sample_offset for i in 0..n]
+// the steps of a written melody spread over the seconds, its whole cycle
+steps_played(steps, seconds, shape) := sound(melody_samples(steps, seconds / sum(steps.map(held_length)), shape))
+global swing = 0.0 as float
+global melody_seed = 0
+// the steps as this play of the melody sounds them: the option of an alternation for this turn, the step of a maybe or a rest as long
+melody_steps(notes, cycle) := [melody_step(notes[k], cycle, k) for k in 0..count(notes)]
+melody_step(step, cycle, place) := {
+	if step is Alternate { return melody_step(step.options[cycle % count(step.options)], floor(cycle / count(step.options)) as int, place) }
+	if step is Maybe { return if melody_chance(cycle, place) < step.share then melody_step(step.step, cycle, place) else Rest(held_length(step.step)) }
+	step
+}
+// 0 to 1, the same for the same seed, cycle and place in the melody
+melody_chance(cycle, place) := {
+	h = (melody_seed * 7919 + cycle * 104729 + place * 1299709 + 12345) % 2147483647
+	for round in 0..3 { h = (h * h + 48271) % 2147483647 }
+	(h as float) / 2147483647
+}
+// how often this voice played the same melody before: alternations take turns by it
+global melodies_played = [""]
+melody_cycle(written: text) := {
+	cycle = count([seen for seen in melodies_played if seen == written])
+	melodies_played.push(written)
+	cycle
 }
 // music as plain data, no parser syntax (card music-data-dsl, decision self-parser-drops): play { c4 e4 [c4 g4] } is
 // its notes one after another, a group of them a chord; a note name written in small letters (c4, eb4) reads as C4, Eb4
@@ -1232,33 +1338,27 @@ rewrite play({$score...}) => score_played({$score...})
 rewrite tune {$score...} => score_played({$score...})
 rewrite tune({$score...}) => score_played({$score...})
 score_played(score: data) := play([score_pitch(item) for item in score])
-score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(str(item)) else item
+score_pitch(item) := if item is list then [score_pitch(pitch) for pitch in item] else if item is symbol then note_capitalized(text(item)) else item
 // capitalize is text.warp's; letter-range uses range_index so it does not meet this module's at(time, block)
 note_capitalized(name: text) := upper(name[0]) + name[1..]
 
-// patterns in Tidal's mini-notation (card patterns-live): a cycle of steps that share the cycle's seconds evenly.
-// `c4 e4 g4` three steps, `~` a rest, `[g4 b4]` a group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord,
-// `c4(3,8)` Euclidean: 3 notes spread over 8 steps. Card pattern-extras: `<c4 e4 g4>` one of them per cycle, in turn;
-// `c4 _ e4` (or `c4@2 e4`) c4 holds two steps; `c4?` sounds in half the cycles (`c4?0.3` in 30 %), chosen by
-// pattern_seed, the same each run. The cycle lasts `for 2 bars` (a bar without), the result is one sound the voice
-// goes on after; `swing` (0 to 1) delays every second step of a group, 1 to a triplet feel
-global swing = 0.0 as float
-global pattern_seed = 0
-// a pattern item is [kind, payload, weight, chance]: kind 0 a group of items, 1 a sound of frequencies (none: a
-// rest), 2 alternatives (`<a b>`); weight its steps (`_`, `@n`), chance the share of cycles it sounds in (`?`)
-pattern_item(kind, payload) := [kind, payload, 1, 1.0 as float]
-pattern_note(word) := if word == "~" then pattern_item(1, []) else pattern_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
-// k notes over n steps as evenly as possible: step i sounds when (i * k) mod n < k
-pattern_euclid(item, k, n) := pattern_item(0, [if (i * k) % n < k then item else pattern_item(1, []) for i in 0..n])
+// a melody written as text (Tidal's mini-notation), read into a list of steps: `c4 e4 g4` three, `~` a rest, `[g4 b4]` a
+// group sharing one step, `c4*2` twice in its step, `c4,e4,g4` a chord, `c4(3,8)` euclid, `<c4 e4>` alternate, `c4?`
+// (`c4?0.3`) maybe, `c4 _ e4` or `c4@2 e4` c4 held two steps. play("c3 ~ [c3 c3]", 1 bar) spreads them over the bar
+// a parsed item is [kind, payload, weight, chance]: kind 0 a group of items, 1 a sound of frequencies (none: a rest),
+// 2 alternatives; weight its steps, chance the share of plays it sounds in
+step_item(kind, payload) := [kind, payload, 1, 1.0 as float]
+step_note(word) := if word == "~" then step_item(1, []) else step_item(1, [note_hertz(upper(word[0]) + word[1..]) for word in split(word, ",")])
+step_euclid(item, k, n) := step_item(0, [if (i * k) % n < k then item else step_item(1, []) for i in 0..n])
 // a parameter `text` is the local here: `text[i]` is its letter, never the rule's i empty texts
-pattern_end(text: text, from: int, stops: text) := {
+step_end(text: text, from: int, stops: text) := {
 	i = from
 	while i < count(text) and not (text[i] in stops) { i = i + 1 }
 	i
 }
-global pattern_stops = " []<>*(?@_"
+global step_stops = " []<>*(?@_"
 // the steps from `from` to the closing bracket (or the end), and the place after it
-def parse_pattern(steps: text, from: int) {
+def written_items(steps: text, from: int) {
 	items = []
 	i = from
 	while i < count(steps) {
@@ -1270,30 +1370,30 @@ def parse_pattern(steps: text, from: int) {
 			if last >= 0 { items[last][2] = items[last][2] + 1 }
 			i = i + 1
 		} else {
-			item = pattern_item(1, [])
+			item = step_item(1, [])
 			if c == "[" or c == "<" {
-				inner = parse_pattern(steps, i + 1)
-				item = pattern_item(if c == "[" then 0 else 2, inner[0])
+				inner = written_items(steps, i + 1)
+				item = step_item(if c == "[" then 0 else 2, inner[0])
 				i = inner[1]
 			} else {
-				stop = pattern_end(steps, i, pattern_stops)
-				item = pattern_note(steps[i..stop])
+				stop = step_end(steps, i, step_stops)
+				item = step_note(steps[i..stop])
 				i = stop
 			}
 			while i < count(steps) and steps[i] in "*(?@" {
 				if steps[i] == "*" {
-					stop = pattern_end(steps, i + 1, pattern_stops)
-					item = pattern_item(0, [item for x in 0..number(steps[i + 1..stop])])
+					stop = step_end(steps, i + 1, step_stops)
+					item = step_item(0, [item for x in 0..number(steps[i + 1..stop])])
 				} else if steps[i] == "(" {
-					stop = pattern_end(steps, i + 1, ")")
+					stop = step_end(steps, i + 1, ")")
 					arguments = split(steps[i + 1..stop], ",")
-					item = pattern_euclid(item, number(arguments[0]), number(arguments[1]))
+					item = step_euclid(item, number(arguments[0]), number(arguments[1]))
 					stop = stop + 1
 				} else if steps[i] == "@" {
-					stop = pattern_end(steps, i + 1, pattern_stops)
+					stop = step_end(steps, i + 1, step_stops)
 					item[2] = number(steps[i + 1..stop])
 				} else {
-					stop = pattern_end(steps, i + 1, pattern_stops)
+					stop = step_end(steps, i + 1, step_stops)
 					item[3] = if stop > i + 1 then float(steps[i + 1..stop]) else 0.5 as float
 				}
 				i = stop
@@ -1303,60 +1403,28 @@ def parse_pattern(steps: text, from: int) {
 	}
 	[items, i]
 }
-// 0 to 1, the same for the same seed, cycle and place in the pattern
-def pattern_chance(cycle, place) {
-	h = (pattern_seed * 7919 + cycle * 104729 + place * 1299709 + 12345) % 2147483647
-	for round in 0..3 { h = (h * h + 48271) % 2147483647 }
-	(h as float) / 2147483647
+// the steps a text writes, each tied to its share of one step: "c4 [e4 g4]" is [C4, E4 ~ ½, G4 ~ ½]
+public notes_written(written: text) := melody_of(written_items(written, 0)[0], 1)
+melody_of(items, length) := {
+	steps = []
+	for item in items { steps = steps + item_steps(item, length * item[2]) }
+	steps
 }
-// [frequencies, seconds] of every sound and rest of the items spread over the seconds in this cycle, the swing applied;
-// place numbers each item for its chance, chance is the share of cycles the enclosing items sound in
-def pattern_events(items, seconds, cycle, place, chance) {
-	steps = 0
-	for item in items { steps = steps + item[2] }
-	step = seconds / steps
-	shift = swing * step / 3
-	events = []
-	for k in 0..count(items) {
-		item = items[k]
-		length = item[2] * step + (if k % 2 == 1 then - shift else if k + 1 < count(items) then shift else 0)
-		turn = cycle
-		while item[0] == 2 {
-			chosen = item[1][turn % count(item[1])]
-			turn = floor(turn / count(item[1])) as int
-			item = [chosen[0], chosen[1], item[2], chosen[3] * item[3]]
-		}
-		here = (place * 31 + k + 1) % 1000003
-		sounds = chance * item[3]
-		if item[0] == 0 { events = events + pattern_events(item[1], length, turn, here, sounds) }
-		else if sounds < 1 and pattern_chance(cycle, here) >= sounds { events.push([[], length]) }
-		else { events.push([item[1], length]) }
-	}
-	events
+item_steps(item, length) := {
+	steps = if item[0] == 0 then melody_of(item[1], length / sum([inner[2] for inner in item[1]])) else if item[0] == 2 then [alternate([single_step(option, length) for option in item[1]])] else [sounded_step(item[1]).similar(length)]
+	if item[3] < 1 then steps.map(step => maybe(step, item[3])) else steps
 }
-// the cycle a pattern plays: how often this voice played the same text before
-global patterns_played = [""]
-def pattern_cycle(text) {
-	cycle = count([seen for seen in patterns_played if seen == text])
-	patterns_played.push(text)
-	cycle
+single_step(item, length) := {
+	steps = item_steps(item, length)
+	if count(steps) == 1 then steps[0] else alternate(steps)
 }
-silent_samples(n) := [sample_offset for i in 0..n]
-// the samples of the events one after another, each ending at the sample its cumulated seconds reach: no drift
-def pattern_samples(events) {
-	samples = []
-	elapsed = 0.0
-	done = 0
-	for event in events {
-		elapsed = elapsed + event[1]
-		target = round(elapsed * sample_rate) as int
-		if target > done { samples = samples + (if count(event[0]) == 0 then silent_samples(target - done) else chord_samples(event[0], (target - done) / sample_rate, wave_shape)) }
-		done = target
-	}
-	samples
+sounded_step(frequencies) := if count(frequencies) == 0 then rest else if count(frequencies) == 1 then note(frequencies[0]) else Chord(frequencies.map(note))
+// a text that reads as steps (each word a note name or ~): it plays as a melody; any other text names a sound file
+written_steps(written: text) := {
+	words = split(written.replace("[", " ").replace("]", " ").replace("<", " ").replace(">", " ").replace(",", " "), " ").filter(word => word != "" and word != "_")
+	count(words) > 0 and words.all(word => word == "~" or note_word(word[0 ..< step_end(word, 0, "*(?@")]))
 }
-pattern(text, duration) := sound(pattern_samples(pattern_events(parse_pattern(text, 0)[0], si_amount(duration), pattern_cycle(text), 0, 1.0 as float)))
-pattern(text) := pattern(text, bar_seconds(1))
+note_word(word: text) := count(word) > 0 and is_note_name(upper(word[0]) + word[1..])
 
 // MIDI (card midi-out): midi_on C4, midi_off C4, midi_send(144, 60, 100) to the first output device (or the browser's
 // Web MIDI output), midi_outputs() their names; channels count from 1, velocity 1 to 127. The native warp sends over
@@ -1382,7 +1450,7 @@ public midi_off(pitch, channel = 1) := midi_send(127 + channel, midi(pitch), 0)
 // a note of that length: on at the voice's place, off after it; the next sound or message follows (card midi-clock)
 public midi_note(pitch, duration, velocity = 100, channel = 1) := {
 	midi_on(pitch, velocity, channel)
-	silence(duration)
+	rest(duration)
 	midi_off(pitch, channel)
 }
 midi_outputs() := midi_devices(midi_ports(0))
@@ -1391,11 +1459,12 @@ midi_inputs() := midi_devices(midi_ports(1))
 // waits that long at most, then ø (card midi-receive); the input stays open, so no message between two calls is lost
 midi_receive(port = "", seconds = 0) := std_io("midi", "receive", [port, seconds])
 // a Standard MIDI File of notes [start, pitch, length, velocity] (seconds, frequency or note, seconds, 1 to 127) at
-// 120 beats a minute, and the notes of such a file the same way: write_midi("tune.mid", [[0, C4, 0.5, 100]])
+// 120 beats a minute: save(MidiFile([[0, C4, 0.5, 100]]), "tune.mid"), and midi_file("tune.mid").notes read the same way.
 // The file is made and read in warp, the same on every host: format 0, one track, MIDI_TICKS_PER_QUARTER ticks a
 // quarter note at MIDI_MICROSECONDS_PER_QUARTER (120 beats a minute)
-public write_midi(path, notes) := write_bytes(path, midi_file(notes))
-public read_midi(path) := midi_notes(read_bytes(path))
+class MidiFile { notes: list }
+public save(tune: MidiFile, as file) := write_bytes(file, midi_bytes(tune.notes))
+public midi_file(path: any): MidiFile := MidiFile(midi_notes(read_bytes(path)))
 MIDI_TICKS_PER_QUARTER = 480
 MIDI_MICROSECONDS_PER_QUARTER = 500000
 MIDI_NOTE_ON = 144
@@ -1406,8 +1475,6 @@ MIDI_TRACK_END = 47
 MIDI_SYSTEM_EXCLUSIVE = [240, 247]
 midi_ticks_per_second() := MIDI_TICKS_PER_QUARTER * 1000000 / MIDI_MICROSECONDS_PER_QUARTER
 midi_ticks(seconds) := round(max(0, seconds) * midi_ticks_per_second()) as int
-big_endian(n, width) := [(n / 256 ** (width - 1 - i)) as int % 256 for i in 0..width]
-big_endian_at(bytes, at, width) := sum([bytes[at + i] * 256 ** (width - 1 - i) for i in 0..width]) as int
 // a delay as MIDI writes it: seven bits a byte, the first ones marked by their high bit
 midi_variable_length(n) := {
 	groups = [n % 128]
@@ -1420,11 +1487,11 @@ midi_variable_length(n) := {
 }
 midi_chunk(kind, body) := codes(kind) + big_endian(count(body), 4) + body
 // the bytes of a Standard MIDI File of notes [start, pitch, length, velocity]
-midi_file(notes) := {
+midi_bytes(notes) := {
 	events = []
 	for note in notes {
 		key = midi(note#2)
-		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + str(key) }
+		if key < 0 or key > 127 { raise "MIDI keys are 0 to 127, got " + text(key) }
 		on = midi_ticks(note#1)
 		events = events + [[on, 1, [MIDI_NOTE_ON, key, min(127, max(1, note#4))]], [max(on, midi_ticks(note#1 + si_amount(note#3))), 0, [MIDI_NOTE_OFF, key, 0]]]
 	}
@@ -1452,14 +1519,14 @@ midi_length_at(bytes, at) := {
 // key as its frequency, by their start and then their key; every track's, timed by the file's tempo changes
 midi_notes(bytes) := {
 	if count(bytes) < 14 or bytes[0..4] != codes("MThd") { raise "not a MIDI file (it does not start with MThd)" }
-	division = big_endian_at(bytes, 12, 2)
+	division = from_big_endian(bytes[12 ..< 14])
 	if division >= 32768 { raise "MIDI files timed in SMPTE frames are not supported, only ticks per quarter note" }
 	tempi = [[0, MIDI_MICROSECONDS_PER_QUARTER]]
 	// [tick, sounding, channel, key, velocity], each note's start and end
 	messages = []
-	at = 8 + big_endian_at(bytes, 4, 4)
-	for track in 0..big_endian_at(bytes, 10, 2) {
-		end = at + 8 + big_endian_at(bytes, at + 4, 4)
+	at = 8 + from_big_endian(bytes[4 ..< 8])
+	for track in 0..from_big_endian(bytes[10 ..< 12]) {
+		end = at + 8 + from_big_endian(bytes[at + 4 ..< at + 4 + 4])
 		in_track = bytes[at..at + 4] == codes("MTrk")
 		at = if in_track then at + 8 else end
 		tick = 0
@@ -1474,7 +1541,7 @@ midi_notes(bytes) := {
 			}
 			if status == MIDI_META {
 				size = midi_length_at(bytes, at + 1)
-				if bytes[at] == MIDI_TEMPO and size#1 == 3 { tempi = tempi + [[tick, big_endian_at(bytes, size#2, 3)]] }
+				if bytes[at] == MIDI_TEMPO and size#1 == 3 { tempi = tempi + [[tick, from_big_endian(bytes[size#2 ..< size#2 + 3])]] }
 				at = size#2 + size#1
 			} else if status in MIDI_SYSTEM_EXCLUSIVE {
 				size = midi_length_at(bytes, at)

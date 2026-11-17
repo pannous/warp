@@ -16,7 +16,7 @@ export = "date,category,description,amount,currency
 2026-10-15,office,Cables,0.20,EUR"
 
 rows = csv_maps(export)
-print(str(count(rows)) + " expenses")
+print(text(count(rows)) + " expenses")
 
 # the totals per currency, then per category in each currency
 currencies = unique([row["currency"] for row in rows])

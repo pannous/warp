@@ -1,0 +1,6 @@
+# a Python module from warp: `use python json` (or `use json from python`) and its members called as warp's (user, card rewrite-example-hide)
+'use python json; json.dumps([1, 2])'	"[1, 2]"
+'use json from python; json.dumps([1, 2])'	"[1, 2]"
+'use python "math"; math.factorial(5)'	120
+'use python fractions; f = fractions.Fraction(1, 2); f.numerator'	1
+'use python json; json.dumpz(1)'	error	the AttributeError of Python, never ø

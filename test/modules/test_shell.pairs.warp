@@ -1,0 +1,10 @@
+# Shell file search (lib/shell.warp): matching paths.
+'use shell; find_files("../fixtures/unix/configs", "*.json")'	["../fixtures/unix/configs/a.json", "../fixtures/unix/configs/sub/b.json"]
+
+# Shell helpers (lib/shell.warp): directory detection and wildcard patterns.
+'use shell; is_folder(".")'	yes
+'use shell; wildcard_regex("*.warp")'	"^[^/]*\\.warp$"
+'use shell; wildcard_regex("a?.txt")'	"^a[^/]\\.txt$"
+
+# Shell wildcards (lib/shell.warp): literal and wildcard characters.
+'use shell; [wildcard_piece("*"), wildcard_piece("?"), wildcard_piece("."), wildcard_piece("a")]'	["[^/]*", "[^/]", "\\.", "a"]

@@ -1,0 +1,21 @@
+# an annotation names types wherever the program binds their words as values (decision program-binding)
+'g(x: list or number) := 1; list = 3; g([1])'	1
+'g(x: text or number) := 2; fun f(text) := text; g(4)'	2
+'fun search(list, target) := list[0] == target; search([2 3], 2) and sum([2 3]) == 5'	yes
+
+# decision union-or (`|` = `or` in types) and D6 (`x | f` pipes): a union's later member is a type even where it also
+# converts as a function (int, float, error, a class's constructor); a value before it still pipes into it
+'x: text | int = 3; x'	3
+'x: text or float = 2.5; x'	2.5
+'class P{x:int}; p: text | P = "ab"; p'	'ab'
+'3.7 | int'	3
+
+# a union slot with an int member holds a value of any member, a float or a fraction too
+'x: int|float = 1.5; x * 2'	3
+'x: int|rational = 1/3; x * 3'	1
+'x: int or float = 2; x + 1'	3
+
+# a slot declared with an int member names its whole number int, a value of another member its own type
+'x: int|text = 3; type(x)'	int
+'x: int|text = "ab"; type(x)'	text
+'x: int or text = 3; x'	3

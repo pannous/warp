@@ -1,0 +1,37 @@
+# from test_function_aliases.rs: edit the Rust test, then run the script again
+
+# test_an_alias_names_the_function
+'def add(t){ t + "!" }; g = function add; g("x")'	'x!'
+'def add(t){ t + "!" }; g = &add; h = g; h("x")'	'x!'
+
+# test_a_function_argument_stays_bare
+'def sq(x){x*x}; def apply(f: function, x){ f(x) }; apply(sq, 3)'	9
+
+# f.definition: the function's whole definition as the source writes it (decision reflection-definition)
+'area(width: int, height: int) := width * height; area.definition'	"area(width: int, height: int) := width * height"
+'twice(x) := x*2; twice.definition'	"twice(x) := x*2"
+'f = x => x + 1; f.definition'	"f = x => x + 1"
+'g(s) := { t = "a;b"; s + t }; g.definition'	'g(s) := { t = "a;b"; s + t }'
+
+# function f names the function as a value, also inside a group
+'f(x) := x; (function f) is function'	yes
+'use math; (function gcd) is function'	yes
+'f(x) := x + 1; g = (function f); g(2)'	3
+'f() := 7; h = function f; h()'	7
+
+# from test_function_references.rs: edit the Rust test, then run the script again
+
+# test_a_body_returns_a_function_reference
+'def add(t){ t + "!" }; def make(){ function add }; a = make(); a("x")'	'x!'
+'def add(t){ t + "!" }; def make(){ &add }; a = make(); a("x")'	'x!'
+
+# test_a_function_reference_as_a_value_and_an_argument
+'def sq(x){x*x}; def apply(f: function, x){ f(x) }; apply(function sq, 3)'	9
+'function g(x) := x*2; g(3)'	6
+
+# a function passed by name picks the overload whose function type takes as many parameters, also beside an
+# argument only the run time knows
+'f(g: (int, int) -> any) := g(1, 2); f(g: function) := g(5); h(a) := a * 10; k(a, b) := a + b; [f(h), f(k)]'	[50, 3]
+'f(g: (int, int) -> any, d) := g(1, 2); f(g: function, d) := g(5); k(a, b) := a + b; h(a) := a; x = [1]; [f(k, x#1), f(h, x#1)]'	[3, 5]
+
+'apply(f: (float) -> float, x: float) := f(x); whole(t) := 3; apply(whole, 1.0) is float'	true

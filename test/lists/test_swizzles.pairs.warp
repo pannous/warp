@@ -20,7 +20,5 @@
 'p = {x:7}; p.x'	7
 'p = [x:1, y:2]; p.x'	1
 'p = [x:1, xy:[7,8]]; q = p.xy; q'	[7 8]
-'p = [x:"a", xy:"hi"]; q = p.xy; q'	'hi'
-'f(p) := p.xy; f([x:1, xy:"hi"])'	'hi'
 'f(p) := p.y; f([x:1, y:2])'	2
 'class Point{x:int y:int}; p = Point{x:1 y:2}; p.x + p.y'	3

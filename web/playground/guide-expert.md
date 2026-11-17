@@ -204,17 +204,17 @@ pong
 
 ## Web pages
 
-Tags are values: `tag{attributes children}`, `li all xs` repeats a tag over a list.
+Markup is written inside `html{…}`: `tag{attributes children}`, `li all xs` repeats a tag over a list.
 
-```warp => div{h1:"Fruit" ul{li:"apple" li:"pear"}}
-fruits = ["apple" "pear"]; div{ h1{"Fruit"} ul{ li all fruits } }
+```warp => <html><h1>Fruit</h1><ul><li>apple</li><li>pear</li></ul></html>
+fruits = ["apple" "pear"]; html{ h1{"Fruit"} ul{ li all fruits } }
 ```
 
 ## Servers
 
 Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cloudflare Workers or the playground's Deploy).
 
-## Pictures
+## Paint
 
 `use draw` keeps a pixel canvas that `show()` paints.
 
@@ -222,11 +222,15 @@ Routes answer requests; `warp serve` serves them, `warp deploy` deploys them (Cl
 
 `paint(f, width, height)` compiles a warp function of (x, y) returning [r, g, b] to a WGSL fragment shader
 (`shader_of(f)` shows it); `shader { … }` is WGSL written in place, `$name` a warp variable read at each paint;
-`compute_toy(shader { … })` of `use compute_toys` runs a compute.toys kernel. WebGPU in the page.
+a compute.toys kernel (`fn main_image`) paints as it is, its pictures as `{channel0: picture}`. WebGPU in the page.
 
-## Acceleration
+## GPU
 
 Number lists run as SIMD loops; heavy float maps move to the GPU by themselves above a size threshold (notes/gpu.md); `@gpu` asks for it explicitly.
+
+## Raylib and SDL
+
+C functions imported by name (`import InitWindow from "raylib"`, `'SDL2'`) open a native window; native `warp` only.
 
 ## Sound and music
 

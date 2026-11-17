@@ -1,10 +1,10 @@
 #!/usr/bin/env warp
-# a million floats doubled on the GPU: gpu_compute reads and writes the GPU list in place (lib/host/native_host/gpu.warp)
-doubling = "@group(0) @binding(0) var<storage, read_write> xs: array<f32>;
-@compute @workgroup_size(64) fn main(@builtin(global_invocation_id) id: vec3<u32>) { if (id.x < arrayLength(&xs)) { xs[id.x] = xs[id.x] * 2.0; } }"
+# a million floats doubled on the GPU: `@gpu` compiles the lambda to a compute kernel over every item at once (in f32),
+# no shader text, no explicit GPU call; without a GPU adapter the same line runs on the CPU
 n = 1000000
 started = clock()
-xs = [float(i) for i in 0..n]
+xs = float[n]
+for i in 1 to n { xs#i = i }
 made = clock()
-big = gpu_compute(doubling, xs, n / 64 + 1)
-print("list made in ${made - started} ms, 1M floats through the GPU in ${clock() - made} ms, last ${big#n}")
+doubled = xs.map(x => x * 2) @gpu
+print "list made in \(made - started) ms, \(n) floats doubled on the GPU in \(clock() - made) ms, last \(doubled#n)"

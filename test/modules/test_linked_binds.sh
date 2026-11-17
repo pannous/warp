@@ -4,7 +4,7 @@
 # ("the linked module didn't bind"), never silently (card bind-linked). Run it with bash test/modules/test_linked_binds.sh;
 # the warp under test is WARP (default the warp on PATH)
 warp=${WARP:-warp}
-export WARP_NO_WINDOW=1
+export WARP_WINDOW=0
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 failures=0

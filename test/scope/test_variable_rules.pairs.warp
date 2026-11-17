@@ -1,4 +1,4 @@
-# variables, captures, forcing and spacing as wiki/variable.md, wiki/charged.md, wiki/closure.md and wiki/list.md say (decisions library-constant-refused, lambda-assign-writes-through, let-reassign, let-parallel, P71, P124, P73, data-stays-data, runtime-dates, global-plain-write, handler-blocks-share, count-words-library, range-end-once, kebab-or-minus, operator-even-spacing, spaced-call-parentheses, dot-space-property, default-parameter-def, stored-visits)
+# variables, captures, forcing and spacing as wiki/variable.md, wiki/charged.md, wiki/closure.md and wiki/list.md say (decisions library-constant-refused, lambda-assign-writes-through, let-reassign, let-parallel, P71, P124, P73, data-stays-data, runtime-dates, global-plain-write, handler-blocks-share, count-words-library, range-end-once, kebab-or-minus, operator-even-spacing, spaced-call-parentheses, dot-space-property, default-parameter-def, stored-visits, const-deep)
 'pi = 4'	error
 'seen = 0; f = () => { seen = 3 }; f(); seen'	3
 'let x = 1; x = 2'	error
@@ -26,3 +26,9 @@
 'def f(n, i=2) = n + i; f(1)'	3
 'stored visits default 0; visits'	0
 'count [1..3]'	1
+'const x = ø; x.due = 3'	error
+'x := ø; x.due = 3'	error
+'const xs = [1]; xs#1 = 2'	error
+'let m = {a: 1}; m.a = 2'	error
+'var m = {a: 1}; m.a = 2; m.a'	2
+'m = ø; m.due = 3; m.due'	3

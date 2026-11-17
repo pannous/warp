@@ -1,0 +1,41 @@
+# a list assigned [] stays a list beside a class declaring add: xs.add(v) appends in place
+'class B { n = 0; add(x) := 1 }; zz = []; zz.add(3); zz'	[3]
+'use collections; out = []; out.add(3); out'	[3]
+
+# from test_list_arithmetic.rs: edit the Rust test, then run the script again
+
+# test_square_list_of_one_arithmetic_item_is_a_list
+'x=[1/2, 3/4]; count x'	2
+
+# test_round_group_of_arithmetic_is_still_an_expression
+'(1+2)*3'	9
+'(1+2)'	3
+
+# from test_list_compound_add.rs: edit the Rust test, then run the script again
+
+# a_list_plus_equals_a_list_concatenates
+'xs = [1, 2]; xs += [3]; xs'	[1, 2, 3]
+'fs = []; fs += [x => x * 2]; fs#1(4)'	8
+
+# from test_list_number_comparison.rs: edit the Rust test, then run the script again
+
+# a_list_is_not_equal_to_a_number
+'x=[1 2]; x == 1'	false
+
+# a list's + concatenates beside a class whose add spells +, inside another class's method too (card lines-red)
+'class St { items = []; push(y) := items.add(y) }; class Bag { n = 0; add(x) := { n = x } }; s = St(); s.push(5); s.items'	[5]
+'class Bag { n = 0; add(x) := { n = x } }; f(xs) := xs + [3]; f([1, 2])'	[1, 2, 3]
+
+# from test_list_retype.rs: edit the Rust test, then run the script again
+
+# a_list_variable_given_another_element_type_holds_both
+'ys = ["a"]; ys = [3]; ys#1 + 1'	4
+'ys = [3]; ys = ["a"]; ys#1 is text'	true
+'ys = [1]; ys = [2.5]; ys#1 + 1'	3.5
+'ys = [1]; ys = [2]; ys#1 + 1'	3
+
+# from test_list_write_by_run_time_key.rs: edit the Rust test, then run the script again
+
+# a_list_takes_a_write_by_a_run_time_key_in_place
+'f(k) := { xs = [1, 2, 3]; xs[k] = 9; xs }; f(1)'	[1 9 3]
+'f(k) := { xs = []; xs += 4; xs[k] = 5; xs }; f(0)'	[5]

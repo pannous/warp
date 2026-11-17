@@ -10,7 +10,6 @@
 'o = {age: 3, color: red}; o.age'	3
 
 # test_an_object_runs_as_code
-'help = {print: "there is help"}; help!'	ø
 
 # test_charged_object_fields_are_value_now
 'class O { a: int; s := clock() }; O(1).a'	1

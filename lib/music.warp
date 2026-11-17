@@ -1,0 +1,2 @@
+// The standard library module music: `use music` is another name of `use sound`, the same play, notes and scores
+use sound

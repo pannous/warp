@@ -1,7 +1,7 @@
 // The host words that read a program's values in the page (host.js notify, dispatch_event) on a module of the
 // self-hosted compiler, which has no reflect_* exports: read through its exports (values.js guestPlain), as natively.
 // Before card drop-readnode-branch they read it with reader.js readNode and failed ("module.reflect_tag is not a
-// function"). Needs `warp` on PATH: each program is built by `warp build` into its self-contained <name>.full.wasm.
+// function"). Needs `warp` on PATH: each program is built by `warp build --wasm` into its self-contained <name>.full.wasm.
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -23,7 +23,7 @@ const work = mkdtempSync(join(tmpdir(), "warp-host-values-"));
 function ran(name, code) {
 	const file = join(work, `${name}.warp`);
 	writeFileSync(file, code);
-	execFileSync("warp", ["build", file], { cwd: work, stdio: "pipe" });
+	execFileSync("warp", ["build", "--wasm", file], { cwd: work, stdio: "pipe" });
 	const said = { notified: [], dispatched: [], printed: "" };
 	const hooks = { print: text => { said.printed += text; }, notify: text => said.notified.push(text), dispatch: event => said.dispatched.push(event) };
 	const holder = page.runHolder({ warnings: [], hooks });

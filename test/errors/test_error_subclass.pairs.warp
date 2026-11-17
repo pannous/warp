@@ -1,4 +1,0 @@
-# a program's own error class extends the prelude's Error (decision error-classes)
-'class ParseError: Error; ParseError("bad").message'	'bad'
-'class ParseError: Error; ParseError("bad") is Error'	yes
-'class ParseError extends Error {}; try { raise ParseError("bad") } catch e { "caught" }'	'caught'

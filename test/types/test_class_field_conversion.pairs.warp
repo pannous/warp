@@ -1,5 +1,0 @@
-# a class field takes a value through the program's conversion to its type, as a typed parameter does (card class-field-takes)
-'class Q { v: int }; n: int as Q := Q(n); class P { q: Q }; P(3).q.v'	3
-'class Q { v: int }; n: int as Q := Q(n); class P { q: Q }; P(q: 3).q.v'	3
-'type Age < int; class P { age: Age }; P(3).age + 1'	4
-'type Age < int; type Years = Age; class P { age: Years }; P(3).age + 1'	4

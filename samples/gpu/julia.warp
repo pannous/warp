@@ -1,5 +1,5 @@
 #!/usr/bin/env warp
-# The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette; 
+# The Julia set z → z² + c until |z| > 2, colored by the escape count through a cosine palette;
 # z and c are complex numbers of lib/complex => vec2f on the GPU
 use math
 width = 1600

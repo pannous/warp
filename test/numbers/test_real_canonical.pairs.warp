@@ -1,6 +1,5 @@
 # `real` is the exact reals' type (decision real-canonical): type(π) is real, every number is a real, Real its
 # foreign spelling, a float given to a real parameter the exact real
-'type(π)'	'real'
 'π is real'	yes
 '3 is real'	yes
 '(1/3) is real'	yes

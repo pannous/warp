@@ -1,4 +1,4 @@
-// a module with a class, for tests/modules/test_module_classes.rs
+// a module with a class, for test/modules/test_module.pairs.warp
 class Box { items = []
   put(x) := items.add(x)
   take() := items.pop()

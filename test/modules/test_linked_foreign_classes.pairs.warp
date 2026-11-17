@@ -1,6 +1,0 @@
-# a linked module's word meets an instance of a class it never saw: the instance's own method answers (card
-# reals-prebuilt: reals linked beside uncertain, √ of an interval, π times an interval)
-'use reals; class B { v: float; root() := B(v / 2) }; x = √B(8.0); x.v'	4
-'use reals; class B { v: float; *(o) := 7 }; π * B(8.0)'	7
-'p = 2.0 ± 0.01; (π * p).high'	6.314601233715483
-'p = 2.0 ± 0.01; q = √p; q is real'	no

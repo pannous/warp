@@ -94,7 +94,7 @@ lines touching a fast source or an exactness topic in each mode:
 | **total** | **2,799** | **0** | **1** | |
 
 Why so few: the tests that pin wrapping already use declared ints (test_fast_int, test_nat_and_int,
-test_int_global_wraps, test_fixed_width_ints), and the tests that pin growth (test_unbounded_int,
+test_int, test_fixed_width_ints), and the tests that pin growth (test_unbounded_int,
 test_boxed_int_growth, test_big_int_*) start from literals and untyped values, which neither rule makes fast. No test
 asks `type(x)` of an untyped copy of an int, and none multiplies `#xs` or a range counter copied into a local past
 2^63.

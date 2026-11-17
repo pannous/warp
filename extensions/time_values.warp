@@ -22,10 +22,10 @@ time_words = {time_of: [2, 3], instant_at: [1]}
 time_intrinsics = {time_form: 1, time_position: 1, duration_months: 1, duration_days: 1, zone_index: 1, zone_offset: 1}
 # the host words runtime words over times call, imported when the program makes a time (Rust: imports.rs makes_instant)
 time_host_words = ["local_offset"]
-makes_time(program: Node): bool := mentions(program, "instant_at") or mentions(program, "time_of")
+makes_time(program: Node) as bool := mentions(program, "instant_at") or mentions(program, "time_of")
 
 # time_of(info, position): the time node, of a zoned time with its zone's name; instant_at(milliseconds since 1970): an instant
-def time_call(body: Body, name: text, arguments: list): TypedCode {
+def time_call(body: Body, name: text, arguments: list) as TypedCode {
 	if #arguments not in time_words[name] { return refuse("a call of " + name + " with " + #arguments + " arguments") }
 	if name == "time_of" and #arguments == 2 and arguments#1 is number and arguments#1 % (form_mask + 1) == TimeFormCode.Zoned { return refuse("a zoned time without its zone's name") }
 	values = arguments.map(a => expression_code(body, a))
@@ -36,19 +36,19 @@ def time_call(body: Body, name: text, arguments: list): TypedCode {
 	zone = if #values == 3 then boxed(values#3) else [ref_null, gc_type(gc.node)]
 	TypedCode(ValueKind.Time, time_node(converted(values#1, ValueKind.Int), converted(values#2, ValueKind.Int), zone))
 }
-def time_node(info: list, position: list, zone: list = [ref_null, gc_type(gc.node)]): list {
+def time_node(info: list, position: list, zone: list = [ref_null, gc_type(gc.node)]) as list {
 	module.made["Time"] = yes
 	kind =info + [op.i64_const] + sleb(kind_bits) + [shift_ops.i64_shl, op.i64_const] + sleb(Kind.Time) + [shift_ops.i64_or]
 	kind + position + gc_code(gc_ops.struct_new, [gc_type(gc.int_box)]) + zone + gc_code(gc_ops.struct_new, [gc_type(gc.node)])
 }
 # the kind word of a time node shifted right by `shift` bits, arithmetic (`signed`) or logical
-def kind_word_shifted(code: list, shift: int, signed: bool): list {
+def kind_word_shifted(code: list, shift: int, signed: bool) as list {
 	shifted = code + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(shift)
 	shift_op = if signed then shift_ops.i64_shr_s else shift_ops.i64_shr_u
 	shifted + [shift_op]
 }
-def masked(code: list, mask: int): list { code + [op.i64_const] + sleb(mask) + [op.i64_and] }
-def time_intrinsic(body: Body, name: text, arguments: list): TypedCode {
+def masked(code: list, mask: int) as list { code + [op.i64_const] + sleb(mask) + [op.i64_and] }
+def time_intrinsic(body: Body, name: text, arguments: list) as TypedCode {
 	t = boxed(expression_code(body, arguments#1))
 	if name == "time_form" { return TypedCode(ValueKind.Int, masked(kind_word_shifted(t, kind_bits, no), form_mask)) }
 	if name == "time_position" { return TypedCode(ValueKind.Int, unboxed(t, gc_type(gc.int_box))) }
@@ -63,7 +63,7 @@ def time_intrinsic(body: Body, name: text, arguments: list): TypedCode {
 	TypedCode(ValueKind.Int, zone_seconds(t))
 }
 # a zoned time's seconds east of UTC, 0 of the other forms of a time (no info above their form)
-def zone_seconds(t: list): list := kind_word_shifted(t, kind_bits + offset_shift, yes) + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]
+def zone_seconds(t: list) as list := kind_word_shifted(t, kind_bits + offset_shift, yes) + [op.i64_const] + sleb(seconds_per_minute) + [shift_ops.i64_mul]
 
 ## time literals (card triage-time-values; rust-harness:src/time/mod.rs time_info): the parser's data view of a time,
 ## `2024-02-29`, `2024-01-31T10:30:15.5Z`, `1 month 2 days`, as the time node it is
@@ -71,14 +71,14 @@ second_nanos = 1000000000
 day_nanos = 86400 * second_nanos
 unit_nanos = {hour: 3600 * second_nanos, minute: 60 * second_nanos, second: second_nanos}
 # a time literal's [info, position], [] for a zoned one (its zone's rules are Rust's) or a text that is no time
-def time_parts(written: text): list := if is_digit(written[0]) and #written >= 10 and written[4] == '-' then moment_parts(written) else duration_parts(written)
-def is_time_literal(written: text): bool := #time_parts(written) > 0
-def time_literal(written: text): TypedCode {
+def time_parts(written: text) as list := if is_digit(written[0]) and #written >= 10 and written[4] == '-' then moment_parts(written) else duration_parts(written)
+def is_time_literal(written: text) as bool := #time_parts(written) > 0
+def time_literal(written: text) as TypedCode {
 	parts = time_parts(written)
 	TypedCode(ValueKind.Time, time_node([op.i64_const] + sleb(parts#1), [op.i64_const] + sleb(parts#2)))
 }
 # `2024-02-29` a date (days since 1970), `2024-01-31T10:30` a local time, `…Z` or `…+01:00` an instant (nanoseconds); [] for a zoned time
-def moment_parts(written: text): list {
+def moment_parts(written: text) as list {
 	# (days_from_civil: the prelude's calendar)
 	day = days_from_civil(int(written[0 ..< 4]), int(written[5 ..< 7]), int(written[8 ..< 10]))
 	if #written == 10 { return [TimeFormCode.Date, day] }
@@ -106,7 +106,7 @@ def moment_parts(written: text): list {
 	[]
 }
 # `1 month 2 days 3 hours`: the months and days in the info above the form, the rest as nanoseconds
-def duration_parts(written: text): list {
+def duration_parts(written: text) as list {
 	words = written.split(" ")
 	if #words % 2 != 0 { return [] }
 	months = 0
@@ -127,7 +127,7 @@ time_fields = {year: 0, month: 1, day: 2, weekday: 3, day_of_year: 4, hour: 5, m
 # the fields that are times themselves, by their form: `t.time` the time of day in whole seconds, `t.date` the day
 time_valued_fields = {time: TimeFormCode.Clock, date: TimeFormCode.Date}
 # the field of a time: its form, position and zone's seconds east of UTC given to time_field_of
-def time_field(time: TypedCode, name: text): TypedCode {
+def time_field(time: TypedCode, name: text) as TypedCode {
 	form = masked(kind_word_shifted(time.code, kind_bits, no), form_mask)
 	position = unboxed(time.code, gc_type(gc.int_box))
 	zone = TypedCode(ValueKind.Int, zone_seconds(time.code))
@@ -138,7 +138,7 @@ def time_field(time: TypedCode, name: text): TypedCode {
 
 # `m.hour` of a value held as a node (a top-level name beside a linked module, an `any` parameter): the field of the
 # time it holds, else what `read` reads of it (a map's entry, an instance's field)
-def node_time_field(body: Body, value: TypedCode, name: text, read: any): TypedCode {
+def node_time_field(body: Body, value: TypedCode, name: text, read: any) as TypedCode {
 	held = fresh_node_local(body)
 	stored = value.code + [op.local_set] + held[1 ..]
 	holds_a_time = held + gc_code(gc_ops.struct_get, [gc_type(gc.node), 0]) + [op.i64_const] + sleb(kind_mask) + [op.i64_and, op.i64_const] + sleb(Kind.Time) + [op.i64_eq]
@@ -157,7 +157,7 @@ operand_parts = ["operand_form", "operand_position", "duration_months", "duratio
 time_operand_kinds = [ValueKind.Time, ValueKind.Int, ValueKind.Node]
 # each operand held in a local, read four times; a node as time_operand gives it, lib/units' quantity a duration.
 # `1 day + 2 hours` mixes two duration kinds (times/runtime.warp one_duration_kind); `2024-01-31T10:00 + 24 h` moves the time
-def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): TypedCode {
+def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode) as TypedCode {
 	stored = []
 	held = []
 	for operand in [a, b] {
@@ -182,7 +182,7 @@ def time_operation_call(body: Body, symbol: text, a: TypedCode, b: TypedCode): T
 	result = call_values(module.functions[time_operation_word], parts + [number_value(time_operators[symbol])])
 	TypedCode(if moves_a_time(symbol, a, b) then ValueKind.Time else result.kind, stored + result.code)
 }
-node_in(place: int): TypedCode := TypedCode(ValueKind.Node, [op.local_get] + uleb(place))
+node_in(place: int) as TypedCode := TypedCode(ValueKind.Node, [op.local_get] + uleb(place))
 # a time + or * anything, or a time - a whole number, is a time (`(2024-01-31T23:30 + 1 hour).day` reads its own
 # field); only date - date may count days
-moves_a_time(symbol: text, a: TypedCode, b: TypedCode): bool := symbol != "-" or a.kind == ValueKind.Int or b.kind == ValueKind.Int
+moves_a_time(symbol: text, a: TypedCode, b: TypedCode) as bool := symbol != "-" or a.kind == ValueKind.Int or b.kind == ValueKind.Int

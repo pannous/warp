@@ -6,7 +6,7 @@ use file
 wav = temp_folder() + "/before.wav"
 play(C4, 0.1s)
 save sound as: wav
-job = go { play_file(wav); exists(wav) }
+job = go { play(wav); exists(wav) }
 await job' true
 
 # the_program_reads_what_its_task_wrote

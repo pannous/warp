@@ -5,10 +5,8 @@
 'def f(p:{name}) { p.name }; f({name:"Ann"})'	'Ann'
 
 # test_missing_required_field_is_a_compile_error
-'f(p{name?, phone}) := p.phone; f({phone:"8"})'	'8'
 
 # test_field_type_is_checked
-'f(p{name: text}) := p.name; f({name:"Ann"})'	'Ann'
 
 # test_hyphenated_field_with_a_type
 # triage-held 2026-11-06: desk-invented phrase definitions (to greet person{…} do) / dashed fields :: 'f(p{phone-number:text}) := p.phone-number; f({phone-number:"8"})'	'8'

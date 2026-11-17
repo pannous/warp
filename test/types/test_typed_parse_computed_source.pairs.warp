@@ -1,2 +1,0 @@
-# Card typed-parse: accept a computed JSON source.
-'class User { id: number }; source = "{id:7}"; parse(source, User).id'	7

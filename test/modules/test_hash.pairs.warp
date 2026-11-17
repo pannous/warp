@@ -1,0 +1,10 @@
+# a hash of a list of 0 to 255 is of those bytes, zero bytes and all; of a text its UTF-8 bytes
+'use hash; sha256([104, 0, 105])'	"80de15429a373fbeaa09e51facd30d4a046004338d1ea14f20d2fbfa9236a817"
+'use hash; sha256("hello")'	"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+'use hash; crc32([104, 0, 105])'	2381027958
+'use hash; sha256(42)'	error
+
+# notes/stdlib.md: hash returns a SHA-256 hex text and CRC-32 number for text or bytes
+'use hash; sha256("abc")'	"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+'use hash; crc32("abc")'	891568578
+'use hash; crc32([104, 0, 105])'	2381027958

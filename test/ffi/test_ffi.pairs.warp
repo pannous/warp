@@ -17,3 +17,19 @@
 'import atoi from "c"; q = atoi("3"); q'	3
 'import atoi from "c"; xs=["12" "30"]; atoi(xs#1) + atoi(xs#2)'	42
 'import strlen from "c"; xs=["hello"]; strlen(xs#1)'	5
+
+# from test_ffi_import_group.rs: edit the Rust test, then run the script again
+
+# a_group_of_three_names_is_imported
+«import (sin,floor,fabs) from 'm'; fabs(-1.5)»	1.5
+«import (sin,floor,fabs) from 'm'; fabs(floor(sin(3.14159)))»	0.0
+
+# a_group_with_spaces_is_imported
+«import (sin, floor) from 'm'; floor(3.7)»	3
+
+# from test_ffi_one_parser.rs: edit the Rust test, then run the script again
+
+# libm_calls_need_no_import
+'sqrt(16)'	4
+'cbrt(27)'	3
+'floor(2.5)'	2

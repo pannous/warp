@@ -6,8 +6,8 @@ How the fleet works while the user sleeps, until the user is back (usually 10:00
 - The Supervisor and the Interviewer decide themselves: meaning, spellings, core OKs, process. Courageous, not
   cautious; the user reviews in the morning and keeps or undoes.
 - No questions to the user and no waiting on answers: the Interviewer asks nobody, workers never block on a decision.
-- Every decision goes into the night log notes/night_<date>.md, section "Decisions (keep or undo at 10:00)": what, why,
-  who builds it, how to undo. Append only; never rewrite another session's lines.
+- Every decision goes on its card as a note, "OK <date> night via <session>: what, why, how to undo"; the morning
+  review is built from those notes.
 - What truly needs the user (a test change, a destructive or outward step, money) goes into the night log's "Open
   questions for the morning", each with a recommendation, and is asked once at 10:00.
 
@@ -26,7 +26,7 @@ How the fleet works while the user sleeps, until the user is back (usually 10:00
 - The full suite runs only in the cloud routine (test/results.txt), day and night.
 - No Rust in the cloud: a cloud box needs no cargo or rustc. It takes the latest release's
   warp-v*-<arch>-unknown-linux-gnu.tar.gz (warp with its wasmtime library) and the seed seed.lock names, then
-  `WARP_LIB=<checkout>/lib warp rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
+  `warp --lib <checkout>/lib rebuild`. gh in a cloud session: REST only (`gh api repos/pannous/warp/...`, assets via
   `Accept: application/octet-stream`); GraphQL, and with it `gh release download` and the `todo` board CLI, is refused.
 
 ## Morning

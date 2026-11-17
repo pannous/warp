@@ -1,0 +1,12 @@
+# from test_await_any_values.rs: edit the Rust test, then run the script again
+
+# await_any_of_computed_values_answers
+'await any [go 1+1, go 2+2]'	2
+'a = go 1+1; b = go 2+2; await any [a, b]'	2
+'f(x) := x * 2; await any [go 5+5, go f(2)]'	10
+
+# from test_await_go.rs: edit the Rust test, then run the script again
+
+# await_of_a_start_is_the_result
+'f(x) := x * 2; await go f(21)'	42
+'f(x:float) := x * 2; await go f(1.5)'	3.0

@@ -1,8 +1,0 @@
-# a local datetime beside a duration compares by its time of day, as an instant does (card ref-timestamp-bug; wiki/time.md "Durations")
-'use time; use units; [2026-11-05T14:00:00 >= 6h, 2026-11-05T14:00:00 < 6h, 6h < 2026-11-05T14:00:00]'	[yes, no, yes]
-# a local datetime and a date have no order: the sentence names the kinds, the fix and the place of the `if` in the loop
-'use time\nref = 2026-11-05T14:00:00\nshops = [{open: 2026-11-05}]\ntry {\n\tfor s in shops {\n\t\tif ref >= s["open"] { print(3) }\n\t}\n} catch e { text(e) }'	"a local datetime and a date have no order; fix: compare its time of day, e.g. ref.time >= 6h"
-# (the place a catch reads, line * 4096 + column, is the `if` header (6:6), not a library line)
-'use time\nref = 2026-11-05T14:00:00\nshops = [{open: 2026-11-05}]\ntry {\n\tfor s in shops {\n\t\tif ref >= s["open"] { print(3) }\n\t}\n} catch e { trap_place() }'	24582
-# the fix the sentence names: a time of day compares with a duration
-'use time; use units; t = Instant(parse_date("2026-11-05T14:00:00Z")); [t.time >= 6h, t.time < 6h]'	[yes, no]

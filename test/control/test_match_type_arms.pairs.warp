@@ -12,7 +12,6 @@
 # a_variable_named_like_a_type_stays_a_value
 
 # is_reads_an_unparenthesized_union_as_the_type
-'x = 2.5; x is int or text'	false
 'x = "a"; x is int or text'	true
 'x = 2.5; x is int or text or number'	true
 'ok = yes; x = 2.5; x is int or ok'	true

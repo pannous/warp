@@ -45,7 +45,7 @@ def apply(name, arg) {
 	if name == "sin" { return sin(arg) }
 	if name == "cos" { return cos(arg) }
 	if name == "tan" { return tan(arg) }
-	if name == "sqrt" { return sqrt(arg) }
+	if name == "sqrt" { return √arg }
 	if name == "abs" { return abs(arg) }
 	if name == "log" { return log(arg) }
 	if name == "exp" { return exp(arg) }

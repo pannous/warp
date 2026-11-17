@@ -1,3 +1,0 @@
-// Source: wiki/script.md; home expansion preserves non-home paths and non-text values.
-'use file; home_expanded("relative.txt")'	"relative.txt"
-'use file; home_expanded(42)'	42

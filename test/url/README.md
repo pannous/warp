@@ -14,4 +14,4 @@ A failing case is counted "by design" when one of WHATWG's normalizations applie
 expected ones (default port, empty special path as /, dot segments, encode sets, host lowercasing, IPv6 form, ...),
 or when it is a failure case: parse_url does not validate (it gives the parts), so only those that raise pass.
 
-    WARP_LIB=$PWD/lib test/url/url_test.py [--fails "no base"|"with base"|failure|all]
+    WARP="warp --lib $PWD/lib" test/url/url_test.py [--fails "no base"|"with base"|failure|all]

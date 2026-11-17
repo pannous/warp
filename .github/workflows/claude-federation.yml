@@ -1,0 +1,32 @@
+# Calls Claude from GitHub Actions without a stored API key: GitHub's identity token is exchanged for a short-lived
+# Anthropic token (workload identity federation, rule gha-warp-main: pannous/warp, main branch only).
+# The rule, organization and service account IDs are repository variables (gh variable list), not secrets.
+name: Claude federation check
+on: workflow_dispatch
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  hello-claude:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_FEDERATION_RULE_ID: ${{ vars.ANTHROPIC_FEDERATION_RULE_ID }}
+      ANTHROPIC_ORGANIZATION_ID: ${{ vars.ANTHROPIC_ORGANIZATION_ID }}
+      ANTHROPIC_SERVICE_ACCOUNT_ID: ${{ vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
+      ANTHROPIC_IDENTITY_TOKEN_FILE: /tmp/github-identity.jwt  # on the runner: a job's env has no runner context
+    steps:
+      - name: Fetch GitHub's identity token
+        run: |
+          curl -sS -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" \
+            | jq -r .value > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+      - name: Ask Claude
+        run: |
+          pip install --quiet --upgrade anthropic
+          python3 -c '
+          import anthropic
+          answer = anthropic.Anthropic().messages.create(model="claude-haiku-5-5", max_tokens=50,
+              messages=[{"role": "user", "content": "Say hello to the warp CI in five words."}])
+          print(next(block.text for block in answer.content if block.type == "text"))'

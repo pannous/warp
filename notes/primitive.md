@@ -24,7 +24,10 @@ untyped int literal; a literal takes the width its expected type asks for (`x: i
 f64), narrowing is `x as u8`, which cuts the bits (masked or sign-spread). `%` is C's remainder (rem_s). A pointer
 plus or minus any integer is a pointer, as in C (`p + i * 8`). `handle` is a C pointer outside the module's memory, an
 i64 id. A top-level name given a number literal once (`STDERR = 2`) is a constant: every function and main read it as
-that literal, so it takes the type its place wants.
+that literal, so it takes the type its place wants. `global painted = 0` is one mutable wasm global of its number's
+type, as a local given it takes, which every function reads and writes (test/native/test_primitive_globals.sh). A fixed array `i64[8]` (wiki/array.md)
+holds zeros of its item type, `kept[slot]` and `kept#n` read and write an item, an index outside it traps, a size known
+only as it runs is refused; a global array lives in the data, any other is taken from the arena.
 
 ## Structs
 `struct Header { len: u32; tag: u8; total: i64 }` (or `class`) in a primitive file is a C layout: each field at a
@@ -46,7 +49,7 @@ memory from the arena. A function declared `: nothing` gives no value.
 makes it C with wasm2c (module "program"), writes app.native.main.c (primitive.warp native_main: the C calls' glue, instantiate, run_main printing main's value by its type) and
 compiles both with cc -O2, wasm2c's runtime (beside the wasm2c on the PATH) and lib/native/wasi.c: libc answering
 fd_write, fd_read, fd_seek, fd_close, path_open (paths of the current folder), args_sizes_get, args_get, proc_exit,
-and main (instantiate and run_main are main.c's). The executable is `app` beside the file; the intermediate files are removed. Samples: samples/native/ hello,
+and main (instantiate and run_main are main.c's). The executable is `app` beside the file; the intermediate files are removed. `--c` stops before cc, leaving app.native.c, .h and .main.c for a C compiler elsewhere (the first Windows warp: notes/packaging.md); main.c includes lib/native/wasi.c and foreign.c as `native/…` from -I <lib>, and those include lib/native/system.h, POSIX's headers or on Windows lib/native/windows.c. Samples: samples/native/ hello,
 arguments, files, fib, structs; test/native/test_native.sh. Under wasmtime (`warp app.warp`) the files sample finds
 no opened folder, so it runs natively only.
 
@@ -69,7 +72,7 @@ core/native/driver.warp is the native runner: a primitive file calling
 wasmtime's C API through its own foreign lines (`wasmtime_module_new(engine: handle, wasm: pointer, size: i64, module:
 pointer): handle from "wasmtime"`; the structs the calls fill are arena bytes read with long_at/byte_at, native memory
 copied in with memcpy). `warp build native core/native/driver.warp` makes `driver`:
-- `driver app.warp args…`: warp.wasm ($WARP_LIB, else beside the driver) compiles the file as the native warp has it
+- `driver app.warp args…`: warp.wasm (--lib, else beside the driver) compiles the file as the native warp has it
   compile (the file, a module in $TMPDIR, its folder, lib/, runtime.wasm), then the module runs with the arguments.
 - `driver app.wasm args…` runs a module; a driver with a module appended (`<module><length u64 LE>WRPMwasm`, padded to
   16 bytes, at the end or where a later Mach-O signature begins) runs that one with all its arguments.
@@ -77,6 +80,12 @@ copied in with memcpy). `warp build native core/native/driver.warp` makes `drive
 the module, then signed): about 100 KB beside the module. The driver is built once per lib/ into lib/data/native/
 (again when driver.warp changes), in the same run as the program: every compile starts with a fresh Module
 (emitter.warp fresh_module, card module-inheritance).
+An executable is its own library (user decision 11-11, card self-contained-executables): the driver sets the run's
+`lib` option to its own folder (its path's links resolved), and the build copies there what it links at run time, in
+lib/'s layout: the modules the driver links at a host word's first call whose word the program imports (unicode for
+canonical_text: hello's runtime.wasm, modules/unicode.wasm, unicode_data.wasm, prelude.wasm), their links in turn,
+nothing for a program importing none. It runs in any folder, no lib/ installed; a missing module ends the run naming
+its file. `warp build app` moves them into Contents/MacOS.
 Tests: test/native/test_executables.sh.
 A module gets WASI (stdin/out/err and the environment inherited, "." and "/" preopened), GC, typed references and
 exceptions, wasmtime's machine-code cache. warp.wasm's machine code is the driver's own, beside it as
@@ -90,16 +99,17 @@ shows it, in linear memory) and builds answers with new_text/new_empty/error_of:
 driver lacks is an Error saying so. A C function the module's
 warp.c_functions section describes (one tab-separated line each, extensions/c_imports/section.warp) is the same
 callback, its data the line and the function (foreign.c library_function: lib<name>.dylib/.so, libc and libm the
-process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a text NUL-terminated
-through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot that becomes the
-result; a text result is written at the module's text_heap and made by new_text. Bytes, structs and a failed call stop
-the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
+process's): numbers go in registers (foreign.c native_call, up to 8 integers and 8 floats), a trailing `bytesN` aggregate
+through native_call_struct (17 to 128 bytes, last, no float beside it, at most six integer arguments before it), a
+text NUL-terminated through shown_at, a handle id through foreign.c's handle table, the first out-pointer to a slot
+that becomes the result; a text result is written at the module's text_heap and made by new_text. A struct the line
+cannot pass, and a failed call, stop the run with one line naming the function. Every other host word is a trap naming it. The executable's path is _NSGetExecutablePath's (macOS; Linux needs /proc/self/exe).
 warp.wasm has the shown_at export once the seed that builds it has it. Tests: test/native/test_native.sh "by the
 driver".
 
 ## Not yet (cards)
 - f32 in a primitive function of a GC program (no ValueKind with an f32 wasm type there): refused, card
   f32-primitive-refused.
-- (card primitive-class-gc) `@primitive class` in a GC program; lists, texts as (pointer, length), `use` of other primitive files,
-  `continue`, globals beyond number constants.
+- (card primitive-class-gc) `@primitive class` in a GC program; lists other than fixed arrays, texts as (pointer, length),
+  `use` of other primitive files, `continue`, globals of other than a number or an array.
 - A primitive file's refusal of a struct field has no line: declarations reach the passes as opaque views.

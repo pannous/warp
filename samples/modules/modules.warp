@@ -3,7 +3,7 @@
 
 # a standard module written in warp
 use math
-print sqrt(16)
+print √16
 
 # a standard module with classes
 use collections

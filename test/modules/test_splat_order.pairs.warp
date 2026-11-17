@@ -1,0 +1,5 @@
+# covariance_terms, depths_of and order_by_depth (lib/splats.warp): the numbers a splat renderer uploads, and the order it draws
+'use splats; covariance_terms([1, 0, 0, 0], [2, 3, 4])'	[4, 0, 0, 9, 0, 16]
+'use splats; use color; s = Splat([1, 2, 3], [1, 1, 1], [1, 0, 0, 0], rgb(0, 0, 0), 1); depths_of([s], [0, 0, 0], [0, 1, 0], [])'	[2]
+'use splats; order_by_depth([0.2, 0.01, 0.5], 0.05)'	[0, 2]
+'use splats; order_by_depth([3, 1, 2], 0)'	[1, 2, 0]

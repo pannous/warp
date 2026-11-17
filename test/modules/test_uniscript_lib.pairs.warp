@@ -1,4 +1,5 @@
 # use uniscript: lib/uniscript.warp over the package's C library (card uniscript-ownership; scripts/link-packages.sh builds it)
+// needs: uniscript
 'use uniscript; uniscript("<:alpha/>")'	'α'
 'use uniscript; uniscript("\\:alpha + \\:beta")'	'α + β'
 'use uniscript; unicode_to_uniscript("α")'	'\\:alpha'

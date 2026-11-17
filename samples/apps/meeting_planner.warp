@@ -6,7 +6,7 @@ use intervals
 hm(minutes) := {
 	h = minutes /! 60
 	m = minutes % 60
-	(if h < 10 then "0" else "") + str(h) + ":" + (if m < 10 then "0" else "") + str(m)
+	(if h < 10 then "0" else "") + text(h) + ":" + (if m < 10 then "0" else "") + text(m)
 }
 shown(e) := hm(e.lo) + "-" + hm(e.hi)
 
@@ -22,10 +22,10 @@ for name in ["ana", "ben", "cleo"] {
 }
 merged = merge_intervals(everyone)
 print("busy together: " + join([shown(e) for e in merged], ", "))
-print("busy minutes: " + str(total_length(merged)))
+print("busy minutes: " + text(total_length(merged)))
 day = extent(540, 1050)
 free = subtract_intervals(day, merged)
 print("free: " + join([shown(e) for e in free], ", "))
 long_enough = [e for e in free if extent_length(e) >= 45]
 print("45 minute slots: " + join([shown(e) for e in long_enough], ", "))
-print("is 12:30 free? " + str(free.any(e => extent_contains(e, 750))))
+print("is 12:30 free? " + text(free.any(e => extent_contains(e, 750))))

@@ -16,8 +16,8 @@ and native_host/gpu.warp (wgpu-native), over C libraries by plain FFI, no C wrap
   and hands gpu.warp its CAMetalLayer, `host_run_ended()` holds a still picture open and waits till the sounds are
   heard out. A host word `name` the driver doesn't know is answered by an export `host_<name>`: text_coverage,
   sound_played, sound_file_played, sound_file_decoded, midi_sent, midi_ports.
-- The driver's headless guard (headless_checked: a program's window-opening C import refused under WARP_NO_WINDOW) is
-  not applied to modules the driver links itself (`guarded` no); the module asks WARP_NO_WINDOW / CI itself
+- The driver's headless guard (headless_checked: a program's window-opening C import refused under --no-window) is
+  not applied to modules the driver links itself (`guarded` no); the module asks --no-window / CI itself
   (quiet_run: no window, no sound, no MIDI) and stays windowless and silent when SDL3 is missing.
 - Records made while linking inside a host word survive the host-word arena reset through `arena_kept()`
   (lib/native/foreign.c).
@@ -36,7 +36,7 @@ read value by value so (~1 call a sample); a bulk copy into linear memory is the
 
 ## Text (text_coverage)
 macOS: CoreText over FFI (CTLineDraw into an alpha-only CGBitmapContext), native look, no dependency.
-Linux, or WARP_FONT set: FreeType over FFI (libfreetype.so.6), glyph slot fields by offset. Both give the same
+Linux, or a font file given (label's font): FreeType over FFI (libfreetype.so.6), glyph slot fields by offset. Both give the same
 coverage list (width, height, rows) through `coverage_list`.
 
 ## Sound
@@ -60,11 +60,13 @@ installs beside warp. Its mechanisms:
    (six integer registers each). gpu.warp makes three once (an adapter's or device's answer, an error scope's, a
    buffer's mapping); each writes the answer into globals, and the call polls wgpuInstanceProcessEvents (and
    wgpuDevicePoll) till it is there.
-2. Structs by value: no new parameter kind on ARM64 (AAPCS64, macOS and Linux): a composite over 16 bytes goes as a
-   pointer to a caller's copy, so a WGPU*CallbackInfo (40 bytes) is a `handle` to calloc'd memory; a WGPUStringView
-   argument of a callback is two integers (data, length). Every descriptor is calloc + set_field_* at the offsets of
-   webgpu.h v29 (the constants on top of gpu.warp; any 64-bit machine). x86-64 SysV puts a struct over 16 bytes on
-   the stack, which native_call cannot: there the callback infos would need a `struct` parameter kind.
+2. Structs by value: a foreign parameter `bytesN` (N from 17 to 128) is the last parameter and a handle to N bytes,
+   passed as one aggregate (foreign.c `native_call_struct`). On x86-64 SysV the C compiler puts that aggregate on
+   the stack; on AAPCS64 (macOS and Linux ARM64) it passes a pointer to a copy in the next integer register. The
+   compile refuses a struct of 16 bytes or less, one that is not last, a float beside it, and more than six integer
+   arguments before it. gpu.warp's four callback infos (request adapter, request device, pop error scope, map
+   buffer) are `info: bytes40`. A WGPUStringView argument of a callback is two integers (data, length). Every descriptor
+   is calloc + set_field_* at the offsets of webgpu.h v29 (the constants on top of gpu.warp; any 64-bit machine).
 3. Bulk copies: a `bytes` result (a C function's malloc'd {i64 length, bytes} read back as a text and freed, driver
    c_result) with lib/c.warp field_bytes / set_field_bytes; `f32s` and `i32s` parameters (a list of numbers as one C
    array of floats or int32s, its byte count the `length` after it). gpu.warp stages a buffer by

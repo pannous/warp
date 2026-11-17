@@ -5,7 +5,7 @@ superscripts_extension = Extension{name: "superscripts", suffix_readers: reading
 # `x²` is x^2, `x⁻¹` is 1/x^1, `2ⁿ⁺¹` is 2^(n+1), `2²⁺³` is 2^5:
 # the power of `left` written in superscripts at the parser's position and binding at least `min_power`, else ø
 # Rust twin: math_notation.rs try_parse_superscript_power, superscript_exponent, superscript_variable_exponent
-def superscript_power(p: Parser, left: Node, min_power: int): Node := {
+def superscript_power(p: Parser, left: Node, min_power: int) as Node := {
 	terms = raised_terms(p)
 	if terms.length == 0 { return ø }
 	width = terms#(terms.length)#3 - p.at
@@ -30,10 +30,10 @@ def superscript_power(p: Parser, left: Node, min_power: int): Node := {
 	reciprocal_if(total < 0, power)
 }
 
-def reciprocal_if(negative: bool, power: Node): Node := if negative then Key(1, Op.Div, power) else power
+def reciprocal_if(negative: bool, power: Node) as Node := if negative then Key(1, Op.Div, power) else power
 
 # The superscript terms at the parser's position, each [sign, value, end]: a raised number, or a raised name as a symbol
-def raised_terms(p: Parser): list {
+def raised_terms(p: Parser) as list {
 	terms = []
 	at = p.at
 	while true {
@@ -62,7 +62,7 @@ def raised_terms(p: Parser): list {
 # walked the table at each operand (a quarter of a parse, card compiler-parse-timing)
 SUPERSCRIPT_LETTER_INDEX = character_index(SUPERSCRIPT_LETTERS)
 SUPERSCRIPT_DIGIT_INDEX = character_index(SUPERSCRIPT_DIGITS)
-def character_index(table: text): map {
+def character_index(table: text) as map {
 	index = {}
 	at = 0
 	for c in table {

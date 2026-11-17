@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # which() and exists() see no program behind a dangling absolute link in the PATH (card which-missing-result): WASI
 # refuses such a path (EPERM), which is no file there. Run it with bash test/modules/test_which_dangling_link.sh; the warp
-# under test is WARP (default the warp on PATH), its compiler from WARP_LIB as usual
+# under test is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT

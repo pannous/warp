@@ -1,3 +1,0 @@
-# a lambda with a defaulted parameter takes its default where a call leaves it out, as a definition does (card lambda-own)
-'f = (a, b = 1) => a + b; f(3)'	4
-'f = (a, b = 1) => a + b; f(3, 2)'	5

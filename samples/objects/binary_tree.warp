@@ -60,9 +60,9 @@ for v in values {
 
 print "Tree structure:"
 print_tree(tree, "", false)
-print "Inorder:  " + str(inorder(tree))
-print "Preorder: " + str(preorder(tree))
-print "Height:   " + str(height(tree))
-print "Contains 40? " + str(search(tree, 40))
-print "Contains 42? " + str(search(tree, 42))
+print "Inorder:  " + text(inorder(tree))
+print "Preorder: " + text(preorder(tree))
+print "Height:   " + text(height(tree))
+print "Contains 40? " + text(search(tree, 40))
+print "Contains 42? " + text(search(tree, 42))
 height(tree) * 100 + count(inorder(tree))

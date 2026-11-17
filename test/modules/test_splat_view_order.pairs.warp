@@ -1,0 +1,12 @@
+# view_order_into (extensions/gpu_lists/runtime.warp): a stable 16-bit counting sort of a GPU list [f32] of centres
+# (xyzw per splat), nearest first, the order gaussian_splats.warp draws back to front. Quantized as antimatter15/splat
+# runSort (trunc(depth · 4096), then 65535 bins). It matches order_by_depth where those bins differ, and keeps the
+# lower index first where two depths share a bin
+'c: [f32] = [0, 0, 1, 1, 0, 0, 5, 1, 0, 0, 3, 1]; o: [f32] = float[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2, o#3]'	[3, 0, 2, 1]
+'use splats; c: [f32] = [0, 0, 1, 1, 0, 0, 5, 1, 0, 0, 3, 1]; d = [(c#(4 * i + 3)) for i in 0 ..< 3]; order_by_depth(d, 0)'	[0, 2, 1]
+'c: [f32] = [0, 0, 2, 1, 0, 0, 2, 1]; o: [f32] = float[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2]'	[2, 0, 1]
+'c: [f32] = [1, 2, 3, 1]; o: [f32] = float[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1]'	[1, 0]
+'c: [f32] = float[0]; o: [f32] = float[4]; view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o)'	0
+'c: [f32] = [0, 0, 1, 1, 0, 0, 0.01, 1]; o: [f32] = float[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0.5, o); [n, o#1]'	[1, 0]
+# 1.0001 and 1.0 share a bin (both trunc(depth · 4096) = 4096), so the stable order keeps index 0 first. A float mergesort would put the nearer 1.0 first
+'c: [f32] = [0, 0, 1.0001, 1, 0, 0, 1, 1]; o: [f32] = float[4]; n = view_order_into(c, [0, 0, 0], [0, 0, 1], 0, o); [n, o#1, o#2]'	[2, 0, 1]

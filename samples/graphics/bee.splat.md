@@ -27,3 +27,10 @@ layout. The higher-order spherical harmonics are not kept: .splat stores one col
 0.05 were dropped (928043 remained). Those were binned in a 40×40×40 grid over the box of their 1st–99th
 percentile positions (13430 cells held one). Each cell kept its two highest scores of opacity × geometric-mean
 scale, and of that set the 24000 highest scores were written, largest first.
+
+## Full model
+
+The published scene is all 978285 splats. `scripts/bee-full.sh` downloads that SOG (the file the scene player
+loads, `https://d28zzqy0iyovbz.cloudfront.net/ae58ed2c/v1/meta.json`) and writes `data/splat-speed/bee-full.splat`,
+every Gaussian, in the SOG's order, no opacity cut and no binning. The file is gitignored (31305120 bytes).
+`gaussian_splats.warp --full` reads it, or pass the path. Same licence and attribution as above.

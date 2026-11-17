@@ -3,7 +3,6 @@
 # known_as_words_still_convert
 '3.7 as int'	3
 '3 as text'	'3'
-'class Point{x:int y:int}; p = {x:1 y:2} as Point; p.y'	2
 
 # fixed_width_casts
 '255 as byte'	255

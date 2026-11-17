@@ -1,7 +1,7 @@
 #!/usr/bin/env warp
 # warp on the GPU without shader text: `@gpu` compiles the element-wise product to a WGSL compute kernel over every
 # item at once (in f32), and without a GPU adapter the same line runs on the CPU. gpu_compute(shader, arrays, n) still
-# takes a hand-written WGSL shader where one is needed (test/gpu/test_gpu_compute.pairs.warp)
+# takes a hand-written WGSL shader where one is needed (test/gpu/test_gpu.pairs.warp)
 prices = [1.5, 2, 0.25]
 counts = [4, 3, 8]
 totals = (prices .* counts) @gpu

@@ -28,7 +28,7 @@ TIMEOUT_SECONDS = 120
 def console_output(warp: str) -> str:
     child, terminal = pty.fork()
     if child == 0:
-        os.environ["WARP_NO_WINDOW"] = "1"
+        os.environ["WARP_WINDOW"] = "0"
         os.execvp(warp, [warp, "repl"])
     output = b""
 

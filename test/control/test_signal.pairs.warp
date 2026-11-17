@@ -1,0 +1,9 @@
+# once with a condition runs its block the first time a write makes it hold (card once-after)
+'x=1; n=0; once x == 5 {n+=1}; x=5; x=6; x=5; n'	1
+'x=1; y=0; n=0; once x > y {n+=1}; y=3; x=2; x=4; y=1; n'	1
+
+# a step and an item's write notify the variable's listeners (card once-after)
+'x=3; n=0; on set x {n+=1}; x--; x++; x++; n'	3
+'x=3; seen=0; on change x {seen+=1}; y = x--; [y, x]'	[3, 2]
+'xs=[1,2]; n=0; on change xs {n+=1}; xs#1 = 9; xs#1 = 9; n'	1
+'xs=[1,2]; first=0; on change xs {first+=old#1}; xs#1 = 9; first'	1

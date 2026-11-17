@@ -11,14 +11,30 @@ const NAME = "[\\p{L}_][\\p{L}\\p{N}_]*";
 const DEFINED_HEAD = new RegExp(`(${NAME})((?:[ \\t]+${NAME})*)(?=(?:\\([^()]*\\))?[ \\t]*(?:(?::|->)[^=]*)?:=)`, "u");
 const DEFINITION_WORDS = ["def", "fun", "fn", "func", "function", "define", "class", "enum"];
 
+// a text runs on over line ends to its closing quote (card multiline-string-formatting): its opening line, then a
+// state per quote holding the lines until the close; "…" and '…' take backslash escapes, “…” ‘…’ «…» none
+const QUOTES = [['"', '"', true], ["'", "'", true], ["“", "”", false], ["‘", "’", false], ["«", "»", false]];
+const quotedState = open => `text ${open}`;
+function quoted(open, close, escapes) {
+	const body = escapes ? `(?:[^${close}\\\\]|\\\\.)*` : `[^${close}]*`;
+	return {
+		opening: [
+			{ regex: new RegExp(`${open}${body}${close}`), token: "string" },
+			{ regex: new RegExp(`${open}.*`), token: "string", next: quotedState(open) },
+		],
+		rest: [
+			{ regex: new RegExp(`${body}${close}`), token: "string", next: "start" },
+			{ regex: /.*/, token: "string" },
+		],
+	};
+}
+
 CodeMirror.defineSimpleMode("warp", {
 	start: [
 		{ regex: /\/\*/, token: "comment", next: "comment" },
 		{ regex: /\/\/.*/, token: "comment" },
 		{ regex: /#(?:[ \t#!].*|$)/, token: "comment" },
-		{ regex: /"(?:[^"\\]|\\.)*"?/, token: "string" },
-		{ regex: /'(?:[^'\\]|\\.)*'?/, token: "string" },
-		{ regex: /“[^”]*”?|‘[^’]*’?|«[^»]*»?/, token: "string" },
+		...QUOTES.map(([open, close, escapes]) => quoted(open, close, escapes).opening).flat(),
 		{ regex: /0x[0-9a-fA-F]+|\d+(?:\.\d*)?(?:[eE][+-]?\d+)?/, token: "number" },
 		{ regex: words(["true", "false", "yes", "no", "nil", "null", "none", "it", "self", "this", "π", "τ", "ø"]), token: "atom" },
 		{ regex: words(["int", "float", "real", "number", "text", "string", "bool", "byte", "char", "codepoint", "list", "rational"]), token: "type" },
@@ -40,5 +56,6 @@ CodeMirror.defineSimpleMode("warp", {
 		{ regex: /.*?\*\//, token: "comment", next: "start" },
 		{ regex: /.*/, token: "comment" },
 	],
-	meta: { lineComment: "//", dontIndentStates: ["comment"] },
+	...Object.fromEntries(QUOTES.map(([open, close, escapes]) => [quotedState(open), quoted(open, close, escapes).rest])),
+	meta: { lineComment: "//", dontIndentStates: ["comment", ...QUOTES.map(([open]) => quotedState(open))] },
 });

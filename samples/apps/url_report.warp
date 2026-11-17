@@ -32,7 +32,7 @@ for link in absolute { h = parse_url(link).host; if h != nil and not (h in hosts
 print("hosts:")
 for h in hosts {
 	these = [l for l in absolute if parse_url(l).host == h]
-	print("  " + h + ": " + str(count(these)) + " link" + (if count(these) == 1 then "" else "s"))
+	print("  " + h + ": " + text(count(these)) + " link" + (if count(these) == 1 then "" else "s"))
 }
 no_host = [l for l in absolute if parse_url(l).host == nil]
 print("  (no host): " + join(no_host, ", "))
@@ -50,7 +50,7 @@ print("ports and fragments:")
 for link in absolute {
 	u = parse_url(link)
 	if u.port != nil or u.fragment != nil {
-		print("  " + u.host + (if u.port != nil then ":" + str(u.port) else "") + (if u.fragment != nil then "  #" + u.fragment else ""))
+		print("  " + u.host + (if u.port != nil then ":" + text(u.port) else "") + (if u.fragment != nil then "  #" + u.fragment else ""))
 	}
 }
 
@@ -58,6 +58,6 @@ for link in absolute {
 wanted = {q: "warp & wasm", lang: "de", page: "2"}
 built = "https://shop.example.com/search?" + query_text(wanted)
 print("built: " + built)
-print("round trip: " + str(query_map(parse_url(built).query) == wanted))
+print("round trip: " + text(query_map(parse_url(built).query) == wanted))
 print("encoded: " + url_encode("Grüße, 100%") + "  decoded: " + url_decode(url_encode("Grüße, 100%")))
 print("malformed kept: " + url_decode("100%zz"))
