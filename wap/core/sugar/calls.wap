@@ -1,0 +1,4 @@
+# Calls written other ways (notes/wap.md core/sugar/): `x.f(y)` is f(x, y), any function on any value, and `x.f` is
+# x's part named f, a field or else f(x) (kernel/forms.wap Get), so a chain reads in order: `xs.map(f).sum`
+rule $x.$f($arguments...) => $f($x, $arguments...)
+rule $x.$f => Get($x, "$f")
