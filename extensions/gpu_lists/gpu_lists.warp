@@ -42,5 +42,5 @@ declared_packed(n: Node, cells: map) as Node := {
 	if declared != ø { return Key(key_of(key_of(n)), Op.Assign, gpu_packed_as(declared#2, value_of(n))) }
 	if key_of(n) is symbol and cells.has(name_of(key_of(n))) then Key(key_of(n), Op.Assign, gpu_packed_as(cells[name_of(key_of(n))], value_of(n))) else n
 }
-gpu_lists_extension = Extension{name: "gpu_lists", passes_before: {"tries": gpu_lists_declared}, library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_cell: "gpu_list_cell", gpu_list_bytes: "gpu_list_bytes", view_order_into: "view_order_into"},
-	host_exports: ["gpu_list_place", "gpu_list_cell", "gpu_list_bytes"], constant_tables: {GpuCell: GpuCell}}
+gpu_lists_extension = Extension{name: "gpu_lists", passes_before: {"tries": gpu_lists_declared}, library_words: {gpu_zeros: "gpu_zeros", gpu_put: "gpu_put", gpu_list_of: "gpu_list_of", gpu_list_place: "gpu_list_place", gpu_list_room: "gpu_list_room", gpu_list_kept: "gpu_list_kept", is_gpu_list: "is_gpu_list", gpu_list_cell: "gpu_list_cell", gpu_list_bytes: "gpu_list_bytes", view_order_into: "view_order_into"},
+	host_exports: ["gpu_list_place", "gpu_list_room", "gpu_list_kept", "is_gpu_list", "gpu_list_cell", "gpu_list_bytes"], constant_tables: {GpuCell: GpuCell}}

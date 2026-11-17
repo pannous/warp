@@ -1,9 +1,11 @@
 # GPU lists `[f32]`, `[i32]`, `[u32]`, `[f16]`, `[vec4]` (decision gpu-bound-floats), the runtime of the gpu_lists extension
 # (gpu_lists.warp registers it): the numbers a program hands the GPU, packed as four-byte cells (two-byte f16 ones,
-# two to a word, the first in the low half, as WGSL's array<f16> holds them) in linear memory from
-# their creation (extensions/rules/gpu_packing.warp gpu_packed chooses them), so the GPU's library reads and writes them where they are
-# (lib/host/native_host/gpu.warp cells_address). A List $Node of the square bracket of list kind gpu_list_row() and its cell
-# type (GpuCell) in KindUnit.ListCell, its data an Int of (address << 32) + count. It reads, shows and compares as a
+# two to a word, the first in the low half, as WGSL's array<f16> holds them) from their creation
+# (extensions/rules/gpu_packing.warp gpu_packed chooses them). A List $Node of the square bracket of list kind
+# gpu_list_row() and its cell type (GpuCell) in KindUnit.ListCell, its data a $BigInt whose limbs are the cells' words:
+# GC memory, freed with the list (card gpu-memory-reuse); its sign flag marks a two-byte list of an odd count, whose
+# last word holds one cell. A host reads and writes the words in one staging room in linear memory
+# (gpu_list_place, gpu_list_room, gpu_list_kept: lib/host/native_host/gpu.warp program_cells). It reads, shows and compares as a
 # list (the core's list words reach it through runtime/bridge.warp's list hooks); a list word that would change one
 # refuses (gpu_list_refused), as a boxed copy would lose the change
 use "../../compiler/runtime/intrinsics.warp"
@@ -29,31 +31,87 @@ first_vector_cell() as int := 5
 is_vector_cell(cell: int) as bool := cell >= first_vector_cell()
 vector_width(cell: int) as int := cell - first_vector_cell() + 2
 vector_slots(cell: int) as int := if vector_width(cell) == 3 then 4 else vector_width(cell)
-address_unit() as int := 4294967296
 # its row in a list's kind field, gpu_lists.warp GpuListKind.Row (a number, as list_kind_unit says why)
 gpu_list_row() as int := 2
 gpu_list_kind(cell: int) as int := Kind.List + BracketCode.Square * KindUnit.Info + gpu_list_row() * list_kind_unit() + cell * list_cell_unit()
 is_gpu_list(n: Node) as bool := list_kind(n) == gpu_list_row()
-gpu_list_address(n: Node) as int := shifted_right(unboxed_int(n), 32)
-gpu_list_count(n: Node) as int := bits_and(unboxed_int(n), address_unit() - 1)
+gpu_list_count(n: Node) as int := {
+	cell = gpu_list_cell(n)
+	if is_narrow_cell(cell) { return limb_count(n) * 2 - (if big_int_negative(n) then 1 else 0) }
+	int_quotient(limb_count(n) * word_bytes(), cell_bytes(cell))
+}
+# the words holding count cells of that type
+words_holding(count: int, cell: int) as int := int_quotient(count * cell_bytes(cell) + word_bytes() - 1, word_bytes())
 # its cell type, a GpuCell
 gpu_list_cell(n: Node) as int := int_remainder(int_quotient(marked_kind(n), list_cell_unit()), 8)
 gpu_cell_name(cell: int) as text := if cell == first_vector_cell() then "vec2" else if cell == first_vector_cell() + 1 then "vec3" else if cell == first_vector_cell() + 2 then "vec4" else if cell == GpuCell.I32 then "i32" else if cell == GpuCell.U32 then "u32" else if cell == half_cell() then "f16" else if cell == brain_cell() then "bf16" else "f32"
 is_float_cell(cell: int) as bool := cell == GpuCell.F32 or is_narrow_cell(cell)
-# where a host finds a GPU list's cells: (address << 32) + count, -1 for any other value (exported for a host,
-# gpu_lists.warp host_exports)
-gpu_list_place(n: Node) as int := if is_gpu_list(n) then unboxed_int(n) else -1
+# where a host finds a GPU list's cells, copied into the staging room: (address << 32) + count, -1 for any other value
+# (exported for a host, gpu_lists.warp host_exports). The room is shared: a host copies the cells from it before it
+# takes the place of another list
+gpu_list_place(n: Node) as int := if is_gpu_list(n) then cells_staged(n, yes) else -1
+# where a host writes a GPU list's cells, the staging room as gpu_list_place gives it, the cells not copied there;
+# gpu_list_kept takes them into the list
+gpu_list_room(n: Node) as int := if is_gpu_list(n) then cells_staged(n, no) else -1
+# the cells a host wrote into the staging room, taken into the list (after gpu_list_room or gpu_list_place)
+gpu_list_kept(n: Node) as int := {
+	room = staging_held#1
+	words = limb_count(n)
+	w = 0
+	while w < words {
+		set_limb(n, w, memory_u32(room + w * word_bytes()))
+		w = w + 1
+	}
+	0
+}
+cells_staged(n: Node, copied: bool) as int := {
+	words = limb_count(n)
+	room = staging_room(words * word_bytes())
+	w = 0
+	while copied and w < words {
+		memory_set_i32(room + w * word_bytes(), limb(n, w))
+		w = w + 1
+	}
+	shifted_left(room, 32) + gpu_list_count(n)
+}
+# an f32 cell's bits (0 to 2^32 - 1) as its float, and a float as those bits, rounded to nearest: through a word of
+# linear memory of its own, the one wasm reinterpretation the language has no word for
+f32_of_bits(bits: int) as float := {
+	memory_set_i32(f32_word(), bits)
+	memory_f32(f32_word())
+}
+bits_of_f32(x: float) as int := {
+	memory_set_f32(f32_word(), x)
+	memory_u32(f32_word())
+}
+global f32_word_held = []
+f32_word() as int := {
+	if #f32_word_held == 0 { f32_word_held = [pages_grown(1)] }
+	f32_word_held#1
+}
+# the staging room [address, bytes]: one region every list a host reads or writes passes through in turn, grown to
+# at least twice its size when a larger list comes (the old one is left: grown pages are never freed). Kept in a
+# list, as depth_held
+global staging_held = []
+staging_room(bytes: int) as int := {
+	if #staging_held == 0 or staging_held#2 < bytes {
+		wanted = if #staging_held == 0 or bytes > 2 * staging_held#2 then bytes else 2 * staging_held#2
+		pages = pages_holding(wanted)
+		staging_held = [pages_grown(pages), pages * page_bytes()]
+	}
+	staging_held#1
+}
 # the bytes a GPU list's cells take where they are (exported for a host, as gpu_list_place)
 gpu_list_bytes(n: Node) as int := gpu_list_count(n) * cell_bytes(gpu_list_cell(n))
 # grow pages for count cells of that type (a grown page is zero) and the start address
-gpu_space(count: int, cell: int) as int := {
-	pages = pages_holding(count * cell_bytes(cell))
+gpu_space(count: int, cell: int) as int := pages_grown(pages_holding(count * cell_bytes(cell)))
+pages_grown(pages: int) as int := {
 	before = memory_grown(if pages > 0 then pages else 1)
 	if before < 0 { gpu_list_refused("no memory left for a GPU list of this size") }
 	before * page_bytes()
 }
-# count zeros of the cell type in pages grown for them
-gpu_zeros(count: int, cell: int) as Node := with_kind(fresh_int_node(shifted_left(gpu_space(count, cell), 32) + count), gpu_list_kind(cell))
+# count zeros of the cell type
+gpu_zeros(count: int, cell: int) as Node := with_kind(big_int_of(is_narrow_cell(cell) and int_remainder(count, 2) == 1, words_holding(count, cell)), gpu_list_kind(cell))
 # a GPU list of a list's numbers: what a GPU word gives back (extensions/rules/gpu_packing.warp packs a list where it is made)
 gpu_list_of(xs: Node, cell: int) as Node := {
 	if is_gpu_list(xs) and gpu_list_cell(xs) == cell { return xs }
@@ -67,47 +125,49 @@ gpu_put(n: Node, index: int, value: Node) as Node := {
 	gpu_list_set(n, index, value)
 	n
 }
-# where the index-th cell (from 1) is, an index beyond the list failing the run
-cell_address(n: Node, index: int) as int := {
+# the word holding the index-th cell (from 1) or its first lane, from 0, an index beyond the list failing the run
+cell_word(n: Node, index: int) as int := {
 	if index < 1 or index > gpu_list_count(n) { index_out_of_range_of(index, gpu_list_count(n)) }
-	gpu_list_address(n) + (index - 1) * cell_bytes(gpu_list_cell(n))
+	int_quotient((index - 1) * cell_bytes(gpu_list_cell(n)), word_bytes())
 }
+# an i32 cell's bits as its int
+signed_word(bits: int) as int := if bits > 2147483647 then bits - 4294967296 else bits
 # a list's items, a GPU list's read from its cells
 listed_numbers(xs: Node) as list := if is_gpu_list(xs) then gpu_list_items(xs) else unboxed_list(xs)
 # the index-th number (from 1): a float of an f32 or f16 cell, an int of an i32 or u32 one, a new list of a vector's
 # lanes (changing it leaves the cell as it is: `xs#i = v` writes one)
 gpu_list_at(n: Node, index: int) as Node := {
 	cell = gpu_list_cell(n)
-	address = cell_address(n, index)
+	word = cell_word(n, index)
 	if is_vector_cell(cell) {
 		lanes = new_list(vector_width(cell))
-		for k in 1 to #lanes { lanes#k = memory_f32(address + (k - 1) * word_bytes()) }
+		for k in 1 to #lanes { lanes#k = f32_of_bits(limb(n, word + k - 1)) }
 		return lanes
 	}
-	if is_narrow_cell(cell) { return narrow_float(half_at(address), narrow_exponent_bits(cell), narrow_fraction_bits(cell)) }
-	if cell == GpuCell.I32 { return memory_i32(address) }
-	if cell == GpuCell.U32 { return memory_u32(address) }
-	memory_f32(address)
+	if is_narrow_cell(cell) { return narrow_float(half_at(n, word, index), narrow_exponent_bits(cell), narrow_fraction_bits(cell)) }
+	if cell == GpuCell.I32 { return signed_word(limb(n, word)) }
+	if cell == GpuCell.U32 { return limb(n, word) }
+	f32_of_bits(limb(n, word))
 }
 gpu_list_set(n: Node, index: int, value: Node) as Node := {
 	cell = gpu_list_cell(n)
-	address = cell_address(n, index)
+	word = cell_word(n, index)
 	if is_vector_cell(cell) {
 		lanes = if kind_code(value) == Kind.List then listed_numbers(value) else new_list(0)
 		if #lanes != vector_width(cell) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds vectors of its width only") }
-		for k in 1 to #lanes { memory_set_f32(address + (k - 1) * word_bytes(), number_checked(cell, lanes#k)) }
+		for k in 1 to #lanes { set_limb(n, word + k - 1, bits_of_f32(number_checked(cell, lanes#k))) }
 		return value
 	}
 	if is_float_cell(cell) {
 		x = number_checked(cell, value)
-		if is_narrow_cell(cell) { half_set(address, narrow_bits(x, narrow_exponent_bits(cell), narrow_fraction_bits(cell))) } else { memory_set_f32(address, x) }
+		if is_narrow_cell(cell) { half_set(n, word, index, narrow_bits(x, narrow_exponent_bits(cell), narrow_fraction_bits(cell))) } else { set_limb(n, word, bits_of_f32(x)) }
 		return value
 	}
 	if kind_code(value) != Kind.Int { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds ints only") }
 	number = int_of_node(value)
 	if cell == GpuCell.U32 and (number < 0 or number > 4294967295) { gpu_list_refused("a GPU list [u32] holds 0 to 4294967295") }
 	if cell == GpuCell.I32 and (number < -2147483648 or number > 2147483647) { gpu_list_refused("a GPU list [i32] holds -2147483648 to 2147483647") }
-	memory_set_i32(address, number)
+	set_limb(n, word, number)
 	value
 }
 # a number's float for a float or vector cell, an exact one's (a real, √9.25) included, anything else refused
@@ -115,13 +175,13 @@ number_checked(cell: int, value: Node) as float := {
 	if not summable(value) { gpu_list_refused("a GPU list [" + gpu_cell_name(cell) + "] holds numbers only") }
 	float_of_node(value)
 }
-# a two-byte cell: its half of the aligned word holding it
-half_at(address: int) as int := bits_and(shifted_right(memory_u32(address - int_remainder(address, word_bytes())), 8 * int_remainder(address, word_bytes())), 65535)
-half_set(address: int, bits: int) := {
-	word = address - int_remainder(address, word_bytes())
-	shift = 8 * int_remainder(address, word_bytes())
-	kept = bits_and(memory_u32(word), bits_xor(4294967295, shifted_left(65535, shift)))
-	memory_set_i32(word, bits_or(kept, shifted_left(bits, shift)))
+# the index-th cell of a two-byte list: its half of the word holding it, the low one first
+half_shift(index: int) as int := 16 * int_remainder(index - 1, 2)
+half_at(n: Node, word: int, index: int) as int := bits_and(shifted_right(limb(n, word), half_shift(index)), 65535)
+half_set(n: Node, word: int, index: int, bits: int) := {
+	shift = half_shift(index)
+	kept = bits_and(limb(n, word), bits_xor(4294967295, shifted_left(65535, shift)))
+	set_limb(n, word, bits_or(kept, shifted_left(bits, shift)))
 }
 # x as the bits of a narrow IEEE 754 float of that many exponent and fraction bits (f16: 5, 10), rounded to nearest,
 # ties to even; too big a magnitude infinity, NaN a quiet NaN, too small zero
@@ -182,7 +242,7 @@ gpu_list_items(n: Node) as list := {
 }
 gpu_list_refused(message: text) as int := returned_error(message)
 # how many bins view_order_into quantizes a depth into, and the 0 .. 65535 keys those bins are (antimatter15/splat
-# runSort: depth · 4096, then 65535 / (max − min)). The two tables are allocated once: a GPU list's pages are never freed
+# runSort: depth · 4096, then 65535 / (max − min)). The two tables are allocated once: grown pages are never freed
 depth_bins() as int := 65536
 depth_levels() as int := 65535
 # the two bin-table addresses, reused after the first sort. Kept in a list: a GPU-list global is unlisted
@@ -203,10 +263,10 @@ zero_words(address: int, count: int) := {
 }
 # centres holds one splat per four floats, xyz then opacity. index is 0-based. depth is (position − eye) · forward
 view_depth(centres: Node, index: int, ex: float, ey: float, ez: float, fx: float, fy: float, fz: float) as float := {
-	base = gpu_list_address(centres) + index * word_bytes() * 4
-	x = memory_f32(base)
-	y = memory_f32(base + word_bytes())
-	z = memory_f32(base + word_bytes() * 2)
+	base = index * 4
+	x = f32_of_bits(limb(centres, base))
+	y = f32_of_bits(limb(centres, base + 1))
+	z = f32_of_bits(limb(centres, base + 2))
 	(x - ex) * fx + (y - ey) * fy + (z - ez) * fz
 }
 # runSort's first quantization: trunc(depth · 4096), toward 0
@@ -286,7 +346,6 @@ view_order_into(centres: Node, eye: Node, forward: Node, nearest: Node, into: No
 		run = run + c
 		i = i + 1
 	}
-	out = gpu_list_address(into)
 	write_int = gpu_list_cell(into) == GpuCell.I32
 	i = 0
 	while i < n {
@@ -295,8 +354,7 @@ view_order_into(centres: Node, eye: Node, forward: Node, nearest: Node, into: No
 			slot_at = starts + depth_key(d, low, scale) * word_bytes()
 			slot = memory_i32(slot_at)
 			memory_set_i32(slot_at, slot + 1)
-			at = out + slot * word_bytes()
-			if write_int { memory_set_i32(at, i) } else { memory_set_f32(at, float(i)) }
+			set_limb(into, slot, if write_int then i else bits_of_f32(float(i)))
 		}
 		i = i + 1
 	}
