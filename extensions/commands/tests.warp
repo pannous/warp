@@ -130,7 +130,8 @@ test_verdicts(work: text, words: list) := {
 		took = run_milliseconds(work, "" + n) + run_milliseconds(work, n + EXPECTED_RUN)
 		if took > SLOW_MILLISECONDS { print SLOW_MARK + described + ": " + float(took) / 1000 + " s" }
 	}
-	unread = test_files_of(words).flat_map(file => unread_lines(file, cases).map(line => file + ":" + line))
+	# (against every case of the file: one skipped for a need this machine lacks was read)
+	unread = test_files_of(words).flat_map(file => unread_lines(file, all_cases_of([file])).map(line => file + ":" + line))
 	for place in unread { print "✗ " + place + ": " + UNREAD_PAIR }
 	failed += #unread
 	skipped = test_files_of(words).map(file => #skipped_pairs(read(file))).sum() + #skipped_for_needs(words)
