@@ -26,7 +26,9 @@ own_signatures(program: Node) as map := {
 signatures_of(word: text, defined: map) as list := (defined.get(word) ?? []) + lines_of(typed_lines, unaliased(word)).map(line => line.signature)
 
 # `f: function`, `body: block`, a bare `block`, `f: (any) -> bool`
-is_function_typed(parameter: Parameter) as bool := parameter.type_name in ["function", "block"] or parameter.type_name.contains("->") or (parameter.name == "block" and parameter.type_name == "")
+is_function_typed(parameter: Parameter) as bool := parameter.type_name == "function" or parameter.type_name.contains("->") or is_block_typed(parameter)
+# `body: block`, a bare `block`: whatever its argument is written as, it is the block of it (wiki/block.md)
+is_block_typed(parameter: Parameter) as bool := parameter.type_name == "block" or (parameter.name == "block" and parameter.type_name == "")
 
 # the parameter an argument at place (from 1) fills: a named argument `by: -it` its own, else the one at its place
 parameter_filled(signature: Signature, place: int, argument: Node) as Parameter? := {
@@ -36,12 +38,12 @@ parameter_filled(signature: Signature, place: int, argument: Node) as Parameter?
 	if place <= #signature.parameters then signature.parameters#place else ø
 }
 
-# a function in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside text's
-# `find(t, part)` reads the list's
-is_function_place(signatures: list, place: int, arguments: list) as bool := {
+# a parameter of that type in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside
+# text's `find(t, part)` reads the list's
+is_typed_place(signatures: list, place: int, arguments: list, typed: function) as bool := {
 	signatures.filter(signature => #signature.parameters >= #arguments).any(signature => {
 		parameter = parameter_filled(signature, place, arguments#place)
-		parameter != ø and is_function_typed(parameter)
+		parameter != ø and typed(parameter)
 	})
 }
 
@@ -59,12 +61,16 @@ is_named(argument: Node) as bool := is_key(argument, Op.Colon) and key_of(argume
 # an argument that gives a function where one is taken: an `it` expression or a block, `{ $0 * 10 }`, `{ |x| x + 1 }`
 gives_function(argument: Node) as bool := if is_named(argument) then gives_function(value_of(argument)) else names_free_it(argument) or is_block_argument(argument)
 
-# the arguments with each one at a function place made the function of `it`; ø when none gives a function there
+# an argument a block place makes a block of: not a name, which may hold a block itself (`twice(b)`), nor a named one
+written_as_expression(argument: Node) as bool := not is_named(argument) and not (argument is symbol)
+# the arguments with each one at a function place made the function of `it`, and one at a block place written as an
+# expression its block, `twice(n += 1)` → twice({ n += 1 }); ø when none changes
 with_functions(word: text, arguments: list, defined: map) as list? := {
 	signatures = signatures_of(word, defined)
-	given = range_list(#arguments).map(i => is_function_place(signatures, i + 1, arguments) and gives_function(arguments#(i + 1)))
-	if not given.any(place => place) { return ø }
-	range_list(#arguments).map(i => if given#(i + 1) then as_function_of_it(arguments#(i + 1)) else arguments#(i + 1))
+	given = range_list(#arguments).map(i => is_typed_place(signatures, i + 1, arguments, is_function_typed) and gives_function(arguments#(i + 1)))
+	blocked = range_list(#arguments).map(i => not given#(i + 1) and is_typed_place(signatures, i + 1, arguments, is_block_typed) and written_as_expression(arguments#(i + 1)))
+	if not (given + blocked).any(place => place) { return ø }
+	range_list(#arguments).map(i => if given#(i + 1) then as_function_of_it(arguments#(i + 1)) else if blocked#(i + 1) then List([arguments#(i + 1)], Bracket.Curly, Separator.Semicolon) else arguments#(i + 1))
 }
 
 # `x.w(a)` with x its first argument: the call of w on the arguments, else ø
