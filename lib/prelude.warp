@@ -1106,34 +1106,9 @@ kept_listeners(key: text, keep: function) as any := {
 	ø
 }
 
-// Python's range: `range(4)` is 0..4, `range(1, 4)` 1..4
+// Python's range: `range(4)` is 0..4, `range(1, 4)` 1..4 (core/prelude_core.warp Range)
 range(stop: int) := 0 ..< stop
 range(start: int, stop: int) := start ..< stop
-// A range (wiki/range.md): `a to b` holds its end, `a upto b` (`a..b`) leaves it out (extensions/sugar/ranges.warp).
-// Of whole numbers or characters it counts: for, #r, r#i, count, sum, map … walk it, reckoned from its ends however
-// far apart (`count(1 to 10^12)`). Of real numbers, `0 to π`, it is an interval: a value lies in it or not, and its
-// length (count's alias) is end - start; walking one needs a step
-class Range {
-	start: any
-	end: any
-	inclusive: bool
-	contains(x: any) as bool := x >= start and (x < end or (inclusive and x == end))
-	count() := if is_interval() then end - start else max(0, ordinal(end) - ordinal(start) + (if inclusive then 1 else 0))
-	is_interval() as bool := not (counts(start) and counts(end))
-	counts(x: any) as bool := x is int or x is char
-	at(i: int) := {
-		if is_interval() { raise text(self) + " is an interval of real numbers: it has no items; walk it by a step" }
-		if i < 1 or i > count() { raise "index out of range: " + text(i) + " not in 1…" + text(count()) }
-		stepped(i - 1)
-	}
-	// Gauss's sum, count · (first + last) / 2
-	sum() := if count() == 0 then 0 else count() * (start + at(count())) div 2
-	list() as list := [at(i) for i in 1 to count()]
-	text() as text := text(start) + (if inclusive then " to " else "..") + text(end)
-	// what count and r#i reckon with: a whole number itself, a character its code point
-	ordinal(x: any) as int := if x is char then ord(x) else x
-	stepped(n: int) := if start is char then chr(ord(start) + n) else start + n
-}
 // the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
 // playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
 gpu_computed(shader: node, values: node, count: int): node from host

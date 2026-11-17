@@ -65,3 +65,33 @@ alias size => count
 alias len => count
 alias length => count
 alias sorted => sort
+// A range (wiki/range.md): `a to b` holds its end, `a upto b` (`a..b`) leaves it out (extensions/sugar/ranges.warp).
+// Of whole numbers or characters it counts: for, #r, r#i, count, sum, map … walk it, reckoned from its ends however
+// far apart (`count(1 to 10^12)`). Of real numbers, `0 to π`, it is an interval: a value lies in it or not, and its
+// length (count's alias) is end - start; walking one needs a step. In the core: the compiler walks its own ranges,
+// `(0 ..< #xs).map(…)`, and list words take a range's items() (runtime/lists.warp unlisted_items)
+class Range {
+	start: any
+	end: any
+	inclusive: bool
+	contains(x: any) as bool := x >= start and (x < end or (inclusive and x == end))
+	count() := {
+		if is_interval() { return end - start }
+		steps = ordinal(end) - ordinal(start) + (if inclusive then 1 else 0)
+		if steps > 0 then steps else 0
+	}
+	is_interval() as bool := not (counts(start) and counts(end))
+	counts(x: any) as bool := x is int or x is char
+	at(i: int) := {
+		if is_interval() { raise text(self) + " is an interval of real numbers: it has no items; walk it by a step" }
+		if i < 1 or i > count() { raise "index out of range: " + text(i) + " not in 1…" + text(count()) }
+		stepped(i - 1)
+	}
+	// Gauss's sum, count · (first + last) / 2
+	sum() := if count() == 0 then 0 else count() * (start + at(count())) div 2
+	items() as list := [stepped(i) for i in 0 ..< count()]
+	text() as text := text(start) + (if inclusive then " to " else "..") + text(end)
+	// what count and r#i reckon with: a whole number itself, a character its code point
+	ordinal(x: any) as int := if x is char then ord(x) else x
+	stepped(n: int) := if start is char then chr(ord(start) + n) else start + n
+}
