@@ -69,7 +69,8 @@ The languages, each a set of Node shapes:
   - four keys (reader.md Q1, Q11, Q13): `Key(key, Op.Colon, value)`, `Key(key, Op.Assign, value)` and
     `Key(key, Op.Define, value)` by the same rules, `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and
     `x = a + b` all before and after; `=` and `:=` split before `:` (`x: int = 3` is `(x: int) = 3`);
-    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
+    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`, and to a type list,
+    `list<int>` (reader.md Q14);
   - `List(items, bracket, separator)` in three uses: a phrase, items with blanks between, separator Space
     (`a + b` is `[a, +, b]`); a glued run of no head and bracket, separator None (`a.b`, `3ms`, `a-b`, `-x`); a
     bracketed list, Curly, Square or Round, with the loosest separator inside. Separators cascade (glue < space <
