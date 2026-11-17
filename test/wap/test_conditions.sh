@@ -13,6 +13,14 @@ check "an If's value given to a name" "$(ran value 'x = if no then 1 else 2
 x')" "2"
 check "an If's value as a function's result" "$(ran result 'pick(c: bool) := if c then 10 else 20
 pick(yes)')" "10"
+# and, or: the second part runs only when the first does not decide (wiki/operator.md)
+check "and skips its second part after no" "$(ran and_skips 'loud(): bool := { print "ran"; yes }
+if no and loud() then print "a" else print "b"')" "b"
+check "and runs its second part after yes" "$(ran and_runs 'loud(): bool := { print "ran"; yes }
+if yes and loud() then print "a" else print "b"')" "ran
+a"
+check "or skips its second part after yes" "$(ran or_skips 'loud(): bool := { print "ran"; yes }
+if yes or loud() then print "a" else print "b"')" "a"
 check "not turns a condition round" "$(ran not 'if not no then print "a" else print "b"
 if !yes then print "c" else print "d"')" "a
 d"

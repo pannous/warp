@@ -16,6 +16,9 @@ A template of several statements `($a; $b)` takes a statement's place; in a valu
 is that value's block `(t·1 = 1; 3; t·1)`. A phrase rule matches the words as written, also where the parser nests
 them (`keep 1 (past 3)`).
 
+A hole inside a template text is the spelling of what it took, the longer hole name first: `$x.$f => Get($x, "$f")`
+writes the key "f", and `"hi $who"` greets whoever matched (wap/core/rules/templates.wap interpolated).
+
 ## Name building (F5)
 `·` in a template glues words and holes into one name (decision name-glue), the words joined by `_`:
 
