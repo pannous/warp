@@ -20,6 +20,10 @@
 # types is typed even when nothing calls it, so its errors show. A function that calls itself needs its result type
 # written: `f(n: int): int := …`. The result is the program, the preload's functions it calls first.
 
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
 # the types of the literals, as a program writes them
 INT_TYPE = "int"
 FLOAT_TYPE = "float"

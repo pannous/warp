@@ -38,7 +38,8 @@ DEEP = #args > 1 and args#2 == "deep"
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
-declared_file(file: text) as Node := declared_program(operated_program(notation(read(file), file)))
+declared_file(file: text) as Node := declared_program(deepened(operated_program(notation(read(file), file))))
+deepened(code: Node) as Node := if DEEP then refitted(without_result_types(code), code) else code
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
@@ -56,7 +57,7 @@ probe(file: text) := {
 	for statement in statements {
 		try {
 			o = operated_program(statement)
-			s = declared_program(if DEEP then without_result_types(o) else o)
+			s = declared_program(deepened(o))
 			lowered_ok = lowered_ok + [lowered(s)]
 		} catch e { report("lower", e.message) }
 	}

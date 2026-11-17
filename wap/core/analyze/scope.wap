@@ -16,6 +16,10 @@
 # definition is seen by its whole Block, before and after it, so functions may call each other.
 # The stage only learns facts: every node keeps its shape and its own metadata.
 
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
 # depth of the program's own statements: names defined there are globals and top-level functions
 PROGRAM_DEPTH = 0
 # depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
