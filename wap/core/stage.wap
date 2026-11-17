@@ -49,6 +49,9 @@ with_parts(n: Node, f: function) as Node := match n {
 	_ => n
 }
 
+# the fact naming the rule that built a node: the rule's head, where it was written
+RULE = "rule"
+
 # Facts a stage learns about a node (notes/backbone.md "Stage languages"): a name's binding, a type, the overload a
 # call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
 # from stage to stage. A later fact of the same name replaces the earlier.

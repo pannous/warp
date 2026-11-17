@@ -8,6 +8,7 @@
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
 #   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
+#   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, core/sugar/ and the program
 #   declare   operated → declared   core/analyze/declarations.wap, the names the top level defines, as facts
 #   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
 #   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
@@ -22,6 +23,9 @@ use "core/parse/reader.wap"
 use "core/parse/operators.wap"
 use "core/format.wap"
 use "core/analyze/declarations.wap"
+use "core/rules/patterns.wap"
+use "core/rules/templates.wap"
+use "core/rules/stages.wap"
 use "core/rules/lowering.wap"
 use "core/analyze/scope.wap"
 use "core/analyze/types.wap"
@@ -30,14 +34,19 @@ use "core/emit/values.wap"
 use "core/emit/emitter.wap"
 use "core/emit/primitives.wap"
 
+# the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/definitions.wap"]
+rule_file(name: text) as text := program.folder + "/" + name
+for file in RULE_FILES { rules_loaded(operated_program(notation(read(rule_file(file)), rule_file(file)))) }
+
 # the standard language every program gets, as definitions (preload/prelude.wap), declared once: what it declares is
 # the library every program is bound in
 PRELOAD = program.folder + "/preload/prelude.wap"
 preload = declared(PRELOAD)
 library = declarations_of(preload)
 
-# a file's text read and its operators read, then declared
-declared(file: text) as Node := declared_program(operated_program(notation(read(file), file)))
+# a file's text read, its operators read, its spellings rewritten by the shape rules, then declared
+declared(file: text) as Node := declared_program(shaped_program(operated_program(notation(read(file), file))))
 # declared code lowered and bound inside the preload's declarations and those of the modules it uses
 prepared(code: Node, modules: list) as Block := bound_program(lowered_program(code), library + uses_of(code).flat_map(file => declarations_of(module_of(file, modules))))
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its

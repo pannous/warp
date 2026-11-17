@@ -62,6 +62,7 @@ lowered_form(n: Node) as Node := match n {
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	_ => not_lowered(n)
 }
