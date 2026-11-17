@@ -13,4 +13,6 @@ check "an If's value given to a name" "$(ran value 'x = if no then 1 else 2
 x')" "2"
 check "an If's value as a function's result" "$(ran result 'pick(c: bool) := if c then 10 else 20
 pick(yes)')" "10"
+check "an if in round brackets is one phrase" "$(ran grouped 'x = (if no then 1 else 2)
+x')" "2"
 exit $((failures > 0))

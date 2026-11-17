@@ -149,11 +149,13 @@ rewritten_by(rules: Rules, code: Node) as Fired := {
 
 rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, n, fired), whole => parts_applied(rules, whole, fired))
 
-# A block of one phrase, `{ if c { a } }`, holds the phrase's words: its one statement is that phrase, rewritten as one
+# A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
+# is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
-	List(items, Bracket.Curly, Separator.Space) => List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], Bracket.Curly, Separator.None)
+	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], bracket, Separator.None) else with_parts(whole, part => rules_applied(rules, part, fired))
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
+one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
 
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
 	current = n
