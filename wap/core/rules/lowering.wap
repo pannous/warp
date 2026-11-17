@@ -9,7 +9,7 @@
 #   { a; b }                 a block of code → Block([a, b])
 #   x = 1                    a value given to a name → Set(x, 1)
 #   f(x) := body             a function → Define(f, [x], body)
-#   let x = 1, global x = 1  a new variable here, the program's → Set(x, 1) with the fact local or global
+#   let x = 1, global x = 1  a new variable here, the program's → Set(x, 1) with the fact which variable it assigns
 #   prim print_text(t)       a built-in's body in the preload → Prim(print_text, [t])
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
@@ -35,7 +35,7 @@ lowered_form(n: Node) as Node := match n {
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
 	Key(place, Op.Assign, value) => if place is symbol then Set(place, lowered(value)) else not_lowered(n)
 	Key(List(items, Bracket.Round, separator), Op.Define, body) => if items#1 is symbol then Define(items#1, List(items[1 ..], Bracket.Round, Separator.Comma), lowered(body)) else not_lowered(n)
-	Key(word, Op.Colon, assignment) => if word == symbol(GLOBAL_WORD) then scoped(assignment, GLOBAL, n) else not_lowered(n)
+	Key(word, Op.Colon, assignment) => if word == symbol(GLOBAL_WORD) then scoped(assignment, BOUND_GLOBAL, n) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	List(items, Bracket.Round, separator) => called_with(items, n)
 	_ => not_lowered(n)
@@ -44,14 +44,14 @@ lowered_form(n: Node) as Node := match n {
 # a phrase, a word and what follows: a primitive, `let x = 1`, or a call
 phrase_lowered(items: list, n: Node) as Node := {
 	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(items#2, n) }
-	if #items == 2 and items#1 == symbol(LOCAL_WORD) { return scoped(items#2, LOCAL, n) }
+	if #items == 2 and items#1 == symbol(LOCAL_WORD) { return scoped(items#2, BOUND_LOCAL, n) }
 	called_with(items, n)
 }
 
-# `let x = 1`, `global x = 1`: the assignment, with the fact which variable it means (core/analyze/scope.wap)
-scoped(assignment: Node, fact: text, n: Node) as Node := {
+# `let x = 1`, `global x = 1`: the assignment, with the fact which variable it assigns (core/analyze/scope.wap)
+scoped(assignment: Node, variable: text, n: Node) as Node := {
 	set = lowered(assignment)
-	if set is Set then with_fact(set, fact, True) else refused(n, "`${LOCAL_WORD}` and `${GLOBAL_WORD}` take an assignment, `${LOCAL_WORD} x = 1`")
+	if set is Set then with_fact(set, ASSIGNS, symbol(variable)) else refused(n, "`${LOCAL_WORD}` and `${GLOBAL_WORD}` take an assignment, `${LOCAL_WORD} x = 1`")
 }
 
 # a word with its arguments, `print "a"` or `f(1, 2)` as the reader gives it, (f 1 2): a call of the word

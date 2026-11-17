@@ -198,6 +198,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 3. ~~Folder~~: decided, wap/ (kernel/, core/; preload and library later).
 4. **The kernel list:** start the case-by-case discussion from notes/kernel.md's 13 forms plus primitives?
 
+## Open, not built yet
+
+- **Binding:** a bare `global x` (a function declaring it means the program's x, without a value); the late-binding
+  check of wiki/Footguns.md, where a free variable changed after the definition must be declared `global`.
+
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)

@@ -34,7 +34,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Block(statements) => refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), n)
 	Define(name, parameters, body) => with_captures(refitted(Define(resolved(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
-	Set(place, value) => refitted(Set(bound(place, if fact_of(n, GLOBAL) == ø then scope else program_scope(scope), depth), bound(value, scope, depth)), n)
+	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	Number(value) => n
@@ -119,9 +119,9 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 # none for `global x = …`, the program's, or for a variable its function has. A name that is a variable of the
 # program or of a function around reads two ways, so the assignment is refused naming both.
 assigned_variables(set: Node, place: Node, scope: list, depth: int) as list := {
-	if not place is symbol or fact_of(set, GLOBAL) != ø { return [] }
+	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
 	name = text(place)
-	if fact_of(set, LOCAL) == ø {
+	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
 		if seen_in_function(name, scope, depth) { return [] }
 		outer = outer_variable(name, scope, depth)
 		if outer != ø { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one${if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""}") }
