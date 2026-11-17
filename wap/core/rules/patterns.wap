@@ -120,16 +120,22 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
-	List(items, bracket, separator) => {
-		if bracket != m.bracket or #m.parts > 1 and separator != m.separator { return no }
-		rest = #m.parts > 0 and m.parts.last.rest
-		fixed = if rest then #m.parts - 1 else #m.parts
-		if #items < fixed or not rest and #items != fixed { return no }
-		for i in 1 to fixed { if not matches(m.parts#i, items#i, bindings) { return no } }
-		if rest { return rest_matches(m.parts.last, items[fixed ..], bindings) }
-		yes
-	}
+	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separator == m.separator) and parts_match(m.parts, items, bindings)
 	_ => no
+}
+
+# Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
+# remain when it is last: `if $c... then $a...` stops the condition at the first then. A failed try leaves no binding.
+parts_match(parts: list, items: list, bindings: map) as bool := {
+	if parts is empty { return items is empty }
+	part = parts#1
+	if not part.rest { return #items > 0 and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
+	known = bindings.keys
+	for taken in 0 to #items {
+		if rest_matches(part, items[.. taken], bindings) and parts_match(parts[1 ..], items[taken ..], bindings) { return yes }
+		for name in bindings.keys { if not known.contains(name) { bindings.remove(name) } }
+	}
+	no
 }
 
 rest_matches(m: Matcher, items: list, bindings: map) as bool := {

@@ -13,6 +13,9 @@
 # Reading runs in two passes: `read_tokens` cuts the text into atoms, brackets, separators and colons, each knowing
 # whether a blank came before it; `built` assembles them by the separator cascade.
 
+use "../errors.wap"
+use "../stage.wap"
+
 # Separators, tightest first; glue (no blank) is tighter than all of them
 SEPARATOR_ORDER = [Separator.None, Separator.Space, Separator.Comma, Separator.Semicolon, Separator.Tab, Separator.Newline]
 OPENERS = "([{"

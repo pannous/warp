@@ -18,4 +18,9 @@ welcome()
 say("both")')" "loaded
 hi
 both"
+printf '%s\n' 'use "pong.wap"' 'ping() := print("ping")' 'serve() := rally()' >"$stage/ping.wap"
+printf '%s\n' 'use "ping.wap"' 'pong() := print("pong")' 'rally() := {' '	ping()' '	pong()' '}' >"$stage/pong.wap"
+check "modules may use each other" "$(ran use_each_other 'use "ping.wap"
+serve()')" "ping
+pong"
 exit $((failures > 0))
