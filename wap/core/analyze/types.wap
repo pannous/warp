@@ -53,11 +53,15 @@ class TypeFrame {
 }
 
 # the program typed, after the preload's functions it calls
-typed_program(program: Block, preload: Block) as Block := {
+typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload))
+# A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
+retyped(program: Block) as Block := typed_among(program, [])
+# the program typed, after those of the library's definitions it calls
+typed_among(program: Block, library: list) as Block := {
 	s = TypingState()
-	s.definitions = statements_in(preload)
+	s.definitions = library
 	typed = typed_form(program, s, TypeFrame(), ø)
-	refitted(Block(functions_typed_from(statements_in(preload), s) + statements_in(typed)), typed)
+	refitted(Block(functions_typed_from(library, s) + statements_in(typed)), typed)
 }
 statements_in(block: Block) as list := match block { Block(statements) => statements }
 
@@ -133,14 +137,14 @@ defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "th
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	candidates = candidates_of(called).map(definer => definition_at(definer, s))
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
-	hints = if #by_count == 1 then parameters_in(by_count#1).map(declared_type) else arguments.map(argument => ø)
+	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
 	chosen = function_typed(chosen_definition(n, called, candidates, types, expected), types, s, n)
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), given), n), chosen.result)
 }
-# the definitions a called name may mean, its candidates or the one it was bound to
-candidates_of(called: Node) as list := match fact_of(called, CANDIDATES) {
+# the definitions a called name may mean: the one it was bound or typed to, else its candidates
+candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {
 	List(items, bracket, separator) => items
 	_ => [defined_at(called)]
 }
@@ -160,7 +164,7 @@ chosen_definition(n: Node, called: Node, candidates: list, types: list, expected
 }
 takes(definition: Node, types: list) as bool := {
 	parameters = parameters_in(definition)
-	#parameters == #types and (1 to #types).all(at => declared_type(parameters#at) == ø or declared_type(parameters#at) == types#at)
+	#parameters == #types and (1 to #types).all(at => type_given(parameters#at) == ø or type_given(parameters#at) == types#at)
 }
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
@@ -208,8 +212,10 @@ with_items(n: Node, items: list) as Node := match n {
 	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
 	_ => n
 }
-all_typed(definition: Node) as bool := parameters_in(definition).all(parameter => declared_type(parameter) != ø)
-written_types(definition: Node) as list := parameters_in(definition).map(declared_type)
+all_typed(definition: Node) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø)
+written_types(definition: Node) as list := parameters_in(definition).map(type_given)
+# a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
+type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
 
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
