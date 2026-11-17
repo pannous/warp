@@ -167,6 +167,7 @@ kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.in
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
 	function = called_function(form, called, p, f)
+	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = arguments.map(argument => code(argument, p, f))
 	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
 	Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index]))
