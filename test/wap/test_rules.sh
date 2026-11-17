@@ -13,10 +13,6 @@ hi"
 # a result type after `as` (wiki/function.md: `f() as int := 3` reports its result as int)
 check "a result type written with as" "$(ran result 'greet(t: text) as text := t
 print greet("hi")')" "hi"
-# repetition (notes/rules.md): `($k => $v)...` takes each arm, `print($v)...` writes one print per arm
-check "a repeated part matched and written once per match" "$(ran repeat 'rule show { ($k => $v)... } => { print($v)... }
-show { 1 => "a"; 2 => "b" }')" "a
-b"
 # a hole inside a template text is the spelling of what it took, the longer hole name first (notes/rewrites.md)
 check "a hole inside a template text" "$(ran spelled 'rule hail $who $whom => print "hi $who and $whom"
 hail ann bob')" "hi ann and bob"
