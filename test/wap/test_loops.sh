@@ -17,4 +17,11 @@ check "the end's value when no return runs" "$(ran late 'first(c: bool) := { if 
 first(no)')" "2"
 check "a return in one part of an If" "$(ran part 'f(c: bool) := if c then return 5 else 6
 f(yes)')" "5"
+check "a counting loop's sum" "$(ran sum 'i = 0
+sum = 0
+while i < 5 { i = i + 1
+sum = sum + i }
+sum')" "15"
+check "a comparison chooses" "$(ran compare 'x = 3
+if x == 3 then print "three" else print "other"')" "three"
 exit $((failures > 0))
