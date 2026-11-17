@@ -60,6 +60,7 @@ Three details:
 | form | fields | the program wrote |
 |---|---|---|
 | Literal | the Node cases Number, Text, Char, True, False, Empty, Symbol | `3`, `"a"`, `'a'`, `yes`, `ø`, `#red` |
+| Data | the reader's own nodes: a List (`[…]` a list, `{k: v}` a map) or a glued Key `Point{x: 1, y: 2}` (an instance), its parts forms (user 2026-11-17: the List node is the literal, no constructor primitive) | `[a, b]`, `{a: 1}`, `Point{x: 1, y: 2}` |
 | Name | a Symbol read as a variable | `x` |
 | Quote | `code`, `$x` holes spliced | `data a + b`, `data f($x)` |
 | Define | `name parameters body` | `f(x) := …`, constants, `global n = 0` |
@@ -72,7 +73,7 @@ Three details:
 | Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
 | While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
 | Break, Continue, Return | none, none, `value` | the same words |
-| Record | `name fields variants` | `class`, `enum`, `type X = A \| B` |
+| Record | `name fields variants`, the one form that declares a type (user-approved 2026-11-17) | `class`, `enum`, `type X = A \| B` |
 | Case | `subject arms` | `match`, `x is T` |
 | Try | `body handler` | `try … catch`, `try x else y`, `except` |
 
@@ -82,6 +83,10 @@ How a few spellings reach the kernel:
 - `a + b` is `Call(+, [a, b])`: an operator is a function (first principles). Whether `+` on two ints becomes a
   single wasm instruction is decided by `+`'s library definition, whose body is a primitive.
 - `x is int` is a `Case` with one arm.
+- `class Point { x: int; y: int }` is `Record(Point, [x: int, y: int], [])`, `enum Color { red green }` is
+  `Record(Color, [], [red, green])` (variants without fields are tags), `type Shape = Circle | Square` is
+  `Record(Shape, [], [Circle, Square])` (variants that are records are subtypes). Its constructor is a Define
+  whose body is the instance's data form, `Point(x, y) := Point{x: x, y: y}`, and `p.x` is a Get.
 
 Not in the kernel, because they compute nothing and run before it: `use module`, `rule …`, `operator` rows. They
 build the language the program is written in.
@@ -102,8 +107,6 @@ instruction. The compiler knows no built-in by name (first principles: "built-in
 The kinds of primitive:
 - **wasm instructions:** `i64.add`, `f64.sqrt`, `i64.rem_s` …
 - **conversions:** `convert x T`, every `as` (today the old emitter has a branch per target type)
-- **constructors of values:** `new_list items`, `new_map entries`, `new Name fields` (list, map and instance
-  literals)
 - **runtime words:** functions of the runtime written in warp (text, big numbers, equality …), notes/self_hosting.md
 - **host words:** what the host answers (print, files, time, graphics)
 

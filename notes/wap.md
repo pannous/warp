@@ -137,3 +137,28 @@ Next, in order:
 2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
 3. Define and Name, then If and While, each with an outcome test
 4. core/rules/ taking over lowering.wap; the first rule files in core/sugar/ and extensions/
+
+## Road to self-build
+
+Measured 2026-11-17 by scripts/wap-census.warp: wap's stages run on wap's own sources (wap/**/*.wap, 16 files, 388
+top-level statements), statement by statement. A statement stops at its first refusal, so each row counts the
+statements a missing piece blocks first; the second column assumes the result-type rule (`f(x) as T := …`) exists,
+which shows the layer behind it. Today 97 statements lower and 60 bind; nothing past the emitter's literals emits.
+
+| blocks first (deep) | stage that should handle it | what is missing |
+|---|---|---|
+| 139 (148) | kernel + preload | list literals `[a, b]`, `[]`: a list constructor primitive |
+| 105 (4) | spelling rules | result types `f(x) as T := …` |
+| 3 (54) | spelling rules → kernel | `if`/`while`/`match`/`for` reach binding as calls: rules to If, While, Case |
+| 7 (38) | kernel | If, with `if … then … else` (in progress on wap-if) |
+| 25 (26) | kernel | Record: class fields `x: T`, enum cases, `x: T = v` |
+| 24 (19) | declare | `use` of a module, and the names other modules define |
+| 3 (20) | preload functions | `+`, `+=`, `and`, `or`, `??`, `raise` and the runtime's words (`with_attribute`, `read` …) |
+| 13 (14) | lowering | a parenthesized group `(a + b)` |
+| 2 (11) | kernel | Get: `x.f` member access |
+| 6 (6) | reader | a rest hole `$x...` reads as `$x to` (the `...` alias); `list<T>` reads as comparisons |
+| 1 (1) | reader | a text inside `${…}` of a text (`"${if c then "a" else ""}"`) is never closed |
+| (2) | emitter | value layouts of classes (Node, Program) |
+
+Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f deep;
+done`; the `deep` argument applies the result-type stand-in.
