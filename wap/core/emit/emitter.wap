@@ -15,26 +15,26 @@ WRITTEN_ADDRESS = 0
 # The module of a program: its statements become the body of `_start`, the function WASI runs.
 emitted(program: Seq) as Module := {
 	m = Module()
-	write = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
-	start = added_function(m, [], [], code(program, m, write))
+	output = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
+	start = added_function(m, [], [], code(program, m, output))
 	exported(m, "_start", FUNCTION_KIND, start)
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
 
 # the instructions of a kernel form
-code(n: Node, m: Module, write: int) as list := match n {
-	Seq(statements) => statements.flat_map(statement => code(statement, m, write))
-	Call(callee, arguments) => if callee == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, write) else refused_call(n)
+code(n: Node, m: Module, output: int) as list := match n {
+	Seq(statements) => statements.flat_map(statement => code(statement, m, output))
+	Call(callee, arguments) => if callee == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused_call(n)
 	_ => raise "not a kernel form: " + n
 }
 
 # a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
-printed(line: text, m: Module, write: int) as list := {
+printed(line: text, m: Module, output: int) as list := {
 	bytes = line.bytes + [NEWLINE]
 	text_address = added_data(m, bytes)
 	iovec = added_data(m, little_endian(text_address) + little_endian(#bytes))
-	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(write) + [DROP]
+	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(output) + [DROP]
 }
 
 refused_call(n: Node) := raise "wap emits no call but print of a text yet: " + n

@@ -23,6 +23,9 @@ FUNCTION_TYPE = 0x60
 FUNCTION_KIND = 0x00
 MEMORY_KIND = 0x02
 
+# every data segment starts at a multiple of this, the size of the largest value, as WASI requires of its records
+DATA_ALIGNMENT = 8
+
 # instructions
 CALL = 0x10
 DROP = 0x1A
@@ -94,11 +97,11 @@ added_function(m: Module, params: list, results: list, body: list) as int := {
 
 exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
 
-# Bytes placed in the memory: their address.
+# Bytes placed in the memory, aligned: their address.
 added_data(m: Module, bytes: list) as int := {
-	address = m.memory_end
+	address = (m.memory_end + DATA_ALIGNMENT - 1) ÷ DATA_ALIGNMENT * DATA_ALIGNMENT
 	m.data += [[address, bytes]]
-	m.memory_end += #bytes
+	m.memory_end = address + #bytes
 	address
 }
 
