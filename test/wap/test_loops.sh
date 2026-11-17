@@ -34,6 +34,10 @@ while i < 6 { i = i + 1
 if i == 2 then continue
 sum = sum + i }
 sum')" "19"
+# until c { b } is while not c (wiki/keyword.md)
+check "until loops until its condition holds" "$(ran until 'x = 0
+until x >= 3 { x = x + 1 }
+x')" "3"
 check "for counts through a range" "$(ran for_range 'sum = 0
 for i in 1 to 4 { sum = sum + i }
 sum')" "10"
