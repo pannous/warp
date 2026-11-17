@@ -192,17 +192,17 @@ named_definition(definition: Node) as list? := match definition {
 # `Node` itself tests nothing. A body with no hole at all reads as before, its words binding (card named-pattern-holes).
 pattern_body(body: Node) as Node := {
 	if is_quote(body) or not nodes_in(body).any(is_hole_symbol) { return body }
-	if is_value_body(body) then bottom_up(rest_holes_typed(body), hole_unmarked) else List([quote_symbol, bottom_up(rest_holes_typed(body), code_hole_typed)], Bracket.Round, Separator.None)
+	if is_value_body(body) then bottom_up(bottom_up(rest_holes_typed(body), field_shorthand), hole_unmarked) else List([quote_symbol, bottom_up(rest_holes_typed(body), code_hole_typed)], Bracket.Round, Separator.None)
 }
 is_hole_symbol(n: Node) as bool := n is symbol and #name_of(n) > 1 and name_of(n).starts_with(HOLE_MARK)
 HOLE_MARK = "$"
 # a list, a map or a case `Key(…)`: matched as a value, its holes the names of an arm
 is_value_body(body: Node) as bool := bracket_of(body) == "[" or bracket_of(body) == "{" or is_capitalized_call(body)
 is_capitalized_call(n: Node) as bool := bracket_of(n) == "(" and separator_of(n) == "" and #n > 1 and n#1 is symbol and is_capitalized(name_of(n#1))
-# `$x` the name x; in a map, `src: $src` the field src bound by its own name, `{src}`
-hole_unmarked(part: Node) as Node := match part {
-	Key(Symbol(field), Op.Colon, Symbol(hole)): if hole == HOLE_MARK + field then symbol(field) else Key(symbol(field), Op.Colon, hole_unmarked(value_of(part)))
-	Symbol(name): if is_hole_symbol(part) then symbol(name[1 ..]) else part
+hole_unmarked(part: Node) as Node := if is_hole_symbol(part) then symbol(name_of(part)[1 ..]) else part
+# in a map, `src: $src` is the field src bound by its own name, `{src}`
+field_shorthand(part: Node) as Node := match part {
+	Key(Symbol(field), Op.Colon, Symbol(hole)): if hole == HOLE_MARK + field then symbol(field) else part
 	_: part
 }
 # `$c: Node` is any part, `$c`; `$f: Symbol` tests the case by its type word, `$f: symbol`
