@@ -38,19 +38,18 @@ parameter_filled(signature: Signature, place: int, argument: Node) as Parameter?
 
 # a function in a signature that takes as many arguments as the call gives: `find(xs, it > 1)` beside text's
 # `find(t, part)` reads the list's
-is_function_place(signatures: list, place: int, arguments: list) as bool := fitting(signatures, arguments).any(signature => {
-	parameter = parameter_filled(signature, place, arguments#place)
-	parameter != ø and is_function_typed(parameter)
-})
+is_function_place(signatures: list, place: int, arguments: list) as bool := fitting(signatures, arguments).any(signature => holds_at(signature, place, arguments, is_function_typed))
 # a place the program's own definitions all declare `body: block` (wiki/block.md: an argument there is a block,
 # `twice(n += 1)`); a builtin's or an overload's place that takes a value too (`2 times [1, 2]`, `f(n: number)` beside
 # `f(b: block)`) is none
 is_block_place(own: list, place: int, arguments: list) as bool := {
 	fit = fitting(own, arguments)
-	#fit > 0 and fit.all(signature => {
-		parameter = parameter_filled(signature, place, arguments#place)
-		parameter != ø and parameter.type_name == "block"
-	})
+	#fit > 0 and fit.all(signature => holds_at(signature, place, arguments, parameter => parameter.type_name == "block"))
+}
+# whether the parameter the argument at place fills is one the test holds of
+holds_at(signature: Signature, place: int, arguments: list, test: function) as bool := {
+	parameter = parameter_filled(signature, place, arguments#place)
+	parameter != ø and test(parameter)
 }
 fitting(signatures: list, arguments: list) as list := signatures.filter(signature => #signature.parameters >= #arguments)
 
