@@ -189,7 +189,10 @@ is_function(definition: Definition) as bool := definition.kind == BOUND_FUNCTION
 # refused where it is written. The program's first value of a variable is its definition, no change.
 late_reads_checked(program: Node) as Node := {
 	changes = global_changes(program, no)
-	match program { Block(statements) => for statement in statements { late_reads_of(function_defined_by(statement), line_of(statement), [], changes) }; _ => ø }
+	match program {
+		Block(statements) => for statement in statements { if function_defined_by(statement) != ø { late_reads_of(function_defined_by(statement), line_of(statement), [], changes) } }
+		_ => ø
+	}
 	program
 }
 # the function a top-level statement defines: `f(x) := …`, or `f = x => …`
