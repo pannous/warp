@@ -14,6 +14,7 @@
 #   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
+#   (x + 1)  (a; b)          a group: its one statement, several a Block
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
@@ -41,6 +42,7 @@ lowered_form(n: Node) as Node := match n {
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
+	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	_ => not_lowered(n)
 }
@@ -88,6 +90,9 @@ arguments_of(group: Node) as list := match group {
 
 # the parameters a definition or a function value names, as the one list Define and Fn take
 parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
+
+# round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
+grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else Block(statements.map(lowered))
 
 # a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {
