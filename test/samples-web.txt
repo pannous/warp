@@ -1,4 +1,4 @@
-# 1ebf38a391 2026-11-16 03:29 283/286 99.0%
+# 70f09a1581 2026-11-17 03:29 288/292 98.6%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -52,6 +52,12 @@ ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
 ok   samples/geometry/pga_example.warp
+ok   samples/geometry/pga_point_line_distance.warp
+ok   samples/geometry/pga_ray_plane.warp
+ok   samples/geometry/pga_reflect.warp
+ok   samples/geometry/pga_skew_lines.warp
+ok   samples/geometry/pga_sphere_cut.warp
+ok   samples/geometry/pga_visual.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
 ok   samples/golf/arabic-to-roman.short.warp
@@ -123,7 +129,8 @@ ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
-ok   samples/graphics/paint_text_gpu.warp
+FAIL samples/graphics/paint_text_gpu.warp
+ok   samples/graphics/plot_siren.warp
 ok   samples/graphics/postcard.warp
 drew samples/graphics/raylib_circle.warp
 drew samples/graphics/raylib_mouse_circle.warp
@@ -142,7 +149,7 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-ok   samples/laws/kitchensink.warp
+DIFF samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -165,7 +172,7 @@ ok   samples/matching/tree_patterns.warp
 ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
-ok   samples/modules/free_slots.warp
+FAIL samples/modules/free_slots.warp
 ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
@@ -282,6 +289,5 @@ ok   samples/web/page_custom_event.warp
 ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
-DIFF samples/world/polymarket_odds.warp
-ok   samples/world/strong_quakes.warp
-FAIL samples/world/wikipedia_edits.warp
+ran  samples/world/polymarket_odds.warp
+ran  samples/world/strong_quakes.warp
