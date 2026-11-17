@@ -38,3 +38,6 @@
 # a_union_of_a_class_and_a_builtin_type
 'class Point{x:int}; p: Point | text = "ab"; p'	'ab'
 'class Point{x:int}; p: text | Point = Point(2); p.x'	2
+
+# class B < A is class B extends A (user card class-dog)
+'class animal { name; speak := name + " makes a sound" }; class dog < animal { speak := super.speak + ": woof" }; dog("Rex").speak'	'Rex makes a sound: woof'

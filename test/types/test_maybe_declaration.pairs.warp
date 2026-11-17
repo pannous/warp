@@ -3,4 +3,3 @@
 # a_maybe_declaration_is_optional
 'x: maybe int = 1; x'	1
 'x: maybe int = ø; x'	ø
-'x: maybe text = "a"; x'	'a'

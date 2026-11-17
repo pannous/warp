@@ -3,3 +3,7 @@
 'zork("a")'	error	a call of a name nothing defines is refused
 'raise "boom"'	error	a raise as it runs
 'x := 1; x = 2; x'	error	P71: a charged := takes no assignment
+# the expected `error(<key>)`: the code fails with the compile error of that row of core/analysis/errors.data, whatever
+# its wording (card error-kind-expectations, user OK 11-11)
+'x := 1; x = 2; x'	error(charged_assignment)
+'total := 0; total += 2; total'	error(charged_assignment)

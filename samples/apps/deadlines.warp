@@ -4,7 +4,7 @@
 use time
 use tables
 
-today = date_time_ms("2026-11-05T12:00:00Z")
+today = "2026-11-05T12:00:00Z" as Instant
 soon = 2 * 24 * 3600 * 1000
 deadlines = [
 	{name: "Tax return", due: "2026-10-31"},
@@ -17,13 +17,14 @@ deadlines = [
 rows = []
 late = 0
 for d in deadlines {
-	left = parse_date(d["due"]) - today
+	due = d["due"] as Instant
+	left = due - today
 	state = "later"
 	if left < 0 { state = "overdue"; late = late + 1 } else if left <= soon { state = "due soon" }
-	shown = format_duration(left)
-	if left < 0 { shown = format_duration(0 - left) + " ago" }
-	rows = rows + [[d["name"], format_date(parse_date(d["due"])), state, shown, days_between(today, parse_date(d["due"]))]]
+	shown = Duration(abs(left)) as text
+	if left < 0 { shown = shown + " ago" }
+	rows = rows + [[d["name"], text(due.date), state, shown, days_between(today.ms, due.ms)]]
 }
-print("as of " + format_date(today) + ": " + text(count(deadlines)) + " deadlines, " + text(late) + " overdue")
+print("as of " + text(today.date) + ": " + text(count(deadlines)) + " deadlines, " + text(late) + " overdue")
 print("")
 print(table_text(rows, {headers: ["deadline", "due", "status", "remaining", "days"], align: ["left", "left", "left", "right", "right"]}))

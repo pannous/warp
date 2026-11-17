@@ -28,3 +28,6 @@
 'sorted "listen" == sorted "silent"'	true
 'reverse "ab" == "ba"'	true
 'xs = [1, 2]; sum xs == 3'	true
+
+# sort_of_a_split_text: samples/text/sort_words.warp, the user's form
+'sort split "the quick brown fox"'	["brown", "fox", "quick", "the"]

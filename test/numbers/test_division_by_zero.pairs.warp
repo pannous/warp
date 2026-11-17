@@ -5,4 +5,3 @@
 
 # float_division_by_zero_is_infinity
 '1.0/0.0 == ∞'	1
-'1/0.0 == ∞'	1

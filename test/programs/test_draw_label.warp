@@ -12,4 +12,4 @@ count(canvas_pixels.filter(p => p != 0 and p != red)) > 0' true
 
 # text_coverage_grows_with_the_size_and_the_words
 is! 'c = text_coverage("Hi", 16)
-count(c) == 2 + c[0] * c[1]' true
+count(c) == 2 + c[0] * c[1]' true  // needs: display

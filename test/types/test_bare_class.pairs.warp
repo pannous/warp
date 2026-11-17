@@ -9,3 +9,6 @@
 
 # a_bodyless_class_used_elsewhere_still_declares_it
 # triage-held 2026-11-06: desk-invented `class int` values / C declarations :: 'class Foo; int bar(){ 42 }; Foo().bar()'	42
+# a program's own class wins over the prelude's class of its name (card prelude-class-shadowing, cell-name-clash)
+'class Cell {n: int}; Cell(3).n'	3
+'class Cell {empty: bool}; c = Cell(yes); c.empty'	yes

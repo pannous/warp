@@ -2,13 +2,8 @@
 # a foreign type name (the prelude's block of them: Int, String, …) works and hints warp's name, once; a program's own
 # type of that name, or an enum case so named, hears nothing. Run it with bash test/types/test_foreign_type_hint.sh;
 # the warp is WARP (default the warp on PATH), a tree's WARP=<tree>/data/gate/warp
-warp=${WARP:-warp}
-export WARP_WINDOW=0
-failures=0
+source "$(dirname "$0")/../native/checks.sh"
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 hints() { "$warp" "$1" 2>&1 | grep '^hint' | sed 's/ at .*//'; }
 
 check "x: Int works" "$("$warp" 'x: Int = 3; x' 2>/dev/null | tail -1)" 3

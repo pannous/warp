@@ -28,3 +28,10 @@
 # only a number's subtype equals its number: a class giving float() does not (user 11-11)
 'use units; 5 m == 5'	false
 'class Money{amount: float; float() := amount}; Money(5) == 5'	false
+# a number's subtype keys a map by its number, as it equals it: hex(123) finds the entry 123 (card maps-key)
+'{123: "a"}[hex(123)]'	"a"
+'m = {123: "a"}; m[hex(123)]'	"a"
+'def g(m) { m[hex(123)] }; g({123: "a", 4: 5})'	"a"
+'m = {}; m[hex(5)] = 1; m[5]'	1
+'m = {}; m[hex(5)] = 1; m'	{5: 1}
+'m = {5: 1}; hex(5) in m'	yes

@@ -1,0 +1,4 @@
+# a function reads a main variable declared with its type as it reads an untyped one (card level-int-unknown, interviewer OK 11-12)
+'level: int = 0; f() := level; f()'	0
+'level: int = 3; f() := level * 2; f()'	6
+'ratio: float = 0.5; f() := ratio; f()'	0.5

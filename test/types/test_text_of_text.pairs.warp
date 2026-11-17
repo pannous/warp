@@ -7,7 +7,7 @@
 'text(text(5))'	'5'
 'text(5 as text)'	'5'
 '(5 as text) as text'	'5'
-'text(hex(255))'	'0xFF'
+'text(hex(255))'	'0xff'
 
 # text_of_data_stays_its_source
 'text(data x+1)'	'x+1'

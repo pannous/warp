@@ -15,7 +15,7 @@ bar_fall = 0.75
 peak_fall = 2
 frame_milliseconds = 40
 
-tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4]]
+tune = [C4 E4 G4 [C4 E4 G4] A4 G4 E4 [C3 G3 C4] D4 F4 A4 [D4 F4 A4] G4 B4 D5 [G3 B3 D4 G4] C5 G4 E4 C5]
 song = melody_samples(tune, 0.25)
 seconds = count(song) / sample_rate
 sound(song)
@@ -33,7 +33,7 @@ while elapsed < seconds {
 		peaks[band] = max(shown[band], peaks[band] - peak_fall)
 		x = band * bar_width + gap / 2
 		rect(x, height - shown[band], bar_width - gap, shown[band], hsv(band * 280 / bands, 1, 1))
-		rect(x, height - peaks[band] - 2, bar_width - gap, 2, black)
+		rect(x, height - peaks[band] - 2, bar_width - gap, 2, ink)
 	}
 	show()
 	sleep(frame_milliseconds / 1000)

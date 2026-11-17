@@ -44,28 +44,87 @@ vertex, row-major. Odd counts and a short height list are refused.
   area and the normals fit the cone. A degenerate triangle, or two triangles that face opposite ways, disables
   the cone, including when the camera is behind the cluster.
 
-## GPU parity that this does not have
+## GPU path
 
-Doing what `MeshletDrawingPipeline` does on the GPU would need host support warp does not have. None of it was
-added. `lib/host/native_host/gpu.warp` and `web/playground/host-gpu.js` stay as they are (the shared GPU path).
+`paint` / `gpu_render` still draw a full-image triangle, or instanced quads when the shader has its own vertex
+stage and `values.indices` is absent. Two opt-ins, the same in `lib/host/native_host/gpu.warp` and
+`web/playground/host-gpu.js`:
 
-- `paint` / `gpu_render` draw a full-image triangle, or instanced quads when the shader has its own vertex stage.
-  There is no indexed triangle mesh and no vertex-pull of a meshlet.
-- There is no indirect draw. The three.js pipeline writes draw counts from a compute pass into an indirect buffer.
-- There is no depth attachment and no depth pyramid. `values.previous` is the previous color frame, not a
-  hierarchical depth.
-- `gpu_compute` binds at most 8 storage arrays and returns them to the CPU. The meshlet cull uses more buffers
-  (instances, bounds, cones, queues, counters, visibility, indirect arguments) and then draws without reading
-  the indices back.
+- `values.indices`, a flat list of uint32 vertex ids, is an index buffer. The draw is indexed triangles. The
+  vertex stage pulls attributes from storage: `values.vertices[vertex_index]` is the vertex the index names.
+  A shader with no `@vertex` function is refused. With a depth target the indexed draw is opaque; without one
+  it blends like a quad.
+- `values.depth`, a number other than 0, attaches `depth32float`. The pass clears it to 1 and keeps that
+  texture for the next frame that asks. Compare is less-equal, so a fragment on the far plane stays, and the
+  test writes depth. A quad draw keeps its blend; discarded fragments do not write depth.
+
+`grid_indexed` is the heightfield as that vertex list and index list. `mesh_draw_indices` flattens triangle
+records `[a, b, c, part]` to the index buffer. `frame_rate(frames, spent_ms)` is the number the samples print
+on stderr when an argument is `fps` (CPU work; a paint is included only when the frame would paint anyway).
+
+Three more opt-ins, again the same on both hosts:
+
+- `values.compute`, shader text with `@compute fn main`, runs in the same encoder before the render pass.
+  It may bind the value arrays, plus `indices` and `indirect`, by the names in its own `@binding`s. One shader
+  binds at most 8 storage arrays. The value map may hold 12, because the compute pass and the draw bind their
+  own subsets. `u32` and `i32` arrays are only `indices` and `indirect`; every other array is float bytes.
+- `values.workgroups` is one to three positive ints. The default is one workgroup.
+- `values.indirect` is four uint32s for `drawIndirect`, or five for `drawIndexedIndirect` (that one needs
+  `indices`). The compute shader writes them. The cone test is meshoptimizer's (MIT, Arseny Kapoulkine,
+  https://github.com/zeux/meshoptimizer). The indirect-buffer shape follows three.js PR 35191 (MIT,
+  https://github.com/mrdoob/three.js/pull/35191). The WGSL in `lib/meshlets.warp` is written here.
+
+`INDEX_CULL` copies the kept clusters' indices and sets an indexed indirect draw. `INSTANCE_CULL` compacts
+`draws` and `spans` in place and sets the instance count to the sprites plus the kept clusters times
+`MESHLET_TRIANGLES`. A cutoff of 1 skips the cone test.
+
+`view[1]` is LOD parameters: cot(half fov), screen height, threshold, and how many planes follow.
+Planes start at `view[2]`. `LOD_INDEX` picks the last level whose projected error is within the threshold,
+the same rule as `lod_picked` / `chosen_level`, then culls that level. `LOD_INSTANCE` does that per tree
+from `lods`: trees first (first level, level count, local distance), then each level (first cluster,
+cluster count, error). The printed counts stay the CPU's choice. The picture uses the GPU's.
+
+After a depth pass the host keeps one max-depth per 8 by 8 tile. The next frame's cull reads that
+pyramid as `pyramid`: a cluster is dropped when its nearest depth is past every tile it covers.
+The first frame at a size is all far, so nothing is occluded. `values.previous` is still the previous
+color frame.
+
+Still absent:
 - A paint uniform is at most 16384 floats (64 KB).
 - There is no compute rasterizer, no atomic visibility buffer, and no resolve pass.
 - There is no mesh shader or task shader.
 - There is no geometry paging or streaming. The three.js reference does not have that either.
-- A new host word for any of the above would go through `core/native` and the emitter. That is out of scope.
+- The words above are the existing paint and gpu_compute. A further host word would go through `core/native` and the emitter.
+
+## Tree meshes
+
+`samples/graphics/ez_trees/*.eztree` are seeded trees from Dan Greenheck's EZ Tree (MIT, commit
+`dcf309bd86bd521083d9c70f01f2de45fdc7c457`). The notice beside them is the licence. The exporter is
+`scripts/ez_tree/export.mjs`. No EZ Tree texture, demo asset, or EZ Tree Pro file is in this tree.
+
+A file is little-endian. `EZT1`, then a u32 level count. Each level is u32 vertex count, u32 triangle count,
+f32 error, then that many vertices `(x, y, z, u, v)` and triangles `(u16 a, b, c, part)`. `part` 0 is bark and
+1 is a leaf. The tree is normalized: the trunk stays at the xz origin, the base is y = 0, and the height is 1.
+`read_tree_mesh` / `tree_mesh_of` build one `TreeMesh`. The fine level's stored error is 0, the same contract as
+a flat grid, so a near camera can select it. A coarser level's error is at least the measured one-sided
+Hausdorff distance of that level and of every finer level, and at least 0.0001, so the errors do not decrease.
+`chosen_level` would otherwise keep the last level whenever two errors were equal.
+
+Clusters are still consecutive groups of 64 triangles. That is not a spatial partition: a cluster can hold
+bark and leaves, and none of the oak's fine clusters has a cone tight enough to cull. Frustum culling still
+drops a cluster whose sphere is outside. `local_view(planes, camera, place)` moves the planes and the camera
+into one tree. `place` is `x, z, yaw, scale`: world point = `(x, 0, z) + scale * R(yaw) * p`.
+
+`pack_tree_meshes` lays every level into one vertex list `(x, y, z, u)`, one texel list `(v)`, and one triangle
+list of absolute indices plus the part. A level's `base` is its first triangle there, and a cluster's `at` is
+its first triangle in the level.
 
 ## Sample value
 
 `samples/graphics/meshlet_grid.warp` returns, in order: flat fine triangles, flat coarse triangles, the two flat
-cluster sizes, the peak's coarse error, peak triangles kept at the fine level and at the coarse level, and flat
-cluster counts in front, behind, and outside one plane:
-`[96, 24, 64, 32, 1, 8, 2, 2, 0, 0]`. The fifth value is the peak error, 1.
+cluster sizes, the peak's coarse error, peak triangles kept at the fine level and at the coarse level, flat
+cluster counts in front, behind, and outside one plane, then the oak: level count, fine triangles, coarse
+triangles, fine clusters, coarse clusters, the level at distance 2 and at distance 40 (one pixel, cot 1,
+height 135), fine clusters kept by the plane `x >= 0.05`, and how many of those fine clusters can be cone-culled:
+`[96, 24, 64, 32, 1, 8, 2, 2, 0, 0, 2, 1998, 1146, 32, 18, 1, 2, 30, 0]`. The fifth value is the peak error, 1.
+The oak's fine error is 0 and its coarse error is about 0.0529.

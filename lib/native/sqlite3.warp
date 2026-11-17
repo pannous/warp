@@ -4,7 +4,7 @@
 // argument and its pointer is the call's result.
 //   db = sqlite3_open(":memory:")
 //   rows(db, "select 1+2, 'a'")        [[3, "a"]]
-//   run_query(db, "create table t(x)") the changed rows' count
+//   run(db, "create table t(x)")      the changed rows' count
 // (`sql` and `execute` are warp's words for sql templates, core/parsing/injection.warp)
 sqlite3_libversion(): text from 'sqlite3'
 sqlite3_libversion_number(): i32 from 'sqlite3'
@@ -49,12 +49,17 @@ column_value(statement: int, column: int) := {
 	sqlite3_column_text(statement, column)
 }
 
-// the rows `query` gives on the database `db`, each the list of its columns' values
-rows(db: int, query: text) := rows_bound(db, query, [])
-// the rows `query` gives with its `?`s bound to `values` in order, as run_bound binds them
-rows_bound(db: int, query: text, values: list) := {
+// `query` prepared on `db` with its `?`s bound to `values` in order, each an int (a yes/no as 1 or 0), a float, a text
+// or ø (null), so no value is spliced into SQL
+prepared(db: int, query: text, values: list) := {
 	statement = sqlite3_prepare_v2(db, query, -1)
 	for i in 1 to count(values) { bound(statement, i, values#i) }
+	statement
+}
+
+// the rows `query` gives on the database `db`, each the list of its columns' values
+rows(db: int, query: text, values: list = []) := {
+	statement = prepared(db, query, values)
 	found = []
 	while sqlite3_step(statement) == SQLITE_ROW {
 		row = []
@@ -70,12 +75,8 @@ rows_bound(db: int, query: text, values: list) := {
 }
 
 // runs `query` on `db` for what it does; the count of the rows it changed
-run_query(db: int, query: text) := run_bound(db, query, [])
-// runs `query` with its `?`s bound to `values` in order, each an int (a yes/no as 1 or 0), a float, a text or ø (null),
-// so no value is spliced into SQL; the count of the rows it changed
-run_bound(db: int, query: text, values: list) := {
-	statement = sqlite3_prepare_v2(db, query, -1)
-	for i in 1 to count(values) { bound(statement, i, values#i) }
+run(db: int, query: text, values: list = []) := {
+	statement = prepared(db, query, values)
 	stepped = sqlite3_step(statement)
 	while stepped == SQLITE_ROW { stepped = sqlite3_step(statement) }
 	sqlite3_finalize(statement)

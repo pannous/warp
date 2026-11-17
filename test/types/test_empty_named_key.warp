@@ -1,8 +1,8 @@
 # from test_empty_named_key.rs: edit the Rust test, then run the script again
 
 # a_key_named_empty_is_a_field
-is! 'class Cell{empty: bool}
-c = Cell(yes)
+is! 'class Box{empty: bool}
+c = Box(yes)
 c.empty' true
 
 # a_linked_list_of_empty_marked_cells

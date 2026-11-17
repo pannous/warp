@@ -6,7 +6,9 @@
 use "class_methods/listed_fields.warp"
 use "class_methods/statics.warp"
 use "class_methods/methods.warp"
+use "class_methods/iterators.warp"
+use "class_methods/class_tags.warp"
 
 # the program's classes rewritten: their listed fields typed, their static fields hoisted, then their methods lifted to
 # functions of the program
-classes_rewritten(program: Node): Node := methods_lifted(statics_hoisted(listed_fields(program)))
+classes_rewritten(program: Node) as Node := methods_lifted(statics_hoisted(listed_fields(program)))

@@ -12,3 +12,15 @@
 # triage-held 2026-11-06: map<int, int> / dict type spellings, foreign syntax :: 'm: map<int, int> = {}; m[1] = 2; m[1] + 1'	3
 'm: map = {}; m[7] = 2; count(m)'	1
 # triage-held 2026-11-06: map<int, int> / dict type spellings, foreign syntax :: 'm: dict = {}; m[1] = 5; m[2] = 6; m[1] + m[2]'	11
+
+# a map given, declared or answered by a function keeps number keys as entries, as a map variable does (card map-put)
+'def f(): map { m = {}; m[2] = yes; m }; g = f(); g[37] = yes; g'	{2: yes, 37: yes}
+'def f(g: map) { g[37] = yes; g }; f({2: yes})'	{2: yes, 37: yes}
+'def f(g: map) { g[2] = no; g }; f({2: yes})'	{2: no}
+'def f(xs) { xs[1] = 5; xs }; f([1, 2])'	[1, 5]
+'f(): map := { m = {}; m[2] = yes; m }; g = f(); g[37] = yes; g'	{2: yes, 37: yes}
+'f(): map := { m = {}; m[2] = yes; m }; g: map = f(); g[37] = yes; g[2]'	yes
+'def f(g) { k = 37; g[k] = yes; g }; m = {2: yes}; f(m)'	{2: yes, 37: yes}
+'def f(xs) { k = 1; xs[k] = 5; xs }; f([1, 2])'	[1, 5]
+'[{2: yes}, {3: no}]#1'	{2: yes}
+'def lt(d: int): map { found = {}; if d < 1 { inner = lt(d + 1); for p in inner.keys { found[p] = inner[p] } } else { found["x"] = "y" }; found }; lt(0)'	{x: 'y'}

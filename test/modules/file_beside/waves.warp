@@ -1,0 +1,2 @@
+// a file beside test_used_by_name.pairs.warp, used by its name: its libm call is the program's (card use-image)
+wave = cos(0.5)

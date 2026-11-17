@@ -8,6 +8,10 @@ Darwin)
 	sed_in_place() { sed -i '' "$@"; }
 	mtime_of() { stat -f %m "$@"; }
 	size_of() { stat -f %z "$@"; }
+	# instruction_counter <file> <command…>: the command run, the instructions it retired (its own, not its
+	# children's) written to the file; instructions_counted <file>: that number
+	instruction_counter=(/usr/bin/time -l -o)
+	instructions_counted() { awk '/instructions retired/ { print $1 }' "$1"; }
 	;;
 *)
 	warp_platform=linux
@@ -16,12 +20,19 @@ Darwin)
 	sed_in_place() { sed -i "$@"; }
 	mtime_of() { stat -c %Y "$@"; }
 	size_of() { stat -c %s "$@"; }
+	instruction_counter=(perf stat -x, -e instructions:u -o)
+	instructions_counted() { awk -F, '/instructions/ { print $1 }' "$1"; }
+	# (no perf: nothing counted, the file left empty)
+	instructions_uncounted() { : >"$1"; shift; "$@"; }
+	command -v perf >/dev/null || instruction_counter=(instructions_uncounted)
 	;;
 esac
-# the shared native warp: WARP_BINARY, else ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp)
-warp_binary=${WARP_BINARY:-$HOME/dev/bin/warp}
-# (neither there: the path stays, so an error names where the binary was looked for, never an empty one)
-[ -e "$warp_binary" ] || warp_binary=$(command -v warp || echo "$warp_binary")
+# main's installed native warp: ~/dev/bin/warp (the Mac), else the warp on PATH (the box: ~/bin/warp); neither there,
+# the path stays, so an error names where the binary was looked for, never an empty one
+installed_warp=$HOME/dev/bin/warp
+[ -e "$installed_warp" ] || installed_warp=$(command -v warp || echo "$installed_warp")
+# the native warp a script runs: WARP_BINARY (a tree's own, <tree>/core/native/warp), else main's installed one
+warp_binary=${WARP_BINARY:-$installed_warp}
 # launcher_of <folder> <binary> <option…>: <folder>/warp, a warp that runs <binary> with these options first (warp
 # reads no variable for them, decision no-bash-exports: `--lib <tree>/lib --no-hints`), so a script hands its tests
 # one WARP for its tree; prints its path
@@ -42,6 +53,11 @@ packages_linked() {
 if [ $warp_platform = mac ]; then warp_store=${WARP_COMPILER_STORE:-/Volumes/Build/compilers}
 elif [ -d /workspace/warp-store ]; then warp_store=${WARP_COMPILER_STORE:-/workspace/warp-store}  # the box's, shared by its agents
 else warp_store=${WARP_COMPILER_STORE:-$HOME/.cache/warp/compilers}; fi
+DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
+# how many compiler builds run at once machine-wide (scripts/build-slot.sh): <store>/build-slots/count, when present,
+# sets the slots for every session at once (at night as many as the load allows; the Supervisor raises and lowers it
+# watching the load, notes/agents/night.md)
+build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$warp_store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
 # a native warp copied into <folder> finds its wasmtime beside itself: put the folder on the loader's path (the Mac's
 # rpath already looks there; Linux's loader needs LD_LIBRARY_PATH)
 libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_library_path_variable:+:\$$warp_library_path_variable}\""; }

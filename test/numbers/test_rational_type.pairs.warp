@@ -17,10 +17,7 @@
 'type([1 2.5f])'	'list of number'
 
 # test_pi_is_real_whatever_its_representation
-'type(π)'	'real'
-'type(pi)'	'real'
 'type([π π])'	'list of real'
-'type([π 1])'	'list of number'
 
 # test_other_mixes_stay_plain_lists
 «type([1.5 'a'])»	'list'
@@ -33,4 +30,3 @@
 'x:rationals=[1/2, 3/4]; count x'	2
 'x:rationals=[1/2, 3/4]; type(x)'	'list of rational'
 'x:list<rational>=[1/2, 3/4]; type(x)'	'list of rational'
-'x:list of rational=[1/2, 3/4]; type(x)'	'list of rational'

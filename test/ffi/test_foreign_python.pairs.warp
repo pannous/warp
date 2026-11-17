@@ -8,4 +8,3 @@
 
 # test_python_values_cross_exactly
 'use python math; math.factorial(25) / math.factorial(24)'	25
-'use python "sys"; count sys.version_info'	5

@@ -5,11 +5,12 @@
 // of the block, holds every task until it wakes (the first said once as a warning).
 // `await job` runs the tasks until it is done and gives its value, `await all jobs` their values, `await any`/`first`
 // the first done's, `await job within t or d` its value if done within t, else d.
-// A task keeps what a module holds per task (task_context: sound's voice), its starter's when it was started
+// A task keeps what a module holds per task (sound's voice), its starter's when it was started: each such module gives
+// its part with task_part_kept
 use units
 // (`await go …` is one rule: `await $x` taking the go would leave it unrewritten)
 rewrite await go $body: block => task_awaited(task_go(() => $steps)) where $steps = task_steps($body)
-rewrite await go $x => ($context = task_context(); $value = $x; task_context_back($context); $value)
+rewrite await go $x => ($context = task_parts(); $value = $x; task_parts_back($context); $value)
 // `go for x in xs {…}`: each iteration a task, the loop done when all of them are (a parallel for)
 rewrite go for $x in $xs {$body...} => ($jobs = $xs.map($x => task_go(() => $steps)); $jobs.map(task_awaited); ø) where $steps = task_steps({$body...})
 rewrite go $body: block => task_go(() => $steps) where $steps = task_steps($body)
@@ -76,20 +77,36 @@ global failed_tasks = []
 global task_sleep_said = no
 // the last task each function's `go f(…)` started, by the function's name
 global named_tasks = {}
+// what modules hold per task (sound's voice), each a [kept, back, joined] triple given by task_part_kept: kept() its part
+// of the running context, back(part) that part set again, joined(part) an awaited task's part taken into the awaiter's
+// (sound: what follows `await bass` starts after the bass's sounds, one clock for every voice). A module of its own
+// (prebuilt, linked by name), tasks calls them through this list: a word of the same name in the module holding the
+// part would never be reached from here
+global context_parts = []
+public task_part_kept(kept: function, back: function, joined: function) := { context_parts += [[kept, back, joined]] }
+public task_parts() := context_parts.map(part => part#1())
+task_parts_back(context: list) := task_parts_given(context, 2)
+// each part of the context to its module's word: 2 back, 3 joined
+task_parts_given(context: list, word: int) := {
+	for i in 0..#context {
+		given = context_parts#(i + 1)#word
+		given(context#(i + 1))
+	}
+}
 // the task of a step, queued to start at main's next yield, its starter's context its own (sound's voice)
-task_go(first: function): Task := {
+task_go(first: function) as Task := {
 	task = Task(clock(), first)
-	task.context = task_context()
+	task.context = task_parts()
 	task_queue = task_queue + [task]
 	task
 }
-task_named(task: Task, name: text): Task := {
+task_named(task: Task, name: text) as Task := {
 	named_tasks[name] = task
 	task
 }
-task_named_by(name: text): Task := named_tasks[name] ?? raise "no task of " + name + " was started: `go " + name + "(…)` starts one"
+task_named_by(name: text) as Task := named_tasks.get(name) ?? raise "no task of " + name + " was started: `go " + name + "(…)` starts one"
 // the task of `after`: each turn it checks the condition, giving the others their turn until it holds
-task_when(holds: function, value: function): Task := task_go(() => task_polled(holds, value))
+task_when(holds: function, value: function) as Task := task_go(() => task_polled(holds, value))
 task_polled(holds: function, value: function) := if holds() then value() else task_sleep(1, () => task_polled(holds, value))
 // a sleep's amount in ms: a duration's, a plain number's seconds (as sleep)
 sleep_ms_of(amount) := (if amount is Time then amount.amount else amount) * 1000
@@ -132,11 +149,11 @@ task_stepped(task: Task) := {
 	step = task.next
 	task.next = ø
 	running_task = task
-	starter = task_context()
-	task_context_back(task.context)
+	starter = task_parts()
+	task_parts_back(task.context)
 	value = try step() catch e { task.failed = text(e); failed_tasks = failed_tasks + [task]; ø }
-	task.context = task_context()
-	task_context_back(starter)
+	task.context = task_parts()
+	task_parts_back(starter)
 	running_task = ø
 	if task.next == ø {
 		task.done = yes
@@ -149,15 +166,16 @@ handlers_run(handlers: list) := for handler in handlers { handler() }
 // `await job`: the tasks run until it is done, its value (its error raised again); any other value as it is. The
 // emitter calls it too where a place typed as a value takes a task, `n: int = go f(3)` (decision task-to-value-awaits)
 public task_awaited(x: any): any := if x is Task then task_value(x) else x
-task_value(x: Task): any := {
+task_value(x: Task) as any := {
 	x.paused = no
 	tasks_run_while(() => not x.done, ø)
+	if x.context != ø { task_parts_given(x.context, 3) }
 	x.awaited = yes
 	if x.failed != ø { raise text(x.failed) }
 	x.value
 }
 // `await any jobs`: the value of the first to be done
-task_awaited_any(xs: any): any := {
+task_awaited_any(xs: any) as any := {
 	tasks_run_while(() => not xs.any(is_done), ø)
 	task_awaited(xs.filter(is_done)#1)
 }
@@ -168,10 +186,10 @@ task_value_within(x: Task, ms, fallback: function) := {
 	if x.done then task_value(x) else fallback()
 }
 // a value is done, a task once its last step ran
-is_done(x: any): bool := if x is Task then task_finished(x) else yes
-task_finished(x: Task): bool := x.done
+is_done(x: any) as bool := if x is Task then task_finished(x) else yes
+task_finished(x: Task) as bool := x.done
 // a task named name ends without a result: an await or read of it raises; one done already keeps its value
-task_cancelled(x: any, name: text): any := {
+task_cancelled(x: any, name: text) as any := {
 	if x is Task and not x.done { task_ended(x, name) }
 	ø
 }
@@ -185,7 +203,7 @@ task_stopped(x, name: text) := {
 	warning("stop pauses " + name + "; to end it: cancel " + name)
 	task_paused(x)
 }
-task_paused(x: any): any := {
+task_paused(x: any) as any := {
 	if x is Task and not x.paused { task_held(x) }
 	ø
 }
@@ -201,7 +219,7 @@ task_cancelled_then(x, handler: function) := {
 	if x is Task { x.cancel_handlers += [handler] }
 	ø
 }
-task_resumed(x: any): any := {
+task_resumed(x: any) as any := {
 	if x is Task { x.paused = no }
 	ø
 }

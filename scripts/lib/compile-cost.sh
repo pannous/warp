@@ -20,19 +20,13 @@ COMPILE_COST_PROGRAMS=(
 instructions_of() {
 	local counted status
 	counted=$(mktemp "${TMPDIR:-/tmp}/compile-cost.XXXXXX")
-	if [ $warp_platform = mac ]; then
-		timeout "$COMPILE_COST_SECONDS" /usr/bin/time -l -o "$counted" "$@" >/dev/null 2>&1
-		status=$?
-		awk '/instructions retired/ { print $1 }' "$counted"
-	else
-		timeout "$COMPILE_COST_SECONDS" perf stat -x, -e instructions:u -o "$counted" "$@" >/dev/null 2>&1
-		status=$?
-		awk -F, '/instructions/ { print $1 }' "$counted"
-	fi
+	timeout "$COMPILE_COST_SECONDS" "${instruction_counter[@]}" "$counted" "$@" >/dev/null 2>&1
+	status=$?
+	instructions_counted "$counted"
 	rm -f "$counted"
 	return $status
 }
-compile_cost_counter() { [ $warp_platform = mac ] || command -v perf >/dev/null; }
+compile_cost_counter() { [ "${instruction_counter[*]}" != instructions_uncounted ]; }
 
 # compile_costs_measured <lib> <binary>: `name<TAB>instructions` of each program, the lowest of two runs after one
 # unmeasured (a fresh lib/ compiles its modules' machine code first)

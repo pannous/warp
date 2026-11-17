@@ -32,8 +32,8 @@ tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/compile-cost.sh"
 binary=${args[1]:-${WARP_GATE_BINARY:-$warp_binary}}
-# the installed native warp's folder: its lib/, whose compiler is main's
-installed=$(dirname "$(readlink -f "$binary")")
+# main's installed native warp's folder: its lib/, whose compiler is main's, whatever binary runs the tree
+installed=$(dirname "$(readlink -f "$installed_warp")")
 wants() { # wants <tier>: the tier is in --tiers (a range a-b or a list a,b)
 	local t
 	for t in ${tiers//,/ }; do
@@ -106,7 +106,7 @@ if wants 1; then
 	done
 	# the compile cost against main's installed compiler's (scripts/lib/compile-cost.sh), each kept in its store record
 	if ! compile_cost_counter; then echo "compile cost: not measured (no instruction counter here)"
-	elif ! costs=$(compile_costs "$tree/lib" "$warp") || ! main_costs=$(compile_costs "$installed" "$binary"); then
+	elif ! costs=$(compile_costs "$tree/lib" "$warp") || ! main_costs=$(compile_costs "$installed" "$installed_warp"); then
 		echo "FAIL compile cost: not measured (see the compile-cost lines above)"; ok=0
 	else
 		slower=$(compile_costs_slower "$costs" "$main_costs")
@@ -114,7 +114,8 @@ if wants 1; then
 			echo "compile cost slower, measured again: ${slower//$'\n'/; }"
 			costs=$(compile_costs_again "$tree/lib" "$warp") && slower=$(compile_costs_slower "$costs" "$main_costs")
 		fi
-		accepted=$(git log -1 --format=%B HEAD | grep -m1 '^speed-ok:')
+		# any commit not yet on main may carry it: a landing batch's own merge commits only list the cards' subjects
+		accepted=$(git log --format=%B origin/main..HEAD | grep -m1 '^speed-ok:')
 		against="main's compiler $(cut -d' ' -f1 "$installed/warp.wasm.inputs")"
 		if [[ -z $slower ]]; then echo "ok   compile cost: $(compile_costs_shown "$costs") (within +$COMPILE_COST_SLOWER_PERCENT% of $against)"
 		elif [[ -n $accepted ]]; then echo "ok   compile cost slower, $accepted: ${slower//$'\n'/; } (against $against)"

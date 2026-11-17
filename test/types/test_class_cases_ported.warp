@@ -46,4 +46,4 @@ is! 'class Clicker{r:int; static clicks = 0}; Clicker.clicks = 5; Clicker.clicks
 is! 'class Circle{r:int; static doubled(x:int) := Circle(x * 2)}; Circle.doubled(4).r' 8
 
 # an_object_has_one_text_form
-is! 'class Point{x:int; y:int}; p = Point(1, 2); "at \\(p)"' 'at Point{x:1 y:2}'
+is! 'class Point{x:int; y:int}; p = Point(1, 2); "at \\(p)"' 'at Point{x: 1, y: 2}'

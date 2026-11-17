@@ -5,12 +5,12 @@ infix operator matches(subject: any, pattern: any) := std_pure("regex", "matches
 public first_match(subject: any, pattern: any): any := std_pure("regex", "first", [subject, pattern])
 // the host answers a malformed pattern with an error value ("regex (a: Unmatched ( or \\("): raised here, before the
 // declared list or text would refuse it as "not a list" (card regex-malformed-message)
-def regex_raised(answer: any): any {
+def regex_raised(answer: any) as any {
 	if answer is error { raise answer }
 	answer
 }
-find_all(subject: any, pattern: any): list := regex_raised(std_pure("regex", "all", [subject, pattern]))
-replace_all(subject: any, pattern: any, replacement: any): text := regex_raised(std_pure("regex", "replace", [subject, pattern, replacement]))
+find_all(subject: any, pattern: any) as list := regex_raised(std_pure("regex", "all", [subject, pattern]))
+replace_all(subject: any, pattern: any, replacement: any) as text := regex_raised(std_pure("regex", "replace", [subject, pattern, replacement]))
 // Capture groups (card lib-regex-groups-tempfiles), through the host's replace and its $1 … $9: every match replaced by
 // its groups between marker characters, read back in order, so each match keeps its context (^, \b) exactly as find_all
 // sees it. The native host is POSIX extended regex: at most 9 groups, no named groups (a group that took no part is "")
@@ -18,7 +18,7 @@ REGEX_OPEN = chr(2)
 REGEX_BETWEEN = chr(1)
 REGEX_CLOSE = chr(3)
 // the capturing groups of a pattern: each ( not escaped, not inside [ ], not (?…
-def regex_group_count(re: text): int {
+def regex_group_count(re: text) as int {
 	cs = [c for c in re]
 	n = 0
 	escaped = no
@@ -34,7 +34,7 @@ def regex_group_count(re: text): int {
 	n
 }
 // `find_all_groups("a=1, b=22", "([a-z])=([0-9]+)")` is [["a", "1"], ["b", "22"]]: the groups of every match
-def find_all_groups(t: text, re: text): list {
+def find_all_groups(t: text, re: text) as list {
 	n = regex_group_count(re)
 	if n > 9 { raise "find_all_groups: " + text(n) + " groups in " + re + ", the host captures at most 9" }
 	if REGEX_OPEN in t or REGEX_CLOSE in t { raise "find_all_groups: the text holds the marker characters chr(2) or chr(3)" }
@@ -44,7 +44,7 @@ def find_all_groups(t: text, re: text): list {
 	[pieces[k].split(REGEX_CLOSE)[0].split(REGEX_BETWEEN) for k in 1 ..< count(pieces)]
 }
 // `match_groups("v1.22", "v([0-9]+)\\.([0-9]+)")` is ["1", "22"]: the groups of the first match, ø when none matches
-def match_groups(t: text, re: text): any {
+def match_groups(t: text, re: text) as any {
 	all = find_all_groups(t, re)
 	if count(all) == 0 { return ø }
 	all[0]

@@ -1,0 +1,43 @@
+# samples/gpu/fish.warp, the red sea bream (notes/fish.md). The swim is the Fish Kit's part-id motion,
+# re-expressed. These check the parser and one posed vertex of each motion. They do not paint.
+
+# a tail at a quarter beat sits on the wave, a pectoral leaves its rest, a jaw drops, a gill swings out, an upper jaw slides
+is! 'use "../../samples/gpu/fish.warp"
+use math
+mesh = fish_mesh("swim 0.2 0.4 1 1.6 0.7 0 0 0.25
+v 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0
+v -0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0
+v 0.1 -0.02 0.06 0 0 1 4 1 0 0.1 0 0.02 0 1 0 1 0
+v 0.22 -0.02 0 0 1 0 8 1 0 0 0 0 1 1 0 1 0
+v 0.12 0 0.02 0 0 1 7 0.02 0 0 0 0 0 0 1 1 0
+v 0.23 -0.01 0 0 1 0 9 1 0 0 0 0 1 1 1 1 0
+f 1 2 3")
+tail = fish_point(mesh, 2, 0.15625)
+still = fish_point(mesh, 2, 0)
+fin = fish_point(mesh, 3, 0)
+jaw = fish_point(mesh, 4, 0.3465)
+shut = fish_point(mesh, 4, -0.2785)
+gill = fish_point(mesh, 5, 0.625)
+upper = fish_point(mesh, 6, 0.3465)
+#mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001' yes
+
+# the baked bream: the counts the baker wrote, and the tail, lip, pectoral, eye and gill each move
+is! 'use "../../samples/gpu/fish.warp"
+use math
+mesh = fish_mesh(read("../../samples/gpu/madai.fish"))
+tail = 1
+lip = 1
+fin = 1
+eye = 1
+gill = 1
+for i in 1 to #mesh.positions {
+	if mesh.positions#i#1 < mesh.positions#tail#1 { tail = i }
+	if mesh.jaws#i > 0.5 { lip = i }
+	if mesh.parts#i == PECTORAL and mesh.weights#i > mesh.weights#fin { fin = i }
+	if mesh.parts#i == EYE { eye = i }
+	if mesh.parts#i == GILL { gill = i }
+}
+swung = abs(fish_point(mesh, tail, 0)#3 - fish_point(mesh, tail, 0.15625)#3)
+opened = fish_point(mesh, lip, 0.3465)
+closed = fish_point(mesh, lip, -0.2785)
+#mesh.positions == 408 and #mesh.triangles == 722 and mesh.reach ~ 0.45 and swung > 0.005 and opened#2 < closed#2 - 0.004 and norm(fish_point(mesh, fin, 0) .- fish_point(mesh, fin, 0.3)) > 0.001 and norm(fish_point(mesh, eye, 0.4) .- mesh.positions#eye) > 0.0005 and abs(fish_point(mesh, gill, 0.625)#3) > abs(mesh.positions#gill#3) + 0.002' yes

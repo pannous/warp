@@ -1,0 +1,4 @@
+# delete(path) (card file-delete-word): a written file is gone; a missing file is refused, naming the path
+
+'use file; p = temp_folder() + "/warp_delete_word_1.txt"; write(p, "x"); delete(p); exists(p)'	no
+'use file; p = temp_folder() + "/warp_delete_word_never.txt"; try { delete(p) } catch e { p in e.message }'	yes

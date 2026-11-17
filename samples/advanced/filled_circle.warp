@@ -1,12 +1,13 @@
 #!/usr/bin/env warp
-# a filled circle, painted on the playground's canvas: paint(pixels, width, height), row after row, nonzero is ink
-radius = 50
-width = height = 200
-center = height / 2
+# a filled circle, painted on the playground's canvas: row after row, nonzero is ink
+height=window.height
+width=window.width
+radius = min(width,height)/3
+center = {y:height / 2, x:width/2}
 surface = int[height * width]
 for y in 0..height {
 	for x in 0..width {
-		surface[y * width + x] = (y - center) ^ 2 + (x - center) ^ 2 < radius ^ 2
+		surface[y * width + x] =  (y - center.y) ^ 2 + (x - center.x) ^ 2 < radius ^ 2 
 	}
 }
-paint(surface, width, height)
+paint(surface)

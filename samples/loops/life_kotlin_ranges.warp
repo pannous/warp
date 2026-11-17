@@ -35,14 +35,14 @@ fun step(grid) {
 	}
 	return next
 }
-visualize(grid):={
+visualize(grid) := {
 	for r in 0..size {
-		print(grid[r*size..(r+1)*size])
+		print(grid[r * size..(r + 1) * size])
 		# print(grid[r*size..(r+1)*size].map{it and "•" or " " }) // todo how?
 	}
 }
 
-main():={
+main() := {
 	grid = []
 	for i in 0..size * size { grid.push(0) }
 	for (r, c) in [(0, 1), (1, 2), (2, 0), (2, 1), (2, 2)] {

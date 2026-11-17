@@ -3,8 +3,6 @@ target
 *.wasm
 # … but the test fixtures, which need clang, wasi-libc or wasm-tools to build (card wasm-fixtures-ignored)
 !/test/fixtures/wasm/*.wasm
-# (shapes.wasm is a warp-compiled module an older compiler wrote, no fixture source of its own)
-/test/fixtures/wasm/shapes.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
 lib/modules/sugar_rules.packed
@@ -38,10 +36,11 @@ data/
 # the machine code a linked run keeps beside runtime.wasm and each prebuilt module (driver.warp machine_code_file)
 /lib/runtime.wasm.driver.*
 /lib/modules/*.cwasm*
+/lib/modules/*.built-of
 # … and beside every other module a run links, test/fixtures/wasm's too
 *.driver.cwasm*
 # warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
-/lib/libwarp_wasmtime.*
+/lib/libwarp_*
 /lib/libwgpu_native.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*

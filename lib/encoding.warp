@@ -9,13 +9,13 @@ BASE64_DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+
 HEX_DIGITS = "0123456789abcdef"
 
 // the place of a digit in its alphabet, -1 when it is not there
-digit_value(digits: text, c: any): int := {
+digit_value(digits: text, c: any) as int := {
 	value = -1
 	for i in 0 ..< count(digits) { if digits[i] == c { value = i } }
 	value
 }
 
-def base64_encode(t: text): text {
+def base64_encode(t: text) as text {
 	b = to_utf8(t)
 	out = ""
 	i = 0
@@ -32,7 +32,7 @@ def base64_encode(t: text): text {
 // strict decoding: whitespace (space, tab, CR, LF) is skipped, any other character outside the alphabet raises
 // with its position (1-based, in the text as given); = only as the last one or two characters, the digits then a
 // multiple of 4; unpadded, a final group of one digit raises (it cannot spell a byte)
-def base64_decode_bytes(t: text): list {
+def base64_decode_bytes(t: text) as list {
 	out = []
 	n = 0
 	bits = 0
@@ -57,15 +57,15 @@ def base64_decode_bytes(t: text): list {
 	if digits % 4 == 1 { raise "base64: a final group of one digit" }
 	out
 }
-base64_decode(t: text): text := from_utf8(base64_decode_bytes(t))
+base64_decode(t: text) as text := from_utf8(base64_decode_bytes(t))
 
 // hex, the one story (card lib-hex-unify): hex_byte(255) is "ff", hex_encode_bytes([0, 171]) is "00ab", hex_encode(t)
 // a text's UTF-8 bytes; hex_value("f") is 15 and hex_value("1F") 31, -1 for an empty text or any character that is no
 // hex digit (never raising, for scanners such as url's %HH); hex_decode_bytes and hex_decode are strict and raise
-hex_byte(n: int): text := HEX_DIGITS[n /! 16] + HEX_DIGITS[n % 16]
-hex_encode_bytes(bytes: list): text := join([hex_byte(b) for b in bytes], "")
-hex_encode(t: text): text := hex_encode_bytes(to_utf8(t))
-hex_value(digits: text): int := {
+hex_byte(n: int) as text := HEX_DIGITS[n /! 16] + HEX_DIGITS[n % 16]
+hex_encode_bytes(bytes: list) as text := join([hex_byte(b) for b in bytes], "")
+hex_encode(t: text) as text := hex_encode_bytes(to_utf8(t))
+hex_value(digits: text) as int := {
 	if digits == "" { return -1 }
 	n = 0
 	for c in digits {
@@ -78,7 +78,7 @@ hex_value(digits: text): int := {
 
 // the bytes a hex text spells, for data that is no UTF-8 text (compressed, hashed): hex_decode_bytes("ff00") is [255, 0]
 // strict: an odd number of digits or a character that is no hex digit (either case) raises with its position
-def hex_decode_bytes(t: text): list {
+def hex_decode_bytes(t: text) as list {
 	if count(t) % 2 != 0 { raise "hex: " + text(count(t)) + " digits are an odd count" }
 	out = []
 	i = 0
@@ -89,19 +89,19 @@ def hex_decode_bytes(t: text): list {
 	out
 }
 // the value of one hex digit (either case) at a position, raising for any other character
-encoding_hex_digit(c: any, at: int): int := {
+encoding_hex_digit(c: any, at: int) as int := {
 	v = hex_value(c)
 	if v < 0 { raise "hex: " + c + " at " + text(at) + " is no hex digit" }
 	v
 }
-hex_decode(t: text): text := from_utf8(hex_decode_bytes(t))
+hex_decode(t: text) as text := from_utf8(hex_decode_bytes(t))
 
 // --- base32 (RFC 4648 sections 6 and 7): groups of 5 bits, = padding to a multiple of 8 characters; decoding takes
 // either case, the padding optional, any other character raising
 BASE32_DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"
 BASE32HEX_DIGITS = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
-encoding_bytes(subject: text or list): list := if subject is list then subject else to_utf8(subject)
-def base32_with(subject: text or list, digits: text): text {
+encoding_bytes(subject: text or list) as list := if subject is list then subject else to_utf8(subject)
+def base32_with(subject: text or list, digits: text) as text {
 	b = encoding_bytes(subject)
 	out = ""
 	n = 0
@@ -115,7 +115,7 @@ def base32_with(subject: text or list, digits: text): text {
 	while count(out) % 8 != 0 { out = out + "=" }
 	out
 }
-def base32_bytes_with(t: text, digits: text, name: text): list {
+def base32_bytes_with(t: text, digits: text, name: text) as list {
 	written = upper(t)
 	size = count(written)
 	while size > 0 and written[size - 1] == "=" { size = size - 1 }
@@ -131,17 +131,17 @@ def base32_bytes_with(t: text, digits: text, name: text): list {
 	}
 	out
 }
-base32_encode(subject: text or list): text := base32_with(subject, BASE32_DIGITS)
-base32hex_encode(subject: text or list): text := base32_with(subject, BASE32HEX_DIGITS)
-base32_decode_bytes(t: text): list := base32_bytes_with(t, BASE32_DIGITS, "base32")
-base32hex_decode_bytes(t: text): list := base32_bytes_with(t, BASE32HEX_DIGITS, "base32hex")
-base32_decode(t: text): text := from_utf8(base32_decode_bytes(t))
-base32hex_decode(t: text): text := from_utf8(base32hex_decode_bytes(t))
+base32_encode(subject: text or list) as text := base32_with(subject, BASE32_DIGITS)
+base32hex_encode(subject: text or list) as text := base32_with(subject, BASE32HEX_DIGITS)
+base32_decode_bytes(t: text) as list := base32_bytes_with(t, BASE32_DIGITS, "base32")
+base32hex_decode_bytes(t: text) as list := base32_bytes_with(t, BASE32HEX_DIGITS, "base32hex")
+base32_decode(t: text) as text := from_utf8(base32_decode_bytes(t))
+base32hex_decode(t: text) as text := from_utf8(base32hex_decode_bytes(t))
 
 // --- base58, the Bitcoin alphabet (no 0 O I l): the bytes as one big number in base 58, converted a byte at a time
 // so no int grows past a byte times 58; each leading zero byte is a leading 1
 BASE58_DIGITS = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
-def base58_encode(subject: text or list): text {
+def base58_encode(subject: text or list) as text {
 	b = encoding_bytes(subject)
 	digits = []
 	for x in b {
@@ -155,7 +155,7 @@ def base58_encode(subject: text or list): text {
 	for j in 0 ..< count(digits) { out = out + BASE58_DIGITS[digits[count(digits) - 1 - j]] }
 	out
 }
-def base58_decode_bytes(t: text): list {
+def base58_decode_bytes(t: text) as list {
 	bytes = []
 	for i in 0 ..< count(t) {
 		v = digit_value(BASE58_DIGITS, t[i])
@@ -170,12 +170,12 @@ def base58_decode_bytes(t: text): list {
 	for j in 0 ..< count(bytes) { out.add(bytes[count(bytes) - 1 - j]) }
 	out
 }
-base58_decode(t: text): text := from_utf8(base58_decode_bytes(t))
+base58_decode(t: text) as text := from_utf8(base58_decode_bytes(t))
 
 // --- ascii85 (Adobe/btoa): 4 bytes as 5 digits from ! (33), z for a group of four zero bytes, a final group of k
 // bytes as k + 1 digits. Encoding writes no delimiters (as python's a85encode); decoding drops a <~ … ~> pair and
 // white space if present
-def ascii85_encode(subject: text or list): text {
+def ascii85_encode(subject: text or list) as text {
 	b = encoding_bytes(subject)
 	out = ""
 	i = 0
@@ -192,7 +192,7 @@ def ascii85_encode(subject: text or list): text {
 	}
 	out
 }
-def ascii85_decode_bytes(t: text): list {
+def ascii85_decode_bytes(t: text) as list {
 	written = trim(t)
 	if written.starts_with("<~") { written = written[2 ..< count(written)] }
 	if written.ends_with("~>") { written = written[0 ..< count(written) - 2] }
@@ -216,17 +216,17 @@ def ascii85_decode_bytes(t: text): list {
 	}
 	out
 }
-def ascii85_group(digits: list, k: int): list {
+def ascii85_group(digits: list, k: int) as list {
 	n = 0
 	for v in digits { n = n * 85 + v }
 	if n > 4294967295 { raise "ascii85: a group is past 2^32" }
 	[n /! 2 ** (24 - 8 * j) % 256 for j in 0 ..< k]
 }
-ascii85_decode(t: text): text := from_utf8(ascii85_decode_bytes(t))
+ascii85_decode(t: text) as text := from_utf8(ascii85_decode_bytes(t))
 
 // --- z85 (ZeroMQ RFC 32): 4 bytes as 5 digits of its alphabet; the bytes a multiple of 4, the text of 5
 Z85_DIGITS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ.-:+=^!/*?&<>()[]{}@%$#"
-def z85_encode(subject: text or list): text {
+def z85_encode(subject: text or list) as text {
 	b = encoding_bytes(subject)
 	if count(b) % 4 != 0 { raise "z85: " + text(count(b)) + " bytes are no multiple of 4" }
 	out = ""
@@ -239,7 +239,7 @@ def z85_encode(subject: text or list): text {
 	}
 	out
 }
-def z85_decode_bytes(t: text): list {
+def z85_decode_bytes(t: text) as list {
 	if count(t) % 5 != 0 { raise "z85: " + text(count(t)) + " characters are no multiple of 5" }
 	out = []
 	for i in 0 ..< count(t) /! 5 {
@@ -253,4 +253,4 @@ def z85_decode_bytes(t: text): list {
 	}
 	out
 }
-z85_decode(t: text): text := from_utf8(z85_decode_bytes(t))
+z85_decode(t: text) as text := from_utf8(z85_decode_bytes(t))

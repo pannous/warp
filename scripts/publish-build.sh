@@ -8,7 +8,6 @@
 set -euo pipefail
 REPO=pannous/warp TAG=builds KEEP=${WARP_BUILDS_KEEP:-40}
 source "$(dirname "$0")/lib/platform.sh"
-source "$(dirname "$0")/lib/modules.sh"
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd)
 hash=$(cut -d' ' -f1 "$tree/lib/warp.wasm.inputs" 2>/dev/null) || { echo "publish-build: $tree has no built lib/warp.wasm (scripts/rebuild.sh pure)" >&2; exit 1; }
 entry=$warp_store/$hash
@@ -39,7 +38,7 @@ if [ -n "$code_hash" ] && [ -f "$mark" ] && [ "$(cut -d' ' -f1 "$entry/stage-two
 	[[ " ${marks[*]-} " != *" $mark "* ]]; then marks+=("$mark"); fi
 copy_into() { local folder=$1 f; shift; for f in "$@"; do [ -f "$entry/$f" ] || continue; mkdir -p "$folder/$(dirname "$f")"; cp "$entry/$f" "$folder/$f"; [ -f "$entry/$f.inputs" ] && cp "$entry/$f.inputs" "$folder/$f.inputs"; done; }
 mkdir -p "$scratch/main/$hash"
-(cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed $(companion_files warp.wasm) $(companion_files warp-self.wasm))
+(cd "$entry" && copy_into "$scratch/main/$hash" warp.wasm warp-self.wasm runtime.wasm modules/*.wasm modules/index.tsv modules/sugar_rules.packed)
 ((${#marks[@]})) && { mkdir -p "$scratch/main/$hash/self-tested"; cp "${marks[@]}" "$scratch/main/$hash/self-tested/"; }
 pack "$asset" "$scratch/main/$hash"
 # the self build and its marks apart (build-<hash>-self.tar.gz), only for a hash whose self test passed here: a main

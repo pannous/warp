@@ -35,6 +35,10 @@ The failing lines of test/results.txt (aa60d3ddc3, 4149 ✗), sorted into three 
 
 | file:line | reason | verdict |
 |---|---|---|
+| test/functions/test_braceless.pairs.warp (was :5) | `sq(x):=x*x; sq 2 == 5 or yes`: an untyped braceless call in a logical chain, refused as reading two ways | dropped as unpinned 2026-11-14: refusals are never tested (user rule via warp-supervisor); the line had been rewritten to expect the error by 245dc7f2fa |
+| test/numbers/test_unit_literals.pairs.warp:4, 5, 6, 9, 10, 11; test/numbers/test_unit_definitions.pairs.warp:22, 35; test/numbers/test_unit_prefix_lines.pairs.warp:13 | spelled unit names after a number: `3 kilometers`, `3010 meters`, `2 kilograms`, `3 meter`, `3 feet in inches` | parked: spelled-units-number (user 2026-11-13: `quantity(3, "meters")` is the way; via warp-interviewer 11-14 the lines stay red, not dropped) |
+| test/types/test_time_now.pairs.warp:4-6 | `type(time.now)` 'time of day', `time.now is time`, `time.now.hour == now.hour` (old Rust test, no wiki line) | dropped 2026-11-13 via warp-interviewer: `now.time` (lines 10-11) covers it |
+| test/modules/test_wasm_modules.pairs.warp:34, 35 | a C module's out-pointer as the result: `strtol("42 apples", 10)` expected ' apples', `strtol("ff!", 16)` '!'; main gives the C meaning, 42 / 255 | keep for now: the user expects 42 (11-11 via warp-interviewer); the out-pointer form is card strtol-out-pointer (Later) |
 | test/text/test_count_in.pairs.warp:4-9; test/text/test_counts_in_warp.pairs.warp:4, 5, 10; test/functions/test_words_in_phrases.pairs.warp:11, 12 | `count x in y`, `count(x in y)`: the count of a membership's yes/no, refused with did-you-mean `y.count(x)` | delete: the refusal with its fix `y.count(x)` is the behaviour |
 | test/welcoming/test_footguns.pairs.warp:383 | `fast` floats that reassociate math | keep: wiki Footguns.md:764 promises `fast x=3.3` / `as fast`; gap |
 | test/welcoming/test_footguns.pairs.warp:395 | C float32 suffix `.1f` | keep: wiki Footguns.md:772, number.md:28 promise `0.1f`; gap |
@@ -564,7 +568,7 @@ Unchanged since the earlier triage: ∞ 7, divide by zero 7, `x as text?` 6, Col
 Wrong expectations (approve to correct):
 | file:line | expected now | proposed | why |
 |---|---|---|---|
-| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | 3 | decision round-halves: round rounds halves away from zero (banker's is round_even) |
+| test/numbers/test_rounding_in_functions.pairs.warp:6 | 2 | f(2.7) → 3 | decision round-halves: a half may round either way; tests never pin it |
 | test/numbers/test_unbounded_int.pairs.warp:57 | "too big for int: 9223372037000250000" | "too big for int; fix: `x as! int` keeps its low 64 bits" | the refusal now names the fix-it (decision checked-forced-conversions) |
 | test/numbers/test_unit_prefix_lines.pairs.warp:19 | `'a'   todo: …` (spaces, read as the expected) | a tab before the note | got "a" already; the note is glued to the expected value |
 | test/numbers/test_units_after_numbers.warp:30 | `s = 3; str(440Hz)` "440/s" | "440Hz" | Hz shows as written (canonical-output); Rust-era form |
@@ -587,7 +591,8 @@ changed; most test files are Rust-era (`# from test_….rs`) with no wiki page b
 | 9 | function types shown: `type of f` "function: (x) -> int", `type(int)` "type" (type_of_consistency 4 5 8, type_of_lambda_variable 4-6, type_values 11) | type() of a function shows "function" only | Interviewer: is the signature wanted in type()? |
 | 8 | type calls as casts: `hex(123)` 123 (gets the Color 0xFF00007B), `decimal(1/4)`, `byte(65)`, `char(0x41)`, `text(hex(255))` (type_calls 4-14, text_of_text 10, types 34) | `T(x)` ≡ `x as T` is no core rule; lib/color's hex takes the call | Interviewer: `T(x)` as the cast, a general rule; `char(code)` alone could be a prelude function |
 | 7 | one dispatch: `p.first()` of a map field, `width(canvas)`, `first(x) := …` shadowing the library's, setter `set w(v)` (one_dispatch 5-87) | a program's own definition and a field call read the same; mixed cases | split: each line a decision (decision one-dispatch?) |
-| 6 | records with untyped fields: `class contact {name email}; contact("Joe" "j@x")` (records_classes 4-16) | a class of bare names takes a list as its first field | core constructor |
+| 6 | records with untyped fields: `class contact {name email}; contact("Joe" "j@x")` (records_classes 4-16) | a class of bare names takes a list as its first field | unpinned: f(a b) with several parameters, whatever the compiler does (user 11-13 via Interviewer); the lines dropped |
+| 6 | a mutating method gives the changed object: `class counter{n:int; inc() := n += 1}; counter(4).inc().n` (mutating_methods pairs 4, warp 9) | a method gives its body's value, the new n | unpinned: a method gives its body's value; chaining writes `inc() := { n += 1; self }` (user 11-14 via Interviewer, answer-or-act); the lines dropped |
 | 5 | typed JSON: init effects and guards (typed_parse_constructor_effect 2-4, _guard 2, _flat_guards 2) | extensions/rules/rule_words.warp:1385 refuses or skips | extension |
 | 4 | `nat`: `type(3)` "nat", `type(x) == nat` (type_static 9, type_values 7 15, type_compared_with_text 5) | int is canonical now | wrong expectation? Interviewer |
 | 3 | `gc struct` types (recursive_fields 8 9 12) | wasm-level struct spelling | esoteric |
@@ -650,3 +655,514 @@ Triage (judge the form before building it):
 - test_system_values:26, 27 `mouse_x`, `mouse_down` need a mocked mouse (1207); harness, not language.
 - test_test_line_after_tasks:2 expects ø where the runner prints "✓ 1 tests passed".
 - test_relational_arms:4 `sorted(xs, >)` (card sorted-comparator-syntax).
+
+## test/ffi/test_js_callbacks.warp natively (card js-array-from-callback, night decision 2026-11-12)
+- :9 and :10, a warp function called back by JS that calls JS itself (`Array.from(xs, x => Math.max(x, 2))`), are
+  refused natively: the web view's one JS thread waits for the callback's answer. In the page (its own phase) they can work; natively a
+  second view or JavaScriptCore in process would (option B on the card, waits for the user).
+
+## Singular field of a list (card item-field-access, parked 2026-11-13)
+- test/control/test_call_result_reflection.warp:4, 5 expect `people().name` and `name of people()` to read every
+  item's name, ['a', 'b']. Only the plural, `people().names` (:6), reads every item; whether the singular does too
+  is a parked decision (it reads two ways: the list's own field or each item's). Left red and untouched until decided.
+
+## eval of a text sees only its with: names (card interpret-data, user 2026-11-13 via warp-interviewer)
+- test/node/test_eval_word.pairs.warp:6 `x = 5; eval("x*2")` → 10 is obsolete: eval of a text runs as a program of
+  its own and refuses x as unknown; the name goes in by `with:`, `eval("x*2", with: {x: x})` (wiki/evaluation.md,
+  wiki/full-evaluation.md). Data and blocks, `interpret(data a+1)`, do see the names where they are written.
+
+## Events and signals, cluster 11 (warp-interviewer 2026-11-13)
+Dropped, old Rust-era lines no wiki page backs:
+- test/control/test_reactive_ports.pairs.warp `value - was`, `value - before` and test_reactive_ports.warp
+  `previous`: `old` is the one word for the value before a write; more names would take ordinary names in every
+  listener block.
+- test/control/test_on.pairs.warp `y = x--` → 2 with `on set x`: x-- gives the value before the step, 3, as everywhere.
+- test/control/test_broadcast.pairs.warp `broadcast {…} on "test-nobody"` and test_named_broadcast.pairs.warp
+  `send stop the machine{…} to: "test-nobody"`: an event sent to a channel named by a string is no form; `send … to:`
+  is lib/channels' call.
+Rewritten to today's values: test_print.pairs.warp:5 (3), test_change_of_expression.pairs.warp:6 (the test summary);
+test/modules/test_keys.pairs.warp:2 `key_name(65)` is "a", key names lowercase as the Key enum's cases.
+Parked: test_colon_handlers.warp:10 `at 9pm:` on the time library's card.
+Key names (warp-interviewer 2026-11-13): test_key_names.warp `key == ArrowDown` dropped (the browser's spelling, the
+Key case is down); test/modules/test_keys.pairs.warp:4 `[held_key == ESC, LEFT]` is [no, Key.left], the Key case.
+
+## Error values and try (cluster error-values-try, decided by the user via warp-interviewer 2026-11-13)
+
+| file:line | expected now | proposed | why |
+|---|---|---|---|
+| test/welcoming/test_welcoming_print.pairs.warp:18, 19 | "a∞" / "aNaN" | Error("divide by zero") | decimal literals are exact: `1.0/0.0` raises; only `x as float` keeps IEEE (wiki/Footguns.md "NaN and infinity") |
+| test/numbers/test_nan_observed.pairs.warp:4, 5 | "aNaN" / "NaN" | Error("divide by zero") | same: `-0.0/0.0`, `0.0/0.0` are exact |
+| test/welcoming/test_footguns.pairs.warp:321 | true | Error("divide by zero") | same: `1.0/0.0` |
+| test/control/test_try_index_and_float.pairs.warp:5 | 7 | refused at compile time | `n = 5; try n#1 else 7`: `#` on a known int can never work, so the compiler refuses, try or not |
+| test/control/test_try.pairs.warp:31, 34 | 7 | refused at compile time | same: `def f(m){ m#1 }; try f(3) else 7`, `m.a` of an int |
+| test/control/test_error_words.pairs.warp:9 | "ab" | "aøb" | `warn(…)` gives ø, which text shows as ø like any other ø |
+| test/welcoming/test_warning_mode.pairs.warp:4 | "ab" | "aøb" | same: `warning(…)` |
+| test/control/test_error_not_in_data.pairs.warp:18 | 1 | Error("divide by zero") | `a, b = e, 2` binds a plain variable a, which holds no Error (decision errors held only by optional variables); its own header says the write raises |
+
+## Refused forms, dropped as unpinned (user rule 2026-11-14: refusals are never tested)
+| line | form | why refused |
+|---|---|---|
+| test/functions/test_default_parameters.pairs.warp (Ruby style) | `def f(a, b: 2){a+b}; f(1)`, `… f(1, b: 5)` | a literal after a parameter's colon is refused with its fix `b = 2` (night decision parameter-named-fails) |
+| test/functions/test_default_parameters.warp (Ruby style) | `def greet(name, greeting: "Hello"){…}; greet("Ann")` | same |
+| test/functions/test_preposition_calls.warp | `f(x, for y) := x - y; f 5 for 2`, `f(xs, each y) := …; f [1 2 3] each 2` | a label takes its colon in a call, `f 5 for: 2` (wiki/argument.md; warp-interviewer 11-14) |
+| test/operators/test_equality_never_chains.pairs.warp (approx-level) | `1==1==1`, `1 != 2 == yes`, `1 ~ 1 == yes`, `1 ≈ 1 == yes`, `30 == 10 + 20 ≈ 30` | two equality-level comparisons in a row read two ways; parenthesized forms stay pinned |
+| test/types/test_partial_time_comparisons.pairs.warp (cluster-data) | `now > 1970-01-01`, `now < 2999-01-01`, `2999-01-01 > now` | an instant against a date: types never convert implicitly (wiki/Footguns.md "Dates") |
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/errors/test_caught_error_place.pairs.warp: `'users = 3; get "/" { users(1) }; use web; http_served("GET / HTTP/1.1\r\n\r\n").split("\r\n\r\n")#2'	'not a function at 1:28'` — error-message place test, web internals
+- test/parser/test_comments_and_keywords.pairs.warp: `'print 1    print 2'	error` — expects an error for odd phrasing
+- test/parser/test_emoji_atoms.pairs.warp: `'🇩🇪 = 3; 🇩🇪 == "🇩🇪"'	true` — flag emoji assignment oddity
+- test/parser/test_named_argument_lambda.pairs.warp: `'m = [d: x => x + 1]; m.d(2)'	3` — odd list-of-lambda phrasing
+- test/parser/test_parameter_scope.warp: `# a_definitions_parameter_scope_ends_with_it ⏎ is! 'show(p) := p ⏎ def g(show) { show + 1 } ⏎ x = show /tmp ⏎ x' '/tmp'` — odd phrasing show /tmp
+- test/programs/test_display_names.pairs.warp: `'display.diagonal > 1 inch and display.diagonal < 1000 inch'	true	needs: display` — needs a physical display, platform
+- test/programs/test_display_names.pairs.warp: `'display.size == [display.width, display.height] px'	true` — needs a physical display, platform
+- test/programs/test_samples.pairs.warp: `'samples/numbers/sin.warp'	841471` — float precision platform quirk
+- test/programs/test_samples.pairs.warp: `'samples/advanced/raytracer.warp'	8230` — sample file no longer exists
+- test/programs/test_samples.pairs.warp: `'samples/advanced/snake.warp'	40` — sample file no longer exists
+- test/programs/test_sound.warp: `# a_melody_is_its_notes_one_after_another ⏎ is! 'use sound ⏎ count(melody_samples([C4 [E4 G4]], 0.01))' 442` — sample count intermediate, off by one
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/slow/types/test_conversion_amount.pairs.warp: `'length as pixels := it.amount * 2; 3m as pixels'	6px` — unit conversion phrase, not in wiki
+- test/types/test_alias_network.pairs.warp: `«class W { x: int; add(b: W) := W(x + b.x); plus(b: W) := W(100) }; [W(1).plus(W(2)).x, W(1).add(W(2)).x]»	[100, 3]` — operator method ambiguity esoterica
+- test/types/test_array_types.pairs.warp: `'x : 100 * int; count x'	100` — type name list of number / sized array phrasing unbacked
+- test/types/test_array_types.pairs.warp: `'x : 100 * ints; count x'	100` — type name list of number / sized array phrasing unbacked
+- test/types/test_array_types.pairs.warp: `'x : 3 * char; count x'	3` — type name list of number / sized array phrasing unbacked
+- test/types/test_array_types.pairs.warp: `'x:[number]=[1 2]; type(x)'	'list of number'` — type name list of number / sized array phrasing unbacked
+- test/types/test_array_types.pairs.warp: `'x:numbers=[1 2]; type(x)'	'list of number'` — type name list of number / sized array phrasing unbacked
+- test/types/test_checked_results.pairs.warp: `'def f(x) as bool { 1 }; f(2)'	true` — int as bool return odd
+- test/types/test_class_destructuring.warp: `` — duplicate nested pattern
+- test/types/test_class_properties.pairs.warp: `'class P {x: int}; f(p: P, v) := P(v * 2); p = P(1); p.f = 5; p.x'	10` — property setter by function unbacked
+- test/types/test_class_properties.warp: `is! 'class B {x: int}; r(b: B, m) := B(m); r(xs: list, m) := xs; b = B(1); b.r = 5; b.x' 5` — property setter by function unbacked
+- test/types/test_conversion_amount.pairs.warp: `'Length as Pixels := it.amount * 2; 3m as Pixels'	6px` — unit conversion phrase, not in wiki
+- test/types/test_conversion_phrase.pairs.warp: `'use units; Length as text := "L"; text(3m)'	"L"` — custom as-text conversion, not in wiki
+- test/types/test_copies.pairs.warp: `'m = {a:1}; m.me = m; n = m.copy(); n.me.a = 7; m.a + n.a'	8` — cyclic copy esoterica
+- test/types/test_declared_list_marks.pairs.warp: `'names: texts = ["hi"]; ys = names; ys.add("a"); string(names)'	«["hi" 'a']»` — list print/type name formatting
+- test/types/test_declared_list_marks.pairs.warp: `'names: texts = ["hi"]; ys = names; ys.add("a"); type(names)'	'list of text'` — list print/type name formatting
+- test/types/test_empty_type_aliases.pairs.warp: `'f(x:any) := x is unit; f(3)'	false` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'f(x:any) := x is unit; f(ø)'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'f(x:empty) := 7; f(ø)'	7` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'f(x:nil) := 7; f(ø)'	7` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'f(x:unit) := 7; f(ø)'	7` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'int != integer'	false` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'integer == int'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'is_type(ø, "empty")'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'is_type(ø, "nil")'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'is_type(ø, "unit")'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'string == type("ab")'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'type("ab") != string'	false` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'type("ab") == string'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'type(ø) == Empty'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'type(ø) == empty'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'type(ø) == unit'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'unit == type(ø)'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'x = 3; x is unit'	false` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'x = ø; type(x) == nil'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'x = ø; x is unit'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'x: ø = ø; x == 0'	false` — type alias spellings unit/nil/empty unbacked
+- test/types/test_empty_type_aliases.pairs.warp: `'x: ø = ø; x is unit'	true` — type alias spellings unit/nil/empty unbacked
+- test/types/test_instance_final_text.pairs.warp: `'quantity("5 km")'	'5km'` — quantity formatting detail
+- test/types/test_instance_final_text.pairs.warp: `'x = 5 m ± 1 cm; x * 2'	'10.000 ± 0.020m'` — quantity formatting detail
+- test/types/test_int_types.pairs.warp: `'type Flag < int; format Flag f as text := "F"; format("{} has {} items", ["cart", 3])'	"cart has 3 items"` — format word esoterica
+- test/types/test_interface_signatures.warp: `is! 'interface calculator { add: (i32, i32) -> i32 }; add(a: int, b: int) := a + b; add(2, 3)' 5` — wit interface signature declarations unbacked
+- test/types/test_interface_signatures.warp: `is! 'interface calculator { add: (i32, i32) -> i32; sub: (i32, i32) -> i32 }; 1' 1` — wit interface signature declarations unbacked
+- test/types/test_interface_signatures.warp: `is! 'interface shape { area: (int) -> float }; class sq { s: int }; area(x: sq) := x.s * x.s; area(sq{s: 3})' 9` — wit interface signature declarations unbacked
+- test/types/test_iterable.warp: `is! 'class bag{a:int b:int}; iterate(g:bag) := [g.a, g.b]; g = bag(5, 6); s = 0; for x in g { s += x }; s' 11` — duplicate of kept iterate case
+- test/types/test_map_runtime_kind.warp: `is! 'f(x) := type(x) ⏎ text(f([1 2]))' 'list'` — type name list vs list of int
+- test/types/test_match_exhaustive_assigned.warp: `is! 'enum Coin { Penny, Nickel, Dime } ⏎ c = Dime ⏎ match c { Dime: 10; Penny: 1 }' 10` — refusal test
+- test/types/test_maybe_declaration.pairs.warp: `'x: maybe text = "a"; x'	'a'` — duplicate maybe form
+- test/types/test_number_converts.pairs.warp: `'class Q { xs: floats }; Q([1/3]).xs[0] is float'	true` — duplicate floats case
+- test/types/test_one_dispatch.pairs.warp: `'add(t, n) := 5; xs=[1]; add(xs, 2); xs == [1 2]'	true` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'canvas.width = 30; width(canvas)'	30` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'class Box{w:int; set w(v) { w = v * 2 }}; b = Box(1); b.w = 5; b.w'	10` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'f() := { m = 2; m }; text(300 cm as m)'	'3m'` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'f(m) := m.first(); f({first: 9})'	9` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'f(s) := s + 1; text(2000ms as s) + text(f(1))'	'2s2'` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'first(x) := x * 2; g(v) := first(v); g([4,5]) + g(3)'	10` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'p = {first: 1}; p.first()'	1` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'p = {width: 5}; width == canvas.width'	true` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.pairs.warp: `'width(canvas, 12); canvas.width'	12` — property/dispatch esoterica unbacked
+- test/types/test_one_dispatch.warp: `is! 'def square := it * it; numbers = [1, 2]; result = (square all numbers); string(result)' '[1 4]'` — property esoterica / print format
+- test/types/test_one_dispatch.warp: `is! 'global kept = 1 ⏎ box.size := kept ⏎ box.size(n) := kept = n ⏎ size(box, 5) ⏎ size box' 5` — property esoterica / print format
+- test/types/test_optional_casts.pairs.warp: `'f() = ø; (f() as text?) == ø'	1` — js interop or duplicate optional cast
+- test/types/test_optional_casts.pairs.warp: `'use js JSON; (JSON.parse("\\"a\\"") as text?) + "b"'	'ab'` — js interop or duplicate optional cast
+- test/types/test_optional_casts.pairs.warp: `'use js JSON; x = JSON.parse("null") as text?; x == ø'	1` — js interop or duplicate optional cast
+- test/types/test_plain_enum.warp: `is! 'class Point { x: int }; empty(): any := { t = {}; t }; m = empty(); m["Point"] = empty(); m["y"] = 2; #m' 2` — odd internal-style construction
+- test/types/test_plain_enum.warp: `is! 'enum Op { Colon, Add }; empty(): any := { t = {}; t }; m = empty(); m["Op"] = empty(); m["Bracket"] = 1; #m' 2` — odd internal-style construction
+- test/types/test_show_hook.pairs.warp: `'class P { n: int; text() := "P" + n }; text([P{n: 3}])'	"[P{n: 3}]"` — custom text hook inside list odd
+- test/types/test_sized_array_values.pairs.warp: `'height=4; width=4; surface=height*width int; #surface'	16` — sized array value syntax unbacked
+- test/types/test_sized_array_values.pairs.warp: `'surface = 16 int; #surface'	16` — sized array value syntax unbacked
+- test/types/test_sized_array_values.warp: `is! 'height=4; width=4; surface=height*width int; surface[3]=1; surface[3] + surface[2]' 1` — sized array value syntax unbacked
+- test/types/test_struct_instances.warp: `is! 'class Counter{n:int; inc() := n += 1}; c = Counter(1); d = inc(c); c.n * 10 + d.n' 22` — odd mutating method result
+- test/types/test_symbol_parameters.pairs.warp: `'f(m: symbol) := m == :post; f(post)'	true` — collides with library post
+- test/types/test_symbol_parameters.warp: `is! 'form(method: symbol, action: text) := "\\(method) \\(action)"; form post "/todos"' 'post /todos'` — collides with library post
+- test/types/test_tag_entries.pairs.warp: `'cat{ x = 1 "t" }; cat.x'	1` — odd mixed tag entry
+- test/types/test_trait_constraints.warp: `is! 'class dot{x:int}; class age{n:int}; compare(a:age, b:age) := a.n - b.n; smallest(xs: Comparable list) := (sort xs)#1; least(xs: list of Comparable) := (sor` — duplicate constrained list
+- test/types/test_trait_equals_membership.warp: `is! 'class word{text:string}; equals(a:word, b:word) := lower(a.text) == lower(b.text); ws=[word("Hello"), word("World")]; ws.has(word("HELLO"))' 1` — duplicate membership
+- test/types/test_type.pairs.warp: `'use math; type of gcd'	'function: (a: int, b: int) -> int'` — nat/int type naming, signature text unbacked
+- test/types/test_type.pairs.warp: `'x=3; "" + type(x) == "int"'	0` — nat/int type naming, signature text unbacked
+- test/types/test_type.pairs.warp: `'x=3; type(x) == nat'	1` — nat/int type naming, signature text unbacked
+- test/types/test_type.pairs.warp: `'x=3; x.type == type(x)'	true` — nat/int type naming, signature text unbacked
+- test/types/test_type_calls.pairs.warp: `'b = byte 65; b == byte(65)'	true` — duplicate byte/decimal forms
+- test/types/test_type_calls.pairs.warp: `'b = byte 65; text(b)'	'0x41'` — duplicate byte/decimal forms
+- test/types/test_type_calls.pairs.warp: `'decimal 1/4'	'0.25'` — duplicate byte/decimal forms
+- test/types/test_type_name_matching.warp: `is! 'fibonacci number = if number<2 : number else fibonacci(number - 1) + fibonacci(number - 2); fibonacci 10' 55` — duplicate of kept fibonacci form
+- test/types/test_type_of_lambda_variable.pairs.warp: `'f := x => x*2; type(f)'	'function: (x) -> int'` — function type signature text unbacked
+- test/types/test_type_of_lambda_variable.pairs.warp: `'f = x => x*2; type(f)'	'function: (x) -> int'` — function type signature text unbacked
+- test/types/test_type_of_lambda_variable.pairs.warp: `'f = x => x*2; type(function f)'	'function: (x) -> int'` — function type signature text unbacked
+- test/types/test_type_parameters.pairs.warp: `'f(t: Type) := t; f(text)'	'text'` — Type as a type unbacked
+- test/types/test_type_parameters.pairs.warp: `'t: Type = text; t == float'	false` — Type as a type unbacked
+- test/types/test_type_static.pairs.warp: `'x = 3; type(x)'	'nat'` — nat type name unbacked
+- test/types/test_type_tests.pairs.warp: `'[1 2] is texts'	0` — duplicate or phrase form
+- test/types/test_type_tests.pairs.warp: `'type(π) == real'	1` — duplicate or phrase form
+- test/types/test_type_tests.pairs.warp: `'x=[1 2]; x is a list of int'	1` — duplicate or phrase form
+- test/types/test_type_values.pairs.warp: `'type(int)'	'type'` — nat type name / type of type unbacked
+- test/types/test_type_values.pairs.warp: `'x = 3; "" + type(x) == "nat"'	true` — nat type name / type of type unbacked
+- test/types/test_type_values.pairs.warp: `'x = 3; type(x) == nat'	true` — nat type name / type of type unbacked
+- test/types/test_typed.pairs.warp: `'class P { x: int; init(a) { x = a } }; try { parse("{x:1}", P) } catch e { e.message }'	'typed JSON takes no class whose init has parameters'` — typed JSON init hooks and messages
+- test/types/test_typed.pairs.warp: `'class User { name: string? }; try { parse("{}", User) } catch e { e.message }'	'typed JSON supports only required flat fields yet'` — typed JSON init hooks and messages
+- test/types/test_typed.pairs.warp: `'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; c = parse("{value:7}", Counter); c.value + hits'	8` — typed JSON init hooks and messages
+- test/types/test_typed.pairs.warp: `'global hits = 0; class Counter { value: number; init() { hits = hits + 1 } }; try { parse("{value:7}", Counter) } catch e { e.message }'	Counter{value:7}` — typed JSON init hooks and messages
+- test/types/test_typed.pairs.warp: `'global hits = 0; class Inner { n: number; init() { hits += 1 } }; class Outer { inner: Inner }; o = parse("{inner:{n:1}}", Outer); hits'	1` — typed JSON init hooks and messages
+- test/types/test_typed_arrays.pairs.warp: `'if 0 { x = int[3] }; x'	ø` — sized array phrasing unbacked
+- test/types/test_typed_arrays.pairs.warp: `'x : 3 text; x.length'	3` — sized array phrasing unbacked
+- test/types/test_typed_builtins.pairs.warp: `'insert.params'	['xs', 'x', 'at']` — internal param order
+- test/types/test_types.pairs.warp: `'xs: [int16] = [1, 2]; type(xs)'	'list of int16'` — int16 list type name
+- test/types/test_types_scope.pairs.warp: `'x:numbers=[1 2 3];type(x)'	'list of number'` — list of number type name
+- test/types/test_unknown_conversion.pairs.warp: `'class Point{x:int y:int}; p = {x:1 y:2} as Point; p.y'	2` — duplicate of class_json as Point
+- test/types/test_value_constructor.pairs.warp: `'class Person{name; value{ id = 7 }}; p = Person{name:"Joe"}; p.id'	7` — value block unbacked
+- test/types/test_variant_payloads.pairs.warp: `'type Color = red | green | rgb(int, int, int); c = rgb(1, 2, 3); c.0'	1` — positional payload, duplicates, generic variants
+- test/types/test_variant_payloads.pairs.warp: `'type Color = red | green | rgb(int, int, int); c = rgb(1, 2, 3); c.2'	3` — positional payload, duplicates, generic variants
+- test/types/test_variant_payloads.pairs.warp: `'type Color = red | green | rgb(int, int, int); rgb(1, 2, 3) is Color'	true` — positional payload, duplicates, generic variants
+- test/types/test_variant_payloads.pairs.warp: `'type Color = red | green | rgb(int, int, int); x = blue; x is Color'	false` — positional payload, duplicates, generic variants
+- test/types/test_variant_payloads.pairs.warp: `'type Option[T] = Some(T) | None; a: int = Some(3); a + 1'	4` — positional payload, duplicates, generic variants
+- test/types/test_variant_payloads.warp: `is! 'type Color = red | green | rgb(int, int, int); x = green; (x is Color) or true' true` — duplicate is-Color case
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/aquarium/test_madai.warp: `is! 'use "../../samples/gpu/aquarium.warp" ⏎ use math ⏎ mesh = fish_mesh(read("../../samples/gpu/madai.fish")) ⏎ posed = fish_pose(mesh, 0.4) ⏎ fish_show(posed.` — internal fish geometry check, intermediate values
+- test/ffi/test_browser_dollar_names.pairs.warp: `'$Math.floor(2.7)'	2` — browser-only globals, platform quirk
+- test/ffi/test_browser_dollar_names.pairs.warp: `'document.title'	'warp tests in the browser'` — browser-only globals, platform quirk
+- test/ffi/test_c_enums.pairs.warp: `'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"	needs: raylib` — raylib library absent, platform dependent
+- test/ffi/test_c_enums.pairs.warp: `'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; IsKeyPressed(key: KeyboardKey): bool from "raylib"; IsKeyPressed(KeyboardKey.KEY_A)'	no	needs: raylib` — raylib library absent, platform dependent
+- test/ffi/test_ffi_gaps.pairs.warp: `'use c; isdigit(55)'	1` — libc isdigit return value differs per platform
+- test/ffi/test_ffi_signatures.warp: `# raylib_signatures_without_a_window — native only: raylib, a C library the browser has not ⏎ is! «import IsWindowReady from 'raylib' ⏎ IsWindowReady()» 0 ⏎ is!` — raylib C library not installed, nine duplicates
+- test/ffi/test_foreign_handles.pairs.warp: `'use js Intl; f = Intl.NumberFormat("en"); f.format(1234.5)'	'1,234.5'` — Intl locale formatting
+- test/ffi/test_foreign_lines.warp: `# a_foreign_line_imports_its_function — native only: the last digit of macOS libm's erf, which the browser's musl rounds the other way ⏎ is! «erf(x: float): flo` — last digit of libm erf, platform quirk
+- test/ffi/test_foreign_member_assignment.pairs.warp: `'use js Map; m = Map(); m.answer = "yes"; m.answer'	'yes'	needs: js` — assigning members on foreign objects, esoteric
+- test/ffi/test_foreign_member_assignment.pairs.warp: `'use js Math; Math.answer = 42; Math.answer'	42` — assigning members on foreign objects, esoteric
+- test/ffi/test_foreign_member_assignment.warp: `# a_member_of_a_call_result_is_set ⏎ is! 'use js Map; m = Map(); m.set("k", Map()); m.get("k").answer = 3; m.get("k").answer' 3` — member assignment on foreign call result, esoteric
+- test/ffi/test_foreign_member_assignment.warp: `# a_python_attribute_is_set ⏎ is! 'use python "types"; n = types.SimpleNamespace(); n.answer = 4; n.answer' 4` — python attribute assignment, esoteric
+- test/ffi/test_foreign_operators.pairs.warp: `'use js Buffer; b = Buffer.from("abc"); b#1'	97	needs: js` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use js Buffer; b = Buffer.from("abc"); count b'	3	needs: js` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use python "collections"; d = collections.deque([1, 2, 3]); count d'	3` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.pairs.warp: `'use python "collections"; d = collections.deque([1, 2, 3]); d#2'	2` — operators on foreign values, esoteric duplicate
+- test/ffi/test_foreign_operators.warp: `is! 'use python "collections"; d = collections.deque([1, 2, 3]); s = 0; for x in d { s += x }; s' 6` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_operators.warp: `is! 'use python "datetime"; d = datetime.date(2020, 1, 2); e = datetime.date(2020, 1, 5); (e - d).days' 3` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_operators.warp: `is! 'use python "fractions"; f = fractions.Fraction(1, 2); (f * 2).numerator' 1` — operators on foreign python values, esoteric
+- test/ffi/test_foreign_python.pairs.warp: `'use python "sys"; count sys.version_info'	5` — sys.version_info count, platform quirk
+- test/ffi/test_python_roundtrip.pairs.warp: `'use python math; try { math.sqrt(-1) } catch e { e.message }'	"python ValueError: expected a nonnegative input, got -1.0"` — python error message wording
+- test/ffi/test_python_roundtrip.pairs.warp: `'use python builtins; type(builtins.chr(97)).name'	"text"` — python internal type name
+- test/ffi/test_wasi.pairs.warp: `'puti 56'	56` — Rust-era puti word
+- test/ffi/test_wasi.pairs.warp: `'putl 56'	56` — Rust-era putl word
+- test/ffi/test_web_idl.warp: `is! 'use js OffscreenCanvas; c = OffscreenCanvas(4, 4); ctx = c.getContext("2d"); ctx.fillRect(0, 0, 2, 2); c.width' 4` — browser canvas API, needs browser
+- test/gpu/test_gpu.pairs.warp: `'use image; s = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLev` — duplicates paint_pictures image sampling
+- test/gpu/test_gpu.pairs.warp: `'#gpu_render("@fragment fn main() -> @location(0) vec4f { return vec4f(0.0, 0.0, 1.0, 1.0); }", 3, 2, {})'	6	needs: gpu` — odd count-of-render phrasing
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c = [1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c; }", 2, 1, {c: c})'	[4294901760, 4294901760]` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [f32] = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[1]; }", 2, 1, {c: c})'	[4294901760` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [f32] = [0.0, 1.0, 0.0, 1.0, 0.0]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	[4278255360]` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_gpu_f32.pairs.warp: `'c: [i32] = [1, 2, 3, 4, 5, 6, 7, 8]; gpu_render("@fragment fn main() -> @location(0) vec4f { return values.c[0]; }", 1, 1, {c: c})'	error	copy it to a list` — duplicate gpu value upload case or error test
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, (x, y) => red); s = "// four bilinear taps, values.q too\n@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { re` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, (x, y) => rgb(0, 0, 255)); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return vec4f(texture` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(1, 1, red); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return textureSampleLevel(values.p, trili` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(2, 1, (x, y) => if x == 0 then red else blue); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(2, 1, (x, y) => if x == 0 then red else blue); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return` — duplicate picture sampling case
+- test/gpu/test_paint_pictures.pairs.warp: `'use image; p = image(3, 2, black); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { let size = textureDimensions(values.p);` — duplicate picture sampling case
+- test/graphics/test_atlas.pairs.warp: `'use forest; n = baked_atlas("../../samples/graphics/ez_trees", NEAR_ATLAS); [n[1], n[2], n[0].contains("atlas.bin#3#")]'	[4096, 1536, yes]` — atlas internals duplicate
+- test/graphics/test_forest_impostor.pairs.warp: `'use forest; [atlas_has("../../samples/graphics/ez_trees", 1), atlas_has("../../samples/graphics/ez_trees", 9), atlas_has("../../samples/graphics/no-such-atlas"` — internal atlas_has API
+- test/modules/test_coverage_prelude.pairs.warp: `«[consists_of("123", is_digit), consists_of("", is_digit), consists_of("12a", is_digit), is_integer("42"), is_integer("-42"), is_integer("4.2"), is_integer(""),` — undocumented helper coverage
+- test/modules/test_coverage_prelude.pairs.warp: `«[sorted_by_key(["ccc", "a", "bb"], w => count(w)), sorted_by_key(["b1", "a2", "b0", "a1"], w => w[0]), sorted_by_key([], w => w), as_list("ab😀"), count_item([1` — undocumented helper coverage
+- test/modules/test_dir_builtin_members.pairs.warp: `'count([function upper, function min])'	2` — function value of builtin, odd
+- test/modules/test_dir_builtin_members.pairs.warp: `'f = function insert; f([1 2], 5, 1)'	[1, 5, 2]` — function value of builtin, odd
+- test/modules/test_dir_builtin_members.warp: `# methods_list_what_dir_lists ⏎ is! 'xs = [1] ⏎ count(xs.methods) == count(dir(xs))' true` — methods field, undocumented
+- test/modules/test_implicit_uses.pairs.warp: `'transpose([[1, 2]])'	error	a word of two modules needs its `use`` — expects an error
+- test/modules/test_js_globals.pairs.warp: `'use js URL; URL("https://wasp.pannous.com/docs?lang=en").hostname'	'wasp.pannous.com'	needs: js` — URL hostname, duplicate js global case
+- test/modules/test_module.pairs.warp: `'b = (no ? 1 : pi) + 1; b'	4.141592653589793` — odd ternary with symbolic pi
+- test/modules/test_module_function_dir.warp: `is! 'use math ⏎ count(dir(is_square))' 4` — dir of a function, internal
+- test/modules/test_module_function_dir.warp: `is! 'use math ⏎ text(type(is_square))' 'function: (n: int) -> bool'` — exact function type text, internal
+- test/modules/test_module_signals.pairs.warp: `'use •/test/fixtures/stored_settings; module_theme'	'light'` — stored settings fixture, odd
+- test/modules/test_runtime_word_lines.pairs.warp: `'split.signature'	'(t:text, separator:text = " ") -> list of text'` — exact signature text, internal
+- test/modules/test_runtime_word_lines.pairs.warp: `'class P { x: int }; p = P(1); q = instance_copy(p, false); q.x'	1` — internal runtime word instance_copy
+- test/modules/test_std_regex.pairs.warp: `'use regex; "a/b" matches /a\\/b/'	true` — escaped slash regex edge
+- test/modules/test_template_comments.pairs.warp: `'use template; mustache("|\r\n{{! Standalone Comment }}\r\n|", {})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_delimiters.pairs.warp: `'use template; mustache("|\r\n{{= @ @ =}}\r\n|", {})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_inverted.pairs.warp: `'use template; mustache("|\r\n{{^boolean}}\r\n{{/boolean}}\r\n|", {"boolean": no})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_partials.pairs.warp: `'use template; mustache("|\r\n{{>partial}}\r\n|", {}, {"partial": ">"})'	"|\r\n>|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_template_sections.pairs.warp: `'use template; mustache("|\r\n{{#boolean}}\r\n{{/boolean}}\r\n|", {"boolean": yes})'	"|\r\n|"` — mustache spec CRLF standalone-line edge
+- test/modules/test_versions.pairs.warp: `'use uniscript >= v1.0.0; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_versions.pairs.warp: `'use uniscript version 1.0.10; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_versions.pairs.warp: `'use uniscript; use uniscript >= 1.0; uniscript("<:alpha>")'	'α'	needs: packages` — duplicate version-constraint use case
+- test/modules/test_wasm_modules.pairs.warp: `'import •/test/fixtures/wasm/xxhash; XXH32("wasp", 4, 42)'	4089166900` — duplicate fixture library case
+- test/modules/test_wasm_modules.warp: `is! 'import •/test/fixtures/wasm/zlib; crc32(0, compress(64, "hello hello hello"))' 3327255652` — duplicate zlib crc32 case
+- test/node/test_comment_meta.warp: `is! 'use comments ⏎ use strict ⏎ // doc ⏎ x = 1 ⏎ x.@comment' 'doc'` — comment under use strict, odd
+- test/node/test_eval_written_atoms.pairs.warp: `'f(c: text) := eval(c); 6.28 < f("2*π") < 6.29'	true` — duplicate of kept eval atom case
+- test/node/test_parse_positions.warp: `is! 'use comments ⏎ t = "x = 1\\n// note\\n  n * " + "2" ⏎ r = parse(t) ⏎ r#2.comment' 'note' ⏎ is! 'use comments` — duplicate comment-meta case
+- test/node/test_parsed_code_text.warp: `is! 'area(width: int, height: int) := width * height ⏎ t = area.dump + "" ⏎ "\\(parse(t))"' '(area width:int height:int):=width*height' ⏎ is! 't = "a" + "*b"` — area.dump internal
+- test/node/test_parsed_code_text.warp: `is! 'area(width: int, height: int) := width * height ⏎ t = area.dump + "" ⏎ "area: " + parse(t)' 'area: (area width:int height:int):=width*height'` — area.dump internal
+- test/node/test_parsed_node_walks.pairs.warp: `'n = parse("class P { x: int }"); "\\(n)"'	'type P {x:type int ø}'` — printing internal node view
+- test/node/test_parsed_node_walks.pairs.warp: `'n = parse(read("core/parsing/parser.warp")); #n > 50'	true` — printing internal node view
+- test/node/test_parsed_node_walks.pairs.warp: `'t = "class P { x: int }"; n = parse(t); "\\(n)"'	'type P {x:type int ø}'` — printing internal node view
+- test/node/test_trailing_comment.warp: `is! 'x = data [a // first ⏎ b]; (x#1).comment' 'first'` — duplicate trailing comment case
+- test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[foo][ref[bar]]\\n\\n[ref[bar]]: /uri\\n"), markdown_html("[[[foo]]]\\n\\n[[[foo]]]: /url\\n"), markdown_html("[foo][ref\\\\[]\\n` — CommonMark spec reference-link edge cases
+- test/slow/modules/test_markdown.pairs.warp: `«use markdown; [markdown_html("[link *foo **bar** `#`*][ref]\\n\\n[ref]: /uri\\n"), markdown_html("[![moon](moon.jpg)][ref]\\n\\n[ref]: /uri\\n"), markdown_html` — CommonMark spec reference-link edge cases
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/control/test_clipboard.pairs.warp: `'c = clipboard count; c > 0'	true	needs: display` — clipboard form platform-specific, only in Applescript page
+- test/control/test_colon_handlers.warp: `is! 'n = 1 ⏎ at 9pm: print n ⏎ n + 1' 2` — time-of-day handler form not in wiki
+- test/control/test_empty.pairs.warp: `'xs = [1, 2]; xs.each {}; 3'	3` — empty each block odd phrasing
+- test/control/test_error_not_in_data.pairs.warp: `'e = try 10/0; a, b = e, 2; if a failed then 1 else 2'	1` — contradicts Error.md: errors not stored in data
+- test/control/test_error_not_in_data.warp: `is! 'e = try 10/0; class P{x: int?}; p = P(1); p.x = e; if p.x failed then 1 else 2' 1` — contradicts Error.md: field holds no error
+- test/control/test_error_words.pairs.warp: `'"a" + warn("careful") + "b"'	'ab'` — warn inside text concatenation, odd
+- test/control/test_for_forms.pairs.warp: `'text="hi  you"; s=""; for word in text { s += word + "," }; s'	'hi,you,'` — loop variable name picking text unit, esoteric
+- test/control/test_for_forms.warp: `is! 's=""; for line in "a ⏎ b c" { s += line + "," }; s' 'a,b c,'` — loop variable name picking text unit, esoteric
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.description' 'doubles a number'` — description alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.full' '# doubles a number ⏎ twice(x) := x*2'` — full word not in wiki
+- test/control/test_function_objects.warp: `is! 'use math ⏎ fs = math.functions ⏎ fs#1(12, 18)' 6` — math.functions not in wiki; methods is canonical
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.representation' 'twice(x) := x*2'` — representation alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ twice.representation' 'twice(x) := x*2'` — representation alias not in wiki
+- test/control/test_function_objects.warp: `is! '# doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.returns' 'int'` — returns alias not in wiki
+- test/control/test_function_value_words.pairs.warp: `'sqrt.returns'	'number'` — returns alias not in wiki
+- test/control/test_iteration_words.pairs.warp: `'[1 2 3].each(x=>x+1)'	4` — each return value unspecified, odd
+- test/control/test_iteration_words.pairs.warp: `'each [1 2 3] {it*10}'	30` — each return value unspecified, odd
+- test/control/test_library_signatures.pairs.warp: `'f(b) := b == 0; (function f).signature'	'(b) -> bool'` — signature inference duplicate
+- test/control/test_library_signatures.pairs.warp: `'f(b) := b == 0; type(function f)'	'function: (b) -> bool'` — signature inference duplicate
+- test/control/test_library_signatures.pairs.warp: `'g(x) := x > 2; h(x) := g(x); (function h).signature'	'(x) -> bool'` — signature inference duplicate
+- test/control/test_match_type_arms.pairs.warp: `'x = 2.5; x is int or text'	false` — odd type-or test on float
+- test/control/test_object_blocks.pairs.warp: `'help = {print: "there is help"}; help!'	ø` — help object bang form odd
+- test/control/test_one_method_form.pairs.warp: `'class A{n:int}; class B extends A{m:int}; def x(a:A):=n; B(1, 2).x()'	1` — duplicate of kept method-form case
+- test/control/test_plural_field_of_elements.pairs.warp: `'addresses = ["ab" "cd"]; text(upper each address)'	'["AB" "CD"]'` — upper each singular-name form, odd
+- test/control/test_plural_field_of_elements.pairs.warp: `'cities = ["ab" "cd"]; text(upper each city)'	'["AB" "CD"]'` — upper each singular-name form, odd
+- test/control/test_pure_nil_in_map.warp: `is! "f(m: any): bool := { p: any = ø` — duplicate of kept nil-in-map case
+- test/control/test_quasi_quote.pairs.warp: `'data(3 times {print 1}) == parse_code("3 times {print 1}")'	true` — parse tree equality, intermediate
+- test/control/test_quasi_quote.warp: `is! 'f(a) := a ⏎ x = f([1, 2]) where it > 1 ⏎ x' [2]` — where filter phrasing not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection mode ⏎ use math ⏎ gcd.origin' 'math'` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ fs = [function twice] ⏎ fs#1.column' 1` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.line' 3` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.origin' 'program'` — reflection mode not in wiki
+- test/control/test_reflection_mode.warp: `is! 'use reflection ⏎ # doubles a number ⏎ twice(x) := x*2 ⏎ twice.wasm_name' 'twice'` — reflection mode not in wiki
+- test/control/test_reflection_synonyms.warp: `is! 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); [m.name for m in functions(P)]' ['sq']` — duplicate of kept functions() case
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; dir(reflected.P)'	['x', 'y', 'sq']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.P.fields'	['x', 'y']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.P.methods'	['sq']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/compiled/reflected; reflected.twice.params'	['a']` — compiled fixture import internals
+- test/control/test_reflection_words.pairs.warp: `'x = 0; on set x {print value}; count x.listeners'	1` — listeners count not in wiki
+- test/control/test_reflection_words.pairs.warp: `'import •/test/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'` — wasm fixture import internals
+- test/control/test_reflection_words.warp: `is! 'use comments ⏎ // the answer ⏎ x = 42 ⏎ x.doc' 'the answer'` — doc of a plain binding not in wiki
+- test/control/test_reflection_words.warp: `is! 'def add(left:int) -> int: left ⏎ add.params' ['left']` — refused head form, not a wanted form
+- test/control/test_reflection_words.warp: `is! 'import •/test/fixtures/wasm/fourty_two; ("twice" in fourty_two.exports) > 0' true` — wasm fixture exports internals
+- test/control/test_relational_arms.pairs.warp: `'xs = [3, 1, 2]; sorted(xs, >)#1'	3` — sorted with bare comparator not in wiki
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 0-2^70; z = interpret y; z == 0-2^70'	1` — interpret of data bigint, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 2^70; z = interpret y; z+1 == 2^70+1'	1` — interpret of data bigint, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 7/2; z = interpret y; z == 7/2'	1` — interpret of data exact number, odd
+- test/control/test_run_time_blocks.pairs.warp: `'y = data 7/2; z = interpret y; z*2'	7` — interpret of data exact number, odd
+- test/control/test_run_time_blocks.pairs.warp: `'def twice(x): x*2; y = data twice(21); interpret y'	42` — refused definition form
+- test/control/test_storage.pairs.warp: `'storage["visits_next"]'	3` — cross-run persistence depends on earlier runs
+- test/control/test_store_values.warp: `is! 'session["all_a"] = 1; session["all_b"] = 2; s = session; s["all_a"] + s["all_b"]' 3` — session store not in wiki
+- test/control/test_store_values.warp: `is! 'session["walk_a"] = 1; session["walk_b"] = 2; total = 0; for key, value in session { total += value }; total' 3` — session store not in wiki
+- test/control/test_stored_default.pairs.warp: `'stored visits_default = 0; visits_default'	2` — cross-run persistence duplicate form
+- test/control/test_stored_signals.pairs.warp: `'stored theme_kept = "dark"; theme_kept'	'light'` — cross-run persistence depends on earlier runs
+- test/control/test_stored_signals.pairs.warp: `'stored visits_kept = 0; visits_kept'	2` — cross-run persistence depends on earlier runs
+- test/control/test_structural_patterns.pairs.warp: `'p = [a: 1, b: 2]; switch p { [a: x, b: y]: x + y  _: 0 }'	3` — keyed list pattern form odd
+- test/control/test_system_signals.pairs.warp: `'def stop(){ exit(3) }; stop(); 7'	ø	needs: display` — exit code behavior of harness
+- test/control/test_system_values.pairs.warp: `'n = 1; whenever dark mode { n = 2 }; n'	1` — dark mode signal not in wiki
+- test/control/test_system_values.pairs.warp: `'mouse_x * 100 + mouse_y'	1207	needs: display` — mouse position environment-dependent
+- test/control/test_system_values.pairs.warp: `'if mouse_down { 1 } else { 0 }'	1	needs: display` — mouse state environment-dependent
+- test/control/test_task.pairs.warp: `'f(x) := x; t = go f(2); cancel t; await t'	2` — await of cancelled task odd
+- test/control/test_test_line_after_tasks.pairs.warp: `'n = 0; go { n += 1 }; test 1 == 1'	ø` — test-runner output, not language form
+- test/control/test_test_pairs.warp: `is! «rows = ['a'	1` — test-file tab row format, harness
+- test/control/test_try.pairs.warp: `'def f(m){ m.a }; try f(3) else 7'	7` — duplicate of kept try-else case
+- test/control/test_try_stack_overflow.warp: `is! 'up(n) := 1 + up(n + 1); down(n) := if n == 0 then 0 else 1 + down(n - 1); r = try up(0) else 100; r + down(5)' 105` — stack exhaustion platform quirk
+- test/control/test_try_stack_overflow.warp: `is! 'up(n) := 1 + up(n + 1); try up(0) else 7' 7` — stack exhaustion platform quirk
+- test/control/test_unit_tasks.pairs.warp: `'f() := { 2 m + 1 m }; job = go f(); await job'	3` — duplicate of kept unit task case
+- test/control/test_value_methods_are_functions.pairs.warp: `'fs = methods([1 2]); type(fs#1)'	'function: (xs: list) -> list'` — function signature of builtin method, internal
+- test/control/test_value_methods_are_functions.pairs.warp: `'xs = [1 2]; fs = xs.methods; type(fs#1)'	'function: (xs: list) -> list'` — function signature of builtin method, internal
+- test/slow/control/test_clipboard.pairs.warp: `'n = 1; on clipboard change { n = 2 }; n'	1` — clipboard needs display, not in wiki
+
+## Dropped as unpinned 2026-11-16 (card red-test-triage)
+
+No wiki page or sample shows the form, or it is esoteric; removed from the test file.
+
+- test/functions/test_arity_overloads.warp: `is! 'class Point { x: int; name: text } ⏎ Point.label := it.name + "!" ⏎ Point.label(v) := it.name = v ⏎ cfg = {label: 3} ⏎ cfg.label = 4 ⏎ cfg.label' 4` — field-setter overload esoterica
+- test/functions/test_arity_overloads.warp: `is! 'class Point { x: int; name: text } ⏎ Point.label := it.name + "!" ⏎ Point.label(v) := it.name = v ⏎ cfg = {label: 3} ⏎ p = Point(1, "a") ⏎ p.label = "b" ⏎ ` — field-setter overload esoterica
+- test/functions/test_arity_overloads.warp: `is! 'f() := 1 ⏎ f(a, b) := a + b ⏎ [1, 2, 3].reduce(f)' 6` — odd reduce over arity overloads
+- test/functions/test_bare_host_words.pairs.warp: `'any([random 1...4 for i in 1 to 80], x => x == 4)'	true` — duplicate of kept random range case
+- test/functions/test_bare_host_words.pairs.warp: `'x = random int; type x'	'int'` — internal int/nat type name
+- test/functions/test_bare_host_words.pairs.warp: `'x = random(int); type x'	'int'` — internal int/nat type name
+- test/functions/test_callable_parameter.pairs.warp: `'"a" is callable'	false` — esoteric callable type test
+- test/functions/test_callable_parameter.pairs.warp: `'3 is callable'	false` — esoteric callable type test
+- test/functions/test_callable_parameter.warp: `is! 'run(f: invocable) := f() ⏎ run({ 1 + 2 })' 3` — alias word invocable, unpinned
+- test/functions/test_callable_parameter.warp: `is! 'run(f: runnable) := f() ⏎ run({ 1 + 2 })' 3` — alias word runnable, unpinned
+- test/functions/test_callable_parameter.warp: `is! 'n = 0 ⏎ twice(f: callable) := { f(); f() } ⏎ twice({ n += 1 }) ⏎ n' 2` — duplicate callable block case
+- test/functions/test_callable_parameter.warp: `is! 'g = x => x + 1 ⏎ run(f: callable) := f(3) ⏎ run(g)' 4` — duplicate callable parameter case
+- test/functions/test_callable_parameter.warp: `is! 'hi() := 7 ⏎ run(f: callable) := f() ⏎ run(hi)' 7` — duplicate callable parameter case
+- test/functions/test_callable_parameter.warp: `is! 'square(x) := x * x ⏎ square is callable' true` — esoteric callable type test
+- test/functions/test_closure_value_arguments.pairs.warp: `'def make(){ def add(t){ t + "!" }; function add }; a = make(); a("x")'	'x!'` — duplicate of kept closure function value
+- test/functions/test_field_function_values.pairs.warp: `'s = {a: 3, f: x => x * a}; h = s.f; h(4)'	12` — duplicate of kept field closure case
+- test/functions/test_function_words.pairs.warp: `'use math; gcd.return_type'	'int'` — reflection return_type internals
+- test/functions/test_functions.pairs.warp: `'square(x) := x * x; fs = functions(); (fs#1)(4)'	16` — functions() reflection, odd
+- test/functions/test_global_with_closures.warp: `is! 'x = cell_new(1) ⏎ ys = [(value) => { 0 }] ⏎ def bump() { global x; cell_set(x, 5) } ⏎ bump() ⏎ cell_get(x)' 5` — internal cell_new API
+- test/functions/test_kind_tested_parameter.warp: `is! 'def neg(x) { if x is number { return 0 - x }; ["key", "-", ø, x] }; #neg(["symbol", "x"])' 4` — odd node-list internals
+- test/functions/test_kind_tested_parameter.warp: `is! 'def neg(x) { if x is number { return 0 - x }; ["key", "-", ø, x] }; neg(["symbol", "x"])#4#2' 'x'` — odd node-list internals
+- test/functions/test_lambda_held_by_field.warp: `is! 'class Box {join} ⏎ b = Box(x => x + 1) ⏎ b.join(5)' 6` — odd class with bare field
+- test/functions/test_map_library_word_first.pairs.warp: `'ys = map sorted [[2 1]]; ys#1#1'	1` — duplicate of kept map word case
+- test/functions/test_map_list_fields.pairs.warp: `'m = [{"name": "a"}, {"name": "b"}]; m.name'	['a', 'b']` — duplicate of kept field map case
+- test/functions/test_map_list_fields.pairs.warp: `'m = [{name:"a", age:3}, {name:"b", age:5}]; name of m'	['a', 'b']` — odd "name of m" phrasing
+- test/functions/test_multi_value.pairs.warp: `'-123456789012345678901234567890 /! -1000'	123456789012345678901234568` — expects truncation, wiki says floor division
+- test/functions/test_multi_value.pairs.warp: `'123456789012345678901234567890 /! -1000'	-123456789012345678901234567` — expects truncation, wiki says floor division
+- test/functions/test_named.pairs.warp: `'sorted([3, 1, 2], key: x => -x)#1'	3` — duplicate of key= case
+- test/functions/test_operator_arguments.pairs.warp: `'xs = [3, 1, 2]; sorted(xs, <)#1'	1` — operator as sort argument, unbacked
+- test/functions/test_operator_arguments.pairs.warp: `'xs = [3, 1, 2]; xs.sort(>)#1'	3` — operator as sort argument, unbacked
+- test/functions/test_optional_parameters.pairs.warp: `'def f(a, maybe b){ b ?? a }; f(1) + f(1, 3)'	4` — maybe parameter spelling, unbacked
+- test/functions/test_optional_parameters.pairs.warp: `'def f(maybe int x){ x ?? 5 }; f()'	5` — maybe parameter spelling, unbacked
+- test/functions/test_optional_parameters.pairs.warp: `'def f(maybe x){ x ?? 5 }; f() + f(2)'	7` — maybe parameter spelling, unbacked
+- test/functions/test_optional_parameters.pairs.warp: `'def f(x: maybe int){ x ?? 5 }; f()'	5` — maybe parameter spelling, unbacked
+- test/functions/test_optional_words.pairs.warp: `'no is empty'	false` — duplicate emptiness case
+- test/functions/test_parameter.pairs.warp: `'f(n) := { n = "x"; n }; f(5)'	'x'` — retyping an int parameter, esoteric
+- test/functions/test_parameter.pairs.warp: `'f(n) := { n = "xy"; n }; f(5)'	'xy'` — retyping an int parameter, esoteric
+- test/functions/test_parameter.pairs.warp: `'f(n) := { n = 2.5; n }; f(5)'	2.5` — retyping an int parameter, esoteric
+- test/functions/test_parameter.pairs.warp: `'f(n) := { n = [1]; n }; f(5)'	[1]` — retyping an int parameter, esoteric
+- test/functions/test_pattern_clauses.pairs.warp: `'f(n) := 1; f(0) := 2; f(0)'	1` — error-message case, unreachable clause
+- test/functions/test_property_access.pairs.warp: `'p={name:"Joe"}; p[name]'	'Joe'` — odd p[name] bare-name access
+- test/functions/test_render_as.warp: `is! 'class pdf{body:text}; render(t) := pdf(t); ((render "hello") as pdf).body' 'hello'` — odd render/as phrasing
+- test/functions/test_render_as.warp: `is! 'class pdf{body:text}; render(t):pdf := pdf(t); ((render "hello") as pdf).body' 'hello'` — odd render/as phrasing
+- test/functions/test_returned.pairs.warp: `'def make(){ def inc(){ 1 }; inc }; make()'	1` — prints a function value, intermediate
+- test/functions/test_runtime_kind_arithmetic.pairs.warp: `'def f(m){ m.a * 2 }; try f({a:"x"}) else 7'	7` — text times int error fallback, odd
+- test/functions/test_sequence_values.warp: `is! 'f() := { ⏎ 1 ⏎ std_io("sound", "queued", []) ⏎ }; f()' 0` — host sound word, platform
+- test/functions/test_symbol_flow.pairs.warp: `'look(k) := string(k); f(m) := look(m); f(post)'	'post'` — symbol passing quirk
+- test/functions/test_symbol_flow.pairs.warp: `'use math; look(k) := string(k); f(m) := look(m); f(math)'	'math'` — symbol passing quirk
+- test/functions/test_tuple_function_values.pairs.warp: `'pair(x) := (x, x+1); fs=[pair]; a, b = fs#1(3); b'	4` — tuple from function list, odd
+- test/functions/test_tuple_returns.pairs.warp: `'f():=return 1, 2; f() == [1 2]'	1` — duplicate tuple return case
+- test/functions/test_tuple_returns.pairs.warp: `'half(x) := return x, x/2.5; a, b = half(5); b'	2.0` — duplicate tuple return case
+- test/functions/test_tuple_returns.pairs.warp: `'named() := return "a", 2; s, n = named(); s'	'a'` — duplicate tuple return case
+- test/lists/test_bare_list_assignment.pairs.warp: `'f() := 1+1 2+2; f()'	[2, 4]` — odd bare list body
+- test/lists/test_global_typed_lists.pairs.warp: `'xs = [0, 0]; xs[0] = random(); type(xs)'	'list of float'` — internal list element type name
+- test/lists/test_held_element_compare.pairs.warp: `«def f(){ [[1,'a']] }; m = f(); m#1#2 > 50»	1` — mixed-type list compare, odd
+- test/lists/test_held_element_compare.pairs.warp: `«x=[1,'a']; x#2 > 50»	1` — mixed-type list compare, odd
+- test/lists/test_lazy_range.pairs.warp: `'xs = 1..5000; xs#2 = 9; xs#2'	9` — duplicate lazy range write
+- test/lists/test_list_times_list.pairs.warp: `'(1 2) * (3 4)'	11` — dot product by *, unbacked
+- test/lists/test_list_times_list.pairs.warp: `'[1 2] * [3 4]'	11` — dot product by *, unbacked
+- test/lists/test_list_times_list.pairs.warp: `'xs=[1 2 3]; ys=[4 5 6]; xs * ys'	32` — dot product by *, unbacked
+- test/lists/test_list_times_list.warp: `is! 'x=(1 2) y={3 4} ⏎ x*y' 11` — dot product by *, unbacked
+- test/lists/test_list_times_list.warp: `is! 'xs=[1 2 3]; ys=[4 5 6]; d = dot(xs, ys); d1 = xs * ys; assert d1 == d; d1' 32` — dot product by *, unbacked
+- test/lists/test_nested_comprehension.warp: `is! 'from = [5 5 4 4 2 3] ⏎ to = [2 0 0 1 3 1] ⏎ idx = [1 2 3 4 5 6] ⏎ done = [] ⏎ while #done < 6 { ⏎ pick = -1 ⏎ for n in 0 to 5 { ⏎ isdone = #[d for d in don` — long odd graph-walk program
+- test/lists/test_pair_values.warp: `is! 'v = [".x": { padding: 8 }]; n = 0; for item in v { inner = values(item)#1; if inner is pair { n = n + 1 } }; n' 1` — values of pair, odd
+- test/lists/test_range_arguments.pairs.warp: `'f(xs) := { xs#1 = 9; xs#1 }; f(1..5000)'	9` — duplicate lazy range write
+- test/lists/test_range_in_structure.pairs.warp: `'o = {r = 1..100001}; count o.r'	100000` — range inside map, odd
+- test/lists/test_swizzles.pairs.warp: `'f(p) := p.xy; f([x:1, xy:"hi"])'	'hi'` — duplicate swizzle case
+- test/lists/test_swizzles.pairs.warp: `'p = [x:"a", xy:"hi"]; q = p.xy; q'	'hi'` — duplicate swizzle case
+- test/lists/test_unpacking.pairs.warp: `'f() := return 1, 2; _, b = f(); b'	2` — duplicate unpacking case
+- test/lists/test_unpacking.pairs.warp: `'(a, b), c = (1, 2), 3; a*100+b*10+c'	123` — nested destructuring, unbacked
+- test/numbers/test_big_int_bits.pairs.warp: `'-(2^70) & (2^71 - 1)'	1180591620717411303424` — negative big-int bit ops, esoteric
+- test/numbers/test_big_int_bits.pairs.warp: `'-(2^70) | 1'	-1180591620717411303423` — negative big-int bit ops, esoteric
+- test/numbers/test_big_int_bits.pairs.warp: `'x = -(2^70); x xor -1'	1180591620717411303423` — negative big-int bit ops, esoteric
+- test/numbers/test_dimension_types.pairs.warp: `'4 m² is length²'	true` — dimension type names, unbacked
+- test/numbers/test_dimension_types.pairs.warp: `'speed: length/duration = 3 km/h; speed is length/duration'	true` — dimension type names, unbacked
+- test/numbers/test_division_by_zero.pairs.warp: `'1/0.0 == ∞'	1` — duplicate infinity compare
+- test/numbers/test_exponent_texts.pairs.warp: `'int("2.5E2")'	250` — duplicate exponent text case
+- test/numbers/test_exponent_texts.pairs.warp: `'int("2.5e2")'	250` — duplicate exponent text case
+- test/numbers/test_fast_int.pairs.warp: `'x: i64 = 2^63; x'	-9223372036854775808` — i64 boundary, esoteric
+- test/numbers/test_fast_scope.warp: `is! 'fast ⏎ x = 1.0 ⏎ sin(x) == 0.8414709848078937' true` — float precision in fast scope
+- test/numbers/test_float_as_rational.pairs.warp: `'x = 1e20 as float; x as rational == 10^20'	true` — huge float to rational, esoteric
+- test/numbers/test_float_as_rational.pairs.warp: `'x = 1e-20 as float; x as rational == 1/10^20'	true` — tiny float to rational, esoteric
+- test/numbers/test_float_exact_context.pairs.warp: `'π is exact'	true` — exactness predicate, unbacked
+- test/numbers/test_float_exact_context.pairs.warp: `'√2 is exact'	true` — exactness predicate, unbacked
+- test/numbers/test_float_exact_context.pairs.warp: `'type(sqrt(2.0))'	'real'` — internal type name real
+- test/numbers/test_float_exact_context.pairs.warp: `'real == exact'	true` — real/exact type words, unbacked
+- test/numbers/test_host_floats.pairs.warp: `'type(mouse_x)'	'float'` — type of host word, internals
+- test/numbers/test_infinity.pairs.warp: `'-∞ < -1e300'	1` — duplicate infinity compare
+- test/numbers/test_infinity.pairs.warp: `'min(3.5, ∞)'	3.5` — duplicate infinity compare
+- test/numbers/test_infinity.pairs.warp: `'\\:infinity == ∞'	1` — odd symbol-infinity spelling
+- test/numbers/test_math.pairs.warp: `'1 m + 1km'	1001` — expectation drops the unit, odd
+- test/numbers/test_mixed_quantity_arguments.warp: `is! 'f(x) := x * 2; a = f(5 m ± 1 cm); b = f(3); text(a) + " " + text(b)' '10.000 ± 0.020m 6'` — uncertain quantity arithmetic, esoteric
+- test/numbers/test_nan_observed.pairs.warp: `'y = (0.0/0.0) * -1.0; "\\(y)"'	'NaN'` — NaN observation, esoteric
+- test/numbers/test_nan_observed.pairs.warp: `'y = -0.0/0.0; "a" + y'	'aNaN'` — NaN observation, esoteric
+- test/numbers/test_nearest.warp: `is! 'nearest(sqrt(2), rational, 10^38) == 133984184101103275326877813426364627544/94741125149636933417873079920900017937' true` — huge-precision nearest, esoteric
+- test/numbers/test_nearest.warp: `is! 'r = nearest(sqrt(2), rational, within: 1e-40); r * r - 2 == -1/4689566069222821420312720463003656425961' true` — huge-precision nearest, esoteric
+- test/numbers/test_nearest_default.pairs.warp: `'nearest(sqrt(2), rational, 0) == 131836323/93222358'	true` — nearest limit edge, esoteric
+- test/numbers/test_nearest_default.pairs.warp: `'nearest(π, rational, limit: 0) == 245850922/78256779'	true` — nearest limit edge, esoteric
+- test/numbers/test_pixel_unit.pairs.warp: `'2dot + 3px == 5px'	true` — dot pixel unit, unbacked
+- test/numbers/test_rational_type.pairs.warp: `'type([π 1])'	'list of number'` — internal list type name
+- test/numbers/test_rational_type.pairs.warp: `'type(pi)'	'real'` — internal type name real
+- test/numbers/test_rational_type.pairs.warp: `'type(π)'	'real'` — internal type name real
+- test/numbers/test_rational_type.pairs.warp: `'x:list of rational=[1/2, 3/4]; type(x)'	'list of rational'` — list-of-rational type annotation, esoteric
+- test/numbers/test_real_canonical.pairs.warp: `'type(π)'	'real'` — internal type name real
+- test/numbers/test_span_units_compare.pairs.warp: `'use units; use uncertain; (1900 - 2000 cm + 1) is Quantity'	true` — span of units, esoteric
+- test/numbers/test_span_units_compare.pairs.warp: `'use units; use uncertain; span = 1900 - 2000 cm + 1; round(span.low.shown())'	1901` — span of units, esoteric
+- test/numbers/test_sqrt_quantity_unit.pairs.warp: `'√(4 m²) == 2 m'	true` — sqrt of quantity, esoteric
+- test/numbers/test_time_of_day.pairs.warp: `'if now < 0 h : "never" else "always"'	'always'` — now-based clock comparison, timing
+- test/numbers/test_time_of_day.pairs.warp: `'if now < 24h : "still today"'	'still today'` — now-based clock comparison, timing
+- test/numbers/test_time_of_day.pairs.warp: `'now >= 0 ms and now < 1 day'	1` — now-based clock comparison, timing
+- test/numbers/test_unbounded_int.pairs.warp: `'try { (3037000500*3037000500) as int } catch e { e.message }'	'too big for int: 9223372037000250000'` — error-message text test
+- test/numbers/test_unit.pairs.warp: `'text([1, m])'	'[1, 1m]'` — text of bare unit in list, odd
+- test/numbers/test_unit_literals.pairs.warp: `'3km+10m == 3011 meters'	false` — duplicate long unit case
+- test/numbers/test_unit_literals.pairs.warp: `'if 2 kilograms < 3000 grams : 1 else 2'	1` — duplicate long unit case
+- test/numbers/test_unit_literals.pairs.warp: `'x = 2 km; if x > 3 kilometers { "far" } else { "near" }'	'near'` — duplicate long unit case
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'1 Gs == 1000000000 s'	true` — exotic SI prefix, unbacked
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'1 dam == 10 m'	true` — exotic SI prefix, unbacked
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'1 kK == 1000 K'	true` — exotic SI prefix, unbacked
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'1000 µg == 1 mg'	true` — exotic SI prefix, unbacked
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'3 feet in inches == 36 inch'	true` — feet/inches phrasing, unbacked
+- test/numbers/test_unit_prefix_lines.pairs.warp: `'prefix s := s#1; prefix "ab"'	'a'   todo: only allow prefix operator as keyword else ambivalent` — prefix operator todo case
+- test/numbers/test_units_after_numbers.warp: `is! 'h = 2 m ⏎ v: km/h = 3 km/h ⏎ text(v)' '3km/h'` — typed unit variable, esoteric
+- test/operators/test_add_subtract_words.pairs.warp: `'pixel=[1 2 3]; do add 4 to pixel; count(pixel)'	4` — odd do add phrasing
+- test/operators/test_alike_in_warp.pairs.warp: `'[1 2] ≈ (1 2)'	false` — alike operator edge, esoteric
+- test/operators/test_glyph_operator_overloads.pairs.warp: `'>(a: list, b: int) := all a > b; [[1, 2, 3, 4] > 2, [3, 4] > 2, 5 > 2]'	[no, yes, yes]` — glyph operator redefinition, esoteric
+- test/operators/test_glyph_operator_overloads.pairs.warp: `'greater(a: list, b: int) := all a > b; [[1, 2, 3, 4] > 2, [3, 4] > 2, 5 > 2]'	[no, yes, yes]` — odd word overload
+- test/operators/test_like_known_type_mismatch.warp: `is! 'class photo{width:int height:int}; class pic{width:int}; pic like photo; p:photo = pic{width:3}; p.width' 3` — like type-mismatch, esoteric
+- test/operators/test_minus_after_callable.pairs.warp: `'int8 -3'	-3` — int8 minus spacing, odd
+- test/operators/test_pipe_stages.pairs.warp: `'rootSum := sum|sqrt; rootSum 1 3 5'	3` — duplicate pipe stage case
+- test/operators/test_pipe_stages.pairs.warp: `'square x := x*x; sum|square [1 2]'	9` — duplicate pipe stage case
+- test/operators/test_root_word.pairs.warp: `'root 4'	2` — root word not in wiki
+- test/operators/test_root_word.pairs.warp: `'root(9)'	3` — root word not in wiki
+- test/operators/test_then_pipe.warp: `is! 'square x := x*x; numbers = [1,2,3]; square numbers then filter(x => x > 5)' [9]` — then pipe phrasing, unbacked
+- test/slow/functions/test_call_argument_boundaries.pairs.warp: `'f(a, b) := b; f(4, s)'	1s` — symbolic result odd
+- test/slow/functions/test_data_parameter.warp: `is! 'text(div{ style{ ul > li { margin: 0 } } })' '{div:style{"ul > li":{margin:0}}}'` — internal text rendering of data
+- test/slow/functions/test_field_function_values.pairs.warp: `'x = {a: {b: 2, f: x => x * b}}; x.a.f(3)'	6` — duplicate of field closure case
+- test/slow/functions/test_parameter_shapes.pairs.warp: `'f(p{name: text}) := p.name; f({name:"Ann"})'	'Ann'` — duplicate shape parameter case
+- test/slow/functions/test_parameter_shapes.pairs.warp: `'f(p{name?, phone}) := p.phone; f({phone:"8"})'	'8'` — duplicate shape parameter case
+- test/slow/lists/test_pair_values.pairs.warp: `'p = (a: { b: 8 }); y = values(p)#1; keys(y)#1'	'b'` — values of pair, odd
+- test/slow/lists/test_pair_values.pairs.warp: `'p = (a: { padding: "q" }); x = values(p); y = x#1; values(y)#1'	'q'` — values of pair, odd
+- test/slow/lists/test_parameter_shadows_rule_word.pairs.warp: `'use sound; pattern_end("ab]c", 0, "]")'	2` — internal pattern_end API
+- test/text/test_add_to_text.pairs.warp: `'x="a"; x = x + "b"; add "c" to x; x'	'abc'` — duplicate add-to-text case
+- test/text/test_add_to_text.pairs.warp: `'x="ab"; add "cd" to x; x'	'abcd'` — duplicate add-to-text case
+- test/text/test_byte_loop_inline.warp: `is! 'fast total(t) := { s = 0; i = 0; while i < t.bytecount { s = s + byte_at(t, i); i = i + 1 }; s }; total("é")' 364` — byte internals in fast loop
+- test/text/test_char_parameter_type.pairs.warp: `'def g(t) := type(t); g("a")'	'codepoint'` — internal type name codepoint
+- test/text/test_char_parameter_type.pairs.warp: `'def g(t) := type(t); g("ä")'	'codepoint'` — internal type name codepoint
+- test/text/test_char_parameter_type.pairs.warp: `'f(t:text) := type(t); f("a")'	'codepoint'` — internal type name codepoint
+- test/text/test_character_comparison.pairs.warp: `'try ord("ab") else 0'	0` — ord of two-char text edge
+- test/text/test_constant_expression_text.pairs.warp: `'"h" + 3/2'	'h1.5'` — rational printing conflict, unpinned
+- test/text/test_cursor_typed.pairs.warp: `'use text; c = Cursor("ab12"); [c.at_end(), c.looking_at("ab"), c.skip("ab"), c.at_end(), c.skip("z"), c.skip_while(is_digit), c.at_end()]'	[no, yes, yes, no, n` — long Cursor dump, duplicate
+- test/text/test_interpolated_source_forms.warp: `is! 'area(w: int, h: int) := w * h ⏎ "\\(area.params)"' «['w' 'h']»` — list print spacing, reflection
+- test/text/test_interpolated_source_forms.warp: `is! 'class Point { x: int; y: int } ⏎ p = Point(3, 4) ⏎ "\\(dir(p)) \\(p.fields)"' «['x' 'y'] ['x' 'y']»` — list print spacing, reflection
+- test/text/test_interpolation.pairs.warp: `'"a\\$(b)"'	'a$(b)'` — odd escape-dollar form
+- test/text/test_interpolation.pairs.warp: `«'a ${x} b'»	'a ${x} b'` — odd single-quote interpolation
+- test/text/test_interpolation.pairs.warp: `'use js JSON; "j ${JSON.stringify([1])}!"'	'j [1]!'	needs: js` — platform js bridge
+- test/text/test_interpolation.pairs.warp: `'use js Math; "m \\(Math.max(1, 5))"'	'm 5'	needs: js` — platform js bridge
+- test/text/test_interpolation.pairs.warp: `'use js crypto; count "id \\(crypto.randomUUID())"'	39	needs: js` — platform js bridge
+- test/text/test_scan_by_index.warp: `is! 't = "ab\\r\\ncd"; o = ""; for i in [4 3 2 1 0 2] { o += t[i] }; o' 'dc\r ⏎ ba\r ⏎ '` — grapheme/CRLF index scan, esoteric
+- test/text/test_scan_by_index.warp: `is! 't = "aé👍🏽\\r\\nb"; o = ""; for i in [0 1 2 3 4 3 2 1 0 4 2] { o += t[i] + "|" }; o' 'a|é|👍🏽|\r ⏎ |b|\r ⏎ |👍🏽|é|a|b|👍🏽|'` — grapheme/CRLF index scan, esoteric
+- test/text/test_shown_made_kinds.pairs.warp: `'"" + 3 / 4'	"0.75"` — rational printing conflict, unpinned
+- test/text/test_text_slices.warp: `is! 'src = "trüe,fälse," * (1000 + round(random() * 0)) ⏎ first = "trüe" * (1 + round(random() * 0)) ⏎ separator = "," * (1 + round(random() * 0)) ⏎ hits = 0 ⏎ ` — random-times-zero slice stress
+- test/text/test_text_slices.warp: `is! 't = "abcdefghij" * (6000 + round(random() * 0)) ⏎ total = 0 ⏎ for i in 0 to 1999 { total += count(t[i * 30 : i * 30 + 5]) } ⏎ total' 10000` — random-times-zero slice stress
+- test/text/test_text_type_words.pairs.warp: `'π as float'	π` — odd pi as float expectation
+- test/text/test_text_type_words.warp: `is! 'class person{name:text}; text(p:person) := "P " + p.name; x = person{name:"a"}; String(x)' 'P a'` — duplicate String(x) alias case

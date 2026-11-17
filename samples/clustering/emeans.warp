@@ -55,7 +55,7 @@ def new_round() {
 
 # the steps after `done` of the race (0 to 1): e-means' batches and Lloyd's passes over the same share of the epochs
 def draw_race(done) {
-	clear(white)
+	clear(paper)
 	draw_panel(0, "k-means (Lloyd)", lloyd, (1 + floor(done * epochs)) as int)
 	draw_panel(panel, "e-means", emeans, (1 + round(done * (count(emeans) - 1))) as int)
 	line(panel, 0, panel, height, gray)
@@ -67,13 +67,13 @@ def draw_panel(left, title, steps, shown) {
 	labels = nearest_labels(points, centroids)
 	for i in 1 to count(points) { rect(left + points#i#1 - 1, points#i#2 - 1, dot_size, dot_size, colours#(labels#i)) }
 	for s in 2 to shown {
-		for j in 1 to clusters { line(left + steps#(s - 1)#j#1, steps#(s - 1)#j#2, left + steps#s#j#1, steps#s#j#2, black) }
+		for j in 1 to clusters { line(left + steps#(s - 1)#j#1, steps#(s - 1)#j#2, left + steps#s#j#1, steps#s#j#2, ink) }
 	}
 	for j in 1 to clusters {
-		circle(left + centroids#j#1, centroids#j#2, centre_radius + 2, black)
+		circle(left + centroids#j#1, centroids#j#2, centre_radius + 2, ink)
 		circle(left + centroids#j#1, centroids#j#2, centre_radius, colours#j)
 	}
-	label(left + 20, 14, title, black, 26)
+	label(left + 20, 14, title, ink, 26)
 	label(left + 20, 50, "epoch ${round(10 * epochs * (shown - 1) / (count(steps) - 1)) / 10} of ${epochs}   error ${round(mean_error(points, centroids, labels))}", gray, 20)
 }
 

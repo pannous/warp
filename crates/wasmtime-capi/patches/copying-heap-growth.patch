@@ -1,5 +1,5 @@
---- a/src/runtime/store/gc.rs
-+++ b/src/runtime/store/gc.rs
+--- a/wasmtime/src/runtime/store/gc.rs
++++ b/wasmtime/src/runtime/store/gc.rs
 @@ -1196,7 +1196,9 @@
      // GC heap growth (and its space overhead), only prefer growing first if the
      // predicted GC heap utilization is greater than half the GC heap's

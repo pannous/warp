@@ -5,8 +5,7 @@
 # Near trees are drawn one each, farther chunks as a few of their own trees, never as one stand-in picture.
 # Each tree is a lit billboard: tiered pines, clumped oaks, airy birches and autumn crowns, each with its own tint,
 # over a meadow and a sky with sun and clouds that are painted per pixel.
-# Headless, or with no window, the frame still selects that view and does not paint:
-# a paint with no GPU faults. A window paints the trees.
+# Each frame paints the trees: in a window, in the playground's pane, and with no window one frame, the still.
 use forest
 use keys
 
@@ -273,9 +272,7 @@ walk(ahead, side) := {
 	cam_z = cam_z + forward#3 * ahead + right#3 * side
 }
 
-on key {
-	if key == Key.escape { exit() }
-}
+on ESC { exit }
 
 on frame {
 	if mouse_down {
@@ -293,7 +290,7 @@ on frame {
 	if held == Key.a or held == Key.left { side = -WALK }
 	walk(ahead, side)
 	view = show(shown_width(), shown_height())
-	if window_possible() { paint(woods) }
+	paint(woods)
 }
 
 first = show(240.0, 135.0)

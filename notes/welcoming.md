@@ -41,7 +41,7 @@ fields are a decision the writer states once, in one line). wiki/like.md, test/o
 Samples of standard algorithms written in Python/JS style sit next to idiomatic ones (samples/<name>.warp,
 samples/<name>_idiomatic.warp).
 - text + number concatenates (`"F:" + 13` → "F:13")
-- floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) too (the warning naming `/!` is not ported yet)
+- floor division is `/!` (`7 /! 2`, `x /!= 2`); `//` is always a comment, glued (`7//2`) too, which warns naming `/!`
 - `#ident` with no space is count (`#s`); `# text` stays a comment; directives (#use, #include, #!) keep working
 - `upto` excludes the end (`..<`/`..` exclusive, `to`/`...` inclusive)
 - missing map key `m["Z"]` stays an error (as in Python); `m.get(k)`, `m.get(k, default)`, `k in m`, `m.has(k)` are the soft forms
@@ -57,8 +57,8 @@ samples/<name>_idiomatic.warp).
 - Users: `signed-operand` `1 -1` (default the list `[1, -1]`, warning spaced_sign); `local-or-global` (errors.data
   local_or_global: `let n = …` or `global n = …`); and-or, negative-modulo, arithmetic-conversion, optional-result
   (warnings.data). Explicit forms (`..<`, `...`, `to`, `global n`, `[4]`, `.+` …) never warn. test/welcoming/.
-- Not ported from the Rust compiler yet: the warnings of `a upto b`, the for-header bound `0..n-1` (kotlin-range) and
-  glued `//`, and the error fallbacks `list-plus` `[1 2 3]+4`, `bare-list` `a=1 2 3` (both compile today),
+- Not ported from the Rust compiler yet: the warnings of `a upto b`, the for-header bound `0..n-1` (kotlin-range),
+  and the error fallbacks `list-plus` `[1 2 3]+4`, `bare-list` `a=1 2 3` (both compile today),
   `insert-order`, `suffix-precedence`; `list-times` `[x]*n` is refused as "outside the core", without naming its readings.
 - New ambiguities: a fact where the ambiguity is still visible (often the parser, which knows the written form), a row
   giving every reading its explicit form, errors.data only when a wrong guess would silently corrupt results.

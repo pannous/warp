@@ -1,0 +1,20 @@
+#!/usr/bin/env warp
+# How far is a point from a line? The plane through the point square to the line (inner) meets the line in the foot;
+# the distance is from the point to the foot (card pga-visualization, lib/pga_draw.warp)
+use pga_draw
+canvas.resize(480, 360)
+
+p = point(1, 1.5, 2)
+axis = point(-2, 0, 0) ⋎ point(2, 0, 0) # the x axis
+base = point(foot(axis, p))
+print("the point is " + text(round(distance(p, axis), 3)) + " from the line, its foot " + text(place(base)))
+
+clear(paper)
+sketch(axis, blue)
+sketch(p, base, red)
+sketch(p, ink)
+sketch(base, blue)
+caption(p, "p", ink)
+caption(base, "foot", blue)
+caption(0, "distance " + text(round(distance(p, axis), 3)), red)
+show()

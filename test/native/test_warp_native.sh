@@ -4,17 +4,10 @@
 # bash test/native/test_warp_native.sh; the warp that builds it is WARP (default the warp on PATH); a tree's:
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-warp=${WARP:-warp}
-# the lib/ that warp runs with (its version names it), given to the native warp built here
-library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
-export WARP_WINDOW=0
+source "$(dirname "$0")/checks.sh"
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
 
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 
 cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.warp" "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
@@ -34,13 +27,14 @@ if [ -x "$stage/warp" ]; then
 	check "the arguments after --" "$(native arguments.warp -- eins zwei)" '["eins", "zwei"]'
 	check "self, code by warp-self.wasm" "$(native self '3 + 4')" 7
 	printf 'raise "boom"\n' >"$stage/raising.warp"
-	check "what a program raised" "$(native raising.warp)" "boom at raising.warp:1:1"
+	check "what a program raised" "$(native raising.warp)" "raising.warp:1:1 boom"
 	check "the console, its lines staying" "$(printf 'a = 7\nx = [1\na * 6\n' | native repl | sed -n 4p)" "🌀42"
 	# a console line warp refuses for an unknown name whose first word is a command on PATH runs by sh, marked dim
-	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11)
+	# `(sh) <line>` first; a typo and a type error keep warp's refusal (card repl-bash-commands, user 11-11);
+	# a typo's refusal follows the spacing warning `lsx -la is two items`, on the next line
 	check "the console runs a shell line" "$(printf 'echo shell-ran | tr a-z A-Z\n' | native repl | sed -n 2,3p)" "$(printf '🌀\033[2m(sh) echo shell-ran | tr a-z A-Z\033[0m\nSHELL-RAN')"
 	check "the console keeps a type error warp's" "$(printf 'date + 1\n' | native repl | sed -n 2p)" "🌀no + between type date and int 1 at 1:1"
-	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 2p)" "🌀outside the core: the unknown name lsx at 1:1 (no owner)"
+	check "the console keeps a typo's refusal" "$(printf 'lsx -la\n' | native repl | sed -n 3p)" "outside the core: the unknown name lsx at 1:1 (no owner)"
 	# each console line a module of its own, its instance kept: a function changes an earlier line's variable, a class
 	# and its instance cross lines, a value is made once, exit() ends the console (card warp-repl-instance)
 	check "the console keeps a line's variable for the next lines" "$(printf 'global count = 41\ndef bump() { count += 1; count }\nbump()\nbump()\ncount\n' | native repl | sed -n 5p)" "🌀43"
@@ -92,13 +86,13 @@ if [ -x "$stage/warp" ]; then
 	check "a sound, its line" "$(sed -n 1p <<<"$played" | cut -d: -f1)" "sound 0.50 s"
 	wav=$(sed -n 1p <<<"$played" | cut -d' ' -f4-)
 	check "a sound, its WAV" "$(head -c 4 "$wav"; wc -c <"$wav" | tr -d ' ')" RIFF22094
-	check "a sound saved, loaded and saved with another" "$(native $'use sound\ntone(440Hz, 0.5s)\nrender_sound("a.wav")\nkick = sample("a.wav")\nplay_sample(kick, 2)\ntone(440Hz, 0.5s)\n[kick.rate, kick.channels, round(render_sound("b.wav") * 100)]' | tail -1)" "[22050, 1, 75]"
-	check "a sound at its time in the save" "$(native $'use sound\ntone(440Hz, 0.5s)\nat 2s { tone(880, 0.5s) }\nround(render_sound("c.wav") * 100)' | tail -1)" 250
+	check "a sound saved, loaded and saved with another" "$(native $'use sound\ntone(440Hz, 0.5s)\nsave(sound, "a.wav")\nkick = sample("a.wav")\nplay(kick, 2)\ntone(440Hz, 0.5s)\n[kick.rate, kick.channels, round(save(sound, "b.wav") * 100)]' | tail -1)" "[22050, 1, 75]"
+	check "a sound at its time in the save" "$(native $'use sound\ntone(440Hz, 0.5s)\nat 2s { tone(880, 0.5s) }\nround(save(sound, "c.wav") * 100)' | tail -1)" 250
 	printf "posix_spawnp(pid: out, file: text, actions: handle, attributes: handle, arguments: texts, environment: handle): i32 from 'c'\nposix_spawnp('echo', 0, 0, ['echo', 'eins', 'zwei'], 0)\n" >"$stage/spawning.warp"
 	check "a list of texts as a C argv" "$(native spawning.warp | sort | tr '\n' ' ')" "0 eins zwei "
 	# a recorder as the player: nothing sounds even if sound_player were ignored, a windowless run mutes the others
 	printf '#!/bin/sh\necho "$0 ${1##*-}" >>"%s/played.log"\n' "$stage" >"$stage/recorder.sh" && chmod +x "$stage/recorder.sh"
-	paced=$(native $'use sound\nsound_player = "'"$stage/recorder.sh"$'"\nc = clock()\ntone(440Hz, 0.5s)\ntone(880Hz, 0.5s)\nwait_sound()\nclock() - c >= 1000' | tail -1)
+	paced=$(native $'use sound\nsound_player = "'"$stage/recorder.sh"$'"\nc = clock()\ntone(440Hz, 0.5s)\ntone(880Hz, 0.5s)\nwait(sound)\nclock() - c >= 1000' | tail -1)
 	sleep 0.2
 	check "sounds through the player, each when its voice reaches it" "$paced $(wc -l <"$stage/played.log" | tr -d ' ') $(sed -n 2p "$stage/played.log")" "yes 2 $stage/recorder.sh 2.wav"
 	check "a signal, sample by sample" "$(native $'use sound\nhum(t: float) := 0.5 * sin(2 * pi * 220 * t)\nplay(hum, 0.5s)' 2>&1 | head -1 | cut -d: -f1)" "sound 0.50 s"

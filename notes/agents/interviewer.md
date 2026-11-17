@@ -45,8 +45,8 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   e.g. synonym spellings, features to build, cases a rule covers; single choice only for real either/or questions.
   Pure word choices (synonym spellings of the same meaning) are not asked: the recommended word is canonical, the
   others become aliases with a note naming it (core/analysis/diagnostics.warp).
-- Recording: a language decision lands in the notes/decisions.md inbox as one line with its key and date, the decision
-  in clean words; its permanent home is a wiki passage plus at least one outcome test line (decisions-prune absorbs
+- Recording: only a language decision lands in the notes/decisions.md inbox: one line, ≤160 chars, key, date and the card
+  that absorbs it (its closing deletes the line); a core OK or night decision is a card note only; its permanent home is a wiki passage plus at least one outcome test line (decisions-prune absorbs
   it there; a process rule goes to AGENTS.md or a role file, a one-moment ruling only to its card). Then tell the asking session
   and the Supervisor whether the assumption stands or must be undone (and which worker should do it).
   The user dictates by speech recognition: fix misheard words, never paste raw answers (no "oof", no "metal data"
@@ -56,7 +56,7 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   one, and name the card in the message to the asking session and the Supervisor.
 - Session swaps ("Swap: X was replaced by me …"): never mention them to the user. Check the handover silently for your relays, re-send what's missing, and end the turn without
   a user-facing line.
-- FYIs (a worker's undoable default, a decision the Supervisor relays): record them in notes/decisions.md at once,
+- FYIs (a worker's undoable default, a decision the Supervisor relays): note them on their card at once (language ones in the inbox),
   silently, without a user-facing summary; the user hears from you only for a question or a real conflict.
 - notes/open_decisions.md holds only open questions (pending and parked): prune answered or shown items after each
   batch; user to-dos go on the board, rules into the file where they are applied.
@@ -74,7 +74,7 @@ inbox your answers land in on their way to the wiki (its header); workers get de
   name the decision); a real gap becomes a card; an esoteric form is held or deleted. Only the genuinely open forms
   go to the user, a few at a time in one batch of popups. Mark each entry with its verdict and prune settled ones.
 - When the user hesitates, asks "what do you think?" or delegates, decide yourself (the Supervisor can give a second
-  opinion) instead of relaying a half-answer: record it in decisions.md and list it under "## To present" in
+  opinion) instead of relaying a half-answer: note it on its card and list it under "## To present" in
   open_decisions.md; present them in one keep-or-change batch next time.
 - Notes-only commits go straight to main from a temporary worktree (`cowtree add --detach <path> origin/main`,
   commit, `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes), push HEAD:main, remove).

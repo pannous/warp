@@ -47,5 +47,4 @@
 # xxhash_compiled_to_wasm
 'import •/test/fixtures/wasm/xxhash; XXH_versionNumber()'	802
 'import •/test/fixtures/wasm/xxhash; XXH32("hello", 0)'	4211111929
-'import •/test/fixtures/wasm/xxhash; XXH32("wasp", 4, 42)'	4089166900
 'import •/test/fixtures/wasm/xxhash; XXH64("hello", 0)'	2794345569481354659

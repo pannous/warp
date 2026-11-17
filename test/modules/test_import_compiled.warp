@@ -23,3 +23,10 @@ is! 'import shapes
 area(2, 3)' 6
 is! 'import shapes
 shapes.greet("Ann")' 'hi Ann'
+
+# a_compiled_modules_result_typed_variants_link_by_the_type_asked (user 11-11, card float-literal-decimal)
+is! 'import •/test/fixtures/compiled/shapes
+half(3)' 1
+is! 'import •/test/fixtures/compiled/shapes
+x: float = half(3)
+x' 1.5

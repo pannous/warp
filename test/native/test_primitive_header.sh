@@ -2,14 +2,9 @@
 # `@primitive` marks a whole file anywhere in its leading header, the `#!` line, comments and blank lines before the
 # code; on its own line below the code it is refused (card primitive-comment-header). Run it with
 # bash test/native/test_primitive_header.sh; the warp under test is WARP (default the warp on PATH)
-warp=${WARP:-warp}
-export WARP_WINDOW=0
+source "$(dirname "$0")/checks.sh"
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
-failures=0
-check() { # check <what> <got> <expected>
-	if [ "$2" = "$3" ]; then echo "✓ $1"; else echo "✗ $1: got $2, expected $3"; failures=$((failures + 1)); fi
-}
 FIB='fib(n: i64): i64 := if n < 2 then n else fib(n - 1) + fib(n - 2)
 fib 20'
 

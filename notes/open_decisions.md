@@ -7,9 +7,10 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 ## Pending
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
-- data-tag-words: in data, glued `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call. Spaced `first {…}` stays the prelude call (spaced-tag keeps prelude words; only head is a tag via the library index). Keep, or make spaced prelude words tags too? (decisions.md)
 
 ## Parked
+- float-ranges (user: park, 2026-11-16, from card plot-siren-range): `0..π` as a range of real numbers (plot(siren, 0..π)); today a real end fails ("int of node"); core: range literal with real ends, likely 20+ lines. Meanwhile plot(f, from, to).
+- data-tag-words (user: park, 2026-11-16; built as is): in data, glued `head{…}` / `first{…}` (prelude words) stay tags; only program-defined or used words call. Spaced `first {…}` stays the prelude call (spaced-tag keeps prelude words; only head is a tag via the library index). Keep, or make spaced prelude words tags too? (decisions.md)
 - phrase-params (user: park for now; card definition-heads-phrases): in `send v to c := …` which words are parameters: (a) the body decides (used or typed words), () optional, unifying the older `to add a to b:` reader (an unused plain word there turns fixed); (b) always parentheses. Also: a phrase head starting with a keyword word (`send` is an emit word) refused aloud vs outranking the keyword. Provisional (a) on the branch only, not landed. Meanwhile phrases are written with named arguments (`give 2 to: 40`, named-argument-phrases).
 - note tests (decisions.md note-tests): discuss later.
 - event-handlers (prose discussion with the user, no popups; branch function-events): `on(event, body: block)` and `emit(event, data)` run the listeners, no handler core. Open: (1) event data as `it`, a chosen name (`on key k {…}`) or both; (2) user events declared (`enum Event += ask`) or any symbol.

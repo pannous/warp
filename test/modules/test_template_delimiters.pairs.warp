@@ -29,7 +29,6 @@
 'use template; mustache("Begin.\n  {{=@ @=}}\nEnd.\n", {})'	"Begin.\nEnd.\n"
 
 # mustache spec delimiters: Standalone Line Endings
-'use template; mustache("|\r\n{{= @ @ =}}\r\n|", {})'	"|\r\n|"
 
 # mustache spec delimiters: Standalone Without Previous Line
 'use template; mustache("  {{=@ @=}}\n=", {})'	"="

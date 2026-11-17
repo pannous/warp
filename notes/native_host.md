@@ -60,11 +60,13 @@ installs beside warp. Its mechanisms:
    (six integer registers each). gpu.warp makes three once (an adapter's or device's answer, an error scope's, a
    buffer's mapping); each writes the answer into globals, and the call polls wgpuInstanceProcessEvents (and
    wgpuDevicePoll) till it is there.
-2. Structs by value: no new parameter kind on ARM64 (AAPCS64, macOS and Linux): a composite over 16 bytes goes as a
-   pointer to a caller's copy, so a WGPU*CallbackInfo (40 bytes) is a `handle` to calloc'd memory; a WGPUStringView
-   argument of a callback is two integers (data, length). Every descriptor is calloc + set_field_* at the offsets of
-   webgpu.h v29 (the constants on top of gpu.warp; any 64-bit machine). x86-64 SysV puts a struct over 16 bytes on
-   the stack, which native_call cannot: there the callback infos would need a `struct` parameter kind.
+2. Structs by value: a foreign parameter `bytesN` (N from 17 to 128) is the last parameter and a handle to N bytes,
+   passed as one aggregate (foreign.c `native_call_struct`). On x86-64 SysV the C compiler puts that aggregate on
+   the stack; on AAPCS64 (macOS and Linux ARM64) it passes a pointer to a copy in the next integer register. The
+   compile refuses a struct of 16 bytes or less, one that is not last, a float beside it, and more than six integer
+   arguments before it. gpu.warp's four callback infos (request adapter, request device, pop error scope, map
+   buffer) are `info: bytes40`. A WGPUStringView argument of a callback is two integers (data, length). Every descriptor
+   is calloc + set_field_* at the offsets of webgpu.h v29 (the constants on top of gpu.warp; any 64-bit machine).
 3. Bulk copies: a `bytes` result (a C function's malloc'd {i64 length, bytes} read back as a text and freed, driver
    c_result) with lib/c.warp field_bytes / set_field_bytes; `f32s` and `i32s` parameters (a list of numbers as one C
    array of floats or int32s, its byte count the `length` after it). gpu.warp stages a buffer by

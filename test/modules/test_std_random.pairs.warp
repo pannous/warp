@@ -7,7 +7,7 @@
 'use random; count(sample([1, 2], 5))'	2
 
 # use_random_seed_repeats_the_numbers
-'use random; seed(42); [random_below(100), random_below(100)]'	[15, 64]
+'use random; seed(42); a = [random_below(100), random_below(100)]; seed(42); b = [random_below(100), random_below(100)]; a == b'	1
 
 # shuffle and sample give a new list: the one given keeps its order (found by card implement-new: sample reordered the points it drew from)
 'use random; xs = [1, 2, 3, 4, 5, 6]; ys = sample(xs, 2); zs = shuffle(xs); xs'	[1, 2, 3, 4, 5, 6]

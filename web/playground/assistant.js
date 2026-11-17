@@ -102,8 +102,8 @@ async function checkService(id, request, missing) {
 const keyAnswered = status => showAnswerStatus("api-key-status", status);
 const checkApiKey = () => checkService("api-key-status", () => serviceFetch(`${API_ORIGIN}/v1/models?limit=1`, { headers: API_HEADERS(apiKey().trim()) }),
 	apiKey().trim() ? "" : "no key: completion and Ask use the playground's proxy");
-const checkOwnerToken = () => checkService("owner-token-status", () => postJson(`${PROXY_ORIGIN}/session`, { owner_token: stored(OWNER_TOKEN_STORAGE) }),
-	stored(OWNER_TOKEN_STORAGE) ? "" : "open the page once with ?bug_token=<token> (python3 scripts/bug_report.py token)");
+const checkOwnerToken = () => checkService("owner-token-status", () => postJson(`${PROXY_ORIGIN}/session`, { owner_token: stored(BUG_TOKEN_KEY) }),
+	stored(BUG_TOKEN_KEY) ? "" : OWNER_TOKEN_HINT);
 const checkServices = () => { checkApiKey(); checkOwnerToken(); };
 
 // Claude's answer for one of assistant.json's tasks, as text: with a pasted key straight from the API, else from the proxy
@@ -134,18 +134,18 @@ async function askProxy(request, renewed = false) {
 	return askProxy(request, true);
 }
 
-// the owner's token (the bug button's, kept by ?bug_token=…) opens the session without the bot check
-const OWNER_TOKEN_STORAGE = "warp-playground-bug-token";
-
+// the owner's token (the bug button's, kept by ?bug_token=…, playground.js BUG_TOKEN_KEY) opens the session without the
+// bot check
 async function openProxySession() {
-	const ownerToken = stored(OWNER_TOKEN_STORAGE);
+	const ownerToken = stored(BUG_TOKEN_KEY);
 	const credential = ownerToken ? { owner_token: ownerToken } : { turnstile: await turnstileToken() };
 	return (await replyOf(await postJson(`${PROXY_ORIGIN}/session`, credential))).session;
 }
 
+// (loaded for CORS, which Cloudflare allows: an error of its script then says what failed, not a bare "Script error.")
 let turnstileLoaded;
 const loadTurnstile = () => turnstileLoaded ??= new Promise((resolve, reject) => document.head.append(element("script", {
-	src: TURNSTILE_SCRIPT, onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
+	src: TURNSTILE_SCRIPT, crossOrigin: "anonymous", onload: resolve, onerror: () => { turnstileLoaded = undefined; reject(new Error("The bot check (Cloudflare Turnstile) did not load.")); },
 })));
 
 // Turnstile's token, invisible unless Cloudflare wants the visitor to click

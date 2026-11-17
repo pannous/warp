@@ -59,14 +59,16 @@ Three layers, each with one place in the source:
 
 ## 4. Implicit modules
 core/extension.warp implicit_modules_of, "module → when the program needs it" (`warp uses <file>` lists them): file
-URL → file (P183), a page → markup, routes → router, a route's regular expression → regex; play, beep, stop_sound,
-wait_sound → sound (P171). No `use` text is inserted.
+URL → file (P183), a page → markup, routes → router, a route's regular expression → regex; play, beep, stop,
+wait → sound (P171). No `use` text is inserted.
 
 ## 5. How a module is loaded
 - `use math` resolves: a local `math.warp` (the file wins, except warp's own lib/<name>.warp) → `lib/math.warp` → an
   FFI library (`m`) → the package registry. `use cmath` is libm alone (P169/P191).
 - `use a, b` and `use a b` load each; `from list import zip, unique` brings only those words; `import list` works.
-- Names: after `use math`, `gcd(a, b)` and `math.gcd(a, b)` both work (P170); a program's own `gcd` wins. A program
+- Names: after `use math`, `gcd(a, b)` and `math.gcd(a, b)` both work (P170); a program's own `gcd` wins. `gcd` is
+  the core's Euclid (`gcd_euclid` names it), including a value past 64 bits. `gcd_binary` is Stein's
+  trailing-zero form for a signed machine word and is not the default (notes/binary_gcd.md). A program
   variable `text`/`list` keeps its methods.
 - The loader keeps a std module's definitions aside and gives the program only those it calls, and those they call
   (core/passes/prelude_words.warp): an unused word would compile with parameters of no kind.

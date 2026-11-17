@@ -7,3 +7,9 @@
 'fold [2 3 4] 1 *'	24
 'reduce [1 2 3 4] +'	10
 'xs=[5 6]; reduce xs *'	30
+# an operator ending its line is the fold alone; the next line is the next statement (decision trailing-operator-indent)
+'total := fold +\ntotal [1 2 3]'	6
+'x = 1 +\n\t2\nx'	3
+# a comparison alone as the order (card sorted-comparator-syntax)
+'sorted([3, 1, 2], >)'	[3, 2, 1]
+'sort([3, 1, 2], <)'	[1, 2, 3]
