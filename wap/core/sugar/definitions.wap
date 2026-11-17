@@ -1,0 +1,3 @@
+# Definitions written other ways (notes/wap.md core/sugar/): the spellings wap's own source uses
+# a result type after `as`, `f(x) as T := …`, is the typed head `f(x): T := …`
+rule ($head as $type := $body) => ($head: $type := $body)

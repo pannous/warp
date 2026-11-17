@@ -252,3 +252,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
+- **`wap format` leaves `f(x): T := …` as written instead of `f(x) as T := …`** (wap/core/format.wap). Bends
+  "everything warp prints uses the canonical word": wiki/function.md names `as` canonical and `:` its alias. Reason:
+  internally the typed head `f(x): T` is the one shape (core/sugar/definitions.wap rewrites `as` into it). Paid off
+  when format prints a typed definition head with `as`.
