@@ -53,5 +53,8 @@ format_check $'a:\n  b\n  c\n\nd\ne' $'a: {b\nc}\nd\ne'
 format_check $'a\n  b\n    c\nd' $'a{b{c}}\nd'
 format_check $'  a\n    b\n  c' $'a{b}\nc'
 # comments are no code
+format_check 'x:int=3' 'x: int = 3'
+format_check 'f(x):int:=x' 'f(x): int := x'
+format_check 'sample: int := 7' 'sample: int := 7'
 format_check $'blah a b c # note\ny/* c */=0 // c' $'blah a b c\ny = 0'
 exit $((failures > 0))
