@@ -16,7 +16,7 @@ is! 'pattern Pair = [_, _]
 match [1] { Pair => "pair"; _ => "other" }' 'other'
 
 # a_named_pattern_binds_its_names
-is! 'pattern Tagged = ["tag", name, ..]
+is! 'pattern Tagged = ["tag", $name, ..]
 match ["tag", "xy", 1] { Tagged => name; _ => "none" }' 'xy'
 
 # named_patterns_combine_with_and
@@ -30,7 +30,7 @@ is! 'Origin = [0, 0]
 Origin#2' 0
 
 # a_pattern_without_open_parts_binds
-is! 'pattern Point = [x, y]
+is! 'pattern Point = [$x, $y]
 match [3, 4] { Point => x + y }' 7
 
 # the_word_pattern_stays_a_call_outside_a_definition
@@ -39,13 +39,13 @@ pattern Pair = [_, _]
 pattern("abc") + count([[1, 2], [3]] where it is Pair)' 4
 
 # a_named_pattern_of_a_node_case
-is! 'pattern Definition = Key(head, Op.Define, body)
+is! 'pattern Definition = Key($head, Op.Define, $body)
 parse("g := 1") is Definition' true
-is! 'pattern Definition = Key(head, Op.Define, body)
+is! 'pattern Definition = Key($head, Op.Define, $body)
 parse("a + 1") is Definition' false
-is! 'pattern Definition = Key(head, Op.Define, body)
+is! 'pattern Definition = Key($head, Op.Define, $body)
 match parse("g := 1") { Definition: body; _: 0 }' 1
-is! 'pattern Definition = Key(head, Op.Define, body)
+is! 'pattern Definition = Key($head, Op.Define, $body)
 body_of(d: Definition): Node := value_of(d)
 body_of(parse("g := 2"))' 2
 is! 'use "../modules/used_patterns.warp"

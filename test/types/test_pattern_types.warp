@@ -1,26 +1,34 @@
-# A named pattern with names is a type with fields: built by its names, tested with `is`, matched by name or by place,
-# its names read off a parameter of that type (wiki pattern-matching.md "Named patterns as types", user 2026-11-17)
+# A named pattern with holes is a type with fields: built by its holes, tested with `is`, matched by name or by place,
+# its holes read off a parameter of that type. Holes are written `$name`, typed `$name: Type`, the rest `$name...`;
+# any other word stands for itself (wiki pattern.md, pattern-matching.md "Named patterns as types", user 2026-11-17)
 
 # a list
-is! 'pattern Pair = [a: int, b: int]; Pair(1, 2)' [1, 2]
-is! 'pattern Pair = [a: int, b: int]; [1, 2] is Pair' true
-is! 'pattern Pair = [a: int, b: int]; [1, "x"] is Pair' false
-is! 'pattern Pair = [a: int, b: int]; match [3, 4] { Pair(x, y) => x * y; _ => 0 }' 12
-is! 'pattern Pair = [a: int, b: int]; sum(p: Pair) := p.a + p.b; sum([3, 4])' 7
+is! 'pattern Pair = [$a: int, $b: int]; Pair(1, 2)' [1, 2]
+is! 'pattern Pair = [$a: int, $b: int]; [1, 2] is Pair' true
+is! 'pattern Pair = [$a: int, $b: int]; [1, "x"] is Pair' false
+is! 'pattern Pair = [$a: int, $b: int]; match [3, 4] { Pair(x, y) => x * y; _ => 0 }' 12
+is! 'pattern Pair = [$a: int, $b: int]; sum(p: Pair) := p.a + p.b; sum([3, 4])' 7
 
-# code, quoted, its holes the parts of the code
-is! 'pattern If = data((choose $cond $then_part $else_part)); text(If(parse("c"), parse("1"), parse("2")))' '(choose c 1 2)'
-is! 'pattern If = data((choose $cond $then_part $else_part)); parse("(choose c 1 2)") is If' true
-is! 'pattern If = data((choose $cond $then_part $else_part)); parse("(pick c 1 2)") is If' false
-is! 'pattern If = data((choose $cond $then_part $else_part)); match parse("(choose c 1 2)") { If(c, _, other) => other; _ => 0 }' 2
-is! 'pattern If = data((choose $cond $then_part $else_part)); then_of(n: If) := n.then_part; then_of(parse("(choose c 1 2)"))' 1
+# code: the word If itself and three holes
+is! 'pattern If = (If $condition: Node $then: Node $else: Node); text(If(parse("c"), parse("1"), parse("2")))' '(If c 1 2)'
+is! 'pattern If = (If $condition: Node $then: Node $else: Node); parse("(If c 1 2)") is If' true
+is! 'pattern If = (If $condition: Node $then: Node $else: Node); parse("(Unless c 1 2)") is If' false
+is! 'pattern If = (If $condition: Node $then: Node $else: Node); match parse("(If c 1 2)") { If(c, _, other) => other; _ => 0 }' 2
+is! 'pattern If = (If $condition: Node $then: Node $else: Node); then_of(n: If) := n.then; then_of(parse("(If c 1 2)"))' 1
 
-# a node case
-is! 'pattern Def = Key(head, Op.Define, body); parse("g := 1") is Def' true
-is! 'pattern Def = Key(head, Op.Define, body); match parse("g := 1") { Def(h, b) => b; _ => 0 }' 1
-is! 'pattern Def = Key(head, Op.Define, body); body_of(d: Def) := d.body; body_of(parse("g := 2"))' 2
-is! 'pattern Def = Key(head, Op.Define, body); Def(parse("g"), parse("3")) is Def' true
+# a typed hole tests the case of its part; a rest hole takes the remaining parts
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); parse("(Call print 1 2)") is Call' true
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); parse("(Call 3 1 2)") is Call' false
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); match parse("(Call print 1 2)") { Call(f, xs) => #xs; _ => 0 }' 2
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); text(Call(symbol("print"), [parse("1"), parse("2")]))' '(Call print 1 2)'
+
+# a case of Node, its parts named
+is! 'pattern Pair = Key($key, Op.Colon, $value); parse("a: 1") is Pair' true
+is! 'pattern Pair = Key($key, Op.Colon, $value); parse("a := 1") is Pair' false
+is! 'pattern Def = Key($head, Op.Define, $body); match parse("g := 1") { Def(h, b) => b; _ => 0 }' 1
+is! 'pattern Def = Key($head, Op.Define, $body); body_of(d: Def) := d.body; body_of(parse("g := 2"))' 2
+is! 'pattern Def = Key($head, Op.Define, $body); Def(parse("g"), parse("3")) is Def' true
 
 # a pattern without types
-is! 'pattern Point = [x, y]; Point(3, 4)' [3, 4]
-is! 'pattern Point = [x, y]; match [3, 4] { Point(a, _) => a }' 3
+is! 'pattern Point = [$x, $y]; Point(3, 4)' [3, 4]
+is! 'pattern Point = [$x, $y]; match [3, 4] { Point(a, _) => a }' 3
