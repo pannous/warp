@@ -206,10 +206,14 @@ field_shorthand(part: Node) as Node := match part {
 	_: part
 }
 # `$c: Node` is any part, `$c`; `$f: Symbol` tests the case by its type word, `$f: symbol`
+# A capitalized type, a declared pattern (`$c: Call`), waits for the patterns of the program (shapes_resolved). A lowercase
+# type, `$k: int`, is a literal of that type until types are inferred (wap's stage 3 widens it to any code of the type).
 code_hole_typed(part: Node) as Node := match part {
-	Key(hole, Op.Colon, Symbol(kind)): if not is_hole_symbol(hole) then part else if kind == node_type then hole else Key(hole, Op.Colon, symbol(kind.lower()))
+	Key(hole, Op.Colon, Symbol(kind)): if not is_hole_symbol(hole) then part else if kind == node_type then hole else if kind in NODE_CASE_TESTS then Key(hole, Op.Colon, symbol(NODE_CASE_TESTS[kind])) else part
 	_: part
 }
+# the cases of Node a hole of code may name, each with the type word that tests it
+NODE_CASE_TESTS = {"Symbol": "symbol", "Key": "key", "List": "list", "Text": "text", "Number": "number"}
 # `$xs...: Node` is read `($xs...):` then `Node`; as one item it is the rest whose items are each typed, `($xs: Node)...`
 rest_holes_typed(body: Node) as Node := bottom_up(body, part => match part {
 	List(items, Bracket.None, separator): {
@@ -234,7 +238,19 @@ named_patterns_of(program: Node) as map := {
 		named = named_pattern(statement)
 		if named { patterns[named#1] = named#2 }
 	}
+	for name in patterns.keys { patterns[name] = shapes_resolved(patterns[name], patterns, [name]) }
 	patterns
+}
+# A hole of code typed by a declared pattern, `$c: Call`, fits a part of that shape: the type is the pattern's body.
+# Any other capitalized type names no shape and is refused; so is a pattern whose holes take its own shape.
+shapes_resolved(pattern: Node, patterns: map, within: list) as Node := if not is_quote(pattern) then pattern else pattern_rebuilt(pattern, part => match part {
+	Key(hole, Op.Colon, Symbol(kind)): if is_hole_symbol(hole) and is_capitalized(kind) then Key(hole, Op.Colon, shape_named(kind, patterns, within)) else part
+	_: part
+})
+shape_named(kind: text, patterns: map, within: list) as Node := {
+	if kind in within { raise "the pattern " + kind + " takes itself in a hole: a shape cannot hold itself" }
+	if not (kind in patterns) { raise kind + " names no shape: a hole of code takes Node, a case of Node (" + NODE_CASE_TESTS.keys.join(", ") + ") or a declared pattern; a value type is written in lower case, " + kind.lower() }
+	shapes_resolved(patterns[kind], patterns, within + [kind])
 }
 
 without_named_patterns(program: Node) as Node := {

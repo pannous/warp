@@ -32,3 +32,8 @@ is! 'pattern Def = Key($head, Op.Define, $body); Def(parse("g"), parse("3")) is 
 # a pattern without types
 is! 'pattern Point = [$x, $y]; Point(3, 4)' [3, 4]
 is! 'pattern Point = [$x, $y]; match [3, 4] { Point(a, _) => a }' 3
+
+# a hole typed by a declared pattern fits a part of that shape
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); parse("(print (Call f 1))") is Print' true
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); parse("(print (f 1))") is Print' false
+is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); match parse("(print (Call f 1))") { Print(c) => text(c); _ => "no" }' '(Call f 1)'
