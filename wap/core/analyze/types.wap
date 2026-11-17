@@ -82,6 +82,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Prim(operation, arguments) => prim_typed(n, operation, arguments, s, f)
 	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
 	While(condition, body) => refitted(While(condition_typed(condition, s, f), typed_form(body, s, f, ø)), n)
+	Case(subject, arms) => case_typed(n, typed_form(subject, s, f, ø), arms, s, f, expected)
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
@@ -126,6 +127,28 @@ condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
 	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
 	tested
 }
+# A choice by patterns: each arm's pattern of the subject's type, a name holding the subject; each result expected the
+# Case's type. With a last arm that fits any value the Case has the results' joined type, else none.
+case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	type = value_type(subject) ?? refused(subject, "this gives no value to match")
+	typed = arms.map(arm => arm_typed(arm, type, s, f, expected))
+	results = typed.map(arm => value_type(arm))
+	given = if #arms > 0 and fits_any(pattern_of(arms.last)) then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b)) else ø
+	with_type_of(refitted(Case(subject, typed), n), given)
+}
+arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
+	Arm(pattern, result) => {
+		if fits_any(pattern) and pattern != symbol(WILDCARD) { remembered(pattern, type, s, f) }
+		tested = if fits_any(pattern) then pattern else typed_form(pattern, s, f, type)
+		if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit the subject, whose type is ${type}") }
+		given = typed_form(result, s, f, expected)
+		with_type_of(refitted(Arm(tested, given), arm), value_type(given))
+	}
+}
+# a pattern that fits every value: a name, or _
+fits_any(pattern: Node) as bool := pattern is symbol
+pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
+
 # the type of either of two values: the one that finishes, or the common one; ø when they differ
 joined_type(a: Node?, b: Node?) as Node? := if a == symbol(NEVER_TYPE) then b else if b == symbol(NEVER_TYPE) then a else if a != ø and b != ø and same_type(a, b) then a else ø
 

@@ -36,6 +36,17 @@ pattern Prim = (Prim $operation: Symbol $arguments...: Node)
 # (If c a b); with both parts of one type its value is the chosen part's, else it has none
 pattern If = (If $condition: Node $then_part: Node $else_part: Node)
 
+# one arm of a Case: a pattern and the result when it fits the subject: `1 => "one"` is Arm(1, "one"), (Arm 1 "one")
+pattern Arm = (Arm $pattern: Node $result: Node)
+# the pattern that fits any value and names none
+WILDCARD = "_"
+
+# the result of the first arm whose pattern fits the subject: `match x { 1 => "one"; n => "other" }` is
+# Case(x, Arm(1, "one"), Arm(n, "other")), (Case x (Arm 1 "one") …). A literal fits the value equal to it, a name fits
+# any value and holds it in its arm, `_` fits any. With a last arm that fits any value the Case has the arms' value,
+# else none
+pattern Case = (Case $subject: Node $arms...: Arm)
+
 # a body run again and again while a condition holds, yes or no: `while c { b }` is While(c, b), (While c b); it has
 # no value
 pattern While = (While $condition: Node $body: Node)
