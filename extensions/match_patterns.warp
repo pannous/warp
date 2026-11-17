@@ -38,16 +38,14 @@
 #   match v { Point(a, b) => a * b }       // a is the first name of the pattern (x), b the second (y)
 #   length(p: Point) := sqrt(p.x * p.x + p.y * p.y)
 #
-# The same thing can be written as a narrowed type, `type Point < list = [x: int, y: int]`. With the base type Node,
-# the body is a piece of code with holes, and this is how the new compiler will declare its kernel: each form the
-# backend understands is one such type (notes/backbone.md "Kernel forms are narrowed types of Node with a pattern
-# body"):
+# The body may be code too, quoted with `$` before its holes, and matching code against it is how a compiler's rules
+# take programs apart (warp's own core names node shapes this way, core/passes/node_patterns.warp):
 #
-#   type If < Node = (if cond: Node then_part: Node else_part: Node)
-#   If(c, a, b)                            // builds the code `(if c a b)`
-#   match n { If(c, a, b) => … }           // takes such code apart
+#   pattern Choice = data((choose $cond $then_part $else_part))
+#   Choice(c, a, b)                        // builds the code `(choose c a b)`
+#   match n { Choice(c, a, b) => … }       // takes such code apart
 #
-# How the named patterns and pattern types work is explained in "Pattern types" at the end of this file.
+# How named patterns build, bind and read is explained in "Named patterns" at the end of this file.
 
 # whether the core lowers the arm itself
 is_core_arm(arm: Node, variants: map) as bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
@@ -248,59 +246,22 @@ tested_subject(test: Node, patterns: map) as Node? := {
 }
 
 
-# ── Pattern types ─────────────────────────────────────────────────────────────────────────────────────────────────
-# A narrowed type whose body is a pattern with named holes (notes/backbone.md "Kernel forms are narrowed types of Node
-# with a pattern body", user 2026-11-17). It is the third way to narrow a type, beside `type Meters < int` (any int)
-# and a condition (`type Even < int where …`):
+# ── Named patterns ────────────────────────────────────────────────────────────────────────────────────────────────
+# A named pattern with names is a type with fields (user 2026-11-17: `pattern` is the one spelling, no
+# `type X < Base = pattern`): built by its names, tested with `is`, matched by name or by place, its names read off a
+# parameter of that type.
 #
-#   type Pair < list = [a: int, b: int]
-#   type If < Node = (if cond: Node then_part: Node else_part: Node)
-#   type Definition < Node = Key(head: Node, Op.Define, body: Node)
+#   pattern Pair = [a: int, b: int]
+#   pattern Choice = data((choose $cond $then_part $else_part))
+#   pattern Definition = Key(head, Op.Define, body)
 #
-# This is the core mechanism of the new compiler: each kernel form is a pattern type of Node, the emitter's input is
-# their closed union (`kernel = If | Call | …`), so one declaration says what a form looks like and gives every use:
-#
-#   build  If(c, a, b)                 the node `(if c a b)`, a Pair(1, 2) the list [1, 2]
-#   test   n is If                     whether n fits the pattern
-#   match  case n { If(c, _, e) => … } its names bound by place, `_` binding none; `If => cond` binds them by name
-#   read   f(n: If) := n.cond          a parameter of the type reads its names
-#
-# A pattern type is the named pattern of its body, `pattern If = …`, so it is tested, matched and erased to `any` as
-# every named pattern is, and every named pattern with names builds and reads the same way (`pattern Point = [x, y]`
-# builds Point(3, 4)). Only the reading of the body depends on the base: of Node, a body that is no node case is code,
-# quoted, and its holes `cond: Node` become the quote's holes `$cond`.
+#   build  Choice(c, a, b)             the code `(choose c a b)`, a Pair(1, 2) the list [1, 2]
+#   test   n is Choice                 whether n fits the pattern
+#   match  n { Choice(c, _, e) => … }  its names bound by place, `_` binding none; `Choice => cond` binds them by name
+#   read   f(n: Choice) := n.cond      a parameter of the type reads its names
 
-pattern_keyword = "pattern"
-
-# After `type If` (core/extension.warp type_readers): `< Node = (if cond: Node …)` read as the statement
-# `pattern If = data((if $cond …))`. Anything else, `type Age < int` or `type Code < list of int`, is no pattern type:
-# ø, with the parser back where it was, so the subtype reader takes it.
-read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
-	if not subtype_follows(p) { return ø }
-	start = p.at
-	p.at = blank_end(p, p.at + 1)
-	base = word_read(p)
-	equals = blank_end(p, p.at)
-	if char_at(p, equals) != '=' or char_at(p, equals + 1) == '=' {
-		p.at = start
-		return ø
-	}
-	p.at = blank_end(p, equals + 1)
-	# an expression, not a type's fields: `cond: Node then_part: Node` stays one group of typed holes
-	body = with_field(p, "type_body", false, () => expression(p, 0))
-	List([symbol(pattern_keyword), Key(name, Op.Assign, if base == node_type then node_pattern(body) else body)], Bracket.None, Separator.Space)
-}
-
-# The pattern a body of Node stands for. A node case, `Key(head: Node, Op.Define, body: Node)`, is matched case by case
-# as written; any other body is code, `(if cond: Node then_part: Node else_part: Node)`, quoted as `data((if $cond $then_part $else_part))`.
-# A hole typed Node says nothing more than that it is a part of the node, so it becomes the bare name.
-node_pattern(body: Node) as Node := if case_pattern(body) != ø then node_holes(body, "") else List([quote_symbol, node_holes(body, "$")], Bracket.Round, Separator.None)
-node_holes(body: Node, mark: text) as Node := bottom_up(body, part => match part {
-	Key(Symbol(name), Op.Colon, Symbol(kind)): if not is_hole_word(name) then part else if kind == node_type then symbol(mark + name) else Key(symbol(mark + name), Op.Colon, symbol(kind))
-	_: part
-})
-
-# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((if $cond $then_part $else_part))` → cond, yes, no.
+# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((choose $cond $then_part $else_part))` → cond, then_part,
+# else_part.
 # These are the type's fields and the constructor's parameters. A capitalized word (`Key`, `Op.Define`) is a case, a
 # type or an enum, and `_` binds nothing: neither is a name.
 pattern_holes(pattern: Node) as list := structural_names(pattern, no).filter(is_hole_word)
@@ -355,9 +316,9 @@ placed_hole(name: text, placed: map) as Node? := {
 	if placed[hole] is symbol then symbol("$" + name_of(placed[hole])) else raise "a hole of code binds a name, not " + placed[hole]
 }
 
-# `f(n: If) := n.cond`: in a function, a parameter typed by a named pattern reads its names. Each read matches the
-# parameter against the pattern, `match n { If => cond }`; a value that does not fit is refused there ("no case for
-# value"), never read as ø. Reads after a test (`if n is If { n.cond }`) are not narrowed yet.
+# `f(n: Choice) := n.cond`: in a function, a parameter typed by a named pattern reads its names. Each read matches the
+# parameter against the pattern, `match n { Choice => cond }`; a value that does not fit is refused there ("no case for
+# value"), never read as ø. Reads after a test (`if n is Choice { n.cond }`) are not narrowed yet.
 with_hole_reads(n: Node, patterns: map) as Node := {
 	if not is_key(n, Op.Define) { return n }
 	typed = pattern_parameters(leftmost_part(key_of(n)), patterns)
@@ -377,4 +338,4 @@ pattern_read(n: Node, typed: map) as Node := match n {
 	_: n
 }
 
-match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], type_readers: [read_pattern_type], passes_before: {"definition_heads": pattern_constructors}, passes: {"code_templates": named_patterns}}
+match_patterns_extension = Extension{name: "match_patterns", arm_lowerings: [guarded_arms], passes_before: {"definition_heads": pattern_constructors}, passes: {"code_templates": named_patterns}}
