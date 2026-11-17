@@ -14,7 +14,7 @@ count(page find {type: "text"})' 1
 
 # find_takes_a_named_pattern
 is! 'page = {top: {logo: {type: "image", src: "logo.png"}}, body: [{type: "text"}, {type: "image", src: "cat.jpg"}]}
-pattern Image = {type: "image", src}
+pattern Image = {type: "image", src: $src}
 count(page find Image)' 2
 
 # find_matches_list_patterns_in_nested_lists

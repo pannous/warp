@@ -20,7 +20,7 @@ is! 'simplify(code) := code replace data($a * 1) with a
 text(simplify(data (n * 1 + k * 1)))' 'n+k'
 
 # replace_takes_a_named_pattern
-is! 'pattern Pair = [x, y]
+is! 'pattern Pair = [$x, $y]
 xs = [[1, 2], [3, 4], [5, 6]]
 ys = xs replace Pair with x + y
 ys#1 + ys#2' 10
