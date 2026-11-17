@@ -32,4 +32,7 @@ format_check $'infix operator ⊗ := left * right\noperator ⊗ has precedence a
 format_check $'infix operator divides(d, n) := n % d == 0\n3 divides (2 * 6)' $'infix operator divides(d, n) := n % d == 0\n3 divides 2 * 6'
 # an operator with no operand after it is a name
 format_check 'total := fold +' 'total := fold +'
+# a function's result type prints after `as`, the canonical word (wiki/function.md); a typed name keeps its `:`
+format_check 'twice(x): int := x * 2' 'twice(x) as int := x * 2'
+format_check 'x: int := 3' 'x: int := 3'
 exit $((failures > 0))
