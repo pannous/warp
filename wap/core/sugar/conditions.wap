@@ -1,2 +1,5 @@
 # Conditions written other ways, as If (notes/wap.md core/sugar/): the spellings wap's own source uses
 rule unless $c $body => If($c, ø, $body)
+# `and` and `or` stop at the first part that decides: the second part runs only when it is needed
+rule $a and $b => If($a, $b, no)
+rule $a or $b => If($a, yes, $b)
