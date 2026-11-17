@@ -43,7 +43,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
-	Get(value, member) => refitted(Get(bound(value, scope, depth), member_bound(member, scope)), n)
+	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	Number(value) => n
 	Text(value) => n
@@ -167,12 +167,6 @@ resolved(name: Node, scope: list, depth: int) as Node := {
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
 	bound = with_fact(name, BINDING, symbol(kind))
 	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(meant.map(definition => definition.definer), Bracket.Square, Separator.Comma))
-}
-# A member's name: the functions of that name it may call, if any; whether it is a field, only typing can tell
-member_bound(member: Node, scope: list) as Node := {
-	meant = definitions_meant(text(member), scope).filter(is_function)
-	bound = with_fact(member, BINDING, symbol(BOUND_MEMBER))
-	if meant is empty then bound else if #meant == 1 then with_fact(bound, DEFINED_AT, meant#1.definer) else with_fact(bound, CANDIDATES, List(meant.map(definition => definition.definer), Bracket.Square, Separator.Comma))
 }
 # The definitions a name may mean, innermost first: the one it finds, or, when that is a function, every function of
 # that name around it, its overloads, up to a variable of that name, which hides the rest. The typing stage picks

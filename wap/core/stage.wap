@@ -105,8 +105,6 @@ BOUND_CAPTURE = "capture"
 BOUND_GLOBAL = "global"
 BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
-# a member's name, `f` of `x.f`: its functions are its candidates, and typing settles the field or the function
-BOUND_MEMBER = "member"
 # on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
 # BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
 ASSIGNS = "assigns"

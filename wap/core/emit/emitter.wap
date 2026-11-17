@@ -76,7 +76,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => postponed(form, p, f)
 	Set(place, value) => set_code(form, declared_name(place), code(value, p, f), p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
-	Get(value, member) => call_code(form, member, [value], p, f)
+	Get(subject, key) => call_code(form, form, [subject], p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), code(then_part, p, f), code(else_part, p, f))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
@@ -191,7 +191,7 @@ call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Co
 }
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	binding = binding_of(called)
-	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY and binding != BOUND_MEMBER { refused(form, "the emitter calls functions, not a ${binding} yet") }
+	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }
 	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 }
 
