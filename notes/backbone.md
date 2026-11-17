@@ -198,9 +198,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
-- **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
-  any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
-  function whose body is a host primitive.
+- **A library name is found in the preload by its spelling** (wap/core/emit/emitter.wap `library_function`). Bends
+  "the emitter never looks a name up by its spelling". Reason: the binding stage marks a name `library` without its
+  definition yet. Paid off when the declare stage binds library names to the preload's definitions (defined_at),
+  which warp-wap-binding is building.
 - **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
@@ -213,7 +214,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
   function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
   (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.
-- **A definition is known by its line and column** (wap/core/emit/emitter.wap `place_key`): the emitter finds the
-  function, local or global a bound name refers to by where its definer was written. Two files' definitions at the
-  same line and column would collide. Reason: wap compiles one file so far. Paid off when positions carry their file,
-  or the binding fact names its definition uniquely.
+- **A definition's file is the emitter's guess** (wap/core/emit/emitter.wap `place_key`): a definition is known by its
+  file and position, and positions carry no file, so the emitter takes a name's definition to be in the file of the
+  function naming it (the preload for a library name). Paid off when positions carry their file.

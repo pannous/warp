@@ -19,8 +19,14 @@ use "core/analyze/scope.wap"
 use "core/emit/wasm.wap"
 use "core/emit/values.wap"
 use "core/emit/emitter.wap"
+use "core/emit/primitives.wap"
 
-compiled(source: text) as list := module_bytes(emitted(bound_program(lowered_program(notation(source)))))
+# the standard language every program gets, as definitions (preload/prelude.wap)
+PRELOAD = program.folder + "/preload/prelude.wap"
+
+# source text read, lowered and bound: the program and the preload alike
+prepared(source: text) as Block := bound_program(lowered_program(notation(source)))
+compiled(source: text) as list := module_bytes(emitted(prepared(source), prepared(read(PRELOAD))))
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>" }
 write_bytes(args#2, compiled(read(args#1)))

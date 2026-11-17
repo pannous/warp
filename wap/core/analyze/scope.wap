@@ -32,6 +32,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Fn(parameters, body) => refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n)
 	Set(place, value) => refitted(Set(bound(place, scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	Number(value) => n
 	Text(value) => n
 	Char(value) => n
@@ -77,6 +78,7 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Block(statements) => []
 	Fn(parameters, body) => []
 	Call(called, arguments) => defined_in(arguments, scope, depth)
+	Prim(operation, arguments) => defined_in(arguments, scope, depth)
 	_ => []
 }
 local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then BOUND_GLOBAL else BOUND_LOCAL
