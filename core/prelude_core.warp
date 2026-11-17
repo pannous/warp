@@ -89,7 +89,11 @@ class Range {
 	}
 	// Gauss's sum, count · (first + last) / 2
 	sum() := if count() == 0 then 0 else count() * (start + at(count())) div 2
-	items() as list := [stepped(i) for i in 0 ..< count()]
+	items() as list := {
+		out = []
+		for i in 0 ..< count() { out += [stepped(i)] }
+		out
+	}
 	text() as text := text(start) + (if inclusive then " to " else "..") + text(end)
 	// what count and r#i reckon with: a whole number itself, a character its code point
 	ordinal(x: any) as int := if x is char then ord(x) else x
