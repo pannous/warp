@@ -205,9 +205,11 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
-	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
-	chosen = function_typed(chosen_definition(n, called, candidates, types, expected), types, s, n)
-	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), given), n), chosen.result)
+	meant = chosen_definition(n, called, candidates, given, expected)
+	wanted = parameters_in(meant).map(type_given)
+	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then typed_form(arguments#at, s, f, wanted#at) else given#at)
+	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
 # the definitions a called name may mean: the one it was bound or typed to, else its candidates
 candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {
@@ -220,18 +222,23 @@ definition_at(definer: Node, s: TypingState) as Node := {
 	refused(definer, "the typing stage found no definition here")
 }
 
-# The one definition that takes these argument types, by them, then by the type expected; none or several refused
-chosen_definition(n: Node, called: Node, candidates: list, types: list, expected: Node?) as Node := {
-	fitting = candidates.filter(definition => takes(definition, types))
+# The one definition that takes these typed arguments, by their types, then by the type expected; none or several
+# refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
+chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?) as Node := {
+	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
+	fitting = candidates.filter(definition => takes(definition, given))
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
-takes(definition: Node, types: list) as bool := {
+takes(definition: Node, given: list) as bool := {
 	parameters = parameters_in(definition)
-	#parameters == #types and (1 to #types).all(at => type_given(parameters#at) == ø or same_type(type_given(parameters#at), types#at))
+	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
 }
+fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+# a one-character text literal, typed a char, where a text is wanted
+reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result written or

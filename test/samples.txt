@@ -1,7 +1,11 @@
-# e17878a2c8 2026-11-17 13:39 238/299 79.6%
+# 9276387d16 2026-11-17 22:02 297/299 99.3%
 ok   samples/acceleration/gpu_arrays.warp
+ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
 ok   samples/acceleration/gpu_million.warp
+ok   samples/advanced/circle.warp
+ok   samples/advanced/filled_circle.warp
+ok   samples/advanced/mandelbrot_canvas.warp
 ok   samples/advanced/neural_net.warp
 ok   samples/advanced/particles.warp
 ok   samples/advanced/self_parser.warp
@@ -22,6 +26,7 @@ ok   samples/apps/settings_cli.warp
 ok   samples/apps/site_generator.warp
 ok   samples/apps/todo_cli.warp
 ok   samples/apps/url_report.warp
+ok   samples/clustering/emeans.warp
 ok   samples/conditions/control_flow.warp
 ok   samples/conditions/fizzbuzz.warp
 ok   samples/crates/regex_and_sha2.warp
@@ -31,6 +36,7 @@ ok   samples/errors/raise_error.warp
 ok   samples/errors/try_catch.warp
 ok   samples/errors/try_else.warp
 ok   samples/errors/try_failed_json.warp
+ok   samples/events/arrow_keys.warp
 ok   samples/events/effects.warp
 ok   samples/events/ticks.warp
 ok   samples/functions/ackermann.warp
@@ -45,6 +51,12 @@ ok   samples/functions/sudoku.warp
 ok   samples/functions/warp_reads_warp.warp
 ok   samples/functions/y_combinator.warp
 ok   samples/geometry/pga_example.warp
+ok   samples/geometry/pga_point_line_distance.warp
+ok   samples/geometry/pga_ray_plane.warp
+ok   samples/geometry/pga_reflect.warp
+ok   samples/geometry/pga_skew_lines.warp
+ok   samples/geometry/pga_sphere_cut.warp
+ok   samples/geometry/pga_visual.warp
 ok   samples/golf/99-bottles-of-beer.short.warp
 ok   samples/golf/99-bottles-of-beer.warp
 ok   samples/golf/arabic-to-roman.short.warp
@@ -83,9 +95,49 @@ ok   samples/golf/rot13.short.warp
 ok   samples/golf/rot13.warp
 ok   samples/golf/sierpiński-triangle.short.warp
 ok   samples/golf/sierpiński-triangle.warp
+ok   samples/gpu/aquarium.warp
 ok   samples/gpu/fish_mesh.warp
+ok   samples/gpu/fish.warp
+ok   samples/gpu/gpu_visualizer.warp
+ok   samples/gpu/julia.warp
+ok   samples/gpu/kaleidoscope.warp
+ok   samples/gpu/lava_lamp.warp
+ok   samples/gpu/manual_3d_object_viewer.warp
+ok   samples/gpu/northern_lights.warp
+ok   samples/gpu/ocean_sunset.warp
+ok   samples/gpu/ocean.warp
+ok   samples/gpu/ringed_planet.warp
+ok   samples/gpu/rings.warp
+ok   samples/gpu/scene_3d.warp
+ok   samples/gpu/sdf_scene.warp
+ok   samples/gpu/stripes.warp
+ok   samples/gpu/voronoi.warp
+ok   samples/gpu/warp_compiled_wgsl_shader.warp
+ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/ez_forest.warp
+ok   samples/graphics/finger_paint.warp
+ok   samples/graphics/fluid_25d.warp
+ok   samples/graphics/fluid_flame_mouse.warp
+ok   samples/graphics/function_fields.warp
+ok   samples/graphics/gaussian_splats.warp
+ok   samples/graphics/julia_sliders.warp
+ok   samples/graphics/load_bmp.warp
+ok   samples/graphics/load_jpeg.warp
+ok   samples/graphics/make_image.warp
+ok   samples/graphics/meshlet_grid.warp
+ok   samples/graphics/million_trees.warp
+ok   samples/graphics/paint_function.warp
+ok   samples/graphics/paint_text_gpu.warp
+ok   samples/graphics/paint_text.warp
+ok   samples/graphics/plot_siren.warp
+ok   samples/graphics/postcard.warp
+ok   samples/graphics/shader_brush.warp
+ok   samples/graphics/shader_fields.warp
+ok   samples/graphics/shader_trails.warp
+ok   samples/graphics/shader.warp
 ok   samples/graphics/tree_study.warp
+ok   samples/graphics/webgpu.warp
+ok   samples/graphics/window_size.warp
 ok   samples/hello/comments.warp
 ok   samples/hello/hello.warp
 ok   samples/hello/natural.warp
@@ -116,6 +168,7 @@ ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
 ok   samples/modules/free_slots.warp
+ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
@@ -134,6 +187,7 @@ ok   samples/native/hello.warp
 ok   samples/native/structs.warp
 ok   samples/native/uses.warp
 ok   samples/numbers/bits.warp
+ok   samples/numbers/collatz.warp
 ok   samples/numbers/complex_numbers.warp
 ok   samples/numbers/complex_roots.warp
 ok   samples/numbers/dates.warp
@@ -157,13 +211,14 @@ ok   samples/objects/json_parser.warp
 ok   samples/objects/mixins.warp
 ok   samples/objects/references.warp
 ok   samples/objects/ring_log.warp
-ok   samples/objects/sorted_leaderboard.warp
 ok   samples/physics/usd_bodies.warp
+ok   samples/physics/usd_collisions.warp
 ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
 ok   samples/signals/signal_fields.warp
 ok   samples/sound/arrangement.warp
 ok   samples/sound/filters.warp
+ok   samples/sound/gpu_visualizer_warp.warp
 ok   samples/sound/harmony.warp
 ok   samples/sound/hum_blocks.warp
 ok   samples/sound/midi.warp
@@ -178,6 +233,7 @@ ok   samples/sound/sound_patterns.warp
 ok   samples/sound/sound_pipes.warp
 ok   samples/sound/stereo_sound.warp
 ok   samples/sound/synth.warp
+ok   samples/sound/visualizer.warp
 ok   samples/sound/voices.warp
 ok   samples/storage/orm_transaction.warp
 ok   samples/storage/orm_units.warp
@@ -214,14 +270,17 @@ ok   samples/web/collatz_bars.warp
 ok   samples/web/component_binding.warp
 ok   samples/web/component_totals.warp
 ok   samples/web/computed_tags.warp
+ok   samples/web/counter.warp
 ok   samples/web/form_submit.warp
 ok   samples/web/hello_div.warp
 ok   samples/web/html_dsl.warp
 ok   samples/web/html.warp
+ok   samples/web/keyed_counters.warp
 ok   samples/web/keyframes.warp
 ok   samples/web/leaving_list.warp
 ok   samples/web/live_region.warp
 ok   samples/web/page_custom_event.warp
+ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 ok   samples/world/polymarket_odds.warp
@@ -237,64 +296,5 @@ SRV  samples/servers/route_headers.warp
 SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
-FAIL samples/acceleration/gpu_f16.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/advanced/circle.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/advanced/filled_circle.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/advanced/mandelbrot_canvas.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/clustering/emeans.warp: hint: the canvas is 1280×720, the window 240×135: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/events/arrow_keys.warp: hint: the canvas is 320×240, the window 240×135: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/geometry/pga_point_line_distance.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/geometry/pga_ray_plane.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/geometry/pga_reflect.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/geometry/pga_skew_lines.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/geometry/pga_sphere_cut.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/geometry/pga_visual.warp: hint: the canvas is 640×480, the window 240×135: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/gpu/aquarium.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/fish.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/gpu_visualizer.warp: hint: levels stays a list, not a GPU list: the program reads its items, which f32 cells would round; the GPU's upload walks its numbers every time at gpu_visualizer.warp:135:1; fix: levels: [f32] = …
-FAIL samples/gpu/julia.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/kaleidoscope.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/lava_lamp.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/manual_3d_object_viewer.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/northern_lights.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/ocean_sunset.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/ocean.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/ringed_planet.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/rings.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/scene_3d.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/sdf_scene.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/stripes.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/voronoi.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/gpu/warp_compiled_wgsl_shader.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/color_swatches.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/finger_paint.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/fluid_25d.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/fluid_flame_mouse.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/function_fields.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/gaussian_splats.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/julia_sliders.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/load_bmp.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/load_jpeg.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/make_image.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/meshlet_grid.warp: hint: vertices stays a list, not a GPU list: the program hands it on elsewhere too; the GPU's upload walks its numbers every time at meshlet_grid.warp:37:1; fix: vertices: [f32] = …
-FAIL samples/graphics/million_trees.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/paint_function.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/paint_text_gpu.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/paint_text.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/plot_siren.warp: hint: the canvas is 80×24, the window 640×480: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/graphics/postcard.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/shader_brush.warp: hint: ripple stays a list, not a GPU list: it is assigned again; the GPU's upload walks its numbers every time at shader_brush.warp:11:1; fix: ripple: [f32] = …
-FAIL samples/graphics/shader_fields.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/shader_trails.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/shader.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/webgpu.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/graphics/window_size.warp: hint: the canvas is 320×180, the window 240×135: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/modules/javascript.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
 FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
-FAIL samples/numbers/collatz.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/physics/usd_collisions.warp: hint: the canvas is 960×540, the window 240×135: the canvas is shown scaled; canvas.resize(w, h) sizes both
-FAIL samples/sound/gpu_visualizer_warp.warp: sound file: samples/sound/tune.mp3
-FAIL samples/sound/visualizer.warp: sound 5.00 s: /var/folders/x3/8vyvmvd936j2pzv4dc9yw68c0000gn/T/warp-sound/sound-76925.wav
-FAIL samples/web/counter.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/web/keyed_counters.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
-FAIL samples/web/page_elements.warp: C called a callback back, but the run links no warp/callbacks exporting c_callback_fired
+FAIL samples/objects/sorted_leaderboard.warp: wasm trap: call stack exhausted at 12:22
