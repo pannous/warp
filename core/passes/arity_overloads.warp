@@ -541,9 +541,9 @@ known_kind(n: Node, judge: ArgumentJudge) as list? := {
 	# a name assigned is a variable, its kind known only when all its values agree: the `rest = value` of the prelude's
 	# fits_text_cut beside text's Cursor.rest() is no function
 	if n is symbol and name_of(n) in judge.variables { return if judge.variables[name_of(n)] then judge.variables[name_of(n)] else ø }
-	# a function the program defines, passed by name (`play(hum, 2s)`): a function of its parameters' count; one of
-	# none read bare is its call, `sin(π)` of a π() := Real(1, 1)
-	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", #judge.own[name_of(n)] - 1] }
+	# a function the program defines, passed by name (`play(hum, 2s)`): a function taking its least to its full count
+	# of arguments (`double(x, y = 2)` takes one or two); one of none read bare is its call, `sin(π)` of a π() := Real(1, 1)
+	if n is symbol and name_of(n) in judge.own and is_group(judge.own[name_of(n)]) and #judge.own[name_of(n)] > 1 { return ["function", arity_of(judge.own[name_of(n)])] }
 	# `(2)`, the operand of `sqrt(2)`, is 2
 	if is_group(n) and bracket_of(n) == "(" and #n == 1 { return known_kind(n#1, judge) }
 	if n is key and is_empty(key_of(n)) { return if op_of(n) == Op.Sub or op_of(n) == Op.Neg then numeric(known_kind(value_of(n), judge)) else ø }
@@ -605,7 +605,7 @@ argument_fit(kind: list?, type: text) as int? := {
 	if kind == ø { return 0 }
 	# a union fits as well as its best fitting member (decision union-or)
 	if is_union(type) { return union_members(type).map(member => argument_fit(kind, member)).filter(fits => fits != ø).fold(ø, (best, fits) => if best == ø or fits < best then fits else best) }
-	if kind#1 == "function" and kind#2 != ø and function_type_arity(type) not in [ø, kind#2] { return ø }
+	if kind#1 == "function" and kind#2 != ø and function_type_arity(type) != ø and not span_takes(kind#2, function_type_arity(type)) { return ø }
 	if kind#1 == "list" then element_fit(kind#2, type) else fit(kind#1, type)
 }
 # the parameters a function type names, 2 of `(samples, float) -> any`; ø of a type without them, `function`
@@ -773,7 +773,8 @@ within(judge: ArgumentJudge, n: Node) as ArgumentJudge := {
 	for name in own.keys { variables[name] = own[name] }
 	# a parameter declaring its type has that kind: `make(db: any, name: text) := run(db, name)` passes a text
 	for parameter in declared_parameters(n) { variables[parameter.name] = [overload_kinds[parameter.type_name], ø] }
-	ArgumentJudge(variables, judge.own, judge.least, judge.program)
+	# (a parameter hides the program's function of its name: `go(items: list) := items.map(f)` beside an items(m))
+	ArgumentJudge(variables, without_keys(judge.own, parameters), judge.least, judge.program)
 }
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge) as Node := {
