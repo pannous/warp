@@ -1,6 +1,7 @@
 # First principles
 
-condensed philosophy of the warp language: 
+Condensed philosophy of the warp language. Every agent reads this file at start (AGENTS.md); a line here changes
+only with the user's OK.
 
 ## Core identities
 
@@ -13,7 +14,7 @@ special case that breaks one of these identities is a bug.
   is a function name with a fixity (infix, prefix, postfix) and a place in the precedence table. Any function can be
   given an operator spelling, and any operator can be defined and overloaded like a function.
 - **Aliases are one table.** Every alias maps to a canonical word, for example `through` and `…` to `to`, or `≤` to
-  `<=`. `less` to `<` Spelling never changes meaning, and everything warp prints uses the canonical word.
+  `<=`, `less` to `<`. Spelling never changes meaning, and everything warp prints uses the canonical word.
 - **Functions and methods are the same, except for meta.** A method is a function whose first parameter is the
   receiver. Where it is declared (inside a class or not) is metadata, not meaning.
 - **`f(x)` is `x.f`, universally.** `f(x, y)` is `x.f(y)`, for every function, built-in or user-defined, on every type.
@@ -47,36 +48,48 @@ enum Node {
 	Type(name: Node, body: Node)
 }
 
-We make use of this construct either through types and values, or through pattern matching:
+We use this construct through values and types, and through named patterns. A pattern names a shape of Node
+(wiki/pattern.md): it is not a class, it adds no storage, and every Node of that shape matches it, whoever built it.
 
-// kernel layer: a shape is a name for a Node pattern, usable to build and to match
-shape If(cond: Node, yes: Node, no: Node) = (·if cond yes no)
-shape Call(f: Node, args: [Node])        = (·call f args...)
-shape Define(name: Symbol, params: [Node], body: Node) = (·define name params body)
+```warp
+// kernel layer: a kernel form is a named pattern of Node, headed by its own name
+pattern If   = (If $condition: Node $then: Node $else: Node)
+pattern Call = (Call $called: Symbol $arguments...: Node)
+pattern Pair = Key($key, Op.Colon, $value)
 
-kernel = If | Call | Define | …            // the emitter's input language, a union of shapes
+kernel = If | Call | …                     // the emitter's input language, a closed union of patterns
 
 emit(node: kernel) …                       // matches If(c, a, b) etc.
 emit(node: Node) = refuse("not kernel: …") // anything else is refused loudly
+```
 
-A typed rule then writes its output with the same names:
-rule unless $c $body => If(not $c, $body, Empty)  # sugar 
+One declaration builds (`If(c, a, b)`), tests (`n is If`), matches (`If(c, a, b) => …`) and reads (`n.condition`).
+A rule writes its output with the same names: `rule unless $c $body => If(not $c, $body, Empty)`.
 
-type Meters < int is already a narrowed type, so 
-type If < Node   with a head check is the same idea. A shape is a narrowed type plus named fields.
-
-# Can we use cheap types everywhere?
-shape Call(f: Node, args: [Node])   =>
-shape Call(f: Function, args: Arguments)  
+- **Holes:** `$name` is a hole, `$name: Type` a typed hole, `$name...` a rest hole (it stays last; its type applies
+  to each item). Without `$` everything is literal: a bare word is a literal symbol, a word with brackets
+  (`Call($f, $a)`) a nested pattern. A hole followed by `:` and a type name is a typed hole; any other `:` is a
+  literal key.
+- **Two kinds of hole types:** a shape type says what the code looks like (`Symbol`, `Key`, `List`, `Node`, any
+  declared pattern); a value type says what it evaluates to (`int`, `list<int>`, `Meters`, `(float) -> float`). A
+  value type is the static type of what the hole takes: before typing it matches a literal of that type
+  (`$k: int`), after typing any code of that type, so a rule that needs inferred types runs in stage 3, on settled
+  types. A capitalized name that is no shape type is refused with a fix-it (`List` the code, `list` the value).
+- **Function types** are written `(float) -> float`, `(int, int) -> int`, as `f.signature` prints them.
+- **Meta carries everything that is not shape:** source positions (a node a rule builds takes the position of the
+  node it replaced) and the facts later stages find (chosen overload, inferred types, tail call, `@gpu`). A pattern
+  never grows a field for them.
 
 ## The language
 
 1. **Many spellings, one meaning.** Every spelling programs may write stays valid. Only an explicit, printed reading
-   may decide between two readings: `warp format` turns `[a -1]` into `[a, -1]`. ??
+   may decide between two readings, and it is printed: a reading decided by spacing is shown explicitly by
+   `warp format` (`[a -1]` → `[a, -1]`), so the reader sees which one was taken.
 2. **One general rule over special cases.**
    - A form that needs its own rule for one phrase is bloat.
    - A form that falls out of the general rules is welcome, however esoteric (`"x" * yes`).
-   - A fix holds for every sibling of the example that showed the problem. ??
+   - A fix is the general rule: it also holds for the cases next to the example that showed the problem (other
+     types, other operators).
 3. **Refuse, never guess.** Where code reads two ways, or a form is unknown, the compiler refuses with a fix-it that
    names the readings. A plausible wrong value is the worst bug.
 4. **Meaning is typed.** Types are optional to write and always there to the compiler.
@@ -125,12 +138,16 @@ shape Call(f: Function, args: Arguments)
     - A list, condition or rule written twice becomes a name.
     - Never degrade the input to suit a tool: fix the tool.
 
-# Universality
-Warp shall be structured as
-• kernel: backbone notes/kernel.md minimal working subset of the language "better Lisp with maps and types"
-• core: standard language features 
-• extensions: language features not needed by the compiler, semantic rewrite rules applied =>
-• library: extra functionality for specific scenarios (Sound, graphics, ...)
+## Layers
+
+As wap is laid out (wap/):
+- **kernel** (wap/kernel/): the kernel forms as named patterns plus the primitives, the emitter's whole input
+  language. A form is here only with a written case and the user's OK. "A better Lisp with maps and types."
+- **core** (wap/core/): the machinery only: reader, stage walker, binding, typing, rule engine, emitter, wasm
+  builder. No domain names, no surface keywords.
+- **preload**: the standard language every program gets: the rules for surface forms (`for`, `unless`, ranges,
+  units) and the standard functions, operator prototypes, aliases and the operator table.
+- **library**: optional domains a program `use`s: sound, graphics, web …
 
 ## How agents work by these principles
 

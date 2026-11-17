@@ -37,29 +37,8 @@ aliases), the language and compiler principles, and how agents work by them. Eve
 
 ## Layers
 
-Decided (user 2026-11-17): four layers.
-
-| Layer | Holds | Rule of thumb |
-|---|---|---|
-| **kernel** | the kernel forms and the primitives: the emitter's whole input language | a form is here only with a written, user-approved case |
-| **core** | the machinery: reader, binding analysis, typing, rule engine, kernel emitter, the runtime words the compiler needs | mechanisms only, no names of a domain |
-| **extensions** | rule sets, one file per topic (`for`, units, ranges, `unless`, match sugar) | rules only, no compiled-in hook table; loaded like modules |
-| **library** | functions, classes, enums, operator prototypes with primitive bodies, aliases, the operator table | plain warp |
-
-### Kernel forms are named patterns of Node
-
-`Node` stays the plain notation enum (True … Type); no `If` or `Call` variant is added to it. A kernel form is a
-**named pattern of Node** whose body is code with holes (user 2026-11-17: `pattern` is the one spelling; kernel forms
-are patterns, not classes, so positions ride in the nodes' metadata):
-
-```warp
-pattern If = data((If $cond $then_part $else_part))
-pattern Unless = data((unless $cond $body))         // a surface shape, matched by a rule
-```
-
-One declaration gives all four uses: build `If(c, a, b)`, test `n is If`, match `If(c, a, b) => …`, read `n.cond`
-(extensions/match_patterns.warp). Kernel patterns live in the kernel layer, surface patterns (`For`, `Unless`) in
-extensions beside their rules. Core declares none.
+kernel, core, preload, library, as wap/ is laid out: notes/first_principles.md "Layers" (user 2026-11-17). Kernel
+forms are named patterns of Node with `$` holes: notes/first_principles.md, wiki/pattern.md.
 
 ## Operators: a core feature done properly
 
@@ -85,8 +64,8 @@ extensions beside their rules. Core declares none.
   - type aliases.
 
   Each is an alias → canonical row. Spelling never carries meaning.
-- **Meaning is overloading.** `a + b` is a call of the overloaded `+`. Built-in overloads lower to wasm (principle
-  16), user overloads are ordinary functions, and units and vectors overload like any type.
+- **Meaning is overloading.** `a + b` is a call of the overloaded `+`. Built-in overloads lower to wasm ("Built-ins are
+  declared like any function"), user overloads are ordinary functions, and units and vectors overload like any type.
 - **Minus, one general rule for every operator with both a prefix and an infix form:**
   - Spaced on both sides, or on neither: infix (`a - b`, `a-b`).
   - Attached to what follows, after a space or at the start of an element: prefix (`[a -1]` is `[a, -1]`, printed so
@@ -123,7 +102,8 @@ extensions beside their rules. Core declares none.
    function sections, the value layout, runtime words) behind a clean interface that knows no surface forms
    (`emit_instruction`, `declare_type`, `add_function` …). The old emitter keeps running on top of it until the
    switch; the new kernel emitter is written on it. No other cleanup of the frozen compiler (user 2026-11-17).
-1. **Hello:** `print "Hello"` through the new stages, with the emitter accepting only the kernel.
+1. **Hello:** `print "Hello"` through the new stages, with the emitter accepting only the kernel. Reached
+   2026-11-17 (b5a5029b3d).
 2. **The new compiler builds itself.**
 
 After that, the test pass rate is a ballpark of how well the engine works, nothing more. Then the user and the
@@ -161,7 +141,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 1. ~~Layers~~: decided, four layers; kernel forms are named patterns of Node.
 2. **The reader:** reuse it for milestone 1 and rewrite it as a pure notation reader before milestone 2?
    Recommended: yes.
-3. **Folder:** where the new backbone lives until the switch, for example `backbone/`, then it replaces core/.
+3. ~~Folder~~: decided, wap/ (kernel/, core/; preload and library later).
 4. **The kernel list:** start the case-by-case discussion from notes/kernel.md's 13 forms plus primitives?
 
 ## Debts
