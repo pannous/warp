@@ -7,4 +7,7 @@ source "$(dirname "$0")/compile.sh"
 # a function's local never leaks into the rest of the program, whatever its name (the old compiler's push-shadowing bug)
 check "a local named like a library word stays in its function" "$(ran local 'quiet() := { print = "x" }
 print "Hello"')" "Hello"
+# a typed parameter binds its name, its type left as written
+check "a typed parameter" "$(ran typed 'keep(x: int) := { y = x }
+print "Hello"')" "Hello"
 exit $((failures > 0))

@@ -47,18 +47,23 @@ all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bou
 # A function's parameters and body, one depth further in than the function's definition, the body seeing the
 # parameters before the names around it
 parameters_bound(parameters: List, depth: int) as Node := match parameters {
-	List(items, bracket, separator) => refitted(List(all_bound(items, parameter_definitions(parameters, depth + 1), depth + 1), bracket, separator), parameters)
+	List(items, bracket, separator) => refitted(List(items.map(p => parameter_bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
 }
 body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + scope, depth + 1)
 parameter_definitions(parameters: List, depth: int) as list := match parameters {
-	List(items, bracket, separator) => items.map(p => Definition(parameter_name(p), "parameter", p, depth))
+	List(items, bracket, separator) => items.map(p => Definition(text(parameter_symbol(p)), "parameter", parameter_symbol(p), depth))
 }
 
-# the name a parameter defines: `x`, or `x: int` of a typed one
-parameter_name(parameter: Node) as text := match parameter {
-	Symbol(name) => name
-	Key(Symbol(name), Op.Colon, type) => name
-	_ => refused(parameter, "a parameter is a name")
+# a parameter with the facts on its name, the type of a typed one, `x: int`, left as it is
+parameter_bound(parameter: Node, scope: list, depth: int) as Node := match parameter {
+	Key(name, Op.Colon, type) => refitted(Key(parameter_bound(name, scope, depth), Op.Colon, type), parameter)
+	_ => resolved(parameter_symbol(parameter), scope, depth)
+}
+# the name a parameter defines: `x`, or the x of `x: int`
+parameter_symbol(parameter: Node) as Node := match parameter {
+	Symbol(name) => parameter
+	Key(name, Op.Colon, type) => parameter_symbol(name)
+	_ => refused(parameter, "a parameter is a name, or a name and its type")
 }
 
 # The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
@@ -92,11 +97,4 @@ resolved(name: Node, scope: list, depth: int) as Node := {
 		}
 	}
 	with_fact(name, BINDING, symbol("library"))
-}
-
-# the rebuilt node where the original was: its position and the facts earlier stages learned
-refitted(built: Node, original: Node) as Node := {
-	placed = if line_of(original) == ø then built else positioned(built, line_of(original), column_of(original))
-	for fact in attributes_of(original) { placed = with_attribute(placed, fact) }
-	placed
 }
