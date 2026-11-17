@@ -18,15 +18,32 @@ IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
 BYTES_ADDRESS = 16
 
+# The wasm instructions a Prim names, each taking two ints: operation → [opcode, the type it gives]. Comparisons give
+# a yes/no, an i32.
+INT_INSTRUCTIONS = {
+	"i64_add": [I64_ADD, I64], "i64_sub": [I64_SUB, I64], "i64_mul": [I64_MUL, I64],
+	"i64_eq": [I64_EQ, I32], "i64_ne": [I64_NE, I32], "i64_lt_s": [I64_LT_S, I32], "i64_gt_s": [I64_GT_S, I32],
+	"i64_le_s": [I64_LE_S, I32], "i64_ge_s": [I64_GE_S, I32]
+}
+
 # the code of a primitive, its arguments checked against what the operation takes
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
+	name = text(operation)
+	if INT_INSTRUCTIONS.has(name) { return instruction_code(form, arguments, INT_INSTRUCTIONS[name]) }
 	if operation == symbol("print_text") { return helper_call(form, arguments, [nullable(text_type(p.m))], helper(p, "print_text", printing_function)) }
 	refused(form, "no primitive of this name")
 }
 
+# one wasm instruction on two ints
+instruction_code(form: Node, arguments: list, row: list) as Code := {
+	checked_arguments(form, arguments, [I64, I64])
+	Code(row#2, arguments.flat_map(argument => argument.instructions) + row#1)
+}
+checked_arguments(form: Node, arguments: list, takes: list) := if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
+
 # a call of a helper that takes these types and leaves no value
 helper_call(form: Node, arguments: list, takes: list, index: int) as Code := {
-	if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
+	checked_arguments(form, arguments, takes)
 	Code([], arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
 }
 # the helper function of an operation, added by `build` the first time

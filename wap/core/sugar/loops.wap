@@ -1,0 +1,5 @@
+# Loops and the words that leave them, as While and Return (wiki/keyword.md): the spellings wap's own source uses. A
+# bare `return`, `break` or `continue` is a word form of lowering (core/rules/lowering.wap WORD_FORMS).
+
+rule while $condition... $body: Braces => While($condition, $body)
+rule return $value... => Return($value)

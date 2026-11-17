@@ -17,8 +17,9 @@
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
-#   (If c a b)               a kernel form a rule built (core/sugar: `if c then a else b`, `unless c { a }`), its parts
-#                            lowered
+#   break, continue, return  a statement alone → Break(), Continue(), Return(ø)
+#   (If c a b)               a kernel form a rule built (core/sugar: `if c then a else b`, `unless c { a }`,
+#                            `while c { b }`, `return x`), its parts lowered
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
 # the rule engine: `c ? a : b`, `a if c`.
 
@@ -29,8 +30,9 @@ use "../../kernel/forms.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
-# the canonical words of the literals, the kernel forms they are
-LITERAL_WORDS = {"yes": True, "no": False, "ø": Empty}
+# the words that are a kernel form alone: the canonical words of the literals, and the statements that leave a loop or
+# a function (a rule cannot match a word alone: it would have no head)
+WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue": Continue(), "return": Return(Empty)}
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
 VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
@@ -60,7 +62,7 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else n
+	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
