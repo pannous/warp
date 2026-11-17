@@ -45,7 +45,7 @@ fitting_spans(spans: list, count: int) as list := {
 # name → its arities, for each name defined with several parameter counts, no two of them the same
 overloaded_arities(program: Node) as map := {
 	arities = {}
-	for n in nodes_in(program) {
+	for n in code_nodes_in(program) {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
@@ -115,7 +115,7 @@ passed_on_count(body: Node, parameter: text, called: map) as int? := {
 
 # function·index → how many arguments the function calls that parameter with, also by passing it on
 called_parameters(program: Node) as map := {
-	definitions = nodes_in(program).filter(n => definition_call(n) != ø)
+	definitions = code_nodes_in(program).filter(n => definition_call(n) != ø)
 	called = {}
 	for n in definitions { called = remember_calls(n, called, (body, name) => called_count(body, name)) }
 	known = -1
@@ -214,7 +214,7 @@ declared_arity(callee: text, index: int) as int? := {
 # the functions the program defines more than once, by arity or by type
 defined_more_than_once(program: Node) as map := {
 	counts = {}
-	for n in nodes_in(program) {
+	for n in code_nodes_in(program) {
 		call = definition_call(n)
 		if call != ø { counts[name_of(call#1)] = (counts.get(name_of(call#1)) ?? 0) + 1 }
 	}
@@ -266,7 +266,7 @@ value_parts(n: Node) as list := match n {
 overload_value_refusal(name: text, heads: list, at: Node) as text := written_word(name) + " is defined " + "${#heads}" + " times: " + and_listed(heads) + "; pass a lambda that calls the one you mean, e.g. x => " + written_word(name) + "(x)" + place_text(written_at(at), "")
 # the heads of the program's definitions of name as written, before the variants renamed them, in the order written
 # (nodes_in pops siblings last first)
-defined_heads(program: Node, name: text) as list := nodes_in(program).map(definition_call).filter(call => call != ø and name_of(call#1) == name).map(head_written).reverse()
+defined_heads(program: Node, name: text) as list := code_nodes_in(program).map(definition_call).filter(call => call != ø and name_of(call#1) == name).map(head_written).reverse()
 head_written(call: Node) as text := written_word(name_of(call#1)) + "(" + items_of(call)[1 ..].map(parameter => "${parameter}").join(", ") + ")"
 # `a`, `a and b`, `a, b and c`
 and_listed(words: list) as text := if #words < 2 then words.join("") else words[0 ..< #words - 1].join(", ") + " and " + words.last
@@ -386,8 +386,8 @@ overloaded_types(program: Node) as map := {
 # name → the calls its definitions name, `f(a, b)` of `f(a, b) := …`, in declaration order
 definitions_named(program: Node) as map := {
 	named = {}
-	# nodes_in walks the last part first: reversed, the definitions come in declaration order
-	for n in nodes_in(program).reverse() {
+	# code_nodes_in walks the last part first: reversed, the definitions come in declaration order
+	for n in code_nodes_in(program).reverse() {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
@@ -838,7 +838,7 @@ overloaded_results(program: Node) as map := {
 	results = {}
 	taken = {}
 	defaults = {}
-	for n in nodes_in(program).reverse() {
+	for n in code_nodes_in(program).reverse() {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
