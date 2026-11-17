@@ -273,10 +273,12 @@ the form's test folder plus self-check green, self-build instructions within +1%
 
 0. **Ranges, the pilot the user picked** (a separate worker builds it): `a to b`, `a … b` as rules
    (extensions/sugar/ranges.warp, 5 rules today).
-1. **The kernel contract, measured.** core/kernel.warp: `is_kernel(n)` for the 13 shapes, run under `--kernel-report`
-   between passes and emitter, listing every non-kernel shape still reaching the emitter, by form and owner
-   (passes.warp pass_owners already names owners). No behavior change; it is the migration's progress bar. Tests:
-   smoke, self-check.
+1. **The kernel contract, measured** (built, card kernel-report). `warp kernel <code|file>`
+   (extensions/commands/kernel.warp) reads the lowered program, the code the emitter receives, and prints how many of
+   its nodes are kernel forms, then each form outside the kernel with its count and first place: the phrase `print x`,
+   `x += 1`, `i++` (made by the `for` rules), `if c then a` without else. No behavior change; it is the
+   migration's progress bar. It lives in the commands extension: the core needs it only once the emitter refuses
+   non-kernel forms.
 2. **Split analysis from emission (the highest yield).** One canonical lowering to kernel shapes before the emitter
    (the three `if` shapes become one, every `as` a `convert` prim, literals `new_*` prims); the analyzer decides every
    kind on kernel code; the emitter translates typed kernel and stops widening and dispatching on surface shapes. In
