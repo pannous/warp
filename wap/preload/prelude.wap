@@ -33,5 +33,8 @@ print(t: text) := prim print_text(t)
 
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
-!=(a: text, b: text): bool := if a == b then no else yes
+!=(a: text, b: text): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
+
+# the other truth value: `not yes` is no (`!` and `¬` are its aliases)
+not(b: bool): bool := if b then no else yes

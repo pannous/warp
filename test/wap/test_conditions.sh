@@ -21,4 +21,7 @@ if yes and loud() then print "a" else print "b"')" "ran
 a"
 check "or skips its second part after yes" "$(ran or_skips 'loud(): bool := { print "ran"; yes }
 if yes or loud() then print "a" else print "b"')" "a"
+check "not turns a condition round" "$(ran not 'if not no then print "a" else print "b"
+if !yes then print "c" else print "d"')" "a
+d"
 exit $((failures > 0))

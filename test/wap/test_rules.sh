@@ -16,4 +16,8 @@ print greet("hi")')" "hi"
 # a hole inside a template text is the spelling of what it took, the longer hole name first (notes/rewrites.md)
 check "a hole inside a template text" "$(ran spelled 'rule hail $who $whom => print "hi $who and $whom"
 hail ann bob')" "hi ann and bob"
+# repetition (notes/rules.md): `($k => $v)...` takes each arm, `print($v)...` writes one print per arm
+check "a repeated part matched and written once per match" "$(ran repeat 'rule show { ($k => $v)... } => { print($v)... }
+show { 1 => "a"; 2 => "b" }')" "a
+b"
 exit $((failures > 0))

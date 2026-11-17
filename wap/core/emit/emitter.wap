@@ -89,6 +89,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
 	While(condition, body) => while_code(form, condition, body, p, f)
+	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
 	Return(value) => return_code(form, value, p, f)
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
@@ -122,6 +123,36 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
 valued(type: list) as bool := not type is empty and type != NEVER
 checked_condition(form: Node, condition: Code) := if condition.type != I32 { refused(form, "a condition is yes or no") }
+
+# A choice by patterns: the subject kept in a slot of its own, then each arm tested in order, an If each, until one
+# fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.
+#   subject, local.set held;  held == p1, if  r1  else  held == p2, if  r2  else …  end  end
+case_code(form: Node, subject: Code, arms: list, p: Program, f: Frame) as Code := {
+	f.slots += [Placed("subject of ${place_key(form)}", #f.slots, subject.type, [], yes)]
+	held = f.slots.last
+	chosen = arms_code(form, arms, held, p, f)
+	Code(chosen.type, subject.instructions + instruction(LOCAL_SET, [held.index]) + chosen.instructions)
+}
+arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code := {
+	if arms is empty { return Code() }
+	match arms#1 {
+		Arm(pattern, result) => {
+			if pattern is symbol {
+				named = held_by(pattern, held, p, f)
+				given = code(result, p, f)
+				return Code(given.type, named + given.instructions)
+			}
+			if_code(form, pattern_test(pattern, held, p), labelled(f, [OTHER_LABEL], () => code(result, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+		}
+	}
+}
+# whether the held subject equals a literal pattern: yes or no
+pattern_test(pattern: Node, held: Placed, p: Program) as Code := {
+	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names and _ so far")
+	Code(I32, fetched(held) + given.instructions + equality(held.type, p))
+}
+# a name pattern given the held subject, code that leaves nothing; _ gives it to none
+held_by(pattern: Node, held: Placed, p: Program, f: Frame) as list := if text(pattern) == WILDCARD then [] else fetched(held) + kept(added_variable(pattern, held.type, p, f)) + DROP
 
 # A loop: its condition tested before each run of its body, the loop left when it is no. It has no value.
 #   block (exit)  loop (next)  condition, not, br_if exit; body; br next  end  end
