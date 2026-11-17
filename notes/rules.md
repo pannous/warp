@@ -39,3 +39,5 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
+- A rule head in the middle of a phrase is not reached: `print match x { … }` and `print if c then a else b` need the
+  phrase reading to group `match …` as print's argument (`y = match …` and a function body work).
