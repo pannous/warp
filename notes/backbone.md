@@ -55,7 +55,7 @@ mechanism as `type Meters < int`, with a pattern instead of "any int":
 ```warp
 type Meters < int                                   // any int, a new name
 type Even < int where it % 2 == 0                   // narrowed by a condition
-type If < Node = (·if cond: Node yes: Node no: Node)  // narrowed by a pattern with named holes
+type If < Node = (·if cond: Node then_part: Node else_part: Node)  // narrowed by a pattern with named holes
 type Call < Node = (·call f: Node args: [Node]...)
 
 kernel = If | Call | Define | …                     // the emitter's input language, a closed union

@@ -24,13 +24,13 @@ narrowed types of Node with a pattern body"). This is the same mechanism as `typ
 instead of "any int":
 
 ```warp
-type If < Node = (·if cond: Node then_part: Node else_part: Node)
+type If < Node = (If cond: Node then_part: Node else_part: Node)
 ```
 
 One declaration gives four uses (built in extensions/match_patterns.warp, tested in test/types/test_pattern_types.warp):
 
 ```warp
-If(c, a, b)                        // build: the node (·if c a b)
+If(c, a, b)                        // build: the node (If c a b)
 node is If                         // test
 match node { If(c, a, b) => … }    // take apart, the holes bound by place
 emit_if(n: If) := … n.cond …       // read a hole off a parameter of the type
@@ -45,11 +45,12 @@ emit(n: Node) := refuse("not a kernel form: " + n)
 ```
 
 Two details:
-- **The heads start with `·`** (`·if`, `·call`): a reserved word no program can write, so a program's own `(if a b)`
-  group is never mistaken for a kernel form. Warp's reader does not yet read `·if` as one word; until it does, the
-  declarations use plain heads (open point, see the end).
+- **The head is the form's own type name** (`(If c a b)`, `(Call f args)`): readable when printed, and never a
+  keyword (`(if …)` inside a pattern would read as warp's own `if`). A program's own `(If a b)` group cannot pass for
+  a kernel form, because only the rewrite stages build kernel nodes and the emitter sees nothing else. Should a
+  stronger guarantee be wanted, a head no program can write (`·If`) costs one reader change.
 - **Holes are named by what they hold, never by a keyword:** `yes`, `no`, `then`, `else`, `function` and type words
-  are values or keywords in warp, not names, so `(·if cond yes no)` would have a single hole.
+  are values or keywords in warp, not names, so `(If cond yes no)` would have a single hole.
 
 ## The forms
 
@@ -57,20 +58,20 @@ Two details:
 |---|---|---|
 | Literal | the Node cases Number, Text, Char, True, False, Empty, Symbol | `3`, `"a"`, `'a'`, `yes`, `ø`, `#red` |
 | Name | a Symbol read as a variable | `x` |
-| Quote | `(·quote code: Node)`, `$x` holes spliced | `data a + b`, `data f($x)` |
-| Define | `(·define name: Node parameters: Node body: Node)` | `f(x) := …`, constants, `global n = 0` |
-| Get | `(·get place: Node)`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
-| Set | `(·set place: Node value: Node)` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
-| Fn | `(·fn parameters: Node body: Node)` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
-| Call | `(·call callee: Node arguments: Node)` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
-| Prim | `(·prim operation: Node arguments: Node)` | nothing directly: library bodies (below) |
-| If | `(·if cond: Node then_part: Node else_part: Node)` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
-| Seq | `(·seq statements: Node)`, its own scope | `{…}`, `(a; b)`, indented lines |
-| While | `(·while cond: Node body: Node)` | `while`, `until`, `for`, `n times`, `loop` |
-| Break, Continue, Return | `(·break)`, `(·continue)`, `(·return value: Node)` | the same words |
-| Record | `(·record name: Node fields: Node variants: Node)` | `class`, `enum`, `type X = A \| B` |
-| Case | `(·case subject: Node arms: Node)` | `match`, `x is T` |
-| Try | `(·try body: Node handler: Node)` | `try … catch`, `try x else y`, `except` |
+| Quote | `(Quote code: Node)`, `$x` holes spliced | `data a + b`, `data f($x)` |
+| Define | `(Define name: Node parameters: Node body: Node)` | `f(x) := …`, constants, `global n = 0` |
+| Get | `(Get place: Node)`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
+| Set | `(Set place: Node value: Node)` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
+| Fn | `(Fn parameters: Node body: Node)` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
+| Call | `(Call callee: Node arguments: Node)` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
+| Prim | `(Prim operation: Node arguments: Node)` | nothing directly: library bodies (below) |
+| If | `(If cond: Node then_part: Node else_part: Node)` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
+| Seq | `(Seq statements: Node)`, its own scope | `{…}`, `(a; b)`, indented lines |
+| While | `(While cond: Node body: Node)` | `while`, `until`, `for`, `n times`, `loop` |
+| Break, Continue, Return | `(Break)`, `(Continue)`, `(Return value: Node)` | the same words |
+| Record | `(Record name: Node fields: Node variants: Node)` | `class`, `enum`, `type X = A \| B` |
+| Case | `(Case subject: Node arms: Node)` | `match`, `x is T` |
+| Try | `(Try body: Node handler: Node)` | `try … catch`, `try x else y`, `except` |
 
 How a few spellings reach the kernel:
 - `for x in xs { b }` is `Seq(i = iterator(xs); While(has_next(i), Seq(x = next(i); b)))`.
@@ -141,9 +142,5 @@ Measured on warp (the old compiler, 2026-11-17; the full census is in this file'
 
 ## Open points
 
-1. **The `·` heads:** warp's reader reads `·if` as `·` followed by the keyword `if`. Either the reader accepts a word
-   starting with `·` (a small reader change in warp), or the kernel heads are plain words. Plain words are safe as
-   long as only the rewrite stages build kernel nodes, which is the design; `·` adds a guarantee no program can forge
-   one.
-2. **`While` or `Loop`:** this note uses `While(cond, body)`, which reads like the programs; `loop { if not c break; b }`
+1. **`While` or `Loop`:** this note uses `While(cond, body)`, which reads like the programs; `loop { if not c break; b }`
    is the same thing. Either way it is one form.
