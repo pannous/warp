@@ -30,3 +30,4 @@
 'class Pairs { ks: list; vs: list; keys() := ks; get(k) := vs#(ks.index_of(k)); has(k) := k in ks; set(k, v) := { ks = ks + [k]; vs = vs + [v] }; remove(k) := ø }; p = Pairs{ks: [], vs: []}; for i in 1 to 3 { p["k" + i] = i }; [keys(p), p["k2"]]'	[["k1", "k2", "k3"], 2]
 'use markup; m = {i: 1}; m["i"] = 5; f(st: map): any := { st["j"] = 2; ø }; f(m); m'	{i: 5, j: 2}
 'm = ListMap(); m["c"] = 3; m["a"] = 1; s = ""; for k, v in m { s += k + text(v) }; s'	"c3a1"
+'use collections; m = ListMap({a: 1}); class P { ks = ["b"]; keys() := ks; get(k) := 7 }; p = P(); [m.keys, m.keys(), p.keys]'	[['a'], ['a'], ['b']]

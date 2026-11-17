@@ -90,7 +90,10 @@ The languages, each a set of Node shapes:
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
-  a value's signature ø), and on the program `declarations`, the list of them (core/analyze/declarations.wap).
+  a value's signature ø), and on the program `declarations`, the list of them, and `uses`, the files its `use "path"`
+  statements bring in (core/analyze/declarations.wap). Each used file is declared once, after the files it uses; a
+  program is bound inside the preload's declarations and those of the modules it uses itself, and the modules'
+  statements run before its own.
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
@@ -257,3 +260,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
+- **A used module's functions are emitted even when nothing calls them** (wap/compiler.wap: a module's bound statements
+  go first in the program's Block), while the preload's uncalled definitions are left out. Bends "smaller and faster".
+  Reason: a module is code whose statements must run, so it joins the program whole. Paid off when typing leaves out
+  the module definitions nothing calls, as it does the preload's.

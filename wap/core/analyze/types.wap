@@ -103,6 +103,15 @@ functions_typed_from(definitions: list, s: TypingState) as list := {
 	s.functions.filter(typed => typed.key in keys).map(typed => typed.define)
 }
 
+# A choice: its condition a bool, each part expected the If's type; with both parts of one type the If has it
+if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	tested = typed_form(condition, s, f, symbol(BOOL_TYPE))
+	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
+	chosen = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	type = value_type(chosen#1)
+	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), if type != ø and value_type(chosen#2) != ø and same_type(type, value_type(chosen#2)) then type else ø)
+}
+
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
 set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
@@ -217,16 +226,6 @@ all_typed(definition: Node) as bool := parameters_in(definition).all(parameter =
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
-
-# A choice: its condition a bool, its value the parts' type when both give one alike, else none
-if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	asked = typed_form(condition, s, f, symbol(BOOL_TYPE))
-	if value_type(asked) == ø or not same_type(value_type(asked), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no, this gives ${value_type(asked) ?? "no value"}") }
-	then_typed = typed_form(then_part, s, f, expected)
-	else_typed = typed_form(else_part, s, f, expected)
-	alike = value_type(then_typed) != ø and value_type(else_typed) != ø and same_type(value_type(then_typed), value_type(else_typed))
-	with_type_of(refitted(If(asked, then_typed, else_typed), n), if alike then value_type(then_typed) else ø)
-}
 
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)

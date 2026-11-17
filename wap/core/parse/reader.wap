@@ -82,6 +82,7 @@ read_tokens(r: Reader) := {
 read_token(r: Reader) := {
 	c = r.code[r.at]
 	next = peek(r, 1)
+	// todo rewrite as match c { ... later
 	if c == '\n' { new_line(r) }
 	else if c == ' ' or c == '\r' { r.at += 1; r.blank = yes }
 	else if c == '\t' { tab(r) }
@@ -570,7 +571,7 @@ pieces_between(parts: list<Lexeme>, separator: Separator) as list := {
 }
 
 # the glued runs of a phrase: a new run at each part with a blank before it
-runs_of(parts: list<Lexeme>) as list := {
+runs_of(parts: list<Lexeme>) as list := { // todo use  [Lexeme] as soon as syntax works, EVERYWHERE for all generics (via warp fix ?)
 	runs = []
 	run = []
 	for t in parts {

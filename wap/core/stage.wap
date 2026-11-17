@@ -124,3 +124,5 @@ SIGNATURE = "signature"
 # `name: signature`; DECLARATIONS on the program, the list of them
 DECLARES = "declares"
 DECLARATIONS = "declarations"
+# on a program, the files it USES (`use "path"`), each a Text of the path resolved against the program's own folder
+USES = "uses"

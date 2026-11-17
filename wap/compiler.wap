@@ -48,11 +48,16 @@ library = declarations_of(preload)
 
 # a file's text read, its operators read, its spellings rewritten by the shape rules, then declared
 declared(file: text) as Node := declared_program(shaped_program(operated_program(notation(read(file), file))))
-# declared code lowered and bound inside a library: the program inside the preload's, the preload inside none
-prepared(code: Node, around: list) as Block := bound_program(lowered_program(code), around)
+# declared code lowered and bound inside the preload's declarations and those of the modules it uses
+prepared(code: Node, modules: list) as Block := bound_program(lowered_program(code), library + uses_of(code).flat_map(file => declarations_of(module_of(file, modules))))
+# the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
+# functions are there for any caller; typed, then rewritten by the typed rules
 compiled(file: text) as list := {
-	library_code = prepared(preload, [])
-	module_bytes(emitted(typed_by_rules(typed_program(prepared(declared(file), library), library_code), library, library_code)))
+	code_read = declared(file)
+	modules = modules_used(code_read, declared)
+	whole = Block((modules + [code_read]).flat_map(code => statements_in(prepared(code, modules))))
+	library_code = bound_program(lowered_program(preload), [])
+	module_bytes(emitted(typed_by_rules(typed_program(whole, library_code), library, library_code)))
 }
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
