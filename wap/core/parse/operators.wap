@@ -94,13 +94,13 @@ reading_as(item: Node, fixity: Fixity) as Use? := match item {
 class Use { spelling: text, fixity: Fixity, group: text, written: Node }
 
 # an item of a phrase and whether it touches the item before and the item after it with no blank between
-class Token { item: Node, glued_before: bool, glued_after: bool }
+class Spaced { item: Node, glued_before: bool, glued_after: bool }
 
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
 operated(n: Node) as Node := staged(n, operated_form)
 operated_form(n: Node) as Node := match n {
 	List(items, Bracket.None, Separator.None) => phrase_read(glued_tokens(items))
-	List(items, bracket, Separator.Space) => bracketed(phrase_read(tokens_of(items)), bracket)
+	List(items, bracket, Separator.Space) => in_brackets(phrase_read(tokens_of(items)), bracket)
 	List(items, bracket, separator) => List(items.map(operated), bracket, separator)
 	Key(left, Op.Colon, right) => Key(operated(left), Op.Colon, operated(right))
 	Key(left, op, right) => refused(n, "the operator stage reads notation, not the old reader's fold of " + op)
@@ -126,7 +126,7 @@ tokens_of(items: list) as list := {
 	for item in items {
 		match item {
 			List(run, Bracket.None, Separator.None) => tokens = tokens + glued_tokens(run)
-			_ => tokens.add(Token(item, no, no))
+			_ => tokens.add(Spaced(item, no, no))
 		}
 	}
 	tokens
@@ -136,7 +136,7 @@ tokens_of(items: list) as list := {
 glued_tokens(run: list) as list := {
 	items = joined_glyphs(run)
 	tokens = []
-	for i in 1 to #items { tokens.add(Token(items#i, i > 1, i < #items)) }
+	for i in 1 to #items { tokens.add(Spaced(items#i, i > 1, i < #items)) }
 	tokens
 }
 
@@ -214,7 +214,7 @@ phrase_read(tokens: list) as Node := {
 # after an operand, the token as an infix or postfix operator, by the minus rule (notes/backbone.md "Minus"): spaced
 # on both sides or on neither it is infix; attached only to what follows it is prefix, so juxtaposition comes first
 # (ø here); attached only to what precedes it is postfix where it has a postfix, else infix
-operator_after_operand(token: Token, last: bool) as Use? := {
+operator_after_operand(token: Spaced, last: bool) as Use? := {
 	infix = if last then ø else reading_as(token.item, Fixity.Infix)
 	postfix = reading_as(token.item, Fixity.Postfix)
 	prefix = reading_as(token.item, Fixity.Prefix)
@@ -227,7 +227,7 @@ operator_after_operand(token: Token, last: bool) as Use? := {
 }
 
 # a space list read as a phrase, its brackets kept: `[a -1]` stays two items, `(a + b)` holds one
-bracketed(read: Node, bracket: Bracket) as Node := {
+in_brackets(read: Node, bracket: Bracket) as Node := {
 	if bracket == Bracket.None { return read }
 	match read {
 		List(items, Bracket.None, Separator.Space) => List(items, bracket, Separator.Space)
@@ -236,15 +236,15 @@ bracketed(read: Node, bracket: Bracket) as Node := {
 }
 
 # the juxtaposition between the operand before a token and the token: glued when nothing separates them
-juxtaposition_before(token: Token) as Use :=
+juxtaposition_before(token: Spaced) as Use :=
 	if token.glued_before then Use("", Fixity.Infix, glue_group, token.item) else Use("", Fixity.Infix, juxtaposition_group, token.item)
 
 # after juxtaposition, the token starts the next operand: a prefix operator or the operand itself
-operand_or_prefix(token: Token, operands: list, pending: list) := {
+operand_or_prefix(token: Spaced, operands: list, pending: list) := {
 	prefix = reading_as(token.item, Fixity.Prefix)
 	if prefix != ø { pending.add(prefix) } else { operands.add(operated(token.item)) }
 }
-operands_waiting(token: Token) as bool := reading_as(token.item, Fixity.Prefix) != ø
+operands_waiting(token: Spaced) as bool := reading_as(token.item, Fixity.Prefix) != ø
 
 spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => "" }
 
