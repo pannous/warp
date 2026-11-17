@@ -1,7 +1,7 @@
 # Templates: what a rule writes, its holes filled with the code they matched (notes/first_principles.md "Holes").
 # Reads a normalized template (core/rules/patterns.wap) and the bindings of a match; writes new code. A rest hole
 # splices its items, a declared pattern called by name builds its node (`If(not $c, $body, ø)` is (If (Call not …) …)),
-# a text that is exactly a hole, "$f", is the spelling of what it took, and every node the template itself spells is
+# a hole inside a text, "$f" or "get_$f", is the spelling of what it took, and every node the template itself spells is
 # new, so the stage walker places it where the rewritten code was.
 
 FRESH_MARK = "·"
@@ -15,9 +15,16 @@ built(template: Node, bindings: map) as Node := match template {
 	}
 	Key(left, op, right) => Key(built(left, bindings), op, built(right, bindings))
 	List(items, bracket, separator) => grown(built_items(items, bindings), bracket, separator)
-	Text(value) => if bindings.has(value) then Text(text(bindings[value])) else Text(value)
+	Text(value) => Text(interpolated(value, bindings))
 	Number(value) => Number(value)
 	_ => template
+}
+
+# a template text, each hole in it replaced by the spelling of what it took, the longest name first ($fx before $f)
+interpolated(value: text, bindings: map) as text := {
+	filled = value
+	for name in sorted_by_key(bindings.keys, name => -#name) { filled = filled.replace(name, text(bindings[name])) }
+	filled
 }
 
 # the items a rest hole took, written as one node where the template names it without dots: `$a` for `$a...` is the

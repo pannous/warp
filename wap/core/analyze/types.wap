@@ -234,15 +234,13 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
-# the function a name calls with these typed arguments, among these candidates, typed for their types
-function_chosen(n: Node, called: Node, candidates: list, given: list, s: TypingState, expected: Node?) as TypedFunction := function_typed(chosen_definition(n, called, candidates, given, expected), given.map(argument => value_type(argument)), s, n)
 # A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
 # Get then calls (records and maps come with Record and Map)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
 	named = s.definitions.filter(definition => text(declared_name(written_name(definition))) == text(key))
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
-	chosen = function_chosen(n, key, named, [typed], s, expected)
+	chosen = function_typed(chosen_definition(n, key, named, [typed], expected), [value_type(typed)], s, n)
 	called = with_fact(with_fact(refitted(Get(typed, key), n), BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
 	with_type_of(called, chosen.result)
 }
