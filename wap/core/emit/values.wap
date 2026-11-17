@@ -7,6 +7,7 @@
 
 use "wasm.wap"
 use "../stage.wap"
+use "../errors.wap"
 
 # Code that leaves one value of `type` on the stack; a form that leaves none has the type []
 class Code {
@@ -28,17 +29,20 @@ literal(n: Node, m: Module) as Code? := match n {
 	_ => ø
 }
 
-# the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet
-layout_of(type_name: Node, m: Module) as list? := match type_name {
-	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else ø
-	_ => if list_index(type_name, m) == ø then ø else nullable(list_index(type_name, m))
+# the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
+# records (core/stage.wap record_named)
+layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
+	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
+	_ => if list_index(type_name, m, records) == ø then ø else nullable(list_index(type_name, m, records))
 }
 
 # the GC type of a list, `list<int>`: an array of its items' layout; ø for a type that is no list
-list_index(type: Node, m: Module) as int? := {
-	item = if item_type(type) == ø then ø else layout_of(item_type(type), m)
+list_index(type: Node, m: Module, records: list) as int? := {
+	item = if item_type(type) == ø then ø else layout_of(item_type(type), m, records)
 	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
 }
+# the GC type of a record: a struct of its fields' layouts, in the order the class writes them
+struct_of(record: Node, m: Module, records: list) as int := added_type(m, struct_type(fields_of(record).map(field => field_type(layout_of(declared_type(field), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))))
 
 # a text's bytes kept in a passive segment, copied into a new array where the program meets it
 text_literal(t: text, m: Module) as Code := {

@@ -50,10 +50,7 @@ equality(type: list, p: Program) as list := {
 }
 
 # the wasm type of the value a primitive gives, [] when its definition writes none
-given_layout(form: Node, p: Program) as list := {
-	type = fact_of(form, TYPE)
-	if type == ø then [] else layout_of(type, p.m) ?? refused(form, "the emitter has no value layout for this type yet")
-}
+given_layout(form: Node, p: Program) as list := if fact_of(form, TYPE) == ø then [] else layout(form, p)
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
 	for each in p.helpers { if each#1 == operation { return each#2 } }

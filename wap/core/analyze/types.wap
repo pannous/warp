@@ -39,6 +39,7 @@ ARROW = "->"
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
 class TypingState {
 	definitions: list = []
+	records: list = []
 	functions: list = []
 	globals: list = []
 }
@@ -86,6 +87,8 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
+	Record(name, fields, variants) => n
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
 	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
@@ -107,6 +110,7 @@ with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fac
 # written as each of its typed versions; one whose parameters all have their types is typed even when nothing calls it.
 block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	s.definitions = s.definitions + statements.filter(statement => statement is Define)
+	s.records = s.records + statements.filter(statement => statement is Record)
 	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
 	for statement in statements { if statement is Define and all_typed(statement) { function_typed(statement, written_types(statement), s, statement) } }
 	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
@@ -176,13 +180,28 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
 }
 
-# a list's item given a value of the list's item type; the Set itself gives none
+# a list's item or a record's field given a value of its type; the Set itself gives none
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
 	given = typed_form(value, s, f, wanted)
-	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the list holds ${wanted}") }
+	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
 }
+
+# An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
+# type is the record's name
+instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
+	record = record_named(s.records, head) ?? refused(head, "no class has this name")
+	given = items.map(item => field_typed(item, record, s, f))
+	for field in fields_of(record) { if not items.any(item => text(declared_name(item)) == text(declared_name(field))) { refused(n, "this ${head} gives no value to its field ${declared_name(field)}") } }
+	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
+}
+field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
+	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
+	typed = typed_form(value, s, f, declared_type(field))
+	if not fits_type(typed, declared_type(field)) { refused(value, "this gives ${value_type(typed) ?? "no value"}, the field holds a ${declared_type(field)}") }
+	refitted(Key(name, Op.Colon, typed), item)
+} }
 
 # A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
 # list takes the type its place wants.
@@ -238,6 +257,9 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 # Get then calls (records and maps come with Record and Map)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
+	record = record_named(s.records, value_type(typed))
+	field = if record == ø then ø else field_named(record, key)
+	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
 	named = s.definitions.filter(definition => text(declared_name(written_name(definition))) == text(key))
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, named, [typed], expected), [value_type(typed)], s, n)
