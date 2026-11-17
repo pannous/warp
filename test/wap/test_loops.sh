@@ -34,4 +34,16 @@ while i < 6 { i = i + 1
 if i == 2 then continue
 sum = sum + i }
 sum')" "19"
+check "for counts through a range" "$(ran for_range 'sum = 0
+for i in 1 to 4 { sum = sum + i }
+sum')" "10"
+check "for takes each item of a list" "$(ran for_list 'sum(xs: list<int>): int := {
+	total = 0
+	for x in xs { total = total + x }
+	total
+}
+sum [1, 2, 3, 4]')" "10"
+check "continue in a for moves to the next item" "$(ran for_continue 'for x in [1, 2, 3] { if x == 2 then continue
+print "item" }')" "item
+item"
 exit $((failures > 0))
