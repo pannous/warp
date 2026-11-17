@@ -1187,13 +1187,21 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
-		// a GPU list [f32] of the program's (extensions/gpu_lists/runtime.warp): its cells where they are in the module's memory,
-		// undefined for any other value
-		const gpuCells = value => {
-			const place = program().gpu_list_place ? program().gpu_list_place(value) : -1n;
-			if (place === -1n) return undefined;
+		// a GPU list of the program's (extensions/gpu_lists/runtime.warp)
+		const isGpuList = value => Boolean(program().is_gpu_list?.(value));
+		// its cells as the module stages them (gpu_list_place copies them in, gpu_list_room does not), a view valid
+		// until another list is staged; undefined for any other value
+		const stagedCells = (value, staged) => {
+			if (!isGpuList(value)) return undefined;
+			const place = staged(value);
 			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell(value))];
 			return new Cells(program().memory.buffer, Number(BigInt.asUintN(64, place) >> 32n), Number(program().gpu_list_bytes(value)) / Cells.BYTES_PER_ELEMENT);
+		};
+		const gpuCells = value => stagedCells(value, program().gpu_list_place);
+		// numbers the GPU left written into a GPU list's own cells
+		const gpuCellsKept = (value, left) => {
+			stagedCells(value, program().gpu_list_room).set(left);
+			program().gpu_list_kept(value);
 		};
 		// gpu_compute of a map holding GPU lists: those changed where they are and given back themselves, the other
 		// arrays as new lists, all bound and read back in one job without a text of them
@@ -1210,15 +1218,14 @@ addHostPart({
 				const length = lengths[name], Elements = elements[name] ?? Float32Array;
 				const left = new Elements(words.buffer, words.byteOffset + at * WORD_BYTES, length);
 				at += wordBytes(length * Elements.BYTES_PER_ELEMENT) / WORD_BYTES;
-				const cells = gpuCells(value); // read anew: the module's memory may have grown meanwhile
-				if (cells) cells.set(left);
-				return [name, cells ? value : numberList(left, Elements)];
+				if (isGpuList(value)) gpuCellsKept(value, left);
+				return [name, isGpuList(value) ? value : numberList(left, Elements)];
 			}));
 		};
 		// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one
 		// (natively gpu.warp halves_unmatched)
 		// a GPU list's cell type by name, undefined for any other value
-		const gpuCellName = value => gpuCells(value) && GPU_CELL_NAMES[Number(program().gpu_list_cell(value))];
+		const gpuCellName = value => isGpuList(value) ? GPU_CELL_NAMES[Number(program().gpu_list_cell(value))] : undefined;
 		// why an array cannot bind what it is given (natively gpu.warp cells_unfit): an array<f16> takes only a GPU list
 		// [f16], whose cells it binds as they are, and a GPU list [f16] only one; a GPU list [bf16] has no WGSL array
 		// type yet (card gpu-lists)
@@ -1237,13 +1244,13 @@ addHostPart({
 			const entries = guestEntries(program(), numbers);
 			const code = plain(shader);
 			cellsChecked(code, entries ?? [[storageArrays(code).find(array => array.binding === GPU_BINDING)?.name, numbers]]);
-			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(code, entries, workgroups);
-			const cells = gpuCells(numbers);
+			if (entries?.some(([, value]) => isGpuList(value))) return computedInPlace(code, entries, workgroups);
+			const cells = gpuCells(numbers)?.slice();
 			if (cells) {
 				// changed in place, as natively (lib/host/native_host/gpu.warp array_left): the list itself is the value
-				const copy = cells.slice();
-				const left = gpuJob("gpu_kernel", { shader: code, numbers: copy, workgroups: Number(workgroups) }, [copy.buffer], gpuElements(code));
-				gpuCells(numbers).set(left.subarray(0, cells.length)); // the module's memory may have grown meanwhile
+				const length = cells.length; // counted before the job: handing the copy to the task Worker empties it
+				const left = gpuJob("gpu_kernel", { shader: code, numbers: cells, workgroups: Number(workgroups) }, [cells.buffer], gpuElements(code));
+				gpuCellsKept(numbers, left.subarray(0, length));
 				return numbers;
 			}
 			const given = plain(numbers);
