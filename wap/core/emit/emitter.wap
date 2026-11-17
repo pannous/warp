@@ -79,7 +79,8 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 # nothing called are emitted at its end.
 block_code(statements: list, p: Program, f: Frame) as Code := {
 	codes = statements.map(s => code(s, p, f))
-	for waiting in p.pending.filter(w => identical_in(w, statements)) { if identical_in(waiting, p.pending) { emitted_function(waiting, p) } }
+	keys = statements.filter(s => s is Define).map(function_key)
+	for waiting in p.pending.filter(w => function_key(w) in keys) { if function_key(waiting) in p.pending.map(function_key) { emitted_function(waiting, p) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }
@@ -95,15 +96,16 @@ postponed(form: Node, p: Program, f: Frame) as Code := {
 # the function a name defines, its body emitted now if it waits
 pending_function(p: Program, called: Node) as Placed? := waiting_function(p, defining_key(called))
 waiting_function(p: Program, key: text) as Placed? := {
-	for waiting in p.pending { if place_key(defined_name(waiting)) == key { return emitted_function(waiting, p) } }
+	for waiting in p.pending { if function_key(waiting) == key { return emitted_function(waiting, p) } }
 	ø
 }
 defined_name(form: Define) as Node := match form { Define(name, parameters, body) => declared_name(name) }
+function_key(form: Define) as text := place_key(defined_name(form))
 
 # A function: its parameters the first slots of a new frame, its body's value its result. It waits no longer, so a
 # call inside its own body finds it neither waiting nor placed.
 emitted_function(waiting: Define, p: Program) as Placed := {
-	p.pending = p.pending.filter(other => not (other === waiting))
+	p.pending = p.pending.filter(other => function_key(other) != function_key(waiting))
 	function_placed(waiting, p)
 }
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
