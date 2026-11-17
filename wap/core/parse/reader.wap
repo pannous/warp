@@ -2,6 +2,6 @@
 #
 # Milestone 1 reuses warp's reader, `parse`, as notes/backbone.md decides. Before milestone 2 this file becomes the
 # pure notation reader: atoms, keys, lists and phrases, with no keyword branches, the operators from
-# core/reading/operators.wap.
+# core/parse/operators.wap.
 
 notation(source: text) as Node := parse(source)

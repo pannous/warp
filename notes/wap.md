@@ -16,7 +16,7 @@ and the stage that should have removed it.
 
 ```
 text
- │ read                       core/reading/      the notation: data and code alike, no keyword meanings
+ │ read                       core/parse/      the notation: data and code alike, no keyword meanings
  ▼
 notation (Node: atoms, keys, lists, phrases)
  │ shape rules                core/rules/        stage 1: rules that ask only the shape
@@ -34,7 +34,7 @@ typed kernel
  │ kind rules                 core/rules/        stage 3: rules that ask inferred types, output re-checked
  ▼
 typed kernel
- │ emit                       core/emitting/
+ │ emit                       core/emit/
  ▼
 module → bytes
 ```
@@ -61,7 +61,7 @@ wap/
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
 
-    reading/                  text → notation
+    parse/                    text → notation
       reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
       operators.wap           the operator table read from lib/aliases.warp: fixities, precedence groups sorted
                               topologically, aliases to canonical words; unrelated mixes refused
@@ -77,7 +77,7 @@ wap/
       scope.wap               the one binding analysis: what each name refers to
       types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
 
-    emitting/                 typed kernel → bytes
+    emit/                     typed kernel → bytes
       emitter.wap             one case per kernel form; any other node refused
       closures.wap            Fn: closure conversion
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
@@ -94,10 +94,10 @@ test/wap/                     wap's outcome tests: a program compiled by wap, ru
 
 What each file may know:
 - **kernel/** knows Node and nothing of the stages.
-- **core/reading/** knows characters and the operator table, no keyword: `if`, `for` and `class` are words to it.
+- **core/parse/** knows characters and the operator table, no keyword: `if`, `for` and `class` are words to it.
 - **core/rules/** knows patterns and templates, no particular form: every form it handles comes from a rule file.
 - **core/analysis/** reads, never rewrites.
-- **core/emitting/** reads only the kernel; `wasm.wap` reads not even that.
+- **core/emit/** reads only the kernel; `wasm.wap` reads not even that.
 - **extensions/** holds rules only; a rule that needs code calls a function in lib/.
 
 ## Rules for every file
@@ -105,14 +105,14 @@ What each file may know:
 - One job, said in its first comment line; a second job is a second file in its folder.
 - Its input and output language named in that comment.
 - Total over its input: every case handled or refused loudly, never skipped.
-- No surface spelling outside reading/ and extensions/; no name of a domain (units, colors, keys) in core/.
+- No surface spelling outside parse/ and extensions/; no name of a domain (units, colors, keys) in core/.
 - A compromise is a debt in notes/backbone.md "Debts", never silent.
 
 ## State
 
-Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Seq), core/reading/reader.wap (warp's
-`parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emitting/emitter.wap and
-core/emitting/wasm.wap. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
+Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Seq), core/parse/reader.wap (warp's
+`parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap and
+core/emit/wasm.wap. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
 in the emitter (a debt).
 
 Test: `bash test/wap/test_hello.sh` (WARP names the warp to run with).

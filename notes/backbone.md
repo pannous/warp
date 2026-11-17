@@ -178,6 +178,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
-- **`print` known by name in wap's emitter** (wap/core/emitting/emitter.wap, milestone 1). Bends "built-ins are declared like
+- **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
   any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
   function whose body is a host primitive.
