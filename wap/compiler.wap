@@ -7,6 +7,7 @@
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
 #   lower     notation → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   bind      kernel → bound     core/analyze/scope.wap, what each name refers to, as facts
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
@@ -14,10 +15,11 @@ use "core/stage.wap"
 use "core/errors.wap"
 use "core/parse/reader.wap"
 use "core/rules/lowering.wap"
+use "core/analyze/scope.wap"
 use "core/emit/wasm.wap"
 use "core/emit/emitter.wap"
 
-compiled(source: text) as list := module_bytes(emitted(lowered_program(notation(source))))
+compiled(source: text) as list := module_bytes(emitted(bound_program(lowered_program(notation(source)))))
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>" }
 write_bytes(args#2, compiled(read(args#1)))
