@@ -69,8 +69,8 @@ The languages, each a set of Node shapes:
   operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2.
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
-- **declared:** surface, unchanged, plus facts: each definition's `Meta` names what it declares, and the program's
-  block holds the table of declared names and signatures.
+- **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
+  a value's signature ø), and on the program `declarations`, the list of them (core/analyze/declarations.wap).
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
@@ -82,7 +82,9 @@ The languages, each a set of Node shapes:
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
 through core/stage.wap (`with_fact(n, name, value)`, `fact_of(n, name)`), so a kernel form keeps the same holes from
 stage 2 to the emitter and a pattern written for one stage matches in the next. A stage that only learns facts
-(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker.
+(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker. A
+rewrite's result stands for what it replaced: it takes that node's position and facts (a definition's declaration
+survives its lowering), while the new parts inside it take only the position.
 
 **Handoffs.** A worker hands a stage over with an outcome test in test/wap/ (a program compiled by wap, run, its output
 checked) and a line here when its language changed. The lead reviews it against this table before it lands.

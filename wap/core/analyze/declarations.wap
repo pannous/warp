@@ -1,0 +1,55 @@
+# The declaration prescan: surface → declared (notes/backbone.md "Stage languages").
+#
+# Before any phrase is decided, the program's interface is known: the names its top level defines, each with its
+# signature. Signature rules (stage 2) ask it (`$f takes value`), a phrase is read by it (`print x` is a call because
+# print is a function), and so does a module that `use`s this one. It learns facts only, the program keeps its shape:
+#   declares        on each top-level definition: name: signature
+#   declarations    on the program: the list of them, in the order written
+#
+#   x := 3                  x: ø               a value
+#   f(a: int, b) := a       f: [a: int, b]     a function and its parameters, as written
+#   g() := 1                g: []              a function of no parameters
+#
+# Only the top level declares: names inside a function belong to its scopes, which the binding analysis resolves
+# (core/analyze/scope.wap). A statement that defines nothing declares nothing.
+
+DECLARES = "declares"
+DECLARATIONS = "declarations"
+
+declared_program(program: Node) as Node := {
+	statements = top_level_statements(program).map(declared_statement)
+	declarations = []
+	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
+	with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
+}
+
+# a statement with what it declares, if it defines a name
+declared_statement(statement: Node) as Node := {
+	declaration = declaration_of(statement)
+	if declaration == ø then statement else with_fact(statement, DECLARES, declaration)
+}
+
+# name: signature of a definition, ø of any other statement
+declaration_of(statement: Node) as Node? := match statement {
+	Key(head, Op.Define, value) => signature_of(head)
+	Key(head, Op.Assign, value) => match head { Symbol(name) => Key(head, Op.Colon, Empty); _ => ø }
+	_ => ø
+}
+# what `x` or `f(a, b)` written before := declares: a value, or a function with its parameters
+signature_of(head: Node) as Node? := match head {
+	List(items, Bracket.Round, separator) => match items#1 { Symbol(name) => Key(items#1, Op.Colon, List(items[1 ..], Bracket.Square, Separator.Comma)); _ => ø }
+	Symbol(name) => Key(head, Op.Colon, Empty)
+	_ => ø
+}
+
+# the program's statements, and the program put back from them: lines, `;` statements, or the one statement
+top_level_statements(program: Node) as list := match program {
+	List(items, Bracket.None, Separator.Newline) => items
+	List(items, Bracket.None, Separator.Semicolon) => items
+	_ => [program]
+}
+rebuilt_statements(program: Node, statements: list) as Node := match program {
+	List(items, Bracket.None, Separator.Newline) => List(statements, Bracket.None, Separator.Newline)
+	List(items, Bracket.None, Separator.Semicolon) => List(statements, Bracket.None, Separator.Semicolon)
+	_ => statements#1
+}
