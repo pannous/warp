@@ -1,7 +1,14 @@
 # Kernel forms to a wasm module (notes/kernel.md): one case per form, any other node refused.
 #
-# The emitter reads only the kernel. It never sees a surface spelling, and it decides nothing a rule could decide:
-# it translates. The bytes themselves are wasm.wap's.
+# Input: the kernel (wap/kernel/forms.wap and the literals); output: a Module (core/emit/wasm.wap). The emitter
+# never sees a surface spelling, and it decides nothing a rule could decide: it translates. Which wasm type holds a
+# value is core/emit/values.wap's; the bytes are wasm.wap's.
+#
+# Names arrive bound (core/analyze/scope.wap): each carries what it refers to and the name that defined it, so the
+# emitter never looks a name up by its spelling. Without the typing stage, a value's type is known only once its code
+# is emitted, so a function's body is emitted at its first call (its globals set by then), or at the end of its block
+# when nothing calls it. What is still unknown, a function calling itself or a global read before it is set, is
+# refused, never guessed.
 #
 # Milestone 1 writes texts through WASI's fd_write, which the native warp and the browser both answer. That `print`
 # is recognized here by name is a debt (notes/backbone.md "Debts"): print becomes a library function whose body is a
@@ -11,28 +18,181 @@ STDOUT = 1
 NEWLINE = 10
 # fd_write(fd, iovecs, count, written) → error: where it stores the count written
 WRITTEN_ADDRESS = 0
+# the types of the values the host shows when main gives them back
+SHOWN_BY_HOST = [I64]
 
-# The module of a program: its statements become the body of `_start`, the function WASI runs.
+# The module of a program: its statements become the body of `main`, which the host runs. Its value is shown, as
+# warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
+# values show themselves (notes/backbone.md "Debts"); the host's float digits are not warp's (0.1 as
+# 0.10000000000000001).
 emitted(program: Block) as Module := {
 	m = Module()
-	output = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
-	start = added_function(m, [], [], code(program, m, output))
-	exported(m, "_start", FUNCTION_KIND, start)
+	p = Program(m, imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32]))
+	f = Frame()
+	body = code(program, p, f)
+	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
+	exported(m, "main", FUNCTION_KIND, function_of(m, [], shown, f))
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
 
-# the instructions of a kernel form
-code(form: Node, m: Module, output: int) as list := match form {
-	Block(statements) => statements.flat_map(statement => code(statement, m, output))
-	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused(form, "the emitter takes no call but print of a text yet")
-	_ => refused(form, "not a kernel form")
+# What the emitter knows of the whole program: the module, the output it prints through, and the functions and
+# globals emitted so far, each a Placed
+class Program {
+	m: Module
+	output: int
+	functions: list = []
+	globals: list = []
+	# the Define forms whose body is not emitted yet
+	pending: list = []
 }
+# The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
+class Frame {
+	slots: list = []
+	parameter_count: int = 0
+}
+# A definition where wasm keeps it: its index, the type of its value (a function's result) and, for a function,
+# its parameters' types. Its key is where the program defined it.
+class Placed {
+	key: text
+	index: int
+	type: list
+	parameters: list = []
+}
+
+# the code of a kernel form
+code(form: Node, p: Program, f: Frame) as Code := match form {
+	Block(statements) => block_code(statements, p, f)
+	Define(name, parameters, body) => postponed(form, p)
+	Set(place, value) => set_code(form, place, code(value, p, f), p, f)
+	Call(called, arguments) => call_code(form, called, arguments, p, f)
+	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
+	Symbol(name) => name_code(form, p, f)
+	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
+}
+
+# Statements run in order, the value the last one's, every other value dropped. The functions the block defines and
+# nothing called are emitted at its end.
+block_code(statements: list, p: Program, f: Frame) as Code := {
+	codes = statements.map(s => code(s, p, f))
+	for statement in statements { if statement in p.pending { emitted_function(statement, p) } }
+	if codes is empty { return Code() }
+	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
+}
+
+# the instructions of code whose value nobody takes
+dropped(c: Code) as list := c.instructions + (if c.type is empty then [] else DROP)
+
+# a function defined, its body emitted later; the definition leaves no value
+postponed(form: Node, p: Program) as Code := {
+	p.pending += [form]
+	Code()
+}
+# the function a name defines, its body emitted now if it waits
+pending_function(p: Program, called: Node) as Placed? := {
+	key = defining_key(called)
+	for waiting in p.pending { if place_key(defined_name(waiting)) == key { return emitted_function(waiting, p) } }
+	ø
+}
+defined_name(form: Define) as Node := match form { Define(name, parameters, body) => name }
+
+# A function: its parameters the first slots of a new frame, its body's value its result. It waits no longer, so a
+# call inside its own body finds it neither waiting nor placed.
+emitted_function(form: Define, p: Program) as Placed := {
+	p.pending = p.pending.filter(waiting => waiting != form)
+	match form { Define(name, parameters, body) => function_placed(name, parameters, body, p) }
+}
+function_placed(name: Node, parameters: List, body: Node, p: Program) as Placed := {
+	f = Frame()
+	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(parameter), #f.slots, parameter_type(parameter, p))] }
+	f.parameter_count = #f.slots
+	types = f.slots.map(slot => slot.type)
+	value = code(body, p, f)
+	p.functions += [Placed(place_key(name), function_of(p.m, types, value, f), value.type, types)]
+	p.functions.last
+}
+parameters_of(parameters: List) as list := match parameters { List(items, bracket, separator) => items }
+# the wasm function of a frame and its body, its value the result: its index
+function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
+	results = if body.type is empty then [] else [body.type]
+	added_function(m, parameters, results, f.slots[f.parameter_count ..].map(slot => slot.type), body.instructions)
+}
+
+# a parameter's type, as its declaration names it: `x: int`; an untyped one waits for the typing stage
+parameter_type(parameter: Node, p: Program) as list := match parameter {
+	Key(name, Op.Colon, type) => layout_of(type, p.m) ?? refused(type, "the emitter has no value layout for this type yet")
+	_ => refused(parameter, "the emitter needs a parameter's type until the typing stage infers it")
+}
+
+# A value given to a name, and that value again, as `x = 3` has the value 3. A local or parameter lives in the
+# frame, a global in the module; the first value given decides the type.
+set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
+	if value.type is empty { refused(form, "this gives no value to set") }
+	binding = binding_of(place)
+	if binding == "local" or binding == "parameter" {
+		slot = placed_for(f.slots, place) ?? added_slot(f, place, value.type)
+		same_type(slot, value, form)
+		return Code(value.type, value.instructions + instruction(LOCAL_TEE, [slot.index]))
+	}
+	if binding == "global" {
+		global = placed_for(p.globals, place) ?? added_global_of(p, place, value.type)
+		same_type(global, value, form)
+		return Code(value.type, value.instructions + instruction(GLOBAL_SET, [global.index]) + instruction(GLOBAL_GET, [global.index]))
+	}
+	refused(form, "the emitter sets locals and globals, not a ${binding} yet")
+}
+added_slot(f: Frame, place: Node, type: list) as Placed := {
+	f.slots += [Placed(defining_key(place), #f.slots, type)]
+	f.slots.last
+}
+added_global_of(p: Program, place: Node, type: list) as Placed := {
+	p.globals += [Placed(defining_key(place), added_global(p.m, type, MUTABLE, default_of(type)), type)]
+	p.globals.last
+}
+same_type(held: Placed, value: Code, form: Node) := if held.type != value.type { refused(form, "this name held another kind of value before") }
+
+# a name's value: a parameter, local or global; functions as values and captures come with closures
+name_code(name: Node, p: Program, f: Frame) as Code := {
+	binding = binding_of(name)
+	if binding == "local" or binding == "parameter" {
+		slot = placed_for(f.slots, name) ?? refused(name, "this local is read before any value is given to it")
+		return Code(slot.type, instruction(LOCAL_GET, [slot.index]))
+	}
+	if binding == "global" {
+		global = placed_for(p.globals, name) ?? refused(name, "the emitter reads a global only after the statement that sets it, until the typing stage")
+		return Code(global.type, instruction(GLOBAL_GET, [global.index]))
+	}
+	refused(name, "the emitter reads parameters, locals and globals, not a ${binding} yet")
+}
+
+# A call of a function the program defined, its arguments of its parameters' types; print, the one library word
+# (a debt), prints a text
+call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+	binding = binding_of(called)
+	if binding == "library" and called == symbol("print") and #arguments == 1 and arguments#1 is text { return Code([], printed(arguments#1, p.m, p.output)) }
+	if binding != "function" { refused(form, "the emitter calls the program's own functions and print of a text, not this yet") }
+	function = placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
+	given = arguments.map(argument => code(argument, p, f))
+	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
+	Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index]))
+}
+
+# what a bound name refers to: local, parameter, capture, global, function or library
+binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
+# the definition a bound name refers to, among those placed so far
+placed_for(placed: list, name: Node) as Placed? := {
+	key = defining_key(name)
+	for each in placed { if each.key == key { return each } }
+	ø
+}
+defining_key(name: Node) as text := place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"))
+# a definition's key: where the program wrote it
+place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${line_of(definer)}:${column_of(definer)}"
 
 # a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
 printed(line: text, m: Module, output: int) as list := {
 	bytes = line.bytes + [NEWLINE]
 	text_address = added_data(m, bytes)
-	iovec = added_data(m, little_endian(text_address) + little_endian(#bytes))
-	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(output) + [DROP]
+	iovec = added_data(m, little_endian(text_address, 4) + little_endian(#bytes, 4))
+	i32_const(STDOUT) + i32_const(iovec) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [output]) + DROP
 }

@@ -1,0 +1,100 @@
+# Binding analysis: kernel → bound kernel (first principles 15, notes/backbone.md "Stage languages").
+#
+# Scopes, shadowing, captures and globals are resolved here, once. Every name of the program gets two facts in its
+# metadata (core/stage.wap with_fact), which every later stage reads instead of looking the name up again:
+#   binding      what the name refers to: local, parameter, capture, global, function or library
+#   defined_at   the name where that was defined, positioned, so an error can say where (ø for a library word)
+#
+#   x = 1                       x: global
+#   f(y) := { z = x + y         z: local, x: global, y: parameter
+#             g() := z          z: capture (g reads its enclosing function's local)
+#             print z }         print: library
+#
+# Scopes: a Block opens one; a function (Define, Fn) opens one that also starts a new depth. A name a Block's
+# statements give a value to, or define, belongs to that Block unless the same function sees it already; so a local
+# never reaches another function, whatever its name (a local `push` in f leaves g's `xs.push` the library's). A
+# definition is seen by its whole Block, before and after it, so functions may call each other.
+# The stage only learns facts: every node keeps its shape and its own metadata.
+
+BINDING = "binding"
+DEFINED_AT = "defined_at"
+# depth of the program's own statements: names defined there are globals and top-level functions
+PROGRAM_DEPTH = 0
+
+# What a name refers to: its kind as seen from the function that defined it, and the defining name itself
+class Definition { name: text; kind: text; definer: Node; depth: int }
+
+bound_program(program: Block) as Block := bound(program, [], PROGRAM_DEPTH)
+
+# n with the facts on every name it holds; scope lists the definitions visible, the innermost first
+bound(n: Node, scope: list, depth: int) as Node := match n {
+	Symbol(name) => resolved(n, scope, depth)
+	Block(statements) => refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), n)
+	Define(name, parameters, body) => refitted(Define(resolved(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n)
+	Fn(parameters, body) => refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n)
+	Set(place, value) => refitted(Set(bound(place, scope, depth), bound(value, scope, depth)), n)
+	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Number(value) => n
+	Text(value) => n
+	Char(value) => n
+	True => n
+	False => n
+	Empty => n
+	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
+}
+all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
+
+# A function's parameters and body, one depth further in than the function's definition, the body seeing the
+# parameters before the names around it
+parameters_bound(parameters: List, depth: int) as Node := match parameters {
+	List(items, bracket, separator) => refitted(List(items.map(p => parameter_bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
+}
+body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + scope, depth + 1)
+parameter_definitions(parameters: List, depth: int) as list := match parameters {
+	List(items, bracket, separator) => items.map(p => Definition(text(parameter_symbol(p)), "parameter", parameter_symbol(p), depth))
+}
+
+# a parameter with the facts on its name, the type of a typed one, `x: int`, left as it is
+parameter_bound(parameter: Node, scope: list, depth: int) as Node := match parameter {
+	Key(name, Op.Colon, type) => refitted(Key(parameter_bound(name, scope, depth), Op.Colon, type), parameter)
+	_ => resolved(parameter_symbol(parameter), scope, depth)
+}
+# the name a parameter defines: `x`, or the x of `x: int`
+parameter_symbol(parameter: Node) as Node := match parameter {
+	Symbol(name) => parameter
+	Key(name, Op.Colon, type) => parameter_symbol(name)
+	_ => refused(parameter, "a parameter is a name, or a name and its type")
+}
+
+# The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
+# not see yet. Nested Blocks and functions keep theirs; a Set inside another form (an If's branch) is the Block's.
+defined_in(statements: list, scope: list, depth: int) as list := {
+	found = []
+	for statement in statements { found = found + definitions_of(statement, found + scope, depth) }
+	found
+}
+definitions_of(n: Node, scope: list, depth: int) as list := match n {
+	Define(name, parameters, body) => [Definition(text(name), "function", name, depth)]
+	Set(place, value) => if place is symbol and not seen_in_function(text(place), scope, depth) then [Definition(text(place), local_kind(depth), place, depth)] + definitions_of(value, scope, depth) else definitions_of(value, scope, depth)
+	Block(statements) => []
+	Fn(parameters, body) => []
+	Call(called, arguments) => defined_in(arguments, scope, depth)
+	_ => []
+}
+local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then "global" else "local"
+seen_in_function(name: text, scope: list, depth: int) as bool := {
+	for definition in scope { if definition.name == name and definition.depth == depth { return yes } }
+	no
+}
+
+# a name with what it refers to, as seen from depth: its own function's names as they were defined, the program's
+# globals and functions as such, an enclosing function's names as captures, anything else a library word
+resolved(name: Node, scope: list, depth: int) as Node := {
+	for found in scope {
+		if found.name == text(name) {
+			kind = if found.depth == depth or found.depth == PROGRAM_DEPTH then found.kind else "capture"
+			return with_fact(with_fact(name, BINDING, symbol(kind)), DEFINED_AT, found.definer)
+		}
+	}
+	with_fact(name, BINDING, symbol("library"))
+}

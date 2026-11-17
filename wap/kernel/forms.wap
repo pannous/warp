@@ -15,3 +15,13 @@ pattern Call = (Call $called: Symbol $arguments...: Node)
 # forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
 # list value, a block runs a, then b
 pattern Block = (Block $statements...: Node)
+
+# a named definition, a function or a constant, its parameters a list because the body follows them: `f(x) := x * 2`
+# is Define(f, [x], x * 2), (Define f [x] …); `global` and other annotations are facts in its Meta (core/stage.wap)
+pattern Define = (Define $name: Symbol $parameters: List $body: Node)
+
+# a function value without a name: `x => x + 1`, `{ it * 2 }`, `|x| …` are Fn([x], x + 1), (Fn [x] …)
+pattern Fn = (Fn $parameters: List $body: Node)
+
+# a value given to a place, a name, `p.x` or `xs#i`: `x = 1`, `p.x = 2`, `x += 1` are Set(x, 1) …, (Set x 1)
+pattern Set = (Set $place: Node $value: Node)
