@@ -286,3 +286,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`#xs` counts only lists of ints** (wap/preload/prelude.wap `#(xs: list<int>)`). Reason: the preload cannot write
   one `#` for every item type until a type may be written with a variable; one copy per item type would repeat it.
   Paid off with type variables (`#(xs: list<T>): int`).
+- **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
+  the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
+- **`wap format` prints a text with holes as its pieces joined** (wap/core/format.wap): the reader gives
+  `"a ${x} b"` as `("a " + text(x) + " b")`. Paid off when format prints such a sum back as a text with holes.
