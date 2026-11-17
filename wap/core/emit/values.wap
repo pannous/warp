@@ -31,6 +31,13 @@ layout_of(type_name: Node, m: Module) as list? := match type_name {
 	_ => ø
 }
 
+# A literal read as the type its place wants, ø where it reads as itself: a one-character text, which the reader
+# gives as a Char, is a text where a text is wanted
+literal_as(n: Node, wanted: list, m: Module) as Code? := match n {
+	Char(value) => if wanted == nullable(text_type(m)) then text_literal(text(value), m) else ø
+	_ => ø
+}
+
 # a text's bytes kept in a passive segment, copied into a new array where the program meets it
 text_literal(t: text, m: Module) as Code := {
 	type = text_type(m)
