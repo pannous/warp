@@ -84,8 +84,9 @@ The languages, each a set of Node shapes:
   block holds the table of declared names and signatures.
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
-- **bound kernel:** kernel, unchanged, plus a fact on each name: what it refers to (a local, parameter, global,
-  function or library word) and where that is defined.
+- **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
+  `parameter`, `capture` of an enclosing function's name, `global`, `function` or `library`), and `defined_at`, the
+  defining name itself, positioned (core/analyze/scope.wap).
 - **typed kernel:** bound kernel plus each form's type, and on each `Call` the overload chosen.
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
@@ -211,6 +212,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
+- **A URL is no atom yet: `http://x` reads as the key `http: //x`** (wap/core/parse/reader.wap), and `wap format`
+  prints it so, which reads back with `//x` as a comment. Bends "never degrade the input". Reason: the wiki says
+  nothing yet of URLs in code; a URL becomes one atom once a wiki page decides its spelling.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
@@ -223,3 +227,19 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
   stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
 - **`format` prints no comments yet** (wap/core/format.wap). Comments ride in Meta; the printer reads only shapes.
+- **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
+  mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
+  i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
+  Paid off when values show themselves through the runtime's show words, boxed into a $Node.
+- **A name the program binds nowhere is taken for a library word** (wap/core/analyze/scope.wap, `binding: library`)
+  without asking whether the library declares it. Bends "refuse, never guess": a misspelled name is not refused by
+  the binding analysis. Reason: the preload's declarations are not read yet. Paid off when the declare stage reads
+  them; then a name neither the program nor the library defines is refused, naming where it was written.
+- **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), until the typing stage gives
+  types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
+  function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
+  (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.
+- **A definition is known by its line and column** (wap/core/emit/emitter.wap `place_key`): the emitter finds the
+  function, local or global a bound name refers to by where its definer was written. Two files' definitions at the
+  same line and column would collide. Reason: wap compiles one file so far. Paid off when positions carry their file,
+  or the binding fact names its definition uniquely.
