@@ -31,3 +31,7 @@ pattern Set = (Set $place: Node $value: Node)
 # an operation the emitter performs itself, the leaf where warp ends and wasm or the host begins; only the preload
 # writes one, as a built-in's body: `print(t: text) := prim print_text(t)` is Define(print, [t: text], Prim(print_text, [t]))
 pattern Prim = (Prim $operation: Symbol $arguments...: Node)
+
+# a choice between two forms by a condition, yes or no: `if c then a else b`, `if c { a }` are If(c, a, b), If(c, a, ø),
+# (If c a b); with both parts of one type its value is the chosen part's, else it has none
+pattern If = (If $condition: Node $then_part: Node $else_part: Node)
