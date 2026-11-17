@@ -15,6 +15,7 @@ use "core/errors.wap"
 use "core/parse/reader.wap"
 use "core/rules/lowering.wap"
 use "core/emit/wasm.wap"
+use "core/emit/values.wap"
 use "core/emit/emitter.wap"
 
 compiled(source: text) as list := module_bytes(emitted(lowered_program(notation(source))))

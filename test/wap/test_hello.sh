@@ -18,4 +18,18 @@ b"
 # a form refused by a later stage still names the line the program wrote it on
 check "a refusal names the user's line" "$(ran later 'print "a"
 print 3' | grep -o 'line [0-9]*:[0-9]*')" "line 2:1"
+# a program's value is shown, as warp shows it (notes/self_hosting.md "Value layout": an int is an i64)
+check "a program's int value is shown" "$(ran int '40000000000')" "40000000000"
+check "a negative int" "$(ran negative '-3')" "-3"
+check "the value is the last statement's" "$(ran last 'print "a"
+7')" "a
+7"
+# every kind of literal has its wasm value: a char, a text, ø, a float, then an int shown
+check "literals of every kind run" "$(ran kinds "'a'
+\"text\"
+ø
+-2.5
+7")" "7"
+check "a name the emitter cannot place is refused at its line" "$(ran name 'print "a"
+x' | grep -o 'line [0-9]*:[0-9]*')" "line 2:1"
 exit $((failures > 0))

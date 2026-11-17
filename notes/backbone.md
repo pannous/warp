@@ -200,3 +200,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
   any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
   function whose body is a host primitive.
+- **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
+  mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
+  i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
+  Paid off when values show themselves through the runtime's show words, boxed into a $Node.

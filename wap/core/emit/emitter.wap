@@ -1,38 +1,55 @@
 # Kernel forms to a wasm module (notes/kernel.md): one case per form, any other node refused.
 #
-# The emitter reads only the kernel. It never sees a surface spelling, and it decides nothing a rule could decide:
-# it translates. The bytes themselves are wasm.wap's.
+# Input: the kernel (wap/kernel/forms.wap and the literals); output: a Module (core/emit/wasm.wap). The emitter
+# never sees a surface spelling, and it decides nothing a rule could decide: it translates. Which wasm type holds a
+# value is core/emit/values.wap's; the bytes are wasm.wap's.
 #
 # Milestone 1 writes texts through WASI's fd_write, which the native warp and the browser both answer. That `print`
 # is recognized here by name is a debt (notes/backbone.md "Debts"): print becomes a library function whose body is a
-# host primitive once the kernel has Prim.
+# host primitive once the kernel has Prim, Define and Name.
 
 STDOUT = 1
 NEWLINE = 10
 # fd_write(fd, iovecs, count, written) → error: where it stores the count written
 WRITTEN_ADDRESS = 0
+# the types of the values the host shows when main gives them back
+SHOWN_BY_HOST = [I64]
 
-# The module of a program: its statements become the body of `_start`, the function WASI runs.
+# The module of a program: its statements become the body of `main`, which the host runs. Its value is shown, as
+# warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
+# values show themselves (notes/backbone.md "Debts"); the host's float digits are not warp's (0.1 as
+# 0.10000000000000001).
 emitted(program: Block) as Module := {
 	m = Module()
 	output = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
-	start = added_function(m, [], [], code(program, m, output))
-	exported(m, "_start", FUNCTION_KIND, start)
+	body = code(program, m, output)
+	main = if body.type in SHOWN_BY_HOST then added_function(m, [], [body.type], [], body.instructions) else added_function(m, [], [], [], dropped(body))
+	exported(m, "main", FUNCTION_KIND, main)
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
 
-# the instructions of a kernel form
-code(form: Node, m: Module, output: int) as list := match form {
-	Block(statements) => statements.flat_map(statement => code(statement, m, output))
-	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused(form, "the emitter takes no call but print of a text yet")
-	_ => refused(form, "not a kernel form")
+# the code of a kernel form
+code(form: Node, m: Module, output: int) as Code := match form {
+	Block(statements) => block_code(statements.map(statement => code(statement, m, output)))
+	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and arguments#1 is text then Code([], printed(arguments#1, m, output)) else refused(form, "the emitter takes no call but print of a text yet")
+	Symbol(name) => refused(form, "the emitter knows no names yet")
+	_ => literal(form, m) ?? refused(form, "not a kernel form")
 }
+
+# statements run in order, the value the last one's; every other value dropped
+block_code(statements: list) as Code := {
+	if statements is empty { return Code() }
+	Code(statements.last.type, statements[.. #statements - 1].flat_map(dropped) + statements.last.instructions)
+}
+
+# the instructions of code whose value nobody takes
+dropped(c: Code) as list := c.instructions + (if c.type is empty then [] else DROP)
 
 # a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
 printed(line: text, m: Module, output: int) as list := {
 	bytes = line.bytes + [NEWLINE]
 	text_address = added_data(m, bytes)
-	iovec = added_data(m, little_endian(text_address) + little_endian(#bytes))
-	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(output) + [DROP]
+	iovec = added_data(m, little_endian(text_address, 4) + little_endian(#bytes, 4))
+	i32_const(STDOUT) + i32_const(iovec) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [output]) + DROP
 }

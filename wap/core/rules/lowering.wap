@@ -15,6 +15,10 @@ lowered(n: Node) as Node := staged(n, lowered_form)
 lowered_form(n: Node) as Node := match n {
 	Text(value) => n
 	Number(value) => n
+	Char(value) => n
+	True => n
+	False => n
+	Empty => n
 	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
 	_ => not_lowered(n)
 }
