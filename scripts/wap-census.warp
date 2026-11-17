@@ -15,7 +15,8 @@ use "../wap/core/emit/values.wap"
 use "../wap/core/emit/emitter.wap"
 use "../wap/core/emit/primitives.wap"
 
-preload_code = declared_program(operated_program(notation(read(program.folder + "/../wap/preload/prelude.wap"))))
+PRELUDE = program.folder + "/../wap/preload/prelude.wap"
+preload_code = declared_program(operated_program(notation(read(PRELUDE), PRELUDE)))
 library = declarations_of(preload_code)
 library_scope = library.map(library_word)
 
@@ -37,9 +38,20 @@ DEEP = #args > 1 and args#2 == "deep"
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
-probe(source: text) := {
+declared_file(file: text) as Node := declared_program(operated_program(notation(read(file), file)))
+# the names the modules a file uses define, as the compiler binds them
+used_scope(file: text) as list := {
+	try {
+		code = declared_file(file)
+		modules = modules_used(code, declared_file)
+		return uses_of(code).flat_map(used => declarations_of(module_of(used, modules))).map(library_word)
+	} catch e { report("declare", e.message) }
+	[]
+}
+
+probe(file: text) := {
 	statements = []
-	try statements = top_level_statements(notation(source)) catch e { report("read", e.message) }
+	try statements = top_level_statements(notation(read(file), file)).filter(statement => not is_use(operated_program(statement))) catch e { report("read", e.message) }
 	lowered_ok = []
 	for statement in statements {
 		try {
@@ -48,7 +60,7 @@ probe(source: text) := {
 			lowered_ok = lowered_ok + [lowered(s)]
 		} catch e { report("lower", e.message) }
 	}
-	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + library_scope
+	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used_scope(file) + library_scope
 	bound_ok = []
 	for statement in lowered_ok {
 		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
@@ -56,4 +68,4 @@ probe(source: text) := {
 	try emitted(Block(bound_ok), bound_program(lowered_program(preload_code), [])) catch e { report("emit", e.message) }
 	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound"
 }
-probe(read(args#1))
+probe(args#1)

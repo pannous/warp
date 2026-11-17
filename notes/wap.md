@@ -140,25 +140,24 @@ Next, in order:
 
 ## Road to self-build
 
-Measured 2026-11-17 by scripts/wap-census.warp: wap's stages run on wap's own sources (wap/**/*.wap, 16 files, 388
-top-level statements), statement by statement. A statement stops at its first refusal, so each row counts the
-statements a missing piece blocks first; the second column assumes the result-type rule (`f(x) as T := …`) exists,
-which shows the layer behind it. Today 97 statements lower and 60 bind; nothing past the emitter's literals emits.
+Measured 2026-11-17 (main 968d32f095) by scripts/wap-census.warp: wap's stages run on wap's own sources (wap/**/*.wap,
+17 files, 482 top-level statements), statement by statement, each file bound with the names its `use`d modules
+define. A statement stops at its first refusal, so each row counts the statements a missing piece blocks first; the
+first column assumes the result-type rule (`f(x) as T := …`) exists (`deep`), which shows the layer behind it.
+Deep, 254 statements lower and 79 bind (100 and 76 without the stand-in); nothing past the emitter's literals emits.
 
 | blocks first (deep) | stage that should handle it | what is missing |
 |---|---|---|
-| 139 (148) | kernel + preload | list literals `[a, b]`, `[]`: a list constructor primitive |
-| 105 (4) | spelling rules | result types `f(x) as T := …` |
-| 3 (54) | spelling rules → kernel | `if`/`while`/`match`/`for` reach binding as calls: rules to If, While, Case |
-| 7 (38) | kernel | If, with `if … then … else` (in progress on wap-if) |
-| 25 (26) | kernel | Record: class fields `x: T`, enum cases, `x: T = v` |
-| 24 (19) | declare | `use` of a module, and the names other modules define |
-| 3 (20) | preload functions | `+`, `+=`, `and`, `or`, `??`, `raise` and the runtime's words (`with_attribute`, `read` …) |
-| 13 (14) | lowering | a parenthesized group `(a + b)` |
-| 2 (11) | kernel | Get: `x.f` member access |
-| 6 (6) | reader | a rest hole `$x...` reads as `$x to` (the `...` alias); `list<T>` reads as comparisons |
-| 1 (1) | reader | a text inside `${…}` of a text (`"${if c then "a" else ""}"`) is never closed |
-| (2) | emitter | value layouts of classes (Node, Program) |
+| 170 | kernel + preload | list literals `[a, b]`, `[]`, indexing `xs[i]`, slices `xs[1 ..]` |
+| (158 without deep) | spelling rules | result types `f(x) as T := …` |
+| 63 | spelling rules → kernel | `match` (49), `for` (13), `while` reach binding as calls: rules to Case, loops |
+| 47 | preload functions | operators `==` `+` `!=` `is` `>` `??` `<=` `+=` `in`: preload definitions with `prim` bodies |
+| 33 | lowering | a parenthesized group `(a + b)`, `(if … then … else …)` |
+| 25 | kernel | Record: class fields `x: T`, enum cases `Left, Right`, map literals `{yes: True}` |
+| 25 | sources | the wap sources name what sibling modules define without `use`-ing them (`refitted`, `place_key`) |
+| 15 | spelling rules → kernel | `and`, `or` short-circuit: If |
+| 14 | kernel | Get: `x.f` member access |
+| 2 | reader | a text inside `${…}` of a text (`"${if c then "a" else ""}"`) is never closed |
 
 Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f deep;
 done`; the `deep` argument applies the result-type stand-in.
