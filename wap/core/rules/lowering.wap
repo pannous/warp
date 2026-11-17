@@ -9,6 +9,8 @@
 #   x = 1                    (Call = x 1) → Set(x, 1)
 #   f(x) := body             (Call := f(x) body) → Define(f, [x], body); `n := 1` → Define(n, [], 1)
 #   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1)
+#   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
+#                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
@@ -24,7 +26,7 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => n
+	Symbol(name) => if name == "yes" then True else if name == "no" then False else if name == "ø" then Empty else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
@@ -36,14 +38,14 @@ lowered_form(n: Node) as Node := match n {
 operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spelling {
 	"=" => Set(arguments#1, lowered(arguments#2))
 	":=" => defined(n, arguments#1, lowered(arguments#2))
-	"=>" => Fn(parameters_of(arguments#1), lowered(arguments#2))
+	"=>" => Fn(parameter_list(arguments#1), lowered(arguments#2))
 	_ => Call(symbol(spelling), arguments.map(lowered))
 }
 
 # `f(x) := body` defines a function, `n := 1` a constant
 defined(n: Node, head: Node, body: Node) as Node := match head {
-	Key(name, Op.None, group) => if name is symbol then Define(name, parameters_of(group), body) else not_lowered(n)
-	Symbol(name) => Define(head, parameters_of(Empty), body)
+	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(group), body) else not_lowered(n)
+	Symbol(name) => Define(head, parameter_list(Empty), body)
 	_ => not_lowered(n)
 }
 
@@ -56,7 +58,7 @@ arguments_of(group: Node) as list := match group {
 }
 
 # the parameters a definition or a function value names, as the one list Define and Fn take
-parameters_of(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
+parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
 
 # a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {
