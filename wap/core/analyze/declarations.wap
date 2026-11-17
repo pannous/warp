@@ -13,9 +13,6 @@
 # Only the top level declares: names inside a function belong to its scopes, which the binding analysis resolves
 # (core/analyze/scope.wap). A statement that defines nothing declares nothing.
 
-DECLARES = "declares"
-DECLARATIONS = "declarations"
-
 declared_program(program: Node) as Node := {
 	statements = top_level_statements(program).map(declared_statement)
 	declarations = []
