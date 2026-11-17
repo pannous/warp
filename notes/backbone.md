@@ -248,3 +248,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A definition's file is the emitter's guess** (wap/core/emit/emitter.wap `place_key`): a definition is known by its
   file and position, and positions carry no file, so the emitter takes a name's definition to be in the file of the
   function naming it (the preload for a library name). Paid off when positions carry their file.
+- **The emitter reads a literal as its parameter's type until typing does** (wap/core/emit/values.wap `literal_as`):
+  a one-character text, which the reader gives as a Char, becomes a text where a parameter wants one. Bends "one job
+  per stage": checking a value against its expected type is the typing stage's. Paid off by core/analyze/types.wap,
+  which then removes literal_as.
