@@ -322,7 +322,7 @@ is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(is_open_part)
 # `_`, a rest word `*xs`, or an operator missing a side, the rest `..` of `[1, ..]`
 is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") else part is key and (key_of(part) == ø or value_of(part) == ø)
 # the value the pattern describes: each typed name `a: int` (in code `$a: int`) as the name alone
-built_value(pattern: Node) as Node := bottom_up(pattern, part => match part {
+built_value(pattern: Node) as Node := pattern_rebuilt(pattern, part => match part {
 	Key(Symbol(name), Op.Colon, Symbol(kind)): if is_hole_word(name) then symbol(name) else part
 	_: part
 })
@@ -341,8 +341,11 @@ placed_holes(pattern: Node, places: list) as Node := {
 	if #places != #holes { raise "the pattern binds " + #holes + " names, " + holes.join(", ") + ": an arm names each by its place" }
 	placed = {}
 	for at in 1 to #holes { placed[holes#at] = places#at }
-	bottom_up(pattern, part => if part is symbol then placed_hole(name_of(part), placed) ?? part else part)
+	pattern_rebuilt(pattern, part => if part is symbol then placed_hole(name_of(part), placed) ?? part else part)
 }
+# Each part of a pattern changed by f, bottom up, the inside of a quoted pattern too: bottom_up leaves quoted code
+# alone, as it must for code that is data, but a quoted pattern's holes are exactly what is to change.
+pattern_rebuilt(pattern: Node, f: function) as Node := if is_quote(pattern) then group_like(pattern, [pattern#1, bottom_up(pattern#2, f)]) else bottom_up(pattern, f)
 # the place of a name, `$cond` in code as `$c`; ø for a word that is no name of the pattern
 placed_hole(name: text, placed: map) as Node? := {
 	if name in placed { return placed[name] }
