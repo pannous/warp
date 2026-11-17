@@ -1,13 +1,14 @@
-# Refusals: a form wap does not take, reported at the user's line (notes/wap.md).
+# Refusals: a form wap does not take, reported where the program wrote it (notes/wap.md).
 #
-# Every stage refuses through here, never with a bare `raise`, so every message has the same shape and points where
-# the program wrote the form, whichever stage found it (core/stage.wap carries the positions there):
+# Every stage refuses through here, never with a bare `raise`, so every message has the same shape and points at the
+# user's code, whichever stage found it. A stage working on kernel forms passes the form's origin, the code it was
+# lowered from (core/stage.wap):
 #
 #   line 2:1: the emitter takes no call but print of a text yet: print 3
 #
 # Later: the readings a phrase allows, a fix-it, and the rule that expanded the form.
 
-refused(n: Node, why: text) := raise place_of(n) + why + ": " + n
+refused(code: Node, why: text) := raise place_of(code) + why + ": " + code
 
-# `line 2:1: `, or nothing for a node without a position
-place_of(n: Node) as text := if line_of(n) == ø then "" else "line ${line_of(n)}:${column_of(n)}: "
+# `line 2:1: `, or nothing for code without a position
+place_of(code: Node) as text := if line_of(code) == ø then "" else "line ${line_of(code)}:${column_of(code)}: "

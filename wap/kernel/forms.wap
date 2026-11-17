@@ -1,16 +1,23 @@
 # The kernel: the forms wap's emitter understands, and nothing else (notes/kernel.md).
 #
-# Each form is a pattern type of Node: one declaration builds the form (`Call(f, args)`), tests it (`n is Call`),
-# takes it apart (`match n { Call(f, args) => … }`) and reads it (`n.callee` of a parameter `n: Call`). Everything a
-# program writes is rewritten into these forms before the emitter sees it (wap/core/rules/lowering.wap).
+# Each form is a class with typed fields (user 2026-11-17: proper classes for the kernel). A program's code is Node,
+# the notation; the kernel is records, and the lowering (core/rules/lowering.wap) is where one becomes the other. A
+# form is built by its class, `Call(print, [Literal("Hello")])`, tested, `form is Call`, taken apart by its fields,
+# `Call(called, arguments) => …` (the leading fields by place) or `Call{arguments} => …` (any by name), and read,
+# `form.called`.
 #
-# Milestone 1 (`print "Hello"`) needs two forms; the others of notes/kernel.md join as programs need them. A form's
-# head is its own type name, `(Call print ["Hello"])`: readable when printed and never a keyword. Only the lowering
-# builds kernel nodes, so a program's own `(Call …)` group never reaches the emitter as one.
-# Literals (texts, numbers) are the Node cases themselves and need no declaration.
+# Every form's last field, `origin`, is the code it was lowered from: where the program wrote it, and what an error
+# quotes. The stage walker (core/stage.wap) fills it in; nothing else sets it. It is the last field so that places in
+# a pattern bind the form's own fields; each class declares it, since an inherited field would come first.
+#
+# Milestone 1 (`print "Hello"`) needs three forms; the others of notes/kernel.md join as programs need them.
 
-# a call of a function with its arguments, a [list] of nodes: `print "Hello"` is Call(print, ["Hello"])
-type Call < Node = (Call callee: Node arguments: Node)
+# a value written in the program: a text, a number
+class Literal { value: Node; origin: Node = ø }
+# a call of a function with its arguments, each a form: `print "Hello"` is Call(print, [Literal("Hello")])
+class Call { called: Node; arguments: list; origin: Node = ø }
+# type Call < Node = (Call callee: Symbol arguments: list)
+# type Call < Node { tag: Symbol arguments: list }
 
-# statements run in order, a [list] of nodes: a program, a block
-type Seq < Node = (Seq statements: Node)
+# forms run in order: a program, a block
+class Seq { statements: list; origin: Node = ø }

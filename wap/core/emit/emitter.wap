@@ -23,10 +23,14 @@ emitted(program: Seq) as Module := {
 }
 
 # the instructions of a kernel form
-code(n: Node, m: Module, output: int) as list := match n {
+code(form, m: Module, output: int) as list := match form {
 	Seq(statements) => statements.flat_map(statement => code(statement, m, output))
-	Call(callee, arguments) => if callee == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused(n, "the emitter takes no call but print of a text yet")
-	_ => refused(n, "not a kernel form")
+	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and is_text_literal(arguments#1) then printed(arguments#1.value, m, output) else refused(form.origin, "the emitter takes no call but print of a text yet")
+	_ => refused(form.origin, "not a kernel form")
+}
+is_text_literal(form) as bool := match form {
+	Literal(value) => value is text
+	_ => no
 }
 
 # a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)

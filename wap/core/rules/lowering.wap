@@ -3,18 +3,19 @@
 #
 # This is where the rule engine will run its three stages (shape, signature, kind). Until it exists, the few
 # spellings milestone 1 needs are lowered here by hand:
-#   print "Hello"            a phrase: a word, then its arguments → Call(print, ["Hello"])
+#   "Hello", 3               a value → Literal("Hello")
+#   print "Hello"            a phrase: a word, then its arguments → Call(print, [Literal("Hello")])
 #   print "a"; print "b"     statements → Seq([…, …])
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
 # the program as one Seq of its statements
 lowered_program(program: Node) as Seq := staged(program, whole => Seq(statements_of(whole).map(lowered)))
 
-# a form as kernel, built where the form was written (core/stage.wap)
-lowered(n: Node) as Node := staged(n, lowered_form)
-lowered_form(n: Node) as Node := match n {
-	Text(value) => n
-	Number(value) => n
+# code as a kernel form, its origin the code (core/stage.wap)
+lowered(n: Node) := staged(n, lowered_form)
+lowered_form(n: Node) := match n {
+	Text(value) => Literal(n)
+	Number(value) => Literal(n)
 	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
 	_ => not_lowered(n)
 }
