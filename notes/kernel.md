@@ -2,7 +2,7 @@
 
 The kernel is the small language at the bottom of wap, the new compiler: a dozen forms such as `If`, `While`, `Call`
 and `Define`, plus the primitives. The emitter, which writes the wasm bytes, understands these forms and nothing else.
-Everything a program may write (`for`, `unless`, `x if c`, `n times`, `match`, operators, units, ranges …) is
+Everything a program may write (`for`, `unless`, `a if c`, `n times`, `match`, operators, units, ranges …) is
 rewritten into kernel forms before the emitter sees it.
 
 Think of it as a better Lisp with maps and types: a handful of special forms, and everything else is a function
