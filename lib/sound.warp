@@ -382,6 +382,8 @@ class Rest {
 	format as text := "rest" + length_text(length)
 }
 rest() := Rest()
+// pause, taking nothing, is a rest too: play(pause, 1s) is a second of silence (pause job holds a task, lib/tasks.warp)
+pause() := rest
 // how many times the play's duration a step holds, 1 for a plain pitch
 held_length(pitch) := if pitch is Note or pitch is Chord or pitch is Rest then pitch.length else 1
 // the melody words on lists: euclid(C5, 3, 8) three C5 spread over eight steps as evenly as they go, the rest rests;
