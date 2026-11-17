@@ -238,7 +238,7 @@ group_like(n: Node, items: list) as Node := match n {
 
 # the symbol `word`
 is_word(n: Node, word: text) as bool := n == symbol(word)
-# `pattern Definition = Key(head, Op.Define, body)`, a named pattern (node_matches.warp)
+# `pattern Definition = Key($head, Op.Define, $body)`, a named pattern (node_matches.warp)
 is_pattern_definition(n: Node) as bool := is_group(n) and #n == 2 and is_word(n#1, "pattern") and is_key(n#2, Op.Assign)
 # the call `name(arguments…)` a pass makes: its name is the word, never a local of the program named so (a local
 # `same = …` beside the `same(op, Op.Ne)` an enum's equality became, card implicit-word-binding)
