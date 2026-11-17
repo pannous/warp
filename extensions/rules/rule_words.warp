@@ -1491,12 +1491,12 @@ evident_text(name: Node, program: Node) as any := {
 	if #given > 0 and given.all(value => value is text) then yes else ø
 }
 
-# the loop's object, when for walks it by next() (extensions/class_methods/iterators.warp): an instance the rules
-# know (`Counter(3)`, `c = Counter(3)`), a call of a function giving one, or a name assigned such a call; ø otherwise
+# the loop's object, when for walks it by next() (extensions/class_methods/iterators.warp): an instance of a class
+# with next() (`Counter(3)`, `c = Counter(3)`), a call of a function giving one, or a name assigned such a call; ø
+# otherwise, so an instance of any other class is walked by its items (`for x in 1 to n` of a Range)
 iterated_object(object: Node, program: Node) as any := {
-	if has_property(object, "instance") { return object }
 	if object is symbol { return if made_instances.has(name_of(object)) then object else ø }
-	if is_group(object) and is_called_name(object) and instance_makers.has(name_of(object#1)) then object else ø
+	if is_group(object) and is_called_name(object) and (instance_makers.has(name_of(object#1)) or walked_classes.has(name_of(object#1))) then object else ø
 }
 
 rule_words = {
