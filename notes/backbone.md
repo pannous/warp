@@ -64,20 +64,26 @@ The languages, each a set of Node shapes:
   - atoms: `Number` (int, or float when written with a point or a negative exponent; `-1` glued at an item's start
     is a negative Number, `a-1` is not), `Char` (a text of one code point), `Text` (escapes read; a template's `${…}`
     and an extension's `\:name` kept as written), `Symbol` (a word, or an operator: a glyph with its repeats and one
-    `=`, `<=` `==` `...`; `=`, `:=`, `=>`, `and`, `yes`, `null` are all plain Symbols);
-  - `Key(key, Op.Colon, value)`, the only key: `a:1`, `a: b c`, `a b : c`, `a:` before an indented block;
+    `=`, `<=` `==` `...`; `:=`, `=>`, `and`, `yes`, `null` are all plain Symbols);
+  - three keys (reader.md Q1, Q11): `Key(key, Op.Colon, value)` and `Key(key, Op.Assign, value)` by the same rules,
+    `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and `x = a + b` all before and after;
+    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
   - `List(items, bracket, separator)` in three uses: a phrase, items with blanks between, separator Space
-    (`a + b` is `[a, +, b]`); a glued run, items with no blank between, separator None (`f(x)` is `[f, (x)]`,
-    `a.b`, `3ms`, `-x`); a bracketed list, Curly, Square or Round, with the loosest separator inside. Separators
-    cascade (glue < space < `,` < `;` < tab < newline), the loosest splitting first; a list never has one item
-    unless bracketed. An indented block is a Curly list with separator Newline, glued to the line before it;
+    (`a + b` is `[a, +, b]`); a glued run of no head and bracket, separator None (`a.b`, `3ms`, `a-b`, `-x`); a
+    bracketed list, Curly, Square or Round, with the loosest separator inside. Separators cascade (glue < space <
+    `,` < `;` < tab < newline), the loosest splitting first; a list never has one item unless bracketed. An
+    indented block is a Curly list with separator Newline, glued to the line before it like any bracket;
   - `Empty` for an empty text and for `{}` and `()` (wiki/node.md: no items is the empty list whatever the bracket).
     Facts in the metadata (core/stage.wap): positions; `comment` (a comment, on the next atom or on the atom ending
-    the line); `meta` (the `@annotations` before an item, without `@`); `warning` (a duplicate key in `{…}`). No `True`, `False`, `Type`, `Data` or `Error`: a text it cannot read is refused.
+    the line); `meta` (the `@annotations` before an item, without `@`); `warning` (a duplicate key in `{…}`). No
+    `True`, `False`, `Type`, `Data` or `Error`: a text it cannot read is refused.
 - **operated:** notation in which every operator phrase is read by the table: `a + b * c` is
   `(Call + a (Call * b c))`, every alias replaced by its canonical word (`≤` → `<=`), a prefix or postfix operator
   a `Call` of one argument, by the one minus rule. A mix of unrelated groups is refused. Juxtaposition that is no
-  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2.
+  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2. `=` keys are the call
+  `(Call = x 1)`; a glue key `Key(f, Op.None, (args))` stays, for stage 2 to read as a call, an index or a
+  constructor. Until the rule engine runs, core/rules/lowering.wap reads exactly these: a glued call, an operator
+  call (`=` → Set, `:=` → Define, `=>` → Fn), a phrase headed by a word, `{…}`, the literal words `yes` `no` `ø`.
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each definition's `Meta` names what it declares, and the program's

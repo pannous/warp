@@ -8,6 +8,7 @@ written(n: Node) as text := match n {
 	Call(called, arguments) => call_text(n, called, arguments)
 	List(items, bracket, separator) => list_text(items, bracket, separator)
 	Key(left, Op.Colon, right) => key_text(left) + ": " + formatted(right)
+	Key(head, Op.None, group) => formatted(head) + (if group == ø then "()" else formatted(group))
 	Number(value) => if value is float and not "${value}".contains(".") and not "${value}".contains("e") then "${value}.0" else "${value}"
 	Text(value) => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 	Symbol(name) => name
