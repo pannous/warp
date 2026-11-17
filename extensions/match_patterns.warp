@@ -286,7 +286,8 @@ read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
 		return ø
 	}
 	p.at = blank_end(p, equals + 1)
-	body = expression(p, 0)
+	# an expression, not a type's fields: `cond: Node yes: Node` stays one group of three typed holes
+	body = with_field(p, "type_body", false, () => expression(p, 0))
 	List([symbol(pattern_keyword), Key(name, Op.Assign, if base == node_type then node_pattern(body) else body)], Bracket.None, Separator.Space)
 }
 
@@ -317,8 +318,9 @@ pattern_constructor(statement: Node) as list := {
 	if #holes == 0 or not is_buildable(pattern) { return [] }
 	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, built_value(pattern))]
 }
-is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(part => part is symbol and is_open_word(name_of(part)))
-is_open_word(name: text) as bool := name == other_arm or name.starts_with("*") or name.starts_with("..")
+is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(is_open_part)
+# `_`, a rest word `*xs`, or an operator missing a side, the rest `..` of `[1, ..]`
+is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") else part is key and (key_of(part) == ø or value_of(part) == ø)
 # the value the pattern describes: each typed name `a: int` (in code `$a: int`) as the name alone
 built_value(pattern: Node) as Node := bottom_up(pattern, part => match part {
 	Key(Symbol(name), Op.Colon, Symbol(kind)): if is_hole_word(name) then symbol(name) else part
