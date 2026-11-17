@@ -10,11 +10,11 @@ is! 'type Pair < list = [a: int, b: int]; match [3, 4] { Pair(x, y) => x * y; _ 
 is! 'type Pair < list = [a: int, b: int]; sum(p: Pair) := p.a + p.b; sum([3, 4])' 7
 
 # code: a body of Node other than a node case is quoted, its holes the parts of the code
-is! 'type If < Node = (choose cond: Node yes: Node no: Node); text(If(parse("c"), parse("1"), parse("2")))' '(choose c 1 2)'
-is! 'type If < Node = (choose cond: Node yes: Node no: Node); parse("(choose c 1 2)") is If' true
-is! 'type If < Node = (choose cond: Node yes: Node no: Node); parse("(pick c 1 2)") is If' false
-is! 'type If < Node = (choose cond: Node yes: Node no: Node); match parse("(choose c 1 2)") { If(c, _, no) => no; _ => 0 }' 2
-is! 'type If < Node = (choose cond: Node yes: Node no: Node); yes_of(n: If) := n.yes; yes_of(parse("(choose c 1 2)"))' 1
+is! 'type If < Node = (choose cond: Node then_part: Node else_part: Node); text(If(parse("c"), parse("1"), parse("2")))' '(choose c 1 2)'
+is! 'type If < Node = (choose cond: Node then_part: Node else_part: Node); parse("(choose c 1 2)") is If' true
+is! 'type If < Node = (choose cond: Node then_part: Node else_part: Node); parse("(pick c 1 2)") is If' false
+is! 'type If < Node = (choose cond: Node then_part: Node else_part: Node); match parse("(choose c 1 2)") { If(c, _, other) => other; _ => 0 }' 2
+is! 'type If < Node = (choose cond: Node then_part: Node else_part: Node); then_of(n: If) := n.then_part; then_of(parse("(choose c 1 2)"))' 1
 
 # a node case
 is! 'type Definition < Node = Key(head: Node, Op.Define, body: Node); parse("g := 1") is Definition' true

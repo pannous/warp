@@ -43,7 +43,7 @@
 # backend understands is one such type (notes/backbone.md "Kernel forms are narrowed types of Node with a pattern
 # body"):
 #
-#   type If < Node = (if cond: Node yes: Node no: Node)
+#   type If < Node = (if cond: Node then_part: Node else_part: Node)
 #   If(c, a, b)                            // builds the code `(if c a b)`
 #   match n { If(c, a, b) => … }           // takes such code apart
 #
@@ -254,7 +254,7 @@ tested_subject(test: Node, patterns: map) as Node? := {
 # and a condition (`type Even < int where …`):
 #
 #   type Pair < list = [a: int, b: int]
-#   type If < Node = (if cond: Node yes: Node no: Node)
+#   type If < Node = (if cond: Node then_part: Node else_part: Node)
 #   type Definition < Node = Key(head: Node, Op.Define, body: Node)
 #
 # This is the core mechanism of the new compiler: each kernel form is a pattern type of Node, the emitter's input is
@@ -286,13 +286,13 @@ read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
 		return ø
 	}
 	p.at = blank_end(p, equals + 1)
-	# an expression, not a type's fields: `cond: Node yes: Node` stays one group of three typed holes
+	# an expression, not a type's fields: `cond: Node then_part: Node` stays one group of typed holes
 	body = with_field(p, "type_body", false, () => expression(p, 0))
 	List([symbol(pattern_keyword), Key(name, Op.Assign, if base == node_type then node_pattern(body) else body)], Bracket.None, Separator.Space)
 }
 
 # The pattern a body of Node stands for. A node case, `Key(head: Node, Op.Define, body: Node)`, is matched case by case
-# as written; any other body is code, `(if cond: Node yes: Node no: Node)`, quoted as `data((if $cond $yes $no))`.
+# as written; any other body is code, `(if cond: Node then_part: Node else_part: Node)`, quoted as `data((if $cond $then_part $else_part))`.
 # A hole typed Node says nothing more than that it is a part of the node, so it becomes the bare name.
 node_pattern(body: Node) as Node := if case_pattern(body) != ø then node_holes(body, "") else List([quote_symbol, node_holes(body, "$")], Bracket.Round, Separator.None)
 node_holes(body: Node, mark: text) as Node := bottom_up(body, part => match part {
@@ -300,7 +300,7 @@ node_holes(body: Node, mark: text) as Node := bottom_up(body, part => match part
 	_: part
 })
 
-# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((if $cond $yes $no))` → cond, yes, no.
+# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((if $cond $then_part $else_part))` → cond, yes, no.
 # These are the type's fields and the constructor's parameters. A capitalized word (`Key`, `Op.Define`) is a case, a
 # type or an enum, and `_` binds nothing: neither is a name.
 pattern_holes(pattern: Node) as list := structural_names(pattern, no).filter(is_hole_word)
@@ -335,7 +335,7 @@ typed_parameter(pattern: Node, hole: text) as Node := {
 }
 
 # The arm `If(c, _, e) => …`: the pattern with its names, in order, renamed to the arm's, so `c` binds cond and `e`
-# binds no. A place in a value pattern may hold any pattern (`Pair(1, y)`); a hole of code takes a name or `_`.
+# binds else_part. A place in a value pattern may hold any pattern (`Pair(1, y)`); a hole of code takes a name or `_`.
 placed_holes(pattern: Node, places: list) as Node := {
 	holes = pattern_holes(pattern)
 	if #places != #holes { raise "the pattern binds " + #holes + " names, " + holes.join(", ") + ": an arm names each by its place" }
