@@ -1,7 +1,7 @@
 # The new backbone: first principles and plan
 
 Preliminary draft, 2026-11-17, from the user's decisions in the supervisor session. The agent that builds the
-backbone starts from this file with fresh context. Inputs: notes/kernel.md (the 13-form kernel, the census, what rule
+backbone starts from this file with fresh context. Read first: notes/first_principles.md. Inputs: notes/kernel.md (the 13-form kernel, the census, what rule
 patterns need), notes/layers.md, wiki/Philosophy.md, wiki/guiding-principles.md, notes/taste.md.
 
 ## Preamble: rules for every agent on this work
@@ -27,80 +27,8 @@ patterns need), notes/layers.md, wiki/Philosophy.md, wiki/guiding-principles.md,
 
 ## First principles
 
-The condensed philosophy of the wiki. The two groups say what warp is and how its compiler is built. Every design
-choice cites the principle it follows.
-
-### The language
-
-1. **Data and code are one notation.** One reader reads warp data and warp programs alike: atoms, keys, groups,
-   operators, juxtaposition. Code is data until it runs (`data x` quotes it). This is the Lisp idea with a modern
-   notation.
-2. **Many spellings, one meaning.** Every spelling programs may write stays valid. Aliases are one table, alias →
-   canonical word, and everything warp prints uses the canonical word. Spelling never changes meaning; only an
-   explicit, printed reading may (`[a -1]` is formatted as `[a, -1]`).
-3. **One general rule over special cases.** A form that falls out of the general rules is welcome, however esoteric
-   (`"x" * yes`). A form that needs its own rule for one phrase is bloat. A fix holds for every sibling of the example
-   that showed the problem.
-4. **Refuse, never guess.** Where code reads two ways, or a form is unknown, the compiler refuses with a fix-it that
-   names the readings. A plausible wrong value is the worst bug.
-5. **Meaning is typed.** Units are values (`3ms`, `5km == 5000m`). A name can be found from the expected type
-   (`on escape` finds `Key.escape`). Typing is optional to write and always there to the compiler.
-6. **Plain warp first.** A feature is a function, an enum, a class, an overload or a block parameter in the library
-   whenever plain warp can say it. A rule is only for meaning plain warp cannot express.
-7. **Vocabulary is library.** The names and values of a domain (keys, units, colors, months) are declared in lib/.
-   The core holds mechanisms only; a core diff that adds names of a domain shows a mechanism is missing.
-8. **Familiar conventions first.** Where warp has no stated reason to differ, the meaning people know from Julia,
-   shells and mainstream languages wins.
-9. **Progressive disclosure.** A beginner writes `print 1 + 2`. The machinery (types, rules, operators) is there when
-   wanted, never in the way.
-10. **Less state.** Immutable values by default (ranges, texts, records). Globals and mutation are allowed but
-    discouraged, and visible where they happen.
-
-### The compiler
-
-11. **Stratified stages, each with one job:**
-
-    reader → spelling rules → declaration prescan → binding analysis → typing → typed rules → kernel → emitter
-
-    Each stage's output language is written down. A stage sees only its own input language.
-12. **The emitter accepts only the kernel and refuses anything else loudly.** This is the central guard: no surface
-    form, no hidden word, no "just this one" shape reaches the emitter.
-13. **Kernel forms are argued one by one.** There is no number limit; notes/kernel.md's 13 forms are the starting
-    candidates. Each form needs a written case:
-    - why it can't be a rule into the other kernel forms or a primitive;
-    - what it costs in the emitter;
-    - which surface forms lower to it.
-
-    The user discusses each case before the form exists.
-14. **Every surface form is a rule or a library function.** `for`, `unless`, `n times`, comprehensions, ranges,
-    `match` sugar, units and string interpolation never touch the emitter.
-15. **One binding analysis.** Scopes, shadowing, captures and globals are resolved once, in one stage, and every
-    later stage reads its result. Today seven passes each redo it. Bug that shows it: a local `push` in one function
-    breaks `.push` in another.
-16. **One notation for built-in operations.** Every built-in is a declared prototype in the library, typed like any
-    function. Its body is a primitive: a wasm instruction or a runtime word.
-
-    ```
-    operator +(a: i64, b: i64) as i64 = wasm i64.add
-    operator +(a: text, b: text) as text = runtime concat
-    ```
-
-    Overloads resolve by type. A resolved built-in lowers straight to its wasm instruction, so there is no call
-    overhead. The compiler knows built-ins only through these declarations, never by name in core code.
-17. **Rules are semantic pattern matching.** A rule's pattern may match shape, declared signatures or inferred types,
-    and that choice puts the rule in its stage (user decision rule-stages). A rule's output must type-check.
-    - Hygiene: names a rule introduces never capture the user's names.
-    - Positions: every node a rule builds keeps the source position of what it replaced, so errors point at user
-      code.
-    - Termination: rules terminate by construction. Each step lowers toward the kernel, and a cycle is refused
-      when the rules are loaded.
-    - Rules on inferred types fire only on settled types.
-18. **Rules are found by their head.** Matching is indexed by the pattern's head word or operator and compiled, so
-    many rules cost almost nothing. The compiler's speed is part of its design.
-19. **Mechanisms, not cases.** core/ holds the machinery (reader, binding, typing, rule engine, emitter, the runtime
-    the compiler itself needs) and no domain names, surface keywords or one-off conditions.
-20. **Elegance first, never repeat.** The most general, most beautiful code is the target. A list, condition or rule
-    written twice becomes a name.
+notes/first_principles.md: the core identities (functions = operators, `f(x)` = `x.f`, overloads, `@meta`,
+aliases), the language and compiler principles, and how agents work by them. Every design choice here cites one.
 
 ## Layers
 
