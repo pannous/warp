@@ -278,7 +278,7 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # its body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
-	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then ø else frame.returns#1) else body_type
+	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
 	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and same_type(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }

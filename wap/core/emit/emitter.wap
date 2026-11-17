@@ -25,7 +25,10 @@ use "../../kernel/forms.wap"
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
 # the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
-NEVER = ["never"]
+NEVER_WORD = "never"
+NEVER = [NEVER_WORD]
+# the system interface the program prints and exits through
+WASI = "wasi_snapshot_preview1"
 # the labels wasm's structured instructions open, so a jump can count how far out its target is
 EXIT_LABEL = "exit"
 NEXT_LABEL = "next"
@@ -39,7 +42,7 @@ FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 # 0.10000000000000001).
 emitted(program: Block) as Module := {
 	m = Module()
-	p = Program(m, imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32]))
+	p = Program(m, imported(m, WASI, "fd_write", [I32, I32, I32, I32], [I32]), imported(m, WASI, "proc_exit", [I32], []))
 	f = Frame()
 	body = code(program, p, f)
 	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
@@ -53,6 +56,8 @@ emitted(program: Block) as Module := {
 class Program {
 	m: Module
 	output: int
+	# the function that ends the program with a status
+	exit: int
 	functions: list = []
 	globals: list = []
 	# the Defines whose body is not emitted yet
@@ -224,7 +229,7 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 parameters_of(parameters: List) as list := match parameters { List(items, bracket, separator) => items }
 # The type a function gives back: its body's value and every return's, all of one type
 result_type(name: Node, body: Code, f: Frame) as list := {
-	result = if body.type == NEVER then (if f.returns is empty then [] else f.returns#1) else body.type
+	result = if body.type == NEVER then (if f.returns is empty then NEVER else f.returns#1) else body.type
 	for returned in f.returns { if returned != result { refused(name, "this function gives back values of different types") } }
 	result
 }
@@ -283,13 +288,15 @@ fetched(held: Placed) as list := if held.local then instruction(LOCAL_GET, [held
 # a value stored, and left on the stack
 kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
 
+# code that never finishes ends unreachable, so wasm types what follows as any
+finished(c: Code) as Code := if c.type == NEVER then Code(NEVER, c.instructions + UNREACHABLE) else c
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = arguments.map(argument => code(argument, p, f))
 	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
-	Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index]))
+	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
 }
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	binding = binding_of(called)
