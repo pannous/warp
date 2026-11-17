@@ -43,14 +43,20 @@ class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separa
 
 class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty }
 
-# the notation of a text: its one item, the list of its items, Empty for none; text it cannot read is refused where
-# it was written (core/errors.wap)
-notation(source: text) as Node := {
+# the notation of a text read from a file: its one item, the list of its items, Empty for none, each node marked with
+# the file (core/stage.wap file_of); text it cannot read is refused where it was written (core/errors.wap)
+notation(source: text, file: text) as Node := {
 	code = source.codepoints
 	r = Reader{code: code, n: code.length}
 	read_tokens(r)
-	if r.error != "" { refused(r.failure, r.error) }
-	built(r.tokens)
+	if r.error != "" { refused(filed(r.failure, file), r.error) }
+	filed(built(r.tokens), file)
+}
+# n and each part of it that has a position, marked with the file it was read from
+filed(n: Node, file: text) as Node := {
+	if n == ø { return n }
+	whole = refitted(with_parts(n, part => filed(part, file)), n)
+	if line_of(n) == ø then whole else with_fact(whole, SOURCE_FILE, Text(file))
 }
 
 # ── pass 1: tokens ──────────────────────────────────────────────────────────────────────────────────────────────────

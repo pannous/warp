@@ -17,8 +17,10 @@ pattern Call = (Call $called: Symbol $arguments...: Node)
 pattern Block = (Block $statements...: Node)
 
 # a named definition, a function or a constant, its parameters a list because the body follows them: `f(x) := x * 2`
-# is Define(f, [x], x * 2), (Define f [x] …); `global` and other annotations are facts in its Meta (core/stage.wap)
-pattern Define = (Define $name: Symbol $parameters: List $body: Node)
+# is Define(f, [x], x * 2), (Define f [x] …); `global` and other annotations are facts in its Meta (core/stage.wap).
+# Its name carries the result type when the program writes one, as a parameter does: `f(n: int): int := n` is
+# Define((f: int), [n: int], n)
+pattern Define = (Define $name: Node $parameters: List $body: Node)
 
 # a function value without a name: `x => x + 1`, `{ it * 2 }`, `|x| …` are Fn([x], x + 1), (Fn [x] …)
 pattern Fn = (Fn $parameters: List $body: Node)

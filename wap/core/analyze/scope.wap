@@ -32,11 +32,12 @@ library_word(declaration: Node) as Definition := match declaration { Key(name, O
 bound(n: Node, scope: list, depth: int) as Node := match n {
 	Symbol(name) => resolved(n, scope, depth)
 	Block(statements) => refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), n)
-	Define(name, parameters, body) => with_captures(refitted(Define(resolved(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
+	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Number(value) => n
 	Text(value) => n
 	Char(value) => n
@@ -53,18 +54,13 @@ program_scope(scope: list) as list := scope.filter(definition => definition.dept
 # A function's parameters and body, one depth further in than the function's definition, the body seeing the
 # parameters before the names around it
 parameters_bound(parameters: List, depth: int) as Node := match parameters {
-	List(items, bracket, separator) => refitted(List(items.map(p => parameter_bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
+	List(items, bracket, separator) => refitted(List(items.map(p => bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
 }
 body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + scope, depth + 1)
 parameter_definitions(parameters: List, depth: int) as list := match parameters {
-	List(items, bracket, separator) => items.map(p => Definition(text(parameter_symbol(p)), BOUND_PARAMETER, parameter_symbol(p), depth))
+	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), BOUND_PARAMETER, parameter_name(p), depth))
 }
 
-# a parameter with the facts on its name, the type of a typed one, `x: int`, left as it is
-parameter_bound(parameter: Node, scope: list, depth: int) as Node := match parameter {
-	Key(name, Op.Colon, type) => refitted(Key(parameter_bound(name, scope, depth), Op.Colon, type), parameter)
-	_ => resolved(parameter_symbol(parameter), scope, depth)
-}
 # A function with the fact `captures`: the names of the functions around it that its body reads, a nested function's
 # reads included (the function passes them on), each defining name once in the order first read; [] when it captures
 # nothing. A closure is built from them (core/emit/closures.wap).
@@ -93,11 +89,7 @@ identical_in(n: Node, nodes: list) as bool := {
 }
 
 # the name a parameter defines: `x`, or the x of `x: int`
-parameter_symbol(parameter: Node) as Node := match parameter {
-	Symbol(name) => parameter
-	Key(name, Op.Colon, type) => parameter_symbol(name)
-	_ => refused(parameter, "a parameter is a name, or a name and its type")
-}
+parameter_name(parameter: Node) as Node := if declared_name(parameter) is symbol then declared_name(parameter) else refused(parameter, "a parameter is a name, or a name and its type")
 
 # The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
 # not see yet. Nested Blocks and functions keep theirs; a Set inside another form (an If's branch) is the Block's.
@@ -107,8 +99,8 @@ defined_in(statements: list, scope: list, depth: int) as list := {
 	made
 }
 definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
-	Define(name, parameters, body) => [Definition(text(name), BOUND_FUNCTION, name, depth)]
-	Set(place, value) => assigned_variables(n, place, scope, depth) + definitions_made_by(value, scope, depth)
+	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
+	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
 	Call(called, arguments) => defined_in(arguments, scope, depth)
