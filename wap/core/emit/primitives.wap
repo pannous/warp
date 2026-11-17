@@ -9,6 +9,7 @@ use "emitter.wap"
 use "values.wap"
 use "wasm.wap"
 use "../errors.wap"
+use "../stage.wap"
 
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
 # answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
@@ -18,39 +19,30 @@ IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
 BYTES_ADDRESS = 16
 
-# The wasm instructions a Prim names, each taking two values of one type: operation → [opcode, the type of both
-# operands, the type it gives]. Comparisons give a yes/no, an i32.
+# The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
+# its built-in's definition writes (wap/preload/prelude.wap).
 INSTRUCTIONS = {
-	"i64_add": [I64_ADD, I64, I64], "i64_sub": [I64_SUB, I64, I64], "i64_mul": [I64_MUL, I64, I64],
-	"i64_eq": [I64_EQ, I64, I32], "i64_ne": [I64_NE, I64, I32], "i64_lt_s": [I64_LT_S, I64, I32],
-	"i64_gt_s": [I64_GT_S, I64, I32], "i64_le_s": [I64_LE_S, I64, I32], "i64_ge_s": [I64_GE_S, I64, I32],
-	"f64_add": [F64_ADD, F64, F64], "f64_sub": [F64_SUB, F64, F64], "f64_mul": [F64_MUL, F64, F64],
-	"f64_div": [F64_DIV, F64, F64], "f64_eq": [F64_EQ, F64, I32], "f64_ne": [F64_NE, F64, I32],
-	"f64_lt": [F64_LT, F64, I32], "f64_gt": [F64_GT, F64, I32], "f64_le": [F64_LE, F64, I32], "f64_ge": [F64_GE, F64, I32]
+	"i64_add": I64_ADD, "i64_sub": I64_SUB, "i64_mul": I64_MUL, "i64_eq": I64_EQ, "i64_ne": I64_NE,
+	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
+	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
+	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE
 }
+# The operations a helper function of the module performs: operation → the function that builds the helper
+HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function}
 
-# the code of a primitive, its arguments checked against what the operation takes
+# the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
+# built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
 	name = text(operation)
-	if INSTRUCTIONS.has(name) { return instruction_code(form, arguments, INSTRUCTIONS[name]) }
-	a_text = nullable(text_type(p.m))
-	if name == "print_text" { return helper_call(form, arguments, [a_text], [], helper(p, name, printing_function)) }
-	if name == "text_equal" { return helper_call(form, arguments, [a_text, a_text], I32, helper(p, name, text_equality_function)) }
-	if name == "text_joined" { return helper_call(form, arguments, [a_text, a_text], a_text, helper(p, name, joining_function)) }
+	operands = arguments.flat_map(argument => argument.instructions)
+	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
+	if HELPERS.has(name) { return Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])])) }
 	refused(form, "no primitive of this name")
 }
-
-# one wasm instruction on two values of one type
-instruction_code(form: Node, arguments: list, row: list) as Code := {
-	checked_arguments(form, arguments, [row#2, row#2])
-	Code(row#3, arguments.flat_map(argument => argument.instructions) + row#1)
-}
-checked_arguments(form: Node, arguments: list, takes: list) := if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
-
-# a call of a helper that takes these types and gives a value of that type ([] for none)
-helper_call(form: Node, arguments: list, takes: list, gives: list, index: int) as Code := {
-	checked_arguments(form, arguments, takes)
-	Code(gives, arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
+# the wasm type of the value a primitive gives, [] when its definition writes none
+given_layout(form: Node, p: Program) as list := {
+	type = fact_of(form, TYPE)
+	if type == ø then [] else layout_of(type, p.m) ?? refused(form, "the emitter has no value layout for this type yet")
 }
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
