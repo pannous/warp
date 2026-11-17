@@ -231,6 +231,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
+- **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
 
 ## Debts
 
