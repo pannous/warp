@@ -1,8 +1,9 @@
 # Typed rules (stage 3): typed kernel → typed kernel (notes/backbone.md "Stage languages", decision hole-types).
 #
 # A rule with a hole of a value type, `$xs: list<int>` or `$f: (float) -> float`, fires on code whose type is settled
-# (core/analyze/types.wap fits_type); what it wrote is bound and typed again, so its output is checked like any code,
-# and the rules run again until none fires.
+# (core/analyze/types.wap fits_type). Its pattern and template are lowered like the program (core/rules/stages.wap);
+# what it wrote is bound and typed again, so its output is checked like any code, and the rules run again until none
+# fires.
 #
 #   rule twice $x: int => $x + $x      a rule only ints take
 #   twice 3                            3 + 3, typed again

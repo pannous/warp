@@ -55,9 +55,12 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 	normal = normalized(pattern)
 	output = normalized(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
+	typed = asks_value_type(compiled_pattern(normal))
+	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
+	if typed { normal = lowered(normal); output = lowered(output) }
 	matcher = compiled_pattern(normal)
 	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))
-	rules = if asks_value_type(matcher) then typed_rules else shape_rules
+	rules = if typed then typed_rules else shape_rules
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
 	rules.by_head[rule.head].add(rule)
 }

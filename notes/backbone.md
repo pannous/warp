@@ -236,9 +236,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
   versions typing made before, not a new one.
-- **A typed rule's pattern is written in kernel form** (`rule (Call twice $x: int) => …`), not in the spelling the
-  program uses (`twice $x: int`): stage-3 patterns match the typed kernel as it is. Paid off when patterns are lowered
-  like the code they match.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
