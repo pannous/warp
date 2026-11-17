@@ -6,12 +6,12 @@
 #
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
-#   lower     notation → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   lower     notation → kernel     core/rewrite/lowering.wap, by hand until the rule engine runs
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
 use "core/parse/reader.wap"
-use "core/rules/lowering.wap"
+use "core/rewrite/lowering.wap"
 use "core/emit/wasm.wap"
 use "core/emit/emitter.wap"
 

@@ -2,7 +2,7 @@
 #
 # Each form is a pattern type of Node: one declaration builds the form (`Call(f, args)`), tests it (`n is Call`),
 # takes it apart (`match n { Call(f, args) => … }`) and reads it (`n.callee` of a parameter `n: Call`). Everything a
-# program writes is rewritten into these forms before the emitter sees it (wap/core/rules/lowering.wap).
+# program writes is rewritten into these forms before the emitter sees it (wap/core/rewrite/lowering.wap).
 #
 # Milestone 1 (`print "Hello"`) needs two forms; the others of notes/kernel.md join as programs need them. The heads
 # are plain words: only the lowering builds kernel nodes, so a program's own `(call …)` group never reaches the
