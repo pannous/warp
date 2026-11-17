@@ -213,3 +213,18 @@ written_types(definition: Node) as list := parameters_in(definition).map(declare
 
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
+
+# Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
+# `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.
+# A node not typed yet fits nothing, so a typed rule fires only on settled types; a rest hole asks it of each item.
+fits_type(n: Node, wanted: Node) as bool := {
+	held = type_held(n)
+	held != ø and same_type(held, wanted)
+}
+fit_each(items: list, wanted: Node) as bool := items.all(item => fits_type(item, wanted))
+type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
+# two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
+same_type(a: Node, b: Node) as bool := match b {
+	Symbol(name) => a is symbol and text(a) == name
+	_ => a == b
+}
