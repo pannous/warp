@@ -213,3 +213,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 2026-11-16 spaced-hash-count (user, card kitchensink-broken-forms): a blank before `#` and none after is always the count (`test #letters == 3`, `xs #1` is no index any more); index is glued `xs#1`; print's exception goes.
 - 2026-11-16 trailing-operator-indent (user, card kitchensink-broken-forms): a line ending in an operator continues only onto a deeper-indented line (`total := fold +` then `total(xs)` → two lines).
 - 2026-11-17 pause-overload (user, card pause-playback-timing): pause is told apart by parameter and result type: `pause` taking nothing returns a rest Note (play(pause, 1s)); `pause job` holds a task.
+- 2026-11-17 range-value (user, range pilot): every range is an immutable Range value, ints too: `1..5` shows 1..5, type Range; for/map/sum/xs[r] walk it, list(1..5) makes the list. Core ~−40 lines.
