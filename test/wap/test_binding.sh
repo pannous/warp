@@ -10,4 +10,6 @@ print "Hello"')" "Hello"
 # a typed parameter binds its name, its type left as written
 check "a typed parameter" "$(ran typed 'keep(x: int) := { y = x }
 print "Hello"')" "Hello"
+# a name neither the program nor the library defines is an error where it was written, never a guess
+check "a name nothing defines" "$(ran nowhere 'print greeting' | grep -o 'line [0-9]*:[0-9]*: nothing defines this name')" "line 1:7: nothing defines this name"
 exit $((failures > 0))
