@@ -17,7 +17,6 @@
 # the files definitions come from: the program and the preload; a definition is known by its file and position
 PROGRAM_FILE = "program"
 PRELOAD_FILE = "preload"
-SELF_CALL = "a function that calls itself needs its result type, which the typing stage will give"
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
 # the bindings whose variables live in the function's frame
@@ -29,8 +28,8 @@ FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 # 0.10000000000000001).
 emitted(program: Block, preload: Block) as Module := {
 	m = Module()
-	p = Program(m, imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32]), library_of(preload))
-	p.pending = p.library.map(definition => Waiting(definition, PRELOAD_FILE))
+	p = Program(m, imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32]))
+	p.pending = library_of(preload).map(definition => Waiting(definition, PRELOAD_FILE))
 	f = Frame(PROGRAM_FILE)
 	body = code(program, p, f)
 	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
@@ -39,15 +38,14 @@ emitted(program: Block, preload: Block) as Module := {
 	m
 }
 
-# What the emitter knows of the whole program: the module, the output it prints through, the preload's definitions,
-# and the functions and globals emitted so far, each a Placed
+# What the emitter knows of the whole program: the module, the output it prints through, and the functions and
+# globals emitted so far, each a Placed
 class Program {
 	m: Module
 	output: int
-	library: list
 	functions: list = []
 	globals: list = []
-	# the definitions whose body is not emitted yet, each a Waiting
+	# the definitions whose body is not emitted yet, each a Waiting; the preload's wait from the start
 	pending: list = []
 	# the helper functions primitives call, each [operation, index]
 	helpers: list = []
@@ -183,23 +181,12 @@ call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Co
 }
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	binding = binding_of(called)
-	if binding == BOUND_LIBRARY { return library_function(form, called, p) }
-	if binding != BOUND_FUNCTION { refused(form, "the emitter calls functions, not a ${binding} yet") }
-	placed_for(p.functions, called, f) ?? pending_function(p, called, f) ?? refused(form, SELF_CALL)
+	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }
+	placed_for(p.functions, called, f) ?? pending_function(p, called, f) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 }
 
 # The preload's definitions, which library names refer to; the preload holds nothing else
 library_of(preload: Block) as list := match preload { Block(statements) => statements.map(s => if s is Define then s else refused(s, "the preload holds only definitions")) }
-# The preload's function of a library name, emitted at its first call (the preload's definitions wait from the start). Found by its name, as a library word is,
-# until the declare stage gives library names their definition.
-library_function(form: Node, called: Node, p: Program) as Placed := {
-	for definition in p.library {
-		name = defined_name(definition)
-		key = place_key(name, PRELOAD_FILE)
-		if text(name) == text(called) { return placed_by_key(p.functions, key) ?? waiting_function(p, key) ?? refused(form, SELF_CALL) }
-	}
-	refused(form, "neither the program nor the preload defines this")
-}
 
 # what a bound name refers to: local, parameter, capture, global, function or library
 binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
@@ -209,7 +196,10 @@ placed_by_key(placed: list, key: text) as Placed? := {
 	for each in placed { if each.key == key { return each } }
 	ø
 }
-# a bound name's definition is in the file of the function that names it: only library names cross files
-defining_key(name: Node, f: Frame) as text := place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"), f.file)
+# a bound name's definition is in the preload for a library name, else in the file of the function that names it
+defining_key(name: Node, f: Frame) as text := {
+	file = if binding_of(name) == BOUND_LIBRARY then PRELOAD_FILE else f.file
+	place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"), file)
+}
 # a definition's key: the file and the place it was written
 place_key(definer: Node, file: text) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file}:${line_of(definer)}:${column_of(definer)}"

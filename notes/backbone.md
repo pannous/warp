@@ -202,10 +202,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
-- **A library name is found in the preload by its spelling** (wap/core/emit/emitter.wap `library_function`). Bends
-  "the emitter never looks a name up by its spelling". Reason: the binding stage marks a name `library` without its
-  definition yet. Paid off when the declare stage binds library names to the preload's definitions (defined_at),
-  which warp-wap-binding is building.
 - **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
