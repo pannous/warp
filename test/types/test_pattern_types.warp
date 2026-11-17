@@ -42,3 +42,4 @@ is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = 
 is! 'pattern Stop = (Stop); Stop() is Stop' true
 is! 'pattern Stop = (Stop); parse("(Go)") is Stop' false
 is! 'pattern Stop = (Stop); match Stop() { Stop() => 1; _ => 0 }' 1
+is! 'pattern Stop = (Stop); pattern Go = (Go); match Go() { Stop() => 1; Go() => 2; _ => 0 }' 2
