@@ -6,7 +6,8 @@
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
 
-# arithmetic and comparisons of ints, each one wasm instruction (floats join once overloads are chosen by type)
+# arithmetic and comparisons of ints and of floats, each one wasm instruction; a call picks the overload its
+# arguments' types fit
 +(a: int, b: int): int := prim i64_add(a, b)
 -(a: int, b: int): int := prim i64_sub(a, b)
 *(a: int, b: int): int := prim i64_mul(a, b)
@@ -16,3 +17,18 @@ print(t: text) := prim print_text(t)
 >(a: int, b: int): bool := prim i64_gt_s(a, b)
 <=(a: int, b: int): bool := prim i64_le_s(a, b)
 >=(a: int, b: int): bool := prim i64_ge_s(a, b)
++(a: float, b: float): float := prim f64_add(a, b)
+-(a: float, b: float): float := prim f64_sub(a, b)
+*(a: float, b: float): float := prim f64_mul(a, b)
+/(a: float, b: float): float := prim f64_div(a, b)
+==(a: float, b: float): bool := prim f64_eq(a, b)
+!=(a: float, b: float): bool := prim f64_ne(a, b)
+<(a: float, b: float): bool := prim f64_lt(a, b)
+>(a: float, b: float): bool := prim f64_gt(a, b)
+<=(a: float, b: float): bool := prim f64_le(a, b)
+>=(a: float, b: float): bool := prim f64_ge(a, b)
+
+# texts: equal when their bytes are, joined by +
+==(a: text, b: text): bool := prim text_equal(a, b)
+!=(a: text, b: text): bool := if a == b then no else yes
++(a: text, b: text): text := prim text_joined(a, b)
