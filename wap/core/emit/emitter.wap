@@ -20,6 +20,8 @@ NEWLINE = 10
 WRITTEN_ADDRESS = 0
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
+# the bindings whose variables live in the function's frame
+FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 
 # The module of a program: its statements become the body of `main`, which the host runs. Its value is shown, as
 # warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
@@ -58,6 +60,8 @@ class Placed {
 	index: int
 	type: list
 	parameters: list = []
+	# a variable of the frame (wasm's locals) rather than of the module
+	local: bool = no
 }
 
 # the code of a kernel form
@@ -104,7 +108,7 @@ emitted_function(form: Define, p: Program) as Placed := {
 }
 function_placed(name: Node, parameters: List, body: Node, p: Program) as Placed := {
 	f = Frame()
-	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(parameter), #f.slots, parameter_type(parameter, p))] }
+	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(parameter), #f.slots, parameter_type(parameter, p), [], yes)] }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
 	value = code(body, p, f)
@@ -124,53 +128,46 @@ parameter_type(parameter: Node, p: Program) as list := match parameter {
 	_ => refused(parameter, "the emitter needs a parameter's type until the typing stage infers it")
 }
 
-# A value given to a name, and that value again, as `x = 3` has the value 3. A local or parameter lives in the
-# frame, a global in the module; the first value given decides the type.
+# A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
 set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
 	if value.type is empty { refused(form, "this gives no value to set") }
-	binding = binding_of(place)
-	if binding == "local" or binding == "parameter" {
-		slot = placed_for(f.slots, place) ?? added_slot(f, place, value.type)
-		same_type(slot, value, form)
-		return Code(value.type, value.instructions + instruction(LOCAL_TEE, [slot.index]))
-	}
-	if binding == "global" {
-		global = placed_for(p.globals, place) ?? added_global_of(p, place, value.type)
-		same_type(global, value, form)
-		return Code(value.type, value.instructions + instruction(GLOBAL_SET, [global.index]) + instruction(GLOBAL_GET, [global.index]))
-	}
-	refused(form, "the emitter sets locals and globals, not a ${binding} yet")
+	held = variable_of(place, p, f) ?? added_variable(place, value.type, p, f)
+	if held.type != value.type { refused(form, "this name held another kind of value before") }
+	Code(value.type, value.instructions + kept(held))
 }
-added_slot(f: Frame, place: Node, type: list) as Placed := {
-	f.slots += [Placed(defining_key(place), #f.slots, type)]
-	f.slots.last
-}
-added_global_of(p: Program, place: Node, type: list) as Placed := {
-	p.globals += [Placed(defining_key(place), added_global(p.m, type, MUTABLE, default_of(type)), type)]
-	p.globals.last
-}
-same_type(held: Placed, value: Code, form: Node) := if held.type != value.type { refused(form, "this name held another kind of value before") }
 
 # a name's value: a parameter, local or global; functions as values and captures come with closures
 name_code(name: Node, p: Program, f: Frame) as Code := {
-	binding = binding_of(name)
-	if binding == "local" or binding == "parameter" {
-		slot = placed_for(f.slots, name) ?? refused(name, "this local is read before any value is given to it")
-		return Code(slot.type, instruction(LOCAL_GET, [slot.index]))
-	}
-	if binding == "global" {
-		global = placed_for(p.globals, name) ?? refused(name, "the emitter reads a global only after the statement that sets it, until the typing stage")
-		return Code(global.type, instruction(GLOBAL_GET, [global.index]))
-	}
-	refused(name, "the emitter reads parameters, locals and globals, not a ${binding} yet")
+	held = variable_of(name, p, f) ?? refused(name, "this name is read before any value is given to it; a global is read only after the statement that sets it, until the typing stage")
+	Code(held.type, fetched(held))
 }
+
+# The variable a bound name refers to, ø while nothing has given it a value: a local or parameter lives in the
+# frame, a global in the module
+variable_of(name: Node, p: Program, f: Frame) as Placed? := {
+	binding = binding_of(name)
+	if binding in FRAME_BINDINGS { return placed_for(f.slots, name) }
+	if binding == BOUND_GLOBAL { return placed_for(p.globals, name) }
+	refused(name, "the emitter reads and sets parameters, locals and globals, not a ${binding} yet")
+}
+added_variable(name: Node, type: list, p: Program, f: Frame) as Placed := {
+	if binding_of(name) == BOUND_GLOBAL {
+		p.globals += [Placed(defining_key(name), added_global(p.m, type, MUTABLE, default_of(type)), type)]
+		return p.globals.last
+	}
+	f.slots += [Placed(defining_key(name), #f.slots, type, [], yes)]
+	f.slots.last
+}
+fetched(held: Placed) as list := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
+# a value stored, and left on the stack
+kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
 
 # A call of a function the program defined, its arguments of its parameters' types; print, the one library word
 # (a debt), prints a text
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
 	binding = binding_of(called)
-	if binding == "library" and called == symbol("print") and #arguments == 1 and arguments#1 is text { return Code([], printed(arguments#1, p.m, p.output)) }
-	if binding != "function" { refused(form, "the emitter calls the program's own functions and print of a text, not this yet") }
+	if binding == BOUND_LIBRARY and called == symbol("print") and #arguments == 1 and arguments#1 is text { return Code([], printed(arguments#1, p.m, p.output)) }
+	if binding != BOUND_FUNCTION { refused(form, "the emitter calls the program's own functions and print of a text, not this yet") }
 	function = placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 	given = arguments.map(argument => code(argument, p, f))
 	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
