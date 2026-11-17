@@ -336,6 +336,9 @@ shapes match.
 - **Q8 interpolation:** the reader returns the raw Text; a step-2 rule splits the `${…}` holes.
 - **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Assign, 1)` (confirmed 2026-11-17; Op.Eq is `==`); spaced
   `a = 1` splits the phrase as the colon does. Q1's Glue is warp's existing Op.None (the key of `Person{…}`), no new Op case.
+- **Q13 typed declarations:** `=` and `:=` split a phrase (or a glued run) before `:`, and `:=` is a reader key
+  `Key(head, Op.Define, body)`: `x: int = 3` is `(x: int) = 3`, `f(x): int := x` is `(f(x): int) := x`; data
+  `{a: 1, b: 2}` and `a: b c` read as before (interviewer, 2026-11-17).
 - **URLs:** a word glued to `://` reads up to the next blank, bracket, separator or quote as one Text, any scheme
   alike (`http://x.com/a`, `file:///tmp`), as today's warp reads a bare URL (interviewer, 2026-11-17).
 - **Q12 duplicate keys:** the reader marks them with a Meta warning on the curly list; step 3 decides.

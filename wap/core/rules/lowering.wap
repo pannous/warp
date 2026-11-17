@@ -85,12 +85,14 @@ assigned(place: Node, value: Node, n: Node) as Node := match place {
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
-# `f(x) := body` defines a function, `n := 1` a constant
+# `f(x) := body` defines a function, `n := 1` a constant; `f(x): int := body` names its result type with the name
 defined(n: Node, head: Node, body: Node) as Node := match head {
+	Key(signature, Op.Colon, result) => with_result(defined(n, signature, body), result)
 	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(group), body) else not_lowered(n)
 	Symbol(name) => Define(head, parameter_list(Empty), body)
 	_ => not_lowered(n)
 }
+with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
 arguments_of(group: Node) as list := match group {
