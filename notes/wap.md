@@ -63,11 +63,12 @@ wap/
   core/                       the machinery: mechanisms only, no names of a domain
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
+    format.wap                code → canonical warp text (`format`): operators in their notation, spacing spelled out
 
     parse/                    text → notation
       reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
-      operators.wap           the operator table read from lib/aliases.warp: fixities, precedence groups sorted
-                              topologically, aliases to canonical words; unrelated mixes refused
+      operators.wap           notation → operated by the table of preload/operators.wap: precedence groups sorted
+                              topologically, the minus rule, aliases to canonical words; unrelated mixes refused
 
     rules/                    the rule engine
       patterns.wap            matching a rule's pattern: holes, typed holes, rests, guards
@@ -90,6 +91,9 @@ wap/
       closures.wap            Fn: closure conversion
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
       wasm.wap                the wasm binary format: modules, sections, instructions; knows no warp form
+
+  preload/                    the standard language every program gets: data and rules, no mechanism
+    operators.wap             the operator table: precedence groups and their relations, operators, aliases
 
   extensions/                 rule files no compiler needs, one per topic, loaded like modules: no hook table
     units.wap                 3km, 90km/h: a unit multiplied in

@@ -1,6 +1,6 @@
 # The declaration prescan: surface → declared (notes/backbone.md "Stage languages").
 #
-# Before any phrase is decided, the program's interface is known: the names its top level defines, each with its
+# Before any phrase is decided (it reads operated code), the program's interface is known: the names its top level defines, each with its
 # signature. Signature rules (stage 2) ask it (`$f takes value`), a phrase is read by it (`print x` is a call because
 # print is a function), and so does a module that `use`s this one. It learns facts only, the program keeps its shape:
 #   declares        on each top-level definition: name: signature
@@ -32,16 +32,21 @@ declared_statement(statement: Node) as Node := {
 	if declaration == ø then statement else with_fact(statement, DECLARES, declaration)
 }
 
-# name: signature of a definition, ø of any other statement
+# name: signature of a definition, ø of any other statement: `f(a, b) := …`, `n := 1`, `x = 1` as operated code reads
+# them, (Call := f(a, b) …), (Call = x 1)
 declaration_of(statement: Node) as Node? := match statement {
-	Key(head, Op.Define, value) => signature_of(head)
-	Key(head, Op.Assign, value) => match head { Symbol(name) => Key(head, Op.Colon, Empty); _ => ø }
+	Call(called, arguments) => if text(called) == ":=" then signature_of(arguments#1) else if text(called) == "=" then value_named(arguments#1) else ø
 	_ => ø
 }
-# what `x` or `f(a, b)` written before := declares: a value, or a function with its parameters
+# what `f(a, b)` or `n` before := declares: a function with its parameters, or a value
 signature_of(head: Node) as Node? := match head {
-	List(items, Bracket.Round, separator) => match items#1 { Symbol(name) => Key(items#1, Op.Colon, List(items[1 ..], Bracket.Square, Separator.Comma)); _ => ø }
-	Symbol(name) => Key(head, Op.Colon, Empty)
+	Key(name, Op.None, group) => match name { Symbol(word) => Key(name, Op.Colon, List(arguments_of(group), Bracket.Square, Separator.Comma)); _ => ø }
+	_ => value_named(head)
+}
+# the value a name before = declares, also of `let x` and `global x`
+value_named(place: Node) as Node? := match place {
+	Symbol(name) => Key(place, Op.Colon, Empty)
+	List(items, Bracket.None, Separator.Space) => if #items == 2 then value_named(items#2) else ø
 	_ => ø
 }
 

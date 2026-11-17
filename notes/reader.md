@@ -1,6 +1,7 @@
 # wap's data reader: a spec inspired by wasp
 
-Target: `wap/core/parse/reader.wap` (today a 7-line stub that calls warp's `parse`). Read first:
+Built: `wap/core/parse/reader.wap`, its cases printed back by `wap format` in test/wap/test_reader.sh; the notation it
+writes is defined in notes/backbone.md "Stage languages". Read first:
 notes/first_principles.md, notes/backbone.md, notes/wap.md "The pipeline".
 
 Citations. `W` = ~/dev/angles/wasp/source/Wasp.cpp, `P` = WaspParsers.cpp, `C` = CharUtils.cpp,
@@ -326,14 +327,15 @@ shapes match.
 - **Q10 comments:** kept as Meta, on the next item or on the item that ends the line.
 - **Q1 `a{x}`:** a head glued to a bracket group is `Key(head, Glue, group)`: `a{x:1}` is `Key(a, Glue, {x:1})`,
   `f(x)` is `Key(f, Glue, (x))`, distinct from `a:{x:1}` (`Key(a, Colon, …)`). Only head + bracket; other glued
-  runs stay Q2's list. (User proposed it with a "?": confirm when the reader is built.)
+  runs stay Q2's list. Confirmed 2026-11-17: a glued run `[a {x:1}]` would look like a two-item list.
 - **Q2 glue:** runs without brackets (`3ms`, `a-b`) are a List with separator `None`; no new Separator case.
 - **Q5 operator runs:** the reader splits operator characters itself, as wasp: it joins only a repeat or a
   following `=` (`==`, `<=`); `x=-1` reads `=` then `-1`.
 - **Q6 `#`:** the reader detects comments; the glued `#` operator (count, `#use`) comes later, in step 2.
 - **Q7 other bracket pairs `‖x‖ ⟨x⟩ ⌈x⌉`:** a `Bracket` case Other; details later.
 - **Q8 interpolation:** the reader returns the raw Text; a step-2 rule splits the `${…}` holes.
-- **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Eq, 1)` (user, with a "?").
+- **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Assign, 1)` (confirmed 2026-11-17; Op.Eq is `==`); spaced
+  `a = 1` splits the phrase as the colon does. Q1's Glue is warp's existing Op.None (the key of `Person{…}`), no new Op case.
 - **Q12 duplicate keys:** the reader marks them with a Meta warning on the curly list; step 3 decides.
 
 ## 7. Open questions for the user (wasp and warp differ); recommendation first
