@@ -45,8 +45,8 @@ node_at(n: Node, index: int) as Node := {
 }
 # a class instance's default position function: its fields in the order its class declares them, `P(2, 3)#1` is 2
 # (card p1-default-position), read from its struct; its extra fields after them, also a declared field
-# holding ø, from its entries. A class's own position function is to come (card class-position-index)
-instance_position(instance: Node, index: int) as Node := instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
+# holding ø, from its entries; a class with its own at(i) gives that, `(2 to 5)#1` is 2
+instance_position(instance: Node, index: int) as Node := method_called(instance, "at", list_node(Kind.List, [fresh_int_node(index)])) ?? instance_field_at(instance, index) ?? key_value(unboxed_list(fields_of(instance))#index)
 # `#n` of a value known only at run time: a list's items, a text's characters, one of a character ("d" of a list)
 node_length(n: Node) as int := {
 	# ø, also an empty list `[]` in the lowered program, holds nothing
@@ -57,7 +57,8 @@ node_length(n: Node) as int := {
 	if kind_code(n) == Kind.Text { return text_count(unboxed_text(n)) }
 	if kind_code(n) == Kind.Codepoint { return 1 }
 	if kind_code(n) == Kind.Key { return 2 }
-	no_length_of(n)
+	counted = method_called(n, "count", list_node(Kind.List, []))
+	if is_null(counted) then no_length_of(n) else unboxed_int(counted)
 }
 # `xs.pop()`: the last item, dropped from xs in place by lowering its count, so every alias
 # sees the shorter list
@@ -222,6 +223,10 @@ range_sum(n: Node) as Node := {
 	ends = range_first(n) + unboxed_int(key_value(n))
 	if int_remainder(count, 2) == 0 then grown_product(int_quotient(count, 2), ends) else grown_product(count, int_quotient(ends, 2))
 }
-# the items of a list node whose data is no $list (emitter unboxed_list_code): a range's made, an extension's as its
-# kind gives them (a GPU list refuses)
-unlisted_items(n: Node) as list := if is_range(n) then range_items(n) else extended_list_unlisted(n)
+# the items of a value whose data is no $list (emitter unboxed_list_code): a range's made, an instance's as its class's
+# items() gives them (core/prelude_core.warp Range), a list of an extension's kind as that gives them (a GPU list refuses)
+unlisted_items(n: Node) as list := {
+	if is_range(n) { return range_items(n) }
+	items = method_called(n, "items", list_node(Kind.List, []))
+	if is_null(items) then extended_list_unlisted(n) else unboxed_list(items)
+}

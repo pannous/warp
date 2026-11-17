@@ -6,12 +6,15 @@
 # the functions declaring they give an instance, `countdown(n) as Counter`, and the names assigned their calls
 global instance_makers = {}
 global made_instances = {}
+# the classes whose instances walk by next(), the program's and the library's
+global walked_classes = {}
 # [the linked modules' names, what linked_results found among them]: worked out once a compile, not by each program
 # pass
 global linked_makers_known = ["", [{}, {}]]
 
 noted_instance_makers(program: Node) as Node := {
 	classes = entries_of_both(own_walked_classes(statements_in(program), linked_makers()#1), linked_makers()#1)
+	walked_classes = classes
 	instance_makers = entries_of_both(result_classes(statements_in(program), classes), linked_makers()#2)
 	types = assigned_types_in(outer_nodes_in(program), classes, instance_makers)
 	made_instances = {}
