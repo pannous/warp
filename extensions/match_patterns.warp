@@ -8,6 +8,8 @@
 # A named pattern `pattern Definition = Key(head, Op.Define, body)` (decision node-refinements: a named refinement of a
 # node case) leaves the program, and its name stands for the pattern in an arm `Definition: …`, which binds head and
 # body, in a test `n is Definition`, and as the type `d: Definition`, any node.
+# A named pattern is also a type with fields, its names: "Pattern types" at the end of this file, the mechanism the
+# kernel of the new compiler is declared with.
 
 # whether the core lowers the arm itself
 is_core_arm(arm: Node, variants: map) as bool := guard_of(arm_pattern(arm)) == ø and not is_name_arm(arm_pattern(arm), arm_result(arm), variants) and is_case_arm(arm, variants)
@@ -208,14 +210,33 @@ tested_subject(test: Node, patterns: map) as Node? := {
 }
 
 
-# A named pattern's names are its fields (notes/backbone.md "Kernel forms are narrowed types of Node with a pattern
-# body"): `pattern Point = [x, y]` builds `Point(3, 4)`, binds by place in the arm `Point(a, _) => a` and reads `p.x` of
-# a parameter `p: Point`. The narrowed type `type If < Node = (head cond: Node yes: Node no: Node)` is the named pattern
-# of its body; a body of Node other than a node case is code, quoted, its holes `cond: Node` the quote's `$cond`.
+# ── Pattern types ─────────────────────────────────────────────────────────────────────────────────────────────────
+# A narrowed type whose body is a pattern with named holes (notes/backbone.md "Kernel forms are narrowed types of Node
+# with a pattern body", user 2026-11-17). It is the third way to narrow a type, beside `type Meters < int` (any int)
+# and a condition (`type Even < int where …`):
+#
+#   type Pair < list = [a: int, b: int]
+#   type If < Node = (if cond: Node yes: Node no: Node)
+#   type Definition < Node = Key(head: Node, Op.Define, body: Node)
+#
+# This is the core mechanism of the new compiler: each kernel form is a pattern type of Node, the emitter's input is
+# their closed union (`kernel = If | Call | …`), so one declaration says what a form looks like and gives every use:
+#
+#   build  If(c, a, b)                 the node `(if c a b)`, a Pair(1, 2) the list [1, 2]
+#   test   n is If                     whether n fits the pattern
+#   match  case n { If(c, _, e) => … } its names bound by place, `_` binding none; `If => cond` binds them by name
+#   read   f(n: If) := n.cond          a parameter of the type reads its names
+#
+# A pattern type is the named pattern of its body, `pattern If = …`, so it is tested, matched and erased to `any` as
+# every named pattern is, and every named pattern with names builds and reads the same way (`pattern Point = [x, y]`
+# builds Point(3, 4)). Only the reading of the body depends on the base: of Node, a body that is no node case is code,
+# quoted, and its holes `cond: Node` become the quote's holes `$cond`.
 
 pattern_keyword = "pattern"
 
-# `type X < Base = pattern` after the type's name, as `pattern X = pattern`, else ø with the parser where it was
+# After `type If` (core/extension.warp type_readers): `< Node = (if cond: Node …)` read as the statement
+# `pattern If = data((if $cond …))`. Anything else, `type Age < int` or `type Code < list of int`, is no pattern type:
+# ø, with the parser back where it was, so the subtype reader takes it.
 read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
 	if not subtype_follows(p) { return ø }
 	start = p.at
@@ -230,76 +251,75 @@ read_pattern_type(p: Parser, name: Node, parameters: list) as Node := {
 	body = expression(p, 0)
 	List([symbol(pattern_keyword), Key(name, Op.Assign, if base == node_type then node_pattern(body) else body)], Bracket.None, Separator.Space)
 }
-# a node case's pattern as written, `Key(head: Node, Op.Define, body: Node)`, any other body the code it quotes; a hole
-# of type Node, any part of a node, is the bare name, `$cond` in code
+
+# The pattern a body of Node stands for. A node case, `Key(head: Node, Op.Define, body: Node)`, is matched case by case
+# as written; any other body is code, `(if cond: Node yes: Node no: Node)`, quoted as `data((if $cond $yes $no))`.
+# A hole typed Node says nothing more than that it is a part of the node, so it becomes the bare name.
 node_pattern(body: Node) as Node := if case_pattern(body) != ø then node_holes(body, "") else List([quote_symbol, node_holes(body, "$")], Bracket.Round, Separator.None)
-node_holes(n: Node, mark: text) as Node := match n {
-	Key(Symbol(name), Op.Colon, Symbol(kind)): if kind == node_type then symbol(mark + name) else Key(symbol(mark + name), Op.Colon, symbol(kind))
-	Key(left, op, right): Key(node_holes(left, mark), op, node_holes(right, mark))
-	List(items, bracket, separator): List(items.map(item => node_holes(item, mark)), bracket, separator)
-	_: n
-}
+node_holes(body: Node, mark: text) as Node := bottom_up(body, part => match part {
+	Key(Symbol(name), Op.Colon, Symbol(kind)): if not is_hole_word(name) then part else if kind == node_type then symbol(mark + name) else Key(symbol(mark + name), Op.Colon, symbol(kind))
+	_: part
+})
 
-# the names a pattern binds, in order; a capital word is a case, a type or an enum, never a name
-pattern_holes(pattern: Node) as list := structural_names(pattern, no).filter(name => name#1.lower() == name#1 and name != other_arm)
+# A pattern's names in the order written: `[a: int, b: int]` → a, b; `data((if $cond $yes $no))` → cond, yes, no.
+# These are the type's fields and the constructor's parameters. A capitalized word (`Key`, `Op.Define`) is a case, a
+# type or an enum, and `_` binds nothing: neither is a name.
+pattern_holes(pattern: Node) as list := structural_names(pattern, no).filter(is_hole_word)
+is_hole_word(name: text) as bool := name != other_arm and name#1.lower() == name#1
 
-# the parts a pattern leaves open, so it builds no value: `_`, a rest `*xs`, `..`
-is_open_word(name: text) as bool := name == other_arm or name.starts_with("*") or name.starts_with("..")
-is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(n => n is symbol and is_open_word(name_of(n)))
-
-# the value a pattern describes, built of its names: `[a: int, b: int]` → `[a, b]`, `$a: int` → `$a`
-built_value(pattern: Node) as Node := match pattern {
-	Key(Symbol(name), Op.Colon, Symbol(kind)): if #pattern_holes(pattern) > 0 then symbol(name) else pattern
-	Key(left, op, right): Key(built_value(left), op, built_value(right))
-	List(items, bracket, separator): List(items.map(built_value), bracket, separator)
-	_: pattern
-}
-# each name's parameter, typed as the pattern types it: `a: int`
-hole_parameters(pattern: Node, holes: list) as list := holes.map(hole => hole_typed(pattern, hole) ?? symbol(hole))
-hole_typed(pattern: Node, hole: text) as Node? := {
-	for n in nodes_in(pattern) {
-		if is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) in [hole, "$" + hole] and value_of(n) is symbol { return Key(symbol(hole), Op.Colon, value_of(n)) }
-	}
-	ø
-}
-
-# `pattern Point = [x, y]` also defines `Point(x, y) := [x, y]`; a pattern without names or with an open part builds
-# nothing
+# `pattern Point = [x, y]` also defines `Point(x, y) := [x, y]`, right before the definitions are read. The body is
+# the pattern with each name as its value; a typed name types its parameter, `Pair(a: int, b: int) := [a, b]`. A
+# pattern without names or with an open part (`_`, a rest `..`, `*xs`) describes no single value and builds nothing.
 pattern_constructors(program: Node) as Node := if is_statement_sequence(program) then group_like(program, statements_in(program).flat_map(statement => [statement] + pattern_constructor(statement))) else program
 pattern_constructor(statement: Node) as list := {
 	named = named_pattern(statement)
 	if named == ø { return [] }
-	holes = pattern_holes(named#2)
-	if #holes == 0 or not is_buildable(named#2) { return [] }
-	[Key(call_of(named#1, hole_parameters(named#2, holes)), Op.Define, built_value(named#2))]
+	pattern = named#2
+	holes = pattern_holes(pattern)
+	if #holes == 0 or not is_buildable(pattern) { return [] }
+	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, built_value(pattern))]
+}
+is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(part => part is symbol and is_open_word(name_of(part)))
+is_open_word(name: text) as bool := name == other_arm or name.starts_with("*") or name.starts_with("..")
+# the value the pattern describes: each typed name `a: int` (in code `$a: int`) as the name alone
+built_value(pattern: Node) as Node := bottom_up(pattern, part => match part {
+	Key(Symbol(name), Op.Colon, Symbol(kind)): if is_hole_word(name) then symbol(name) else part
+	_: part
+})
+# the parameter of a name, typed as the pattern types it: `a: int`, else the bare name
+typed_parameter(pattern: Node, hole: text) as Node := {
+	for part in nodes_in(pattern) {
+		if is_key(part, Op.Colon) and key_of(part) is symbol and name_of(key_of(part)) in [hole, "$" + hole] and value_of(part) is symbol { return Key(symbol(hole), Op.Colon, value_of(part)) }
+	}
+	symbol(hole)
 }
 
-# the pattern with its names bound by place to the arm's, `_` binding none
+# The arm `If(c, _, e) => …`: the pattern with its names, in order, renamed to the arm's, so `c` binds cond and `e`
+# binds no. A place in a value pattern may hold any pattern (`Pair(1, y)`); a hole of code takes a name or `_`.
 placed_holes(pattern: Node, places: list) as Node := {
 	holes = pattern_holes(pattern)
 	if #places != #holes { raise "the pattern binds " + #holes + " names, " + holes.join(", ") + ": an arm names each by its place" }
-	renamed_holes(pattern, holes, places)
+	placed = {}
+	for at in 1 to #holes { placed[holes#at] = places#at }
+	bottom_up(pattern, part => if part is symbol then placed_hole(name_of(part), placed) ?? part else part)
 }
-renamed_holes(n: Node, holes: list, places: list) as Node := match n {
-	Symbol(name): {
-		quoted = name.starts_with("$")
-		hole = if quoted then name[1 ..] else name
-		if not (hole in holes) { return n }
-		at = (1 to #holes).filter(i => holes#i == hole)#1
-		if not quoted then places#at else if places#at is symbol then symbol("$" + name_of(places#at)) else raise "a hole of code binds a name, not " + places#at
-	}
-	Key(left, op, right): Key(renamed_holes(left, holes, places), op, renamed_holes(right, holes, places))
-	List(items, bracket, separator): List(items.map(item => renamed_holes(item, holes, places)), bracket, separator)
-	_: n
+# the place of a name, `$cond` in code as `$c`; ø for a word that is no name of the pattern
+placed_hole(name: text, placed: map) as Node? := {
+	if name in placed { return placed[name] }
+	hole = name[1 ..]
+	if not (name.starts_with("$") and hole in placed) { return ø }
+	if placed[hole] is symbol then symbol("$" + name_of(placed[hole])) else raise "a hole of code binds a name, not " + placed[hole]
 }
 
-# `f(n: If) := n.cond`: a parameter typed by a named pattern reads its names, `match n { If => cond }`
+# `f(n: If) := n.cond`: in a function, a parameter typed by a named pattern reads its names. Each read matches the
+# parameter against the pattern, `match n { If => cond }`; a value that does not fit is refused there ("no case for
+# value"), never read as ø. Reads after a test (`if n is If { n.cond }`) are not narrowed yet.
 with_hole_reads(n: Node, patterns: map) as Node := {
 	if not is_key(n, Op.Define) { return n }
 	typed = pattern_parameters(leftmost_part(key_of(n)), patterns)
 	if not typed then n else Key(key_of(n), Op.Define, bottom_up(value_of(n), part => pattern_read(part, typed)))
 }
-# parameter name → the pattern its type names
+# each parameter whose type is a named pattern: its name → the pattern
 pattern_parameters(call: Node, patterns: map) as map := {
 	typed = {}
 	if not is_round(call) { return typed }
