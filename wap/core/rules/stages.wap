@@ -34,8 +34,18 @@ class Fired { code: Node, fired: bool }
 
 # the rules and patterns of loaded code taken in, the code without them returned
 rules_loaded(code: Node) as Node := match code {
-	List(items, Bracket.None, Separator.Newline) => List(items.filter(item => not taken_in(item)), Bracket.None, Separator.Newline)
-	_ => if taken_in(code) then Empty else code
+	List(items, Bracket.None, Separator.Newline) => List(items.filter(item => not taken_in(sequence_rule(item))), Bracket.None, Separator.Newline)
+	_ => if taken_in(sequence_rule(code)) then Empty else code
+}
+
+# `rule P => A; B` writes both statements: the `;` binds looser than `=>`, so the line is a sequence whose first
+# statement is the rule; the rule takes the rest as its template's further statements
+sequence_rule(statement: Node) as Node := match statement {
+	List(items, Bracket.None, Separator.Semicolon) => match items#1 {
+		Call(called, arguments) => if spelling_written(called) == RULE_ARROW and #arguments == 2 then Call(called, [arguments#1, List([arguments#2] + items[1 ..], Bracket.None, Separator.Semicolon)]) else statement
+		_ => statement
+	}
+	_ => statement
 }
 
 # a rule or pattern statement taken in (yes), or any other statement left (no)
@@ -74,9 +84,12 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 # first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
 heads_of(n: Node) as list := match n {
 	List(items, bracket, separator) => list_heads(items) + [NO_HEAD]
+	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
 	_ => [NO_HEAD]
 }
+# a glued call or index, `f(x)`, `xs[i]`: under its name and bracket, then under its bracket alone (`$f($x)`, `$xs[$i]`)
+glued_heads(left: Node, bracket: Bracket) as list := (if left is symbol and not is_hole(left) then ["${spelling_written(left)} ${bracket}"] else []) + ["glued ${bracket}"]
 
 list_heads(items: list) as list := {
 	if #items == 0 or is_hole(items#1) or not (items#1 is symbol) { return [] }
@@ -116,7 +129,7 @@ rules_on(rules: Rules, heads: list) as list := heads.filter(head => rules.by_hea
 # the heads of every node a template spells (not the code its holes bring)
 template_heads(n: Node) as list := match n {
 	List(items, bracket, separator) => heads_of(n) + items.map(template_heads).fold([], (a, b) -> a + b)
-	Key(left, op, right) => heads_of(n) + template_heads(left) + template_heads(right)
+	Key(left, op, right) => (if op == Op.None and pattern_called(left) != ø then [spelling_written(left)] else heads_of(n)) + template_heads(left) + template_heads(right)
 	_ => []
 }
 
@@ -153,8 +166,11 @@ rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(ru
 # is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], bracket, Separator.None) else with_parts(whole, part => rules_applied(rules, part, fired))
+	List(items, bracket, separator) => if separator == Separator.Newline or separator == Separator.Semicolon then List(spliced(items.map(part => rules_applied(rules, part, fired))), bracket, separator) else with_parts(whole, part => rules_applied(rules, part, fired))
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
+# statements with each statement sequence among them, one a rule wrote, `A; B`, joined in its place
+spliced(statements: list) as list := statements.map(statement => match statement { List(items, Bracket.None, Separator.Semicolon) => items; List(items, Bracket.None, Separator.Newline) => items; _ => [statement] }).fold([], (a, b) -> a + b)
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
 
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
