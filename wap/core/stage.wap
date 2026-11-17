@@ -90,9 +90,10 @@ with_name_fact(n: Node, name: text, value: Node) as Node := match n {
 	Key(written, Op.Colon, type) => refitted(Key(with_name_fact(written, name, value), Op.Colon, type), n)
 	_ => with_fact(n, name, value)
 }
-# A definition's key, the file, line and column of the name that defined it, and the signature of a typed function,
-# which tells its typed versions apart
-place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file_of(definer)}:${line_of(definer)}:${column_of(definer)}${signature_key(definer)}"
+# A definition's key: the file, line and column of the name that defined it, the name (a rule's template places all
+# the names it binds where the rewritten code was), and the signature of a typed function, which tells its typed
+# versions apart
+place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file_of(definer)}:${line_of(definer)}:${column_of(definer)} ${text(definer)}${signature_key(definer)}"
 signature_key(definer: Node) as text := if fact_of(definer, SIGNATURE) == ø then "" else " ${fact_of(definer, SIGNATURE)}"
 
 # The facts of a bound name, learned by core/analyze/scope.wap and read by every later stage: BINDING is what the
