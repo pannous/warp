@@ -1,0 +1,36 @@
+# samples/physics/usd_bodies.warp, the rigid bodies of samples/physics/usd_collisions.warp: the seven USDCraft-10K
+# objects scripts/usdcraft-bodies.py baked into samples/physics/usdcraft.bodies, and the contact step that drops them.
+
+# the baked file: seven bodies at their authored masses, the jewelry box's hinge and slide listed
+is! 'use "../../samples/physics/usd_bodies.warp"
+use file
+bodies = bodies_read(read("../../samples/physics/usdcraft.bodies"))
+box = bodies.filter(b => b.name == "jewelry_box_with_drawer")#1
+bell = bodies.filter(b => b.name == "hex_dumbbell")#1
+[#bodies, round(bell.mass * 100), #box.joints, #box.spheres % 4]' [7, 1584, 2, 0]
+
+# a crate dropped from 5 cm comes to rest upright on the floor, its centre of mass at the stage's 7.5 cm
+is! 'use "../../samples/physics/usd_bodies.warp"
+use file
+crate = bodies_read(read("../../samples/physics/usdcraft.bodies")).filter(b => b.name == "small_fruit_crate")
+w = simulated(world_of(crate, [0.0, 0.0, 0.125], [[1.0, 0.0, 0.0, 0.0]]), 0.6)
+abs(w.pos#3 - 0.075) < 0.002 and abs(w.quat#1) > 0.999 and kinetic_energy(w) < 0.000001' yes
+
+# a can dropped onto the crate lands on its top, 15 cm up, and does not fall through it
+is! 'use "../../samples/physics/usd_bodies.warp"
+use file
+bodies = bodies_read(read("../../samples/physics/usdcraft.bodies"))
+named(name) := bodies.filter(b => b.name == name)#1
+two = [named("small_fruit_crate"), named("standard_330_ml_can")]
+w = simulated(world_of(two, [0.0, 0.0, 0.076, 0.0, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.6)
+can_bottom = w.pos#6 - 0.0607
+can_bottom > 0.145 and can_bottom < 0.155 and abs(w.pos#4) < 0.01' yes
+
+# the dumbbell dropped on the crate's edge shoves it sideways: the push of one body on another
+is! 'use "../../samples/physics/usd_bodies.warp"
+use file
+bodies = bodies_read(read("../../samples/physics/usdcraft.bodies"))
+named(name) := bodies.filter(b => b.name == name)#1
+two = [named("small_fruit_crate"), named("hex_dumbbell")]
+w = simulated(world_of(two, [0.0, 0.0, 0.076, -0.17, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.4)
+w.pos#1 > 0.01' yes
