@@ -1,6 +1,6 @@
 # wap's data reader: a spec inspired by wasp
 
-Built: `wap/core/parse/reader.wap`, its cases in test/wap/reader.wap (`bash test/wap/test_reader.sh`); the notation it
+Built: `wap/core/parse/reader.wap`, its cases printed back by `wap format` in test/wap/test_reader.sh; the notation it
 writes is defined in notes/backbone.md "Stage languages". Read first:
 notes/first_principles.md, notes/backbone.md, notes/wap.md "The pipeline".
 

@@ -71,9 +71,9 @@ The languages, each a set of Node shapes:
     `a.b`, `3ms`, `-x`); a bracketed list, Curly, Square or Round, with the loosest separator inside. Separators
     cascade (glue < space < `,` < `;` < tab < newline), the loosest splitting first; a list never has one item
     unless bracketed. An indented block is a Curly list with separator Newline, glued to the line before it;
-  - `Empty` for an empty text. Facts in the metadata (core/stage.wap): positions; `comment` (a comment, on the next
-    atom or on the atom ending the line); `meta` (the `@annotations` before an item, without `@`); `warning` (a
-    duplicate key in `{…}`). No `True`, `False`, `Type`, `Data` or `Error`: a text it cannot read is refused.
+  - `Empty` for an empty text and for `{}` and `()` (wiki/node.md: no items is the empty list whatever the bracket).
+    Facts in the metadata (core/stage.wap): positions; `comment` (a comment, on the next atom or on the atom ending
+    the line); `meta` (the `@annotations` before an item, without `@`); `warning` (a duplicate key in `{…}`). No `True`, `False`, `Type`, `Data` or `Error`: a text it cannot read is refused.
 - **operated:** notation in which every operator phrase is read by the table: `a + b * c` is
   `(Call + a (Call * b c))`, every alias replaced by its canonical word (`≤` → `<=`), a prefix or postfix operator
   a `Call` of one argument, by the one minus rule. A mix of unrelated groups is refused. Juxtaposition that is no
@@ -211,9 +211,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
-- **An empty `{}` or `()` reads as `Empty`** (notes/reader.md §5 rows 12, 14; red in test/wap/reader.wap). Bends
-  "the reader never flattens a bracket". Reason: warp's runtime builds `List([], Curly or Round, …)` as ø
-  (core/runtime/nodes.warp `bracketed_node`); only `[]` stays a list. Paid off when wap builds its own Nodes.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
