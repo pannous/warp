@@ -34,4 +34,7 @@ while i < 6 { i = i + 1
 if i == 2 then continue
 sum = sum + i }
 sum')" "19"
+check "a block of one keyword phrase" "$(ran one 'x = 1
+while x < 2 { if x == 1 { x = 2 } }
+x')" "2"
 exit $((failures > 0))

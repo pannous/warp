@@ -147,7 +147,13 @@ rewritten_by(rules: Rules, code: Node) as Fired := {
 	Fired(result, fired[0])
 }
 
-rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, n, fired), whole => with_parts(whole, part => rules_applied(rules, part, fired)))
+rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, n, fired), whole => parts_applied(rules, whole, fired))
+
+# A block of one phrase, `{ if c { a } }`, holds the phrase's words: its one statement is that phrase, rewritten as one
+parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
+	List(items, Bracket.Curly, Separator.Space) => List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], Bracket.Curly, Separator.None)
+	_ => with_parts(whole, part => rules_applied(rules, part, fired))
+}
 
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
 	current = n
