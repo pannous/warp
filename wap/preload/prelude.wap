@@ -1,0 +1,7 @@
+# The preload: the standard language every program gets, as whole definitions with their bodies (notes/wap.md
+# "Layers"). A built-in is declared here like any function; its body is a primitive, `prim`, where warp ends and wasm
+# or the host begins (notes/kernel.md "Primitives"). The compiler knows none of these names: the declare stage reads
+# their signatures from this file, the emitter their bodies.
+
+# a text written to the standard output, then a line end
+print(t: text) := prim print_text(t)

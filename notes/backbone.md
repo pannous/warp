@@ -215,3 +215,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
   function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
   (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.
+- **A definition is known by its line and column** (wap/core/emit/emitter.wap `place_key`): the emitter finds the
+  function, local or global a bound name refers to by where its definer was written. Two files' definitions at the
+  same line and column would collide. Reason: wap compiles one file so far. Paid off when positions carry their file,
+  or the binding fact names its definition uniquely.
