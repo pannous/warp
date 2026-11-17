@@ -9,7 +9,11 @@
 #   { a; b }                 a block of code → Block([a, b])
 #   x = 1                    a value given to a name → Set(x, 1)
 #   f(x) := body             a function → Define(f, [x], body)
+#   prim print_text(t)       a built-in's body in the preload → Prim(print_text, [t])
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
+
+# the word that starts a primitive, only the preload writes it
+PRIMITIVE_WORD = "prim"
 
 # the program as one Block of its statements
 lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
@@ -27,13 +31,18 @@ lowered_form(n: Node) as Node := match n {
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
 	Key(place, Op.Assign, value) => if place is symbol then Set(place, lowered(value)) else not_lowered(n)
 	Key(List(items, Bracket.Round, separator), Op.Define, body) => if items#1 is symbol then Define(items#1, List(items[1 ..], Bracket.Round, Separator.Comma), lowered(body)) else not_lowered(n)
-	List(items, Bracket.None, Separator.Space) => called_with(items, n)
+	List(items, Bracket.None, Separator.Space) => if items#1 == symbol(PRIMITIVE_WORD) and #items == 2 then primitive_of(items#2, n) else called_with(items, n)
 	List(items, Bracket.Round, separator) => called_with(items, n)
 	_ => not_lowered(n)
 }
 
 # a word with its arguments, `print "a"` or `f(1, 2)` as the reader gives it, (f 1 2): a call of the word
 called_with(items: list, n: Node) as Node := if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
+# the operation of `prim print_text(t)`, written like a call
+primitive_of(operation: Node, n: Node) as Node := match operation {
+	List(items, Bracket.Round, separator) => if items#1 is symbol then Prim(items#1, items[1 ..].map(lowered)) else not_lowered(n)
+	_ => not_lowered(n)
+}
 
 # a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {

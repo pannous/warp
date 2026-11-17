@@ -20,6 +20,12 @@ declared_program(program: Node) as Node := {
 	with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
 }
 
+# what a declared program declares, `name: signature` each
+declarations_of(program: Node) as list := match fact_of(program, DECLARATIONS) {
+	List(items, bracket, separator) => items
+	_ => []
+}
+
 # a statement with what it declares, if it defines a name
 declared_statement(statement: Node) as Node := {
 	declaration = declaration_of(statement)

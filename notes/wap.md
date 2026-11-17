@@ -57,6 +57,9 @@ wap/
     forms.wap                 the kernel forms, each a named pattern of Node
     primitives.wap            the primitives: name → wasm instruction, conversion, constructor, runtime or host word
 
+  preload/                    the standard language every program gets, whole definitions with their bodies
+    prelude.wap               the built-ins (print …), each a function whose body may be a Prim
+
   core/                       the machinery: mechanisms only, no names of a domain
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
@@ -83,6 +86,7 @@ wap/
 
     emit/                     typed kernel → bytes
       emitter.wap             one case per kernel form; any other node refused
+      primitives.wap          what each Prim operation emits; a longer one is a helper function of the module
       closures.wap            Fn: closure conversion
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
       wasm.wap                the wasm binary format: modules, sections, instructions; knows no warp form
@@ -119,13 +123,13 @@ A rule file is in core/sugar/ exactly when wap's own source uses its spelling; w
 
 Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Block, as patterns), core/parse/reader.wap (warp's
 `parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap, core/emit/values.wap (the literals' value layout) and core/emit/wasm.wap (a general
-module builder: GC struct and array types, locals, globals, passive data, instruction encoding); the emitter takes Define, Set, Call and names by their binding facts. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
-in the emitter (a debt).
+module builder: GC struct and array types, locals, globals, passive data, instruction encoding); the emitter takes Define, Set, Call and names by their binding facts. `print "Hello"` and several such lines run through wap's own stages; `print` is the
+preload's (wap/preload/prelude.wap), a built-in whose body is the primitive print_text.
 
 Test: `bash test/wap/test_hello.sh` (WARP names the warp to run with).
 
 Next, in order:
-1. kernel/primitives.wap and `print` as a library function (pays the debt)
+1. kernel/primitives.wap, the list of primitives, once there are several
 2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
 3. Define and Name, then If and While, each with an outcome test
 4. core/rules/ taking over lowering.wap; the first rule files in core/sugar/ and extensions/

@@ -109,6 +109,7 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Block(statements) => []
 	Fn(parameters, body) => []
 	Call(called, arguments) => defined_in(arguments, scope, depth)
+	Prim(operation, arguments) => defined_in(arguments, scope, depth)
 	_ => []
 }
 local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then BOUND_GLOBAL else BOUND_LOCAL
