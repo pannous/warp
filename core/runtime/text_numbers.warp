@@ -2,6 +2,7 @@
 use "intrinsics.warp"
 use "conversions.warp"
 use "errors.warp"
+use "nodes.warp"
 use "bridge.warp"
 use "floats.warp"
 use "instructions.warp"
@@ -30,13 +31,15 @@ text_as_int(written: text) as int := {
 	if count > 0 and start + count < byte_count(t) and byte_at(t, start + count) == Ascii.Point { a_fraction_is_no_int() }
 	if count == 0 or start + count != byte_count(t) { invalid_number() }
 	# the digits add toward the sign, so -9223372036854775808 is one; past 64 bits a loud error, never a wrapped value
-	# (card int-text-overflow): a step that wrapped no longer divides back by 10
+	# (card int-text-overflow): the digits so far past a tenth of the bound, or at it with a digit beyond its last
 	sign = if is_negative_text(t) then -1 else 1
+	last_digit = if sign > 0 then 7 else 8
 	value = 0
 	for i in start..byte_count(t) {
-		next = value * 10 + sign * digit_of(byte_at(t, i))
-		if int_quotient(next, 10) != value { too_big_for_int_of(held(written)) }
-		value = next
+		digit = digit_of(byte_at(t, i))
+		tenths = value * sign
+		if tenths > 922337203685477580 or (tenths == 922337203685477580 and digit > last_digit) { too_big_for_int_of(held(written)) }
+		value = value * 10 + sign * digit
 	}
 	value
 }
