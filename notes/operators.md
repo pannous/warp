@@ -31,3 +31,11 @@ wap/core/parse/operators.wap, the printer wap/core/format.wap. What the code dec
   spelling the table knows. `x ⊛= y` of any infix ⊛ is a compound assignment without a row of its own.
 - **Spelled out by format:** a later item of a space list led by a sign spacing decided prints `[a, -1]` in brackets
   and `print (-x)` in a phrase.
+
+## Open
+
+- **A program's `alias a => b` lines** (decision aliases-unified): a program alias would rewrite the line that declares
+  it; decided with the rule engine.
+- **Chained orderings** (`1 < x < 3` as `1 < x and x < 3`, warp's extensions/sugar/arithmetic.warp and its test
+  test_equality_never_chains, no wiki page): the table refuses a chain of comparisons today. With the rule engine the
+  comparison group can group from the left and a stage-1 rule rewrite the chain.
