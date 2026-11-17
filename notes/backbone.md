@@ -103,6 +103,10 @@ functions and rules, and the core shrinks to the machinery alone.
 
 ## Milestones
 
+0. **Step 0, the first brick:** carve the emitter's lower half (wasm module builder, instruction encoding, type and
+   function sections, the value layout, runtime words) behind a clean interface that knows no surface forms
+   (`emit_instruction`, `declare_type`, `add_function` …). The old emitter keeps running on top of it until the
+   switch; the new kernel emitter is written on it. No other cleanup of the frozen compiler (user 2026-11-17).
 1. **Hello:** `print "Hello"` through the new stages, with the emitter accepting only the kernel.
 2. **The new compiler builds itself.**
 
