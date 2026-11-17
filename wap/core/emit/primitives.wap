@@ -5,6 +5,12 @@
 # definition that gives it a warp signature. An operation that needs more than a few instructions is a helper
 # function of the module, emitted once.
 
+use "emitter.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
 # answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
 STDOUT = 1
@@ -13,16 +19,31 @@ IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
 BYTES_ADDRESS = 16
 
-# the code of a primitive, its arguments checked against what the operation takes
+# The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
+# its built-in's definition writes (wap/preload/prelude.wap).
+INSTRUCTIONS = {
+	"i64_add": I64_ADD, "i64_sub": I64_SUB, "i64_mul": I64_MUL, "i64_eq": I64_EQ, "i64_ne": I64_NE,
+	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
+	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
+	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
+	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
+}
+# The operations a helper function of the module performs: operation → the function that builds the helper
+HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function}
+
+# the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
+# built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
-	if operation == symbol("print_text") { return helper_call(form, arguments, [nullable(text_type(p.m))], helper(p, "print_text", printing_function)) }
+	name = text(operation)
+	operands = arguments.flat_map(argument => argument.instructions)
+	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
+	if HELPERS.has(name) { return Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])])) }
 	refused(form, "no primitive of this name")
 }
-
-# a call of a helper that takes these types and leaves no value
-helper_call(form: Node, arguments: list, takes: list, index: int) as Code := {
-	if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
-	Code([], arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
+# the wasm type of the value a primitive gives, [] when its definition writes none
+given_layout(form: Node, p: Program) as list := {
+	type = fact_of(form, TYPE)
+	if type == ø then [] else layout_of(type, p.m) ?? refused(form, "the emitter has no value layout for this type yet")
 }
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
@@ -43,9 +64,37 @@ printing_function(p: Program) as int := {
 	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
 	# pages short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
 	grown = i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [2]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + count + instruction(MEMORY_GROW, [0]) + DROP + END
-	copied = i32_const(0) + instruction(LOCAL_SET, [2]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + length + I32_GE_U + instruction(BRANCH_IF, [1]) + byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]) + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [2]) + instruction(BRANCH, [0]) + END + END
+	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
 	written = i32_const(STDOUT) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
 	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written)
+}
+
+# the body run for each count from 0 while it stays below the limit, the count in that local
+counted(local: int, limit: list, body: list) as list := {
+	count = instruction(LOCAL_GET, [local])
+	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
+}
+
+# The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
+# count.
+text_equality_function(p: Program) as int := {
+	type = text_type(p.m)
+	no_unless_equal = I32_NE + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+	byte = local => instruction(LOCAL_GET, [local]) + instruction(LOCAL_GET, [3]) + instruction(ARRAY_GET_U, [type])
+	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
+	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
+	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
+}
+
+# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
+# new one.
+joining_function(p: Program) as int := {
+	type = text_type(p.m)
+	bytes_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
+	joined = instruction(LOCAL_GET, [2])
+	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
 }

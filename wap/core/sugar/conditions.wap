@@ -1,0 +1,14 @@
+# Conditions written other ways, as If (notes/wap.md core/sugar/; wiki/keyword.md): the spellings wap's own source uses.
+# The condition runs to the first then or block, the then part to the first else, so `else if …` chains.
+
+# a block of code in braces, `{ print "a" }`, a then part without then
+pattern Braces = { $statements... }
+
+rule if $condition... then $then... else $else... => If($condition, $then, $else)
+rule if $condition... then $then... => If($condition, $then, ø)
+rule if $condition... $then: Braces else $else... => If($condition, $then, $else)
+rule if $condition... $then: Braces => If($condition, $then, ø)
+# whose else is it? `if a then if b then x else y` reads two ways
+rule if $condition... then if $inner... else $else... => refuse "this else may belong to either if: put the inner if in braces"
+
+rule unless $c $body => If($c, ø, $body)

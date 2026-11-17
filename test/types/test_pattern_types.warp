@@ -37,3 +37,9 @@ is! 'pattern Point = [$x, $y]; match [3, 4] { Point(a, _) => a }' 3
 is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); parse("(print (Call f 1))") is Print' true
 is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); parse("(print (f 1))") is Print' false
 is! 'pattern Call = (Call $called: Symbol $arguments...: Node); pattern Print = (print $call: Call); match parse("(print (Call f 1))") { Print(c) => text(c); _ => "no" }' '(Call f 1)'
+
+# code without holes, a kernel form like Break (notes/kernel.md): built by its name, tested, matched
+is! 'pattern Stop = (Stop); Stop() is Stop' true
+is! 'pattern Stop = (Stop); parse("(Go)") is Stop' false
+is! 'pattern Stop = (Stop); match Stop() { Stop() => 1; _ => 0 }' 1
+is! 'pattern Stop = (Stop); pattern Go = (Go); match Go() { Stop() => 1; Go() => 2; _ => 0 }' 2

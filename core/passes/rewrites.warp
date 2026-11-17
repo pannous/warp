@@ -379,9 +379,11 @@ sugar_walked(program: Node, rules: list) as Node := {
 	maps = map_names_of(program)
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
-	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
+	# each statement walked with the rules that can fire in it (rules_reaching) and whose words it binds no value of its
+	# own: a function's local `type` keeps its `type in xs` from the rule `type $x` there only; the program's runs
+	# with them all
 	index = rule_index(rules)
-	walked = children(program, statement => sugared_statement(statement, rules_reaching(index, statement), maps))
+	walked = children(program, statement => sugared_statement(statement, rules_unbound_by(rules_reaching(index, statement), [scope_with({}, nodes_in(statement)), {}]), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
 }

@@ -1,0 +1,316 @@
+# The typing stage: bound kernel → typed kernel (notes/backbone.md "Stage languages").
+#
+# Every value learns its type, a fact TYPE, and every function its signature, a fact SIGNATURE on its name
+# (core/stage.wap), so the emitter reads a type instead of learning it by emitting the code. Types are written as a
+# program writes them: int, float, text, char, bool, ø; a signature `(int, text) -> int`. Code that gives no value has
+# no TYPE.
+#
+# Typing is local and runs both ways: a call's arguments are typed first, then the call picks the function it means
+# among the definitions its name may mean (core/analyze/scope.wap CANDIDATES): by the number of arguments, then their
+# types, then the type the call is expected to give. None left, or several, is refused naming them, never a guess.
+# A literal takes the type its place expects where it reads both ways: `"a"` is a char, or a text where one is wanted.
+#
+#   f(x: int) := x          f: (int) -> int
+#   f(x: text) := 1         f: (text) -> int
+#   f "a"                   the second f
+#   g(x) := x               a parameter without a type: g is typed once for each tuple of argument types it is
+#   g 1; g "ab"             called with, g: (int) -> int and g: (text) -> text, each a Define of its own
+#
+# A function is typed when a call reaches it, with that call's argument types; one whose parameters all have their
+# types is typed even when nothing calls it, so its errors show. A function that calls itself needs its result type
+# written: `f(n: int): int := …`. The result is the program, the preload's functions it calls first.
+
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the types of the literals, as a program writes them
+INT_TYPE = "int"
+FLOAT_TYPE = "float"
+TEXT_TYPE = "text"
+CHAR_TYPE = "char"
+BOOL_TYPE = "bool"
+EMPTY_TYPE = "ø"
+# the type of code that never finishes, a return, break or continue: it fits wherever any type is expected
+NEVER_TYPE = "never"
+# the operator a signature is written with: `(int, text) -> int`
+ARROW = "->"
+
+# What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
+class TypingState {
+	definitions: list = []
+	functions: list = []
+	globals: list = []
+}
+# A function typed for one tuple of argument types: the definition's key, its argument types, its result's type,
+# its name with its signature and the Define it became
+class TypedFunction {
+	key: text
+	arguments: list
+	result: Node? = ø
+	signed: Node = ø
+	define: Node = ø
+	done: bool = no
+}
+# The function whose body is being typed: its variables' types, each [key, type], and its written result type
+class TypeFrame {
+	variables: list = []
+	result: Node? = ø
+	# the types its returns give, ø for a bare return
+	returns: list = []
+}
+
+# the program typed, after the preload's functions it calls
+typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload))
+# A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
+retyped(program: Block) as Block := typed_among(program, [])
+# the program typed, after those of the library's definitions it calls
+typed_among(program: Block, library: list) as Block := {
+	s = TypingState()
+	s.definitions = library
+	typed = typed_form(program, s, TypeFrame(), ø)
+	refitted(Block(functions_typed_from(library, s) + statements_in(typed)), typed)
+}
+statements_in(block: Block) as list := match block { Block(statements) => statements }
+
+# a kernel form with the types it learned, expected the type its place wants, ø for any
+typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match n {
+	Block(statements) => block_typed(n, statements, s, f, expected)
+	Define(name, parameters, body) => n
+	Set(place, value) => set_typed(n, place, value, s, f)
+	Call(called, arguments) => call_typed(n, called, arguments, s, f, expected)
+	Prim(operation, arguments) => prim_typed(n, operation, arguments, s, f)
+	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
+	While(condition, body) => refitted(While(condition_typed(condition, s, f), typed_form(body, s, f, ø)), n)
+	Return(value) => return_typed(n, value, s, f)
+	Break() => with_type(n, NEVER_TYPE)
+	Continue() => with_type(n, NEVER_TYPE)
+	Get(subject, key) => get_typed(n, subject, key, s, f)
+	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
+	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
+	Symbol(name) => name_typed(n, s, f)
+	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
+	Number(value) => with_type(n, if value is int then INT_TYPE else FLOAT_TYPE)
+	Text(value) => with_type(n, TEXT_TYPE)
+	True => with_type(n, BOOL_TYPE)
+	False => with_type(n, BOOL_TYPE)
+	Empty => n
+	_ => refused(n, "the typing stage reads only kernel forms")
+}
+with_type(n: Node, type: text) as Node := with_fact(n, TYPE, symbol(type))
+# the type of a typed form's value, ø when it gives none
+value_type(n: Node) as Node? := if n == ø then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
+with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fact(n, TYPE, type)
+
+# Statements typed in order, the last one expected the block's type. A function it defines stands where it was
+# written as each of its typed versions; one whose parameters all have their types is typed even when nothing calls it.
+block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	s.definitions = s.definitions + statements.filter(statement => statement is Define)
+	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
+	for statement in statements { if statement is Define and all_typed(statement) { function_typed(statement, written_types(statement), s, statement) } }
+	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
+	if typed is empty then block else with_type_of(block, value_type(typed.last))
+}
+# the Defines each of these definitions became, in the order typed
+functions_typed_from(definitions: list, s: TypingState) as list := {
+	keys = definitions.map(definition => place_key(declared_name(written_name(definition))))
+	s.functions.filter(typed => typed.key in keys).map(typed => typed.define)
+}
+
+# A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
+# finishes fits any) the If has it
+if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	chosen = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	with_type_of(refitted(If(condition_typed(condition, s, f), chosen#1, chosen#2), n), joined_type(value_type(chosen#1), value_type(chosen#2)))
+}
+condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
+	tested = typed_form(condition, s, f, symbol(BOOL_TYPE))
+	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
+	tested
+}
+# the type of either of two values: the one that finishes, or the common one; ø when they differ
+joined_type(a: Node?, b: Node?) as Node? := if a == symbol(NEVER_TYPE) then b else if b == symbol(NEVER_TYPE) then a else if a != ø and b != ø and same_type(a, b) then a else ø
+
+# The function left with a value, expected the function's written result type; the code after it never runs
+return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+	given = typed_form(value, s, f, f.result)
+	f.returns += [if value is Empty then ø else value_type(given)]
+	with_type(refitted(Return(given), n), NEVER_TYPE)
+}
+
+# A value given to a name: its type the one the name holds, written or given before; the value expected it
+set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
+	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
+	_ => name_set_typed(n, place, value, s, f)
+}
+name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+	name = declared_name(place)
+	wanted = declared_type(place) ?? variable_type(name, s, f)
+	given = typed_form(value, s, f, wanted)
+	type = value_type(given) ?? refused(n, "this gives no value to set")
+	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
+	remembered(name, type, s, f)
+	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
+}
+
+# a list's item given a value of the list's item type; the Set itself gives none
+item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+	wanted = value_type(place)
+	given = typed_form(value, s, f, wanted)
+	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the list holds ${wanted}") }
+	refitted(Set(place, given), n)
+}
+
+# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
+# list takes the type its place wants.
+list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
+	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
+	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
+}
+
+# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
+	held = typed_form(subject, s, f, ø)
+	item = item_type(value_type(held)) ?? refused(subject, "this has no items to take by their place")
+	place = typed_form(key, s, f, symbol(INT_TYPE))
+	if not fits_type(place, symbol(INT_TYPE)) { refused(key, "an item's place is an int") }
+	with_type_of(refitted(Get(held, place), n), item)
+}
+
+# a name's value: a parameter, local or global, of the type given to it
+name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
+	binding = text(fact_of(n, BINDING))
+	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY or binding == BOUND_CAPTURE { refused(n, "a function value or a capture comes with closures, not yet") }
+	with_fact(n, TYPE, variable_type(n, s, f) ?? refused(n, "this name is read before any value is given to it"))
+}
+# the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
+variables_of(name: Node, s: TypingState, f: TypeFrame) as list := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
+remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
+	variable = [place_key(defined_at(name)), type]
+	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
+}
+variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := {
+	key = place_key(defined_at(name))
+	for variable in variables_of(name, s, f) { if variable#1 == key { return variable#2 } }
+	ø
+}
+defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
+
+# A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
+# arguments; then the function it means, typed for these argument types
+call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	candidates = candidates_of(called).map(definer => definition_at(definer, s))
+	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
+	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)
+	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
+	meant = chosen_definition(n, called, candidates, given, expected)
+	wanted = parameters_in(meant).map(type_given)
+	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then typed_form(arguments#at, s, f, wanted#at) else given#at)
+	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
+}
+# the definitions a called name may mean: the one it was bound or typed to, else its candidates
+candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {
+	List(items, bracket, separator) => items
+	_ => [defined_at(called)]
+}
+definition_at(definer: Node, s: TypingState) as Node := {
+	key = place_key(definer)
+	for definition in s.definitions { if place_key(declared_name(written_name(definition))) == key { return definition } }
+	refused(definer, "the typing stage found no definition here")
+}
+
+# The one definition that takes these typed arguments, by their types, then by the type expected; none or several
+# refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
+chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?) as Node := {
+	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
+	fitting = candidates.filter(definition => takes(definition, given))
+	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
+	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
+	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
+	fitting#1
+}
+takes(definition: Node, given: list) as bool := {
+	parameters = parameters_in(definition)
+	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
+}
+fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+# a one-character text literal, typed a char, where a text is wanted
+reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
+candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
+
+# A function typed for these argument types, once per tuple: its parameters, then its body, its result written or
+# its body's type. A call inside its own body finds it typed but without a result unless one is written.
+# what a function's body and returns give back, all of one type
+result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
+	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then ø else frame.returns#1) else body_type
+	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and same_type(returned, result)) { refused(name, "this function gives back values of different types") } }
+	result
+}
+function_typed(definition: Node, types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+	key = place_key(declared_name(name))
+	for typed in s.functions {
+		if typed.key == key and same_types(typed.arguments, types) {
+			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }
+			return typed
+		}
+	}
+	typed = TypedFunction(key, types)
+	typed.result = declared_type(name)
+	typed.signed = with_signature(name, types, typed.result)
+	s.functions += [typed]
+	frame = TypeFrame()
+	frame.result = typed.result
+	typed_parameters = (1 to #types).map(at => parameter_typed(parameters_in(definition)#at, types#at, frame))
+	typed_body = typed_form(body, s, frame, typed.result)
+	given = result_given(value_type(typed_body), frame, name)
+	if typed.result != ø and (given == ø or not same_type(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
+	typed.result = given
+	typed.signed = with_signature(name, types, given)
+	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
+	typed.done = yes
+	typed
+} }
+parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
+	frame.variables += [[place_key(declared_name(parameter)), type]]
+	with_name_fact(parameter, TYPE, type)
+}
+# a function's name with its signature, `(int, text) -> int`; `()` for no parameters or no value
+with_signature(name: Node, types: list, result: Node?) as Node := with_name_fact(name, SIGNATURE, Call(symbol(ARROW), [List(types, Bracket.Round, Separator.Comma), result ?? Empty]))
+
+# the parts of a Define, its parameters as a list of none or more
+written_name(definition: Node) as Node := match definition { Define(name, parameters, body) => name }
+parameters_in(definition: Node) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
+items_of(n: Node) as list := match n {
+	List(items, bracket, separator) => items
+	_ => []
+}
+with_items(n: Node, items: list) as Node := match n {
+	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
+	_ => n
+}
+all_typed(definition: Node) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø)
+written_types(definition: Node) as list := parameters_in(definition).map(type_given)
+# a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
+type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
+
+# a primitive's value is of the type its built-in's definition writes, none when it writes none
+prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
+
+# Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
+# `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.
+# A node not typed yet fits nothing, so a typed rule fires only on settled types; a rest hole asks it of each item.
+fits_type(n: Node, wanted: Node) as bool := {
+	held = type_held(n)
+	held != ø and same_type(held, wanted)
+}
+fit_each(items: list, wanted: Node) as bool := items.all(item => fits_type(item, wanted))
+type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
+same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
+# two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
+same_type(a: Node, b: Node) as bool := match b {
+	Symbol(name) => a is symbol and text(a) == name
+	_ => a == b
+}

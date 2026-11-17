@@ -2,6 +2,11 @@
 # code: each operator Call in its own notation (`(Call + a b)` is `a + b`), brackets only where precedence needs them,
 # and a reading that spacing decided spelled out: `[a -1]` prints as `[a, -1]`, `print -x` as `print (-x)`.
 
+use "parse/operators.wap"
+use "stage.wap"
+use "../kernel/forms.wap"
+use "../preload/operators.wap"
+
 formatted(n: Node) as text := annotations_text(n) + written(n)
 
 written(n: Node) as text := match n {
@@ -49,9 +54,9 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 enum Side { Left, Right }
 
 # an operand of an operator, in brackets only when it would not be applied first without them: `1 + (2 * 3)` prints
-# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets
+# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets; a parameter list keeps its own, `(int) -> int`
 operand_text(operand: Node, call: Node, side: Side) as text := {
-	inner = ungrouped(operand)
+	inner = if side == Side.Left and group_written(call) == parameters_group then operand else ungrouped(operand)
 	if needs_brackets(inner, call, side) then "(" + formatted(inner) + ")" else formatted(inner)
 }
 

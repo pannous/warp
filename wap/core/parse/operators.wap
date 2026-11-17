@@ -10,6 +10,11 @@
 # the same notation with each operator application a Call of its canonical spelling. An unrelated mix, a chain of a
 # group that refuses chaining, or an operator key the table lacks is refused.
 
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "../../preload/operators.wap"
+
 # ---- the table, checked when it is read
 
 # the group of that name; an unknown name in the table is refused
@@ -261,7 +266,8 @@ known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #ali
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
 # spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
-phrase_read(tokens: list) as Node := {
+phrase_read(written: list) as Node := {
+	tokens = operators_called(written)
 	operands = []
 	pending = []
 	expecting_operand = yes
@@ -297,6 +303,27 @@ phrase_read(tokens: list) as Node := {
 	while #pending > 0 { applied(pending.pop(), operands) }
 	operands#1
 }
+
+# An operator glued to the bracket group after it, with nothing glued before it, is called like any `f(x)`:
+# `+(a, b)` is the glued head Key(+, None, (a, b)), whatever fixities + has; `a-(b)` stays a subtraction
+operators_called(tokens: list) as list := {
+	called = []
+	i = 1
+	while i <= #tokens {
+		token = tokens#i
+		if i < #tokens and is_operator_word(token.item) and token.glued_after and not token.glued_before and is_bracketed(tokens#(i + 1).item) {
+			called.add(Spaced(Key(token.item, Op.None, tokens#(i + 1).item), no, tokens#(i + 1).glued_after))
+			i = i + 2
+		} else {
+			called.add(token)
+			i = i + 1
+		}
+	}
+	called
+}
+
+# a symbol the table reads as an operator in any fixity
+is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø
 
 # whether the token can start an operand: a word, a literal, a group, or a prefix operator; ø ends the phrase
 operand_follows(next: Spaced?) as bool := next != ø and (reading_as(next.item, Fixity.Prefix) != ø or reading_as(next.item, Fixity.Infix) == ø and reading_as(next.item, Fixity.Postfix) == ø)

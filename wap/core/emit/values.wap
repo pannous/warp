@@ -5,6 +5,9 @@
 # an f64, yes/no and a character an i32, a text a GC array of its UTF-8 bytes, ø a null reference. Boxing into a
 # $Node, where a kind is known only at run time, joins with the first form that needs it.
 
+use "wasm.wap"
+use "../stage.wap"
+
 # Code that leaves one value of `type` on the stack; a form that leaves none has the type []
 class Code {
 	type: list = []
@@ -28,14 +31,13 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet
 layout_of(type_name: Node, m: Module) as list? := match type_name {
 	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else ø
-	_ => ø
+	_ => if list_index(type_name, m) == ø then ø else nullable(list_index(type_name, m))
 }
 
-# A literal read as the type its place wants, ø where it reads as itself: a one-character text, which the reader
-# gives as a Char, is a text where a text is wanted
-literal_as(n: Node, wanted: list, m: Module) as Code? := match n {
-	Char(value) => if wanted == nullable(text_type(m)) then text_literal(text(value), m) else ø
-	_ => ø
+# the GC type of a list, `list<int>`: an array of its items' layout; ø for a type that is no list
+list_index(type: Node, m: Module) as int? := {
+	item = if item_type(type) == ø then ø else layout_of(item_type(type), m)
+	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
 }
 
 # a text's bytes kept in a passive segment, copied into a new array where the program meets it
