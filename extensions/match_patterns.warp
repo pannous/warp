@@ -199,7 +199,12 @@ HOLE_MARK = "$"
 # a list, a map or a case `Key(…)`: matched as a value, its holes the names of an arm
 is_value_body(body: Node) as bool := bracket_of(body) == "[" or bracket_of(body) == "{" or is_capitalized_call(body)
 is_capitalized_call(n: Node) as bool := bracket_of(n) == "(" and separator_of(n) == "" and #n > 1 and n#1 is symbol and is_capitalized(name_of(n#1))
-hole_unmarked(part: Node) as Node := if is_hole_symbol(part) then symbol(name_of(part)[1 ..]) else part
+# `$x` the name x; in a map, `src: $src` the field src bound by its own name, `{src}`
+hole_unmarked(part: Node) as Node := match part {
+	Key(Symbol(field), Op.Colon, Symbol(hole)): if hole == HOLE_MARK + field then symbol(field) else Key(symbol(field), Op.Colon, hole_unmarked(value_of(part)))
+	Symbol(name): if is_hole_symbol(part) then symbol(name[1 ..]) else part
+	_: part
+}
 # `$c: Node` is any part, `$c`; `$f: Symbol` tests the case by its type word, `$f: symbol`
 code_hole_typed(part: Node) as Node := match part {
 	Key(hole, Op.Colon, Symbol(kind)): if not is_hole_symbol(hole) then part else if kind == node_type then hole else Key(hole, Op.Colon, symbol(kind.lower()))
@@ -217,7 +222,7 @@ rest_holes_typed(body: Node) as Node := bottom_up(body, part => match part {
 typed_rests(items: list) as list := {
 	if #items < 2 { return items }
 	rest = items#1
-	if is_key(rest, Op.To) and is_hole_symbol(key_of(rest)) and value_of(rest) == symbol(":") and items#2 is symbol {
+	if is_key(rest, Op.To) and is_hole_symbol(key_of(rest)) and value_of(rest) != ø and text(value_of(rest)) == ":" and items#2 is symbol {
 		return [Key(Key(key_of(rest), Op.Colon, items#2), Op.To, ø)] + typed_rests(items[2 ..])
 	}
 	[rest] + typed_rests(items[1 ..])
