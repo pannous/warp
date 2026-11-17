@@ -269,7 +269,9 @@ takes(definition: Node, given: list) as bool := {
 	parameters = parameters_in(definition)
 	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
 }
-fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+# a bare `list` wanted, which every list<T> fits
+any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
 # a one-character text literal, typed a char, where a text is wanted
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")

@@ -288,9 +288,12 @@ call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Co
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = arguments.map(argument => code(argument, p, f))
-	if given.map(argument => argument.type) != function.parameters { refused(form, "the arguments are not of the parameters' types") }
+	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at)) { refused(form, "the arguments are not of the parameters' types") }
 	Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index]))
 }
+# whether a value of one wasm type may be passed where another is taken: the same type, or a reference to an array
+# where any array is taken (a list<T> given to a `list` parameter)
+passes(given: list, taken: list) as bool := given == taken or (taken == ARRAYREF and given#1 == NULLABLE_REFERENCE)
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	binding = binding_of(called)
 	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }
