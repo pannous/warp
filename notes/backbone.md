@@ -4,6 +4,11 @@ Preliminary draft, 2026-11-17, from the user's decisions in the supervisor sessi
 backbone starts from this file with fresh context. Read first: notes/first_principles.md. Inputs: notes/kernel.md (the 13-form kernel, the census, what rule
 patterns need), notes/layers.md, wiki/Philosophy.md, wiki/guiding-principles.md, notes/taste.md.
 
+
+**Names (user 2026-11-17):** **warp** is the old compiler (core/, frozen), **wap** the new one built here. The few
+language extensions wap needs to be written (narrowed types with a pattern body, see Layers) are built into warp first,
+and small parts of warp may be rewritten with them as a trial.
+
 ## Preamble: rules for every agent on this work
 
 - **The old compiler is frozen.** Nothing new goes into it: no features, no cleanups. It only keeps building, so it
