@@ -1,8 +1,6 @@
 # First principles
 
-Every agent reads this file at start, before, during and after the backbone rewrite (notes/backbone.md). It is the
-condensed philosophy of the wiki: each design choice cites the principle it follows. A line here changes only with the
-user's OK, through warp-interviewer.
+condensed philosophy of the warp language: 
 
 ## Core identities
 
@@ -11,20 +9,18 @@ special case that breaks one of these identities is a bug.
 
 - **Data and code are one notation.** One reader reads warp data and warp programs alike. Code is data until it runs:
   `data x` quotes it.
-- **Functions and operators are the same, except for notation.** `a + b` is a call of the function `+`. An operator
+- **Functions and operators are the same, except for notation.** `a + b` is a call of the function `+` or `add`. An operator
   is a function name with a fixity (infix, prefix, postfix) and a place in the precedence table. Any function can be
   given an operator spelling, and any operator can be defined and overloaded like a function.
+- **Aliases are one table.** Every alias maps to a canonical word, for example `through` and `…` to `to`, or `≤` to
+  `<=`. `less` to `<` Spelling never changes meaning, and everything warp prints uses the canonical word.
 - **Functions and methods are the same, except for meta.** A method is a function whose first parameter is the
   receiver. Where it is declared (inside a class or not) is metadata, not meaning.
-- **`f(x)` is `x.f`, universally.** `f(x, y)` is `x.f(y)`, for every function, built-in or user-defined, on every
-  type.
+- **`f(x)` is `x.f`, universally.** `f(x, y)` is `x.f(y)`, for every function, built-in or user-defined, on every type.
 - **Overloads are distinguished by parameter types, or by the return type alone.** Several functions may share a
   name. The call picks the one whose parameter types fit. When only the return type differs, the expected type picks
   it: `x: Meters = parse(t)`. Where nothing decides, the compiler refuses and names the candidates.
-- **`@meta` is always a meta node.** `@gpu`, `@global` and `@primitive` annotate what follows. They never compute a
-  value; they steer how it is compiled.
-- **Aliases are one table.** Every alias maps to a canonical word, for example `through` and `…` to `to`, or `≤` to
-  `<=`. Spelling never changes meaning, and everything warp prints uses the canonical word.
+- **`@meta` is always a meta node.** `@gpu`, `@global` and `@primitive` annotate what follows.
 - **Built-ins are declared like any function.** A typed prototype in the library whose body is a primitive: a wasm
   instruction or a runtime word. The compiler knows no built-in by name.
 - **Units are values.** `3ms`, `5km == 5000m`, `90km/h`: a unit is a value multiplied in, and its type travels along.
@@ -33,21 +29,60 @@ special case that breaks one of these identities is a bug.
 - **Blocks are values.** `{ it * 2 }` is a function of `it`. A parameter declared `block` takes the code unevaluated.
 - **Emptiness is tested loosely.** `if no x`, `x is empty` and `if x` test emptiness; `x is ø` tests only for missing.
 
+We have one universal construct to hold all data and Code:
+
+enum Node {
+	True
+	False
+	Empty
+	Number(value: number)
+	Char(value: codepoint)
+	Text(value: text)
+	Symbol(name: text)
+	Error(node: Node)
+	Key(left: Node, op: Op, right: Node)
+	List(items: list, bracket: Bracket, separator: Separator)
+	Data(value: any)
+	Meta(node: Node, data: Node)
+	Type(name: Node, body: Node)
+}
+
+We make use of this construct either through types and values, or through pattern matching:
+
+// kernel layer: a shape is a name for a Node pattern, usable to build and to match
+shape If(cond: Node, yes: Node, no: Node) = (·if cond yes no)
+shape Call(f: Node, args: [Node])        = (·call f args...)
+shape Define(name: Symbol, params: [Node], body: Node) = (·define name params body)
+
+kernel = If | Call | Define | …            // the emitter's input language, a union of shapes
+
+emit(node: kernel) …                       // matches If(c, a, b) etc.
+emit(node: Node) = refuse("not kernel: …") // anything else is refused loudly
+
+A typed rule then writes its output with the same names:
+rule unless $c $body => If(not $c, $body, Empty)  # sugar 
+
+type Meters < int is already a narrowed type, so 
+type If < Node   with a head check is the same idea. A shape is a narrowed type plus named fields.
+
+# Can we use cheap types everywhere?
+shape Call(f: Node, args: [Node])   =>
+shape Call(f: Function, args: Arguments)  
+
 ## The language
 
 1. **Many spellings, one meaning.** Every spelling programs may write stays valid. Only an explicit, printed reading
-   may decide between two readings: `warp format` turns `[a -1]` into `[a, -1]`.
+   may decide between two readings: `warp format` turns `[a -1]` into `[a, -1]`. ??
 2. **One general rule over special cases.**
-   - A form that falls out of the general rules is welcome, however esoteric (`"x" * yes`).
    - A form that needs its own rule for one phrase is bloat.
-   - A fix holds for every sibling of the example that showed the problem.
+   - A form that falls out of the general rules is welcome, however esoteric (`"x" * yes`).
+   - A fix holds for every sibling of the example that showed the problem. ??
 3. **Refuse, never guess.** Where code reads two ways, or a form is unknown, the compiler refuses with a fix-it that
    names the readings. A plausible wrong value is the worst bug.
 4. **Meaning is typed.** Types are optional to write and always there to the compiler.
 5. **Plain warp first.** A feature is a function, an enum, a class, an overload or a block parameter in the library
-   whenever plain warp can say it. A rule is only for meaning plain warp cannot express.
+   whenever plain warp can say it. A rule is only for syntax plain warp cannot express.
 6. **Vocabulary is library.** The names and values of a domain (keys, units, colors, months) are declared in lib/.
-   A core change that adds names of a domain shows that a mechanism is missing.
 7. **Familiar conventions first.** Where warp has no stated reason to differ, the meaning people know from Julia,
    shells and mainstream languages wins.
 8. **Progressive disclosure.** A beginner writes `print 1 + 2`. The machinery (types, rules, operators) is there
@@ -89,6 +124,13 @@ special case that breaks one of these identities is a bug.
     - Picture the most general, most beautiful code and build that.
     - A list, condition or rule written twice becomes a name.
     - Never degrade the input to suit a tool: fix the tool.
+
+# Universality
+Warp shall be structured as
+• kernel: backbone notes/kernel.md minimal working subset of the language "better Lisp with maps and types"
+• core: standard language features 
+• extensions: language features not needed by the compiler, semantic rewrite rules applied =>
+• library: extra functionality for specific scenarios (Sound, graphics, ...)
 
 ## How agents work by these principles
 
