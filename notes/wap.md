@@ -54,7 +54,7 @@ wap/
                               warp wap/compiler.wap <program> <module.wasm>
 
   kernel/                     the kernel layer: the emitter's whole input language
-    forms.wap                 the kernel forms, each a pattern type of Node; `kernel`, their closed union
+    forms.wap                 the kernel forms, each a class with an `origin`; `Form`, their closed union
     primitives.wap            the primitives: name → wasm instruction, conversion, constructor, runtime or host word
 
   core/                       the machinery: mechanisms only, no names of a domain
@@ -117,7 +117,7 @@ A rule file is in core/sugar/ exactly when wap's own source uses its spelling; w
 
 ## State
 
-Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Seq), core/parse/reader.wap (warp's
+Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Literal, Call, Seq, as classes), core/parse/reader.wap (warp's
 `parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap and
 core/emit/wasm.wap. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
 in the emitter (a debt).

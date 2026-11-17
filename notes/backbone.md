@@ -6,7 +6,7 @@ patterns need), notes/layers.md, wiki/Philosophy.md, wiki/guiding-principles.md,
 
 
 **Names (user 2026-11-17):** **warp** is the old compiler (core/, frozen), **wap** the new one built here. The few
-language extensions wap needs to be written (narrowed types with a pattern body, see Layers) are built into warp first,
+language extensions wap needs to be written (narrowed types with a pattern body, generalized class patterns, see Layers) are built into warp first,
 and small parts of warp may be rewritten with them as a trial.
 
 ## Preamble: rules for every agent on this work
@@ -46,30 +46,31 @@ Decided (user 2026-11-17): four layers.
 | **extensions** | rule sets, one file per topic (`for`, units, ranges, `unless`, match sugar) | rules only, no compiled-in hook table; loaded like modules |
 | **library** | functions, classes, enums, operator prototypes with primitive bodies, aliases, the operator table | plain warp |
 
-### Kernel forms are narrowed types of Node with a pattern body
+### Kernel forms are classes; rules match code with pattern types
 
 `Node` stays the plain notation enum (True … Type); no `If` or `Call` variant is added to it. A kernel form is a
-**subtype of Node whose body is a pattern** (user 2026-11-17: combine the subtype and shape ideas). It is the same
-mechanism as `type Meters < int`, with a pattern instead of "any int":
+**class with typed fields** (user 2026-11-17: proper classes for the kernel, notes/kernel.md), its last field `origin`
+the code it was lowered from:
+
+```warp
+class If { cond: Form; then_part: Form; else_part: Form; origin: Node = ø }
+type Form = If | Call | Define | …                  // the emitter's input language, a closed union
+```
+
+One declaration gives all four uses: build `If(c, a, b)`, test `form is If`, match `If(c, a, b) => …`, read
+`form.cond`. The emitter takes `Form`, so its coverage is checked.
+
+The program's code is still matched by **pattern types**, subtypes of Node whose body is a pattern (built in warp:
+extensions/match_patterns.warp). It is the same mechanism as `type Meters < int`, with a pattern instead of "any int":
 
 ```warp
 type Meters < int                                   // any int, a new name
 type Even < int where it % 2 == 0                   // narrowed by a condition
-type If < Node = (·if cond: Node then_part: Node else_part: Node)  // narrowed by a pattern with named holes
-type Call < Node = (·call f: Node args: [Node]...)
-
-kernel = If | Call | Define | …                     // the emitter's input language, a closed union
+type Unless < Node = (unless cond: Node body: Node) // narrowed by a pattern with named holes
 ```
 
-One declaration gives all four uses:
-- **build:** `If(c, a, b)` makes the Node `(·if c a b)`;
-- **test:** `node is If`;
-- **match:** `case node { If(c, a, b) => … }`;
-- **read:** `node.cond`, after narrowing.
-
-Kernel types live in the kernel layer, and surface types (`For`, `Unless`) live in extensions beside their rules.
-Core declares none. The emitter takes `kernel`, so its coverage is checked, and refuses any other Node. Core cost:
-patterns as the body of a narrowed type, which typed rules need anyway.
+Kernel classes live in the kernel layer, and surface pattern types (`For`, `Unless`) live in extensions beside their
+rules. Core declares none.
 
 ## Operators: a core feature done properly
 
@@ -168,7 +169,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open questions for the user
 
-1. ~~Layers~~: decided, four layers; kernel forms are narrowed types of Node with a pattern body.
+1. ~~Layers~~: decided, four layers; kernel forms are classes, code patterns are narrowed types of Node.
 2. **The reader:** reuse it for milestone 1 and rewrite it as a pure notation reader before milestone 2?
    Recommended: yes.
 3. **Folder:** where the new backbone lives until the switch, for example `backbone/`, then it replaces core/.

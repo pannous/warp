@@ -19,62 +19,65 @@ Read first: notes/first_principles.md. The plan this belongs to: notes/backbone.
 
 ## How a kernel form is declared
 
-Each form is a narrowed type of `Node` whose body is a pattern with named holes (notes/backbone.md "Kernel forms are
-narrowed types of Node with a pattern body"). This is the same mechanism as `type Meters < int`, with a pattern
-instead of "any int":
+Each form is a class with typed fields (wap/kernel/forms.wap; user 2026-11-17: proper classes for the kernel). The
+program's code is Node, the notation; the kernel is records, and the lowering is where one becomes the other:
 
 ```warp
-type If < Node = (If cond: Node then_part: Node else_part: Node)
+class If { cond: Form; then_part: Form; else_part: Form; origin: Node = ø }
 ```
 
-One declaration gives four uses (built in extensions/match_patterns.warp, tested in test/types/test_pattern_types.warp):
+One declaration gives four uses:
 
 ```warp
-If(c, a, b)                        // build: the node (If c a b)
-node is If                         // test
-match node { If(c, a, b) => … }    // take apart, the holes bound by place
-emit_if(n: If) := … n.cond …       // read a hole off a parameter of the type
+If(c, a, b)                        // build
+form is If                         // test
+match form { If(c, a, b) => … }    // take apart, the leading fields by place
+match form { If{cond} => … }       // or any field by name
+form.cond                          // read
 ```
 
 and the emitter is one function over the closed union:
 
 ```warp
-kernel = Literal | Name | Quote | Define | Get | Set | Fn | Call | Prim | If | Seq | While | Break | Continue | Return | Record | Case | Try
-emit(n: kernel) := match n { If(c, a, b) => …; While(c, body) => …; … }
-emit(n: Node) := refuse("not a kernel form: " + n)
+type Form = Literal | Name | Quote | Define | Get | Set | Fn | Call | Prim | If | Seq | While | Break | Continue | Return | Record | Case | Try
+emit(form: Form) := match form { If(c, a, b) => …; While(c, body) => …; … }
 ```
 
 Two details:
-- **The head is the form's own type name** (`(If c a b)`, `(Call f args)`): readable when printed, and never a
-  keyword (`(if …)` inside a pattern would read as warp's own `if`). A program's own `(If a b)` group cannot pass for
-  a kernel form, because only the rewrite stages build kernel nodes and the emitter sees nothing else. Should a
-  stronger guarantee be wanted, a head no program can write (`·If`) costs one reader change.
-- **Holes are named by what they hold, never by a keyword:** `yes`, `no`, `then`, `else`, `function` and type words
-  are values or keywords in warp, not names, so `(If cond yes no)` would have a single hole.
+- **`origin` is every form's last field:** the code the form was lowered from, so an error found in any later stage
+  names the line the program wrote and quotes it. The stage walker (wap/core/stage.wap) sets it; no rule does. It is
+  last so that places in a pattern bind the form's own fields, and each class declares it, since an inherited field
+  would come first.
+- **Fields are named by what they hold, never by a keyword or a type word:** `yes`, `no`, `then`, `else`,
+  `function` read as values, keywords or types in a pattern, so `If` has `then_part` and `else_part`, and `Call`
+  has `called` (the function called; a callee would be the one doing the calling).
+
+Rules still match the program's code with pattern types (`type X < Node = pattern`, extensions/match_patterns.warp):
+those describe notation, the classes describe the kernel.
 
 ## The forms
 
-| form | declaration | the program wrote |
+| form | fields | the program wrote |
 |---|---|---|
 | Literal | the Node cases Number, Text, Char, True, False, Empty, Symbol | `3`, `"a"`, `'a'`, `yes`, `ø`, `#red` |
 | Name | a Symbol read as a variable | `x` |
-| Quote | `(Quote code: Node)`, `$x` holes spliced | `data a + b`, `data f($x)` |
-| Define | `(Define name: Node parameters: Node body: Node)` | `f(x) := …`, constants, `global n = 0` |
-| Get | `(Get place: Node)`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
-| Set | `(Set place: Node value: Node)` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
-| Fn | `(Fn parameters: Node body: Node)` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
-| Call | `(Call callee: Node arguments: Node)` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
-| Prim | `(Prim operation: Node arguments: Node)` | nothing directly: library bodies (below) |
-| If | `(If cond: Node then_part: Node else_part: Node)` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
-| Seq | `(Seq statements: Node)`, its own scope | `{…}`, `(a; b)`, indented lines |
-| While | `(While cond: Node body: Node)` | `while`, `until`, `for`, `n times`, `loop` |
-| Break, Continue, Return | `(Break)`, `(Continue)`, `(Return value: Node)` | the same words |
-| Record | `(Record name: Node fields: Node variants: Node)` | `class`, `enum`, `type X = A \| B` |
-| Case | `(Case subject: Node arms: Node)` | `match`, `x is T` |
-| Try | `(Try body: Node handler: Node)` | `try … catch`, `try x else y`, `except` |
+| Quote | `code`, `$x` holes spliced | `data a + b`, `data f($x)` |
+| Define | `name parameters body` | `f(x) := …`, constants, `global n = 0` |
+| Get | `place`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
+| Set | `place value` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
+| Fn | `parameters body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
+| Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
+| Prim | `operation arguments` | nothing directly: library bodies (below) |
+| If | `cond then_part else_part` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
+| Seq | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
+| While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
+| Break, Continue, Return | none, none, `value` | the same words |
+| Record | `name fields variants` | `class`, `enum`, `type X = A \| B` |
+| Case | `subject arms` | `match`, `x is T` |
+| Try | `body handler` | `try … catch`, `try x else y`, `except` |
 
 How a few spellings reach the kernel:
-- `for x in xs { b }` is `Seq(i = iterator(xs); While(has_next(i), Seq(x = next(i); b)))`.
+- `for x in xs { b }` is `Seq([i = iterator(xs), While(has_next(i), Seq([x = next(i), b]))])`.
 - `loop { b }` is `While(yes, b)`; `until c { b }` is `While(not c, b)`.
 - `a + b` is `Call(+, [a, b])`: an operator is a function (first principles). Whether `+` on two ints becomes a
   single wasm instruction is decided by `+`'s library definition, whose body is a primitive.
