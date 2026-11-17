@@ -91,7 +91,10 @@ forms are named patterns of Node with `$` holes: notes/first_principles.md, wiki
   - the host words and the native driver;
   - the test harness;
   - lib/, as far as it is plain warp.
-- **Open, the reader:** reuse it as it is, or rewrite it as a pure notation reader whose keyword branches (about
+- **The reader** comes first and gets special care: notes/reader.md, a data reader inspired by wasp's node parsing
+  (not a copy). Three strictly separate steps: (1) the data reader parses any data into Node and knows no language;
+  (2) then structural language matching (spelling rules); (3) then the analyzer (user 2026-11-17).
+- **Was open, the reader:** reuse it as it is, or rewrite it as a pure notation reader whose keyword branches (about
   1,700 lines today) become spelling rules. The recommendation is to reuse it for milestone 1 and rewrite it before
   milestone 2.
 - **The old compiler** compiles the new backbone until the new backbone compiles itself, then retires.
