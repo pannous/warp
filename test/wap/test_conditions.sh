@@ -13,4 +13,7 @@ check "an If's value given to a name" "$(ran value 'x = if no then 1 else 2
 x')" "2"
 check "an If's value as a function's result" "$(ran result 'pick(c: bool) := if c then 10 else 20
 pick(yes)')" "10"
+check "not turns a condition round" "$(ran not 'if not no then print "a" else print "b"
+if !yes then print "c" else print "d"')" "a
+d"
 exit $((failures > 0))

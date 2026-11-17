@@ -16,3 +16,6 @@ print(t: text) := prim print_text(t)
 >(a: int, b: int): bool := prim i64_gt_s(a, b)
 <=(a: int, b: int): bool := prim i64_le_s(a, b)
 >=(a: int, b: int): bool := prim i64_ge_s(a, b)
+
+# the other truth value: `not yes` is no (`!` and `¬` are its aliases)
+not(b: bool): bool := if b then no else yes

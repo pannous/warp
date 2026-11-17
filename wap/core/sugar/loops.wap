@@ -3,3 +3,4 @@
 
 rule while $condition... $body: Braces => While($condition, $body)
 rule return $value... => Return($value)
+rule until $condition... $body: Braces => While(not $condition, $body)
