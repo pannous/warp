@@ -1,0 +1,38 @@
+# Kernel forms to a wasm module (notes/kernel.md): one case per form, any other node refused.
+#
+# The emitter reads only the kernel. It never sees a surface spelling, and it decides nothing a rule could decide:
+# it translates. The bytes themselves are wasm.wap's.
+#
+# Milestone 1 writes texts through WASI's fd_write, which the native warp and the browser both answer. That `print`
+# is recognized here by name is a debt (notes/backbone.md "Debts"): print becomes a library function whose body is a
+# host primitive once the kernel has Prim.
+
+STDOUT = 1
+NEWLINE = 10
+# fd_write(fd, iovecs, count, written) → error: where it stores the count written
+WRITTEN_ADDRESS = 0
+
+# The module of a program: its statements become the body of `_start`, the function WASI runs.
+emitted(program: Block) as Module := {
+	m = Module()
+	output = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
+	start = added_function(m, [], [], code(program, m, output))
+	exported(m, "_start", FUNCTION_KIND, start)
+	exported(m, "memory", MEMORY_KIND, 0)
+	m
+}
+
+# the instructions of a kernel form
+code(form: Node, m: Module, output: int) as list := match form {
+	Block(statements) => statements.flat_map(statement => code(statement, m, output))
+	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused(form, "the emitter takes no call but print of a text yet")
+	_ => refused(form, "not a kernel form")
+}
+
+# a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
+printed(line: text, m: Module, output: int) as list := {
+	bytes = line.bytes + [NEWLINE]
+	text_address = added_data(m, bytes)
+	iovec = added_data(m, little_endian(text_address) + little_endian(#bytes))
+	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(output) + [DROP]
+}

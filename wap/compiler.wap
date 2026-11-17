@@ -1,0 +1,23 @@
+#!/usr/bin/env warp
+# wap, the new compiler (notes/backbone.md, notes/wap.md, the file tree): a program's source in, a wasm module out.
+#
+#   warp wap/compiler.wap hello.wap hello.wasm      compile
+#   warp hello.wasm                                  run it
+#
+# Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
+#   read      text → notation       core/parse/reader.wap
+#   lower     notation → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
+#   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
+use "kernel/forms.wap"
+use "core/stage.wap"
+use "core/errors.wap"
+use "core/parse/reader.wap"
+use "core/rules/lowering.wap"
+use "core/emit/wasm.wap"
+use "core/emit/emitter.wap"
+
+compiled(source: text) as list := module_bytes(emitted(lowered_program(notation(source))))
+
+if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>" }
+write_bytes(args#2, compiled(read(args#1)))

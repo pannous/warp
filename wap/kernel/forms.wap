@@ -1,0 +1,19 @@
+# The kernel: the forms wap's emitter understands, and nothing else (notes/kernel.md).
+#
+# Each form is a named pattern of Node, code with holes (user 2026-11-17: kernel forms are patterns, positions ride
+# in the nodes' metadata). One declaration builds a form, `Call(print, ["Hello"])`, tests it, `n is Call`, takes it
+# apart, `Call(called, arguments) => …`, and reads it, `n.called` of a parameter `n: Call`.
+#
+# A form's head is its own name, `(Call print ["Hello"])`: readable when printed and never a keyword. Only the
+# lowering builds kernel nodes, so a program's own `(Call …)` group never reaches the emitter as one. Literals (texts,
+# numbers) are the Node cases themselves and need no declaration. Milestone 1 (`print "Hello"`) needs two forms; the
+# others of notes/kernel.md join as programs need them.
+
+# a call of a function with its arguments, a list of forms: `print "Hello"` is Call(print, ["Hello"])
+pattern Call = data((Call $called $arguments))
+# type Call < Node = (Call callee: Symbol arguments: list)
+# type Call < Node { tag: Symbol arguments: list }
+
+# forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
+# list value, a block runs a, then b
+pattern Block = data((Block $statements))

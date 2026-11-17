@@ -1,0 +1,29 @@
+# Notation → kernel forms, by hand until the rule engine runs (notes/wap.md, notes/kernel.md "How a program reaches
+# the kernel").
+#
+# This is where the rule engine will run its three stages (shape, signature, kind). Until it exists, the few
+# spellings milestone 1 needs are lowered here by hand:
+#   print "Hello"            a phrase: a word, then its arguments → Call(print, ["Hello"])
+#   print "a"; print "b"     statements → Block([…, …])
+# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
+
+# the program as one Block of its statements
+lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
+
+# code as a kernel form, placed where the code was written (core/stage.wap)
+lowered(n: Node) as Node := staged(n, lowered_form)
+lowered_form(n: Node) as Node := match n {
+	Text(value) => n
+	Number(value) => n
+	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
+	_ => not_lowered(n)
+}
+
+# a sequence of statements gives each, any other node is the one statement
+statements_of(n: Node) as list := match n {
+	List(items, Bracket.None, Separator.Newline) => items
+	List(items, Bracket.None, Separator.Semicolon) => items
+	_ => [n]
+}
+
+not_lowered(n: Node) := refused(n, "wap does not lower this form yet")
