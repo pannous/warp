@@ -259,17 +259,22 @@ definition_at(definer: Node, s: TypingState) as Node := {
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
 chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?) as Node := {
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
-	fitting = candidates.filter(definition => takes(definition, given))
+	fitting = candidates.filter(definition => takes(definition, given, fits))
+	exact = fitting.filter(definition => takes(definition, given, fits_exactly))
+	if #fitting > 1 and exact is not empty { fitting = exact }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
-takes(definition: Node, given: list) as bool := {
+# whether a definition takes these arguments, each one fitting its parameter; a definition they fit exactly wins over
+# one they fit only by a conversion (`text('é')` is text(c: char), not text(t: text))
+takes(definition: Node, given: list, fit: function) as bool := {
 	parameters = parameters_in(definition)
-	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
+	#parameters == #given and (1 to #given).all(at => fit(given#at, type_given(parameters#at)))
 }
-fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+fits(argument: Node, wanted: Node?) as bool := fits_exactly(argument, wanted) or reads_as_text(argument, wanted)
+fits_exactly(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument))
 # a one-character text literal, typed a char, where a text is wanted
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")

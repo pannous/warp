@@ -18,6 +18,16 @@ NEWLINE = 10
 IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
 BYTES_ADDRESS = 16
+# an int's text: at most 19 digits and a sign; the code points of a digit 0 and of a minus
+INT_TEXT_BYTES = 20
+DIGIT_ZERO = 48
+MINUS = 45
+# a character's UTF-8 bytes: the code point below which it takes 1, 2 or 3 bytes, the lead byte's mark for each count,
+# a following byte's mark, and the bits each following byte holds
+UTF8_LIMITS = [0x80, 0x800, 0x10000]
+UTF8_LEADS = [0, 0xC0, 0xE0, 0xF0]
+UTF8_FOLLOWER = 0x80
+UTF8_BITS = 6
 
 # The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
 # its built-in's definition writes (wap/preload/prelude.wap).
@@ -29,7 +39,7 @@ INSTRUCTIONS = {
 	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function}
+HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -106,4 +116,33 @@ joining_function(p: Program) as int := {
 	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
 	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
 	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
+}
+
+# The helper of int_text: an int's digits, written from the last into a buffer, then copied into a text of their
+# length. It counts on the int made negative, so the smallest int has its digits too. Its locals: 0 the int, 1 whether
+# it was negative, 2 the buffer, 3 the place of the first digit so far, 4 the text.
+int_text_function(p: Program) as int := {
+	type = text_type(p.m)
+	n = instruction(LOCAL_GET, [0])
+	place = instruction(LOCAL_GET, [3])
+	buffer = instruction(LOCAL_GET, [2])
+	written_before = byte => buffer + place + i32_const(1) + I32_SUB + instruction(LOCAL_TEE, [3]) + byte + instruction(ARRAY_SET, [type])
+	negated = n + i64_const(0) + I64_LT_S + instruction(LOCAL_TEE, [1]) + I32_EQZ + IF + VOID_BLOCK + i64_const(0) + n + I64_SUB + instruction(LOCAL_SET, [0]) + END
+	made = i32_const(INT_TEXT_BYTES) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2]) + i32_const(INT_TEXT_BYTES) + instruction(LOCAL_SET, [3])
+	digits = LOOP + VOID_BLOCK + written_before(i32_const(DIGIT_ZERO) + n + i64_const(10) + I64_REM_S + I32_WRAP_I64 + I32_SUB) + n + i64_const(10) + I64_DIV_S + instruction(LOCAL_TEE, [0]) + i64_const(0) + I64_NE + instruction(BRANCH_IF, [0]) + END
+	sign = instruction(LOCAL_GET, [1]) + IF + VOID_BLOCK + written_before(i32_const(MINUS)) + END
+	length = i32_const(INT_TEXT_BYTES) + place + I32_SUB
+	copied = length + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_TEE, [4]) + i32_const(0) + buffer + place + length + instruction(ARRAY_COPY, [type, type]) + instruction(LOCAL_GET, [4])
+	added_function(p.m, [I64], [nullable(type)], [I32, nullable(type), I32, nullable(type)], negated + made + digits + sign + copied)
+}
+
+# The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
+char_text_function(p: Program) as int := {
+	type = text_type(p.m)
+	c = instruction(LOCAL_GET, [0])
+	shifted = bits => c + i32_const(bits) + I32_SHR_U
+	follower = bits => shifted(bits) + i32_const(63) + I32_AND + i32_const(UTF8_FOLLOWER) + I32_OR
+	bytes = count => shifted(UTF8_BITS * (count - 1)) + i32_const(UTF8_LEADS#count) + I32_OR + (1 to count - 1).flat_map(i => follower(UTF8_BITS * (count - 1 - i))) + instruction(ARRAY_NEW_FIXED, [type, count])
+	shorter = (1 to UTF8_LIMITS.length).flat_map(count => c + i32_const(UTF8_LIMITS#count) + I32_LT_U + IF + VOID_BLOCK + bytes(count) + RETURN + END)
+	added_function(p.m, [I32], [nullable(type)], [], shorter + bytes(UTF8_LEADS.length))
 }
