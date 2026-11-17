@@ -55,7 +55,7 @@ lead first, as a change of this table.
 | declare | core/analyze/declarations.wap | wap-binding | surface | declared |
 | signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
-| type | core/analyze/types.wap | later | bound kernel | typed kernel |
+| type | core/analyze/types.wap | wap-reader | bound kernel | typed kernel |
 | kind rules (stage 3) | core/rules/ | as stage 1 | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
@@ -64,10 +64,11 @@ The languages, each a set of Node shapes:
   - atoms: `Number` (int, or float when written with a point or a negative exponent; `-1` glued at an item's start
     is a negative Number, `a-1` is not), `Char` (a text of one code point), `Text` (escapes read; a template's `${…}`
     and an extension's `\:name` kept as written; a URL, a word glued to `://` up to a blank, bracket or separator),
-    `Symbol` (a word, or an operator: a glyph with its repeats and one `=`, `<=` `==` `...`; `:=`, `=>`, `and`,
+    `Symbol` (a word, or an operator: a glyph with its repeats and one `=`, `<=` `==` `...`; `=>`, `and`,
     `yes`, `null` are all plain Symbols);
-  - three keys (reader.md Q1, Q11): `Key(key, Op.Colon, value)` and `Key(key, Op.Assign, value)` by the same rules,
-    `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and `x = a + b` all before and after;
+  - four keys (reader.md Q1, Q11, Q13): `Key(key, Op.Colon, value)`, `Key(key, Op.Assign, value)` and
+    `Key(key, Op.Define, value)` by the same rules, `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and
+    `x = a + b` all before and after; `=` and `:=` split before `:` (`x: int = 3` is `(x: int) = 3`);
     `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
   - `List(items, bracket, separator)` in three uses: a phrase, items with blanks between, separator Space
     (`a + b` is `[a, +, b]`); a glued run of no head and bracket, separator None (`a.b`, `3ms`, `a-b`, `-x`); a
@@ -96,7 +97,12 @@ The languages, each a set of Node shapes:
   defining name itself, positioned (core/analyze/scope.wap); a library word is one the preload declares, a name
   nothing defines is refused. Each `Define` and `Fn` also learns `captures`, the defining names it reads from the
   functions around it, its nested functions' reads included.
-- **typed kernel:** bound kernel plus each form's type, and on each `Call` the overload chosen.
+- **typed kernel:** bound kernel plus each value's `type` (`int`, `text` …, as a program writes types; no fact for
+  code that gives no value) and each function's `signature` on its name, `(int, text) -> int`; a `Call`'s
+  `defined_at` is the one function it means, chosen among its `candidates` by argument types, then the type wanted.
+  A function whose parameters have no type stands as one Define per tuple of argument types it is called with; one
+  nothing calls is gone. The program comes first after the preload's functions it calls: one Block
+  (core/analyze/types.wap). Every node with a position also has its `file` (core/stage.wap `file_of`).
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
@@ -230,9 +236,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
-- **A program's `operator` declarations don't extend the table yet** (wap/preload/operators.wap, read by
-  core/parse/operators.wap). Bends "`operator` declarations extend the table". Reason: the operator stage runs before
-  declarations are collected; it needs a prescan of `operator` phrases of its own. Paid off with that prescan.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
   operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
   stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
@@ -241,14 +244,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
   Paid off when values show themselves through the runtime's show words, boxed into a $Node.
-- **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), until the typing stage gives
-  types. A function's body is emitted at its first call, a parameter needs its type written (`x: int`), and a
-  function calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed"
-  (the types are there, but found late). Paid off by the typing stage: the emitter then reads each form's type fact.
-- **A definition's file is the emitter's guess** (wap/core/emit/emitter.wap `place_key`): a definition is known by its
-  file and position, and positions carry no file, so the emitter takes a name's definition to be in the file of the
-  function naming it (the preload for a library name). Paid off when positions carry their file.
-- **The emitter reads a literal as its parameter's type until typing does** (wap/core/emit/values.wap `literal_as`):
-  a one-character text, which the reader gives as a Char, becomes a text where a parameter wants one. Bends "one job
-  per stage": checking a value against its expected type is the typing stage's. Paid off by core/analyze/types.wap,
-  which then removes literal_as.
+- **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), though the typing stage gives
+  each one: it reads only the parameters' types. A function's body is emitted at its first call, and a function
+  calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed" (the types
+  are there, but read late). Paid off when the emitter reads each form's `type` fact.
+- **A written result type is not declared** (wap/core/analyze/declarations.wap): `f(a): int := …` declares
+  `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
+- **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
+  Paid off with closures.

@@ -111,6 +111,22 @@ operators = [
 # `x ⊛= y` is `x = x ⊛ y` for every infix operator ⊛ (wiki/operator.md): spelled ⊛ then `=`, in this group
 compound_assignment_group = "assignment"
 
+# A program's own operators (wiki/operator.md): `infix operator ⊕(a, b) := …`, `prefix operator ⁻ := …`, `operator ⊕`
+# alone is infix. The word before `operator` gives the fixity and the group the operator joins (it binds like `+`),
+# unless the program places it: `operator ⊕ has precedence above *` gives it a group of its own, bound tighter than
+# the group of `*`; `… below *` looser. A spelling the table has in that fixity is overloaded, not declared again.
+class Declaring { word: text, fixity: Fixity, group: text }
+operator_word = "operator"
+declaring_words = [
+	Declaring("operator", Fixity.Infix, "additive"),
+	Declaring("infix", Fixity.Infix, "additive"),
+	Declaring("prefix", Fixity.Prefix, "unary"),
+	Declaring("postfix", Fixity.Postfix, "superscript"),
+	Declaring("suffix", Fixity.Postfix, "superscript"),
+]
+precedence_above = ["has", "precedence", "above"]
+precedence_below = ["has", "precedence", "below"]
+
 aliases = [
 	# symbols
 	Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
