@@ -199,6 +199,11 @@ list_kind_unit() as int := 4503599627370496
 list_cell_unit() as int := 144115188075855872
 # a list of an extension's kind, whose words runtime/bridge.warp's list hooks reach (a GPU list: extensions/gpu_lists)
 is_extended_list(n: Node) as bool := list_kind(n) > 0
+# TODO (card typed-range-value) remove once the seed is refreshed: the seed's runtime words of the lazy range list,
+# which its emitter still names; nothing calls them
+range_value(first: int, last: int) as Node := fresh_int_node(first)
+is_range(n: Node) as bool := no
+range_sum(n: Node) as Node := n
 # the items of a value whose data is no $list (emitter unboxed_list_code): an instance's as its class's items() gives
 # them (a range, core/prelude_core.warp Range), a list of an extension's kind as that gives them (a GPU list refuses)
 unlisted_items(n: Node) as list := {
