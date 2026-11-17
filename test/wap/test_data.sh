@@ -15,4 +15,6 @@ xs#1 = 5
 xs#1 + xs#2')" "7"
 check "a list given to a function" "$(ran given 'second(xs: list<int>): int := xs#2
 second [4, 5, 6]')" "5"
+check "a list's type in words" "$(ran in_words 'second(xs: list of int) as int := xs#2
+second [1, 2]')" "2"
 exit $((failures > 0))

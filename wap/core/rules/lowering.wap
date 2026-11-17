@@ -95,7 +95,8 @@ primitive_of(operation: Node, n: Node) as Node := match operation {
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
 assigned(place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
-	_ => Set(lowered(place), value)
+	Get(subject, key) => Set(lowered(place), value)
+	_ => Set(place, value)
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
