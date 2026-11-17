@@ -36,9 +36,10 @@ GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], 
 # a line comment starts with `//`, or with `#` before a blank, `!` or `#`
 HASH_COMMENT_FOLLOWERS = " \t\n!#"
 
-# a token: an atom (its node), an opening or closing bracket, a separator or a colon, with the blank before it
-enum LexemeKind { Atom, Open, Close, Separator, Colon }
-class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no }
+# a token: an atom (its node; a bracket's list has its bracket), an opening or closing bracket, a separator or a key's
+# `:` or `=` (its op), with the blank before it
+enum LexemeKind { Atom, Open, Close, Separator, Key }
+class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon }
 
 class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty }
 
@@ -77,7 +78,8 @@ read_token(r: Reader) := {
 	else if c == ';' { separated(r, Separator.Semicolon, 1) }
 	else if QUOTES.contains(c) { quoted(r, c) }
 	else if is_digit(c) or (signs_number(r) and is_digit(next)) { number_read(r) }
-	else if c == ':' and next != ':' and next != '=' { token(r, LexemeKind.Colon, Symbol(":"), 1) }
+	else if c == ':' and next != ':' and next != '=' { token(r, LexemeKind.Key, Symbol(":"), 1) }
+	else if c == '=' and not joins_glyph(r) { key_token(r, Op.Assign) }
 	else if is_glyph(c) { glyphs_read(r, c) }
 	else if is_name_char(c) { name_read(r) }
 	else { failed(r, "a character the reader does not know") }
@@ -98,6 +100,17 @@ signs_number(r: Reader) as bool := {
 	if r.blank or r.at == 0 { return yes }
 	before = r.code[r.at - 1]
 	OPENERS.contains(before) or before == ',' or before == ';' or (is_glyph(before) and before != c)
+}
+
+# `=` alone makes a key; `==`, `=>` and the like are operators, while a sign after it starts a number (`x=-1`)
+joins_glyph(r: Reader) as bool := {
+	next = peek(r, 1)
+	is_glyph(next) and not ((next == '-' or next == '+') and is_digit(peek(r, 2)))
+}
+
+key_token(r: Reader, op: Op) := {
+	token(r, LexemeKind.Key, Symbol(op as text), 1)
+	last_of(r.tokens).op = op
 }
 
 # the token of a list at `i` (from 0), the last one
@@ -432,7 +445,7 @@ body_read(tokens: list<Lexeme>, at: int) as Body := {
 		t = tokens[at]
 		if t.kind == LexemeKind.Open {
 			inner = body_read(tokens, at + 1)
-			parts += [Lexeme{kind: LexemeKind.Atom, node: bracket_list(inner.parts, t), bracket: Bracket.None, separator: Separator.None, glued: t.glued, line: t.line, column: t.column}]
+			parts += [Lexeme{kind: LexemeKind.Atom, node: bracket_list(inner.parts, t), bracket: t.bracket, separator: Separator.None, glued: t.glued, line: t.line, column: t.column}]
 			at = inner.at + 1
 		} else {
 			if t.kind != LexemeKind.Separator or parts.length > 0 { parts += [t] }
@@ -501,18 +514,18 @@ runs_of(parts: list<Lexeme>) as list := {
 	runs + [run]
 }
 
-# A phrase's items. `:` with blanks around takes all before it as key and all after it as value (`a b : c`); `:`
-# glued to a run with a blank after takes the rest of the phrase as value (`a: b c`)
+# A phrase's items. `:` or `=` with blanks around takes all before it as key and all after it as value (`a b : c`,
+# `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as value (`a: b c`)
 spaced(runs: list) as list := {
 	items = []
 	for i in 0 ..< runs.length {
 		run = runs[i]
 		rest = runs[i + 1 .. runs.length]
-		if run.length == 1 and token_at(run, 0).kind == LexemeKind.Colon and i > 0 {
-			return [keyed(phrase_of(items), phrase_of(spaced(rest)))]
+		if run.length == 1 and token_at(run, 0).kind == LexemeKind.Key and i > 0 {
+			return [keyed(phrase_of(items), token_at(run, 0).op, phrase_of(spaced(rest)))]
 		}
-		if run.length > 1 and last_of(run).kind == LexemeKind.Colon {
-			return items + [keyed(glued_run(run[0 .. run.length - 1]), phrase_of(spaced(rest)))]
+		if run.length > 1 and last_of(run).kind == LexemeKind.Key {
+			return items + [keyed(glued_run(run[0 .. run.length - 1]), last_of(run).op, phrase_of(spaced(rest)))]
 		}
 		items += [glued_run(run)]
 	}
@@ -522,16 +535,27 @@ spaced(runs: list) as list := {
 # the items as one node: Empty for none, the item for one, else a phrase
 phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)
 
-# a run without blanks: `x:40` splits at its first `:`, a run of one part is that part, else a glued list
+# A run without blanks: `x:40` and `a=1` split at their first key; a head glued to a bracket is the glue key
+# Key(head, Op.None, group), `f(x)` `a{x:1}` `xs[1]` `f(x)(y)` (Q1); a run of one part is that part, any other run a
+# glued list, `3ms` `a-b` `-x`
 glued_run(run: list) as Node := {
 	for i in 1 ..< run.length {
-		if token_at(run, i).kind == LexemeKind.Colon { return keyed(glued_run(run[0 .. i]), if i + 1 < run.length then glued_run(run[i + 1 .. run.length]) else Empty) }
+		t = token_at(run, i)
+		if t.kind == LexemeKind.Key { return keyed(glued_run(run[0 .. i]), t.op, if i + 1 < run.length then glued_run(run[i + 1 .. run.length]) else Empty) }
 	}
-	nodes = run.map(t => t.node)
+	nodes = []
+	for t in run {
+		if t.bracket != Bracket.None and nodes.length > 0 and not is_operator(nodes.last) {
+			nodes = nodes[0 .. nodes.length - 1] + [keyed(nodes.last, Op.None, t.node)]
+		} else { nodes += [t.node] }
+	}
 	if nodes.length == 1 then nodes#1 else listed(nodes, Bracket.None, Separator.None)
 }
 
-keyed(key: Node, value: Node) as Node := placed(Key(key, Op.Colon, value), line_of(key), column_of(key))
+# an operator written as glyphs, `+` `..` `#`: no head a bracket can glue to
+is_operator(n: Node) as bool := match n { Symbol(name) => is_glyph(name#1); _ => no }
+
+keyed(key: Node, op: Op, value: Node) as Node := placed(Key(key, op, value), line_of(key), column_of(key))
 
 # ── annotations: `@name` and `@name(args)` belong to the item after them ──
 
