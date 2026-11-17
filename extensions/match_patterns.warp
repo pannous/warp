@@ -308,22 +308,23 @@ is_hole_word(name: text) as bool := name != other_arm and name#1.lower() == name
 
 # `pattern Point = [x, y]` also defines `Point(x, y) := [x, y]`, right before the definitions are read. The body is
 # the pattern with each name as its value; a typed name types its parameter, `Pair(a: int, b: int) := [a, b]`. A
-# pattern without names or with an open part (`_`, a rest `..`, `*xs`) describes no single value and builds nothing.
+# pattern without names, or with a part still open once its names are values (`_`, a rest `..` or `*xs`, a type alone
+# as in `{port: int}`), describes no single value and builds nothing.
 pattern_constructors(program: Node) as Node := if is_statement_sequence(program) then group_like(program, statements_in(program).flat_map(statement => [statement] + pattern_constructor(statement))) else program
 pattern_constructor(statement: Node) as list := {
 	named = named_pattern(statement)
 	if named == ø { return [] }
 	pattern = named#2
 	holes = pattern_holes(pattern)
-	if #holes == 0 or not is_buildable(pattern) { return [] }
-	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, built_value(pattern))]
+	value = built_value(pattern, holes)
+	if #holes == 0 or nodes_in(value).any(is_open_part) { return [] }
+	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, value)]
 }
-is_buildable(pattern: Node) as bool := not nodes_in(pattern).any(is_open_part)
-# `_`, a rest word `*xs`, or an operator missing a side, the rest `..` of `[1, ..]`
-is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") else part is key and (key_of(part) == ø or value_of(part) == ø)
-# the value the pattern describes: each typed name `a: int` (in code `$a: int`) as the name alone
-built_value(pattern: Node) as Node := pattern_rebuilt(pattern, part => match part {
-	Key(Symbol(name), Op.Colon, Symbol(kind)): if is_hole_word(name) then symbol(name) else part
+# `_`, a rest word `*xs`, a type word, or an operator missing a side, the rest `..` of `[1, ..]`
+is_open_part(part: Node) as bool := if part is symbol then name_of(part) == other_arm or name_of(part).starts_with("*") or is_tested_type_word(name_of(part)) else part is key and (key_of(part) == ø or value_of(part) == ø)
+# the value the pattern describes: each typed hole `a: int` (in code `$a: int`) as the name alone
+built_value(pattern: Node, holes: list) as Node := pattern_rebuilt(pattern, part => match part {
+	Key(Symbol(name), Op.Colon, Symbol(kind)): if name in holes or (name.starts_with("$") and name[1 ..] in holes) then symbol(name) else part
 	_: part
 })
 # the parameter of a name, typed as the pattern types it: `a: int`, else the bare name
