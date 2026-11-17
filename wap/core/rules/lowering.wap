@@ -14,6 +14,9 @@
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
+# the canonical words of the literals, the kernel forms they are
+LITERAL_WORDS = {"yes": True, "no": False, "ø": Empty}
+
 # the program as one Block of its statements
 lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
 
@@ -26,7 +29,7 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => if name == "yes" then True else if name == "no" then False else if name == "ø" then Empty else n
+	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
