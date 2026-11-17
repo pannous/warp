@@ -1,0 +1,59 @@
+# The road to self-build, measured (notes/wap.md "Road to self-build"): each stage of wap run on one wap source file,
+# statement by statement where a stage allows, every refusal printed as: stage <tab> message.
+#   for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f deep; done
+use "../wap/kernel/forms.wap"
+use "../wap/core/stage.wap"
+use "../wap/core/errors.wap"
+use "../wap/preload/operators.wap"
+use "../wap/core/parse/reader.wap"
+use "../wap/core/parse/operators.wap"
+use "../wap/core/analyze/declarations.wap"
+use "../wap/core/rules/lowering.wap"
+use "../wap/core/analyze/scope.wap"
+use "../wap/core/emit/wasm.wap"
+use "../wap/core/emit/values.wap"
+use "../wap/core/emit/emitter.wap"
+use "../wap/core/emit/primitives.wap"
+
+preload_code = declared_program(operated_program(notation(read(program.folder + "/../wap/preload/prelude.wap"))))
+library = declarations_of(preload_code)
+library_scope = library.map(library_word)
+
+# the probe's stand-in for the spelling rule of a result type: `f(x) as T := body` read as `f(x) := body`, so the
+# census sees past it (args#2 == "deep")
+without_result_types(n: Node) as Node := match n {
+	Call(called, arguments) => if text(called) == ":=" then Call(called, [result_type_dropped(arguments#1)] + arguments[1 ..].map(without_result_types)) else if text(called) == "as" and #arguments == 2 and defines(arguments#2) then Call(arguments#2.called, [arguments#1] + arguments#2.arguments[1 ..].map(without_result_types)) else with_parts(n, without_result_types)
+	_ => with_parts(n, without_result_types)
+}
+defines(n: Node) as bool := match n {
+	Call(operator, parts) => text(operator) == ":="
+	_ => no
+}
+result_type_dropped(head: Node) as Node := match head {
+	Call(operator, parts) => if text(operator) == "as" then parts#1 else head
+	_ => head
+}
+DEEP = #args > 1 and args#2 == "deep"
+
+report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
+
+probe(source: text) := {
+	statements = []
+	try statements = top_level_statements(notation(source)) catch e { report("read", e.message) }
+	lowered_ok = []
+	for statement in statements {
+		try {
+			o = operated_program(statement)
+			s = declared_program(if DEEP then without_result_types(o) else o)
+			lowered_ok = lowered_ok + [lowered(s)]
+		} catch e { report("lower", e.message) }
+	}
+	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + library_scope
+	bound_ok = []
+	for statement in lowered_ok {
+		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
+	}
+	try emitted(Block(bound_ok), bound_program(lowered_program(preload_code), [])) catch e { report("emit", e.message) }
+	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound"
+}
+probe(read(args#1))

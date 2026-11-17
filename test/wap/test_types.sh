@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# wap's typing stage (core/analyze/types.wap): every value's type, and the function each call means. A call picks
+# among a name's definitions by its arguments' types, then by the type wanted; a parameter without a type makes one
+# version of the function per tuple of argument types. Source: the lead's typing interface (notes/backbone.md).
+# Run it with bash test/wap/test_types.sh
+source "$(dirname "$0")/compile.sh"
+
+check "a call picks the definition its argument's type fits" "$(ran by_argument 'f(x: int) := 1
+f(x: text) := 2
+f "ab"')" "2"
+check "a call picks the definition whose result is the type wanted" "$(ran by_result 'h(): int := 4
+h(): float := 2.5
+x: int = h()
+x')" "4"
+check "a parameter without a type takes each type it is called with" "$(ran untyped 'g(x) := x
+g "ab"
+g 5')" "5"
+check "a written result type" "$(ran result 'same(n: int): int := n
+same(6)')" "6"
+check "a typed variable" "$(ran typed_variable 'x: int = 3
+x')" "3"
+check "two typed parameters" "$(ran two 'first(a: int, b: text) := a
+first(3, "b")')" "3"
+exit $((failures > 0))

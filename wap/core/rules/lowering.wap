@@ -14,6 +14,7 @@
 #   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
+#   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
 #   while c { b }            a loop → While(c, b)
 #   return x                 → Return(x); a bare `return` → Return(ø)
@@ -40,7 +41,20 @@ THEN_WORD = "then"
 ELSE_WORD = "else"
 
 # the program as one Block of its statements
-lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
+lowered_program(program: Node) as Block := staged(program, whole => lowered_block(statements_of(whole)))
+
+# Statements as one Block. A statement naming a variable without a value, `global x` or `let x`, is no code: it says
+# which variable x is in the whole block, the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
+lowered_block(statements: list) as Node := {
+	named = statements.filter(names_a_variable)
+	block = Block(statements.filter(statement => not names_a_variable(statement)).map(lowered))
+	if named is empty then block else with_fact(block, VARIABLES, List(named.map(variable_named), Bracket.Square, Separator.Comma))
+}
+names_a_variable(statement: Node) as bool := match statement {
+	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 is symbol and items#2 is symbol and VARIABLE_WORDS.has(text(items#1))
+	_ => no
+}
+variable_named(statement: Node) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
 
 # code as a kernel form, placed where the code was written (core/stage.wap)
 lowered(n: Node) as Node := staged(n, lowered_form)
@@ -54,7 +68,7 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else if STATEMENT_WORDS.has(name) then STATEMENT_WORDS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
-	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
+	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	_ => not_lowered(n)
@@ -117,12 +131,14 @@ assigned(place: Node, value: Node, n: Node) as Node := match place {
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
-# `f(x) := body` defines a function, `n := 1` a constant
+# `f(x) := body` defines a function, `n := 1` a constant; `f(x): int := body` names its result type with the name
 defined(n: Node, head: Node, body: Node) as Node := match head {
+	Key(signature, Op.Colon, result) => with_result(defined(n, signature, body), result)
 	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(group), body) else not_lowered(n)
 	Symbol(name) => Define(head, parameter_list(Empty), body)
 	_ => not_lowered(n)
 }
+with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
 arguments_of(group: Node) as list := match group {
