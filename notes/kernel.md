@@ -294,5 +294,5 @@ Before the big moves (arity_overloads 945, node_matches + node_cases 648): head-
 2). Then by size of win: plain_enums + enum_declarations (306), definitions (260), the parser's `if`/`for` heads (466),
 one scope analysis replacing the duplicated binding walks.
 
-Open for the user (via warp-interviewer): the three stages chosen by the pattern; the emitter split as the first big
-step.
+Decided by the user 2026-11-17 (rule-stages, emitter-split): rules run in the three stages chosen by the pattern; splitting
+analysis from emission is the first big step after the pilots.
