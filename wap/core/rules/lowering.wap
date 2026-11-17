@@ -14,7 +14,7 @@
 #   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
-#   (a + b)                  a group of one form → that form
+#   (x + 1)  (a; b)          a group: its one statement, several a Block
 #   [a, b]                   a list, data as the reader reads it, its items lowered
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
@@ -69,8 +69,8 @@ lowered_form(n: Node) as Node := match n {
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
-	List(items, Bracket.Round, Separator.None) => if #items == 1 then lowered(items#1) else not_lowered(n)
-	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else not_lowered(n)
+	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
+	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	_ => not_lowered(n)
 }
@@ -121,6 +121,9 @@ arguments_of(group: Node) as list := match group {
 
 # the parameters a definition or a function value names, as the one list Define and Fn take
 parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
+
+# round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
+grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else lowered_block(statements)
 
 # a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {

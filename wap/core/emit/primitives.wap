@@ -40,6 +40,15 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if HELPERS.has(name) { return Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])])) }
 	refused(form, "no primitive of this name")
 }
+# the instructions that compare two values of one type on the stack, giving yes or no
+equality(type: list, p: Program) as list := {
+	if type == I64 { return I64_EQ }
+	if type == F64 { return F64_EQ }
+	if type == I32 { return I32_EQ }
+	if type == nullable(text_type(p.m)) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
+	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
+}
+
 # the wasm type of the value a primitive gives, [] when its definition writes none
 given_layout(form: Node, p: Program) as list := {
 	type = fact_of(form, TYPE)

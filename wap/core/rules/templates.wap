@@ -14,7 +14,7 @@ built(template: Node, bindings: map) as Node := match template {
 		if pattern == ø { Key(built(head, bindings), Op.None, List(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
 	}
 	Key(left, op, right) => Key(built(left, bindings), op, built(right, bindings))
-	List(items, bracket, separator) => List(built_items(items, bindings), bracket, separator)
+	List(items, bracket, separator) => grown(built_items(items, bindings), bracket, separator)
 	Text(value) => if bindings.has(value) then Text(text(bindings[value])) else Text(value)
 	Number(value) => Number(value)
 	_ => template
@@ -30,12 +30,36 @@ built_items(items: list, bindings: map) as list := {
 	for item in items {
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
 			match bindings[hole_key(item)] { List(taken, bracket, separator) => all = all + taken; _ => all.add(bindings[hole_key(item)]) }
+		} else if repeated_part(item) != ø {
+			all = all + repeated(repeated_part(item), bindings)
 		} else {
 			all.add(built(item, bindings))
 		}
 	}
 	all
 }
+
+# A bracketed list a repetition or rest made longer than written, `{ print($x)... }`, takes its natural separator: a
+# block's statements one a line, other items by commas
+grown(items: list, bracket: Bracket, separator: Separator) as Node := {
+	if bracket == Bracket.None or separator != Separator.None or #items < 2 { return List(items, bracket, separator) }
+	List(items, bracket, if bracket == Bracket.Curly then Separator.Newline else Separator.Comma)
+}
+
+# `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn
+repeated(part: Node, bindings: map) as list := {
+	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
+	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
+	times = #items_taken(bindings[sequences#1 + REST_MARK])
+	written = []
+	for i in 1 to times {
+		for hole in sequences { bindings[hole] = items_taken(bindings[hole + REST_MARK])#i }
+		written.add(built(part, bindings))
+	}
+	for hole in sequences { bindings.remove(hole) }
+	written
+}
+items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; _ => [taken] }
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.

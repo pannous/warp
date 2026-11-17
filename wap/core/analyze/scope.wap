@@ -45,6 +45,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
+	Case(subject, arms) => refitted(Case(bound(subject, scope, depth), arms.map(arm => arm_bound(arm, scope, depth))), n)
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
 	Continue() => n
@@ -58,6 +59,25 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Empty => n
 	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
 }
+# An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
+arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
+	Arm(pattern, result) => {
+		inner = pattern_variables(pattern, depth) + scope
+		refitted(Arm(if pattern is symbol and text(pattern) != WILDCARD then resolved(pattern, inner, depth) else pattern, bound(result, inner, depth)), arm)
+	}
+}
+arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
+pattern_variables(pattern: Node, depth: int) as list := match pattern {
+	Symbol(name) => if name == WILDCARD then [] else [Definition(name, local_kind(depth), pattern, depth)]
+	Number(value) => []
+	Text(value) => []
+	Char(value) => []
+	True => []
+	False => []
+	Empty => []
+	_ => refused(pattern, "wap matches literals, names and _ so far")
+}
+
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
 all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
 
@@ -134,6 +154,7 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Prim(operation, arguments) => defined_in(arguments, scope, depth)
 	If(condition, then_part, else_part) => defined_in([condition, then_part, else_part], scope, depth)
 	While(condition, body) => defined_in([condition, body], scope, depth)
+	Case(subject, arms) => defined_in([subject] + arms.map(arm_result), scope, depth)
 	Return(value) => defined_in([value], scope, depth)
 	Get(subject, key) => defined_in([subject, key], scope, depth)
 	List(items, Bracket.Square, separator) => defined_in(items, scope, depth)

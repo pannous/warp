@@ -15,4 +15,7 @@ four()')" "4"
 check "a function sees a global set before its call" "$(ran reads 'x = 6
 seen() := x
 seen()')" "6"
+check "round brackets group one value" "$(ran group 'x = (7)
+x')" "7"
+check "round brackets around statements run them in order" "$(ran statements '(x = 4; x)')" "4"
 exit $((failures > 0))

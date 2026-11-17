@@ -10,6 +10,10 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 - **Rest holes anywhere:** `$xs...` takes as few items as let the parts after it match (all that remain when last),
   so `if $c... then $a... else $b...` stops the condition at the first then. In a template `$xs...` splices the items,
   `$xs` writes them as one node (a phrase, the item itself, ø for none).
+- **Repetition** (macros by example): `($p => $r)...` in a pattern takes items that each fit `$p => $r` and binds
+  each hole to the sequence of its matches, under the rest key `$p...`; in a template `$p...` splices them and
+  `Arm($p, $r)...` writes one Arm per match. A bracketed template list that grows takes its natural separator
+  (block statements one a line, else commas).
 - **Refusals are rules too:** `rule P => refuse "fix-it"` refuses what P matches, by the usual specificity: the
   dangling else `if a then if b then x else y` (core/sugar/conditions.wap).
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
@@ -35,3 +39,5 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
+- A rule head in the middle of a phrase is not reached: `print match x { … }` and `print if c then a else b` need the
+  phrase reading to group `match …` as print's argument (`y = match …` and a function body work).
