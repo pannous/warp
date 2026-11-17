@@ -26,6 +26,9 @@ typed_rules = Rules({})
 class Fired { code: Node, fired: bool }
 
 # ---- loading
+#
+# A side of a rule may stand in brackets to keep its keys and operators inside: `rule ($h as $t := $b) => ($h: $t := $b)`.
+# Only a pattern's holes take a type (`$c: Node`); in a template `$h: $t` is the key it writes.
 
 # the rules and patterns of loaded code taken in, the code without them returned
 rules_loaded(code: Node) as Node := match code {
@@ -52,8 +55,8 @@ declaration_taken(called: text, arguments: list) as bool := {
 phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
 
 rule_added(written: Node, pattern: Node, template: Node) := {
-	normal = normalized(pattern)
-	output = normalized(template)
+	normal = normalized(ungrouped(pattern))
+	output = ungrouped(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	typed = asks_value_type(compiled_pattern(normal))
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
@@ -123,7 +126,8 @@ shaped_program(program: Node) as Node := {
 	rest = rules_loaded(program)
 	terminating(shape_rules)
 	terminating(typed_rules)
-	rewritten_by(shape_rules, rest).code
+	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them
+	with_facts_of(rewritten_by(shape_rules, rest).code, program)
 }
 
 # Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none

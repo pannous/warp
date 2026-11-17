@@ -154,7 +154,7 @@ of_shape(wanted: Node, n: Node) as bool := {
 	}
 }
 
-# whether code has the value type a stage-3 hole asks for: typing answers (core/analyze/types.wap fits_type)
+
 # whether any hole of the matcher asks for a value type: the rule then runs in stage 3, on typed code
 asks_value_type(m: Matcher) as bool := m.test == Test.Hole and not is_shape(m.type) or #m.parts.filter(asks_value_type) > 0
 

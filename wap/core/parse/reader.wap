@@ -583,11 +583,11 @@ runs_of(parts: list<Lexeme>) as list := { // todo use  [Lexeme] as soon as synta
 
 # A phrase's items, split at its loosest key (below). A key with blanks around takes all before it as key and all
 # after it as value (`a b : c`, `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as
-# value (`a: b c`), except after a hole: `$c: Node $then: Node` are two typed holes, each taking one run as its type
+# value (`a: b c`). A hole's `:` takes one run, its type: `$c: Node $then: Node` are two typed holes
 # (notes/first_principles.md "Holes")
 spaced(runs: list) as list := {
 	split = splitting_run(runs)
-	if split < 0 { return holes_typed(runs) }
+	if split < 0 { return holes_typed(runs.map(glued_run)) }
 	run = runs[split]
 	before = runs[0 .. split]
 	value = phrase_of(spaced(runs[split + 1 .. runs.length]))
@@ -604,27 +604,23 @@ splitting_run(runs: list) as int := {
 	found = -1
 	for i in 0 ..< runs.length {
 		run = runs[i]
-		if last_of(run).kind == LexemeKind.Key and (run.length > 1 or i > 0) and not types_hole(runs, i) and (found < 0 or key_looseness(last_of(run).op) > key_looseness(last_of(runs[found]).op)) { found = i }
+		if last_of(run).kind == LexemeKind.Key and (run.length > 1 or i > 0) and not is_typed_hole(run) and (found < 0 or key_looseness(last_of(run).op) > key_looseness(last_of(runs[found]).op)) { found = i }
 	}
 	found
 }
 
-# runs without a key to split at, each a glued run, a typed hole with the one run after it: `$c: Node`
-holes_typed(runs: list) as list := {
-	items = []
-	i = 0
-	while i < runs.length {
-		if types_hole(runs, i) { items += [keyed(token_at(runs[i], 0).node, Op.Colon, glued_run(runs[i + 1]))]; i += 2 }
-		else { items += [glued_run(runs[i])]; i += 1 }
-	}
-	items
-}
-# whether the run at i is a hole and its `:`, with a run after it for the type
-types_hole(runs: list, i: int) as bool := {
-	run = runs[i]
-	run.length == 2 and last_of(run).kind == LexemeKind.Key and last_of(run).op == Op.Colon and is_hole_word(token_at(run, 0).node) and i + 1 < runs.length
-}
 is_hole_word(n: Node) as bool := match n { Symbol(name) => name.starts_with(HOLE_SIGN) and #name > 1; _ => no }
+# a run that is a hole and its colon, `$c:`
+is_typed_hole(run: list) as bool := run.length == 2 and last_of(run).op == Op.Colon and is_hole_word(token_at(run, 0).node)
+
+# each hole's colon given the item after it as its type
+holes_typed(items: list) as list := {
+	typed = []
+	for item in items { if #typed > 0 and untyped_hole(typed.last) then typed[#typed - 1] = keyed(hole_of(typed.last), Op.Colon, item) else typed.add(item) }
+	typed
+}
+untyped_hole(n: Node) as bool := match n { Key(hole, Op.Colon, Empty) => is_hole_word(hole); _ => no }
+hole_of(n: Node) as Node := match n { Key(hole, op, value) => hole; _ => n }
 
 # the items as one node: Empty for none, the item for one, else a phrase
 phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)
