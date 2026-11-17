@@ -316,7 +316,16 @@ A "≠ wasp" note marks a deliberate difference.
 Rows 26 and 27: wasp's `==` ignores separators, so its tests only pin the shape. Wap keeps the separators, and the
 shapes match.
 
-## 6. Open questions for the user (wasp and warp differ); recommendation first
+## 6. Decided (user 2026-11-17)
+
+- **Q3 indentation:** an indented block is exactly `{…}`, a curly list with separator Newline, glued to the line
+  before it; tabs or a consistent run of spaces, mixing refused.
+- **Q4 `-1`:** a sign glued to digits at the start of an item is a negative Number literal; `-a` (sign glued to a
+  word or a bracket) is the prefix operator. `a -1` is `[a, -1]`; `a-1` and `a - 1` are infix.
+- **Q9 `true`/`false`/`null`:** the reader gives `Symbol`; the alias table decides.
+- **Q10 comments:** kept as Meta, on the next item or on the item that ends the line.
+
+## 7. Open questions for the user (wasp and warp differ); recommendation first
 
 - **Q1 `a{x}`.** Wasp: a named node with children (T:2035-2040). warp prints it as `a: {x: 1}`, which loses the
   difference from `a:{x:1}`. **Rec:** `G(a C(…))`, one general form for `f(x)`, `xs[i]` and `3ms`; no new Node case.
