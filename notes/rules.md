@@ -10,7 +10,7 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
   type, so `(If $c: Node $then: Node …)` is three typed holes). The type rides as the hole's `type` fact. A shape
   type (Node, Symbol, List, Key, Text, Number, Char, a declared pattern) is checked here; a value type (`$k: int`,
-  `$xs: list<int>`) makes a stage-3 rule, kept in `typed_rules` and checked by typing (`value_type_fits`, the one
+  `$xs: list<int>`) makes a stage-3 rule, kept in `typed_rules` and checked by typing (`fits_type`, the one
   seam to core/analyze/types.wap `fits_type`). Stage 1 runs `shape_rules` only.
 - **Stages share one walker:** `rewritten_by(rules, code) as Fired` gives the code and whether any rule fired, so
   typing can run again after stage 3.

@@ -13,6 +13,7 @@
 #   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
 #   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
 #   type      bound → typed         core/analyze/types.wap, each value's type and the function each call means, as facts
+#   typed rules typed → typed       core/rules/typed.wap, rules with holes of value types, typed again after each round
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
@@ -29,6 +30,7 @@ use "core/rules/stages.wap"
 use "core/rules/lowering.wap"
 use "core/analyze/scope.wap"
 use "core/analyze/types.wap"
+use "core/rules/typed.wap"
 use "core/emit/wasm.wap"
 use "core/emit/values.wap"
 use "core/emit/emitter.wap"
@@ -50,12 +52,13 @@ declared(file: text) as Node := declared_program(shaped_program(operated_program
 # declared code lowered and bound inside the preload's declarations and those of the modules it uses
 prepared(code: Node, modules: list) as Block := bound_program(lowered_program(code), library + uses_of(code).flat_map(file => declarations_of(module_of(file, modules))))
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
-# functions are there for any caller
+# functions are there for any caller; typed, then rewritten by the typed rules
 compiled(file: text) as list := {
 	code_read = declared(file)
 	modules = modules_used(code_read, declared)
 	whole = Block((modules + [code_read]).flat_map(code => statements_in(prepared(code, modules))))
-	module_bytes(emitted(typed_program(whole, bound_program(lowered_program(preload), []))))
+	library_code = bound_program(lowered_program(preload), [])
+	module_bytes(emitted(typed_by_rules(typed_program(whole, library_code), library, library_code)))
 }
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
