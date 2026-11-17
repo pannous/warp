@@ -1,0 +1,2 @@
+# Conditions written other ways, as If (notes/wap.md core/sugar/): the spellings wap's own source uses
+rule unless $c $body => If($c, ø, $body)
