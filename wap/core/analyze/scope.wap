@@ -141,15 +141,28 @@ seen_in_function(name: text, scope: list, depth: int) as bool := {
 	no
 }
 
-# a name with what it refers to, as seen from depth: its own function's names as they were defined, the program's
+# A name with what it refers to, as seen from depth: its own function's names as they were defined, the program's
 # globals and functions and the library's words as such, an enclosing function's names as captures; a name nothing
 # defines is refused
 resolved(name: Node, scope: list, depth: int) as Node := {
+	meant = definitions_meant(text(name), scope)
+	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
+	innermost = meant#1
+	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
+	bound = with_fact(name, BINDING, symbol(kind))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(meant.map(definition => definition.definer), Bracket.Square, Separator.Comma))
+}
+# The definitions a name may mean, innermost first: the one it finds, or, when that is a function, every function of
+# that name around it, its overloads, up to a variable of that name, which hides the rest. The typing stage picks
+# among several by the arguments' types.
+definitions_meant(name: text, scope: list) as list := {
+	meant = []
 	for definition in scope {
-		if definition.name == text(name) {
-			kind = if definition.depth == depth or definition.depth <= PROGRAM_DEPTH then definition.kind else BOUND_CAPTURE
-			return with_fact(with_fact(name, BINDING, symbol(kind)), DEFINED_AT, definition.definer)
+		if definition.name == name {
+			if not is_function(definition) { return if meant is empty then [definition] else meant }
+			meant = meant + [definition]
 		}
 	}
-	refused(name, "nothing defines this name, neither the program nor the library")
+	meant
 }
+is_function(definition: Definition) as bool := definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY
