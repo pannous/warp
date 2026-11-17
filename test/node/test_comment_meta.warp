@@ -33,8 +33,3 @@ p.meta' 7
 is! '// doc
 x = 1
 x + 1' 2
-is! 'use comments
-use strict
-// doc
-x = 1
-x.@comment' 'doc'

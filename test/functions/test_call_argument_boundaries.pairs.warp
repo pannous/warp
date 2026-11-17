@@ -2,5 +2,5 @@
 
 'f(a, b) := [a, b]; f(4, 5 s)'	[4, 5s]
 'square(n) := n*n; square(square 2)'	16
-'use units; str(3 m)'	"3m"
+'use units; text(3 m)'	"3m"
 'sum(x * x for x in [1, 2, 3])'	14

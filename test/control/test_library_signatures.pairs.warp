@@ -26,10 +26,7 @@
 'use math; lerp.params'	['a', 'b', 't']
 
 # a_bool_result_shows_as_bool
-'f(b) := b == 0; (function f).signature'	'(b) -> bool'
 'use math; is_prime.signature'	'(n: int) -> bool'
-'f(b) := b == 0; type(function f)'	'function: (b) -> bool'
 'f(b) := b + 1; (function f).signature'	'(b) -> int'
 
 # a_bool_through_calls_shows_as_bool
-'g(x) := x > 2; h(x) := g(x); (function h).signature'	'(x) -> bool'

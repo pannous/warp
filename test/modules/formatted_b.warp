@@ -1,0 +1,3 @@
+# a fixture of test_use: an int type with its own text, beside formatted_a.warp's
+type tag_b < int
+format tag_b t as text := "b" + int(t)

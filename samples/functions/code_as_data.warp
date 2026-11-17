@@ -10,7 +10,7 @@ print simplify(data (n * 1))           # n
 print simplify(data (n * 2 + 0))       # n*2
 
 # replace rewrites every match inside a larger expression
-print str(data (n * 1 + k * 1) replace data($a * 1) with a)   # n+k
+print text(data (n * 1 + k * 1) replace data($a * 1) with a)   # n+k
 
 # parse turns a text known only at run time into the same data
 code = parse("n * " + "1")

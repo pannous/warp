@@ -3,16 +3,16 @@
 // `now`: the Instant the run reads the wall clock, a library function like any other (bare `now` calls it), in the
 // run's time zone (decision local-now): now.hour is the local hour, its text has the zone's offset; an Instant a
 // program builds is UTC
-now(): Instant := Instant(wall_clock_ms(), local_zone_name())
+now() as Instant := Instant(wall_clock_ms(), local_zone_name())
 // the run's time zone: the environment's TZ, natively the system's zone where TZ names none (core/native/driver.warp),
 // in the page the browser's (web/playground/wasi.js); UTC, warned, for a zone not in time_zones
-local_zone_name(): text := {
+local_zone_name() as text := {
 	for entry in wasi_environment().split(chr(0)) { if entry.starts_with(TZ_ENTRY) { return known_zone(entry[#TZ_ENTRY ..]) } }
 	UTC_ZONE
 }
 TZ_ENTRY = "TZ="
 UTC_ZONE = "UTC"
-known_zone(name: text): text := {
+known_zone(name: text) as text := {
 	if time_zones.any(zone => zone.name == name) { return name }
 	warning("the time zone " + name + " is not in lib/time.warp time_zones: now is UTC")
 	UTC_ZONE
@@ -20,13 +20,14 @@ known_zone(name: text): text := {
 // the one hook into the host: WASI's clock_time_get (core/analysis/host_words.warp) of the wall clock
 // (CLOCK_REALTIME, 0), a millisecond's precision asked for. It writes the u64 nanoseconds since 1970 into linear
 // memory's first 8 bytes (the scratch fd_write takes only within its call), read back little-endian
-wall_clock_ms(): int := {
-	nanos_per_milli = 1000000
+wall_clock_ms() as int := {
 	clock_time_get(0, nanos_per_milli, 0)
 	nanos = 0
 	for i in 0..<8 { nanos = nanos * 256 + memory_byte(7 - i) }
 	nanos /! nanos_per_milli
 }
+// -1, 0 or 1 as the time a comes before, with or after b, by the core's order of times
+time_order(a: time, b: time) as int := if a < b then -1 else if a > b then 1 else 0
 
 // a span of time in milliseconds, which moves an Instant: a plain number is one (`Instant(0) + 2`), lib/units converts
 // its quantities of time (`Instant(0) + 2 seconds`), one of another dimension a DimensionError (card instant-typed-duration)
@@ -34,15 +35,16 @@ wall_clock_ms(): int := {
 // meeting lib/units' quantity of time converts it (decision as-promotes, one-duration): `time 6 == 6s`, `d + 1s` is 7s
 class Duration {
 	ms: number
-	text() := seconds_text(int(round(ms)))
-	format as text := seconds_text(int(round(ms)))
+	text() := units_text(int(round(ms)))
+	format as text := units_text(int(round(ms)))
 	equal(other: Duration) := ms == other.ms
+	compare(other: Duration or number) := ms - duration_ms(other)
 	+(other: Duration or number) := Duration(ms + duration_ms(other))
 	-(other: Duration or number) := Duration(ms - duration_ms(other))
 }
 duration_ms(other: Duration or number) := if other is Duration then other.ms else other
 n: number as Duration := Duration(n)
-seconds_text(ms: int): text := (if ms < 0 then "-" else "") + abs(ms) /! 1000 + millis_fraction(abs(ms) % 1000) + "s"
+seconds_text(ms: int) as text := (if ms < 0 then "-" else "") + abs(ms) /! 1000 + millis_fraction(abs(ms) % 1000) + "s"
 
 // decision time-command: `time 6` is six seconds, `time { … }` runs the block, prints how long it took as the shell's
 // time does and gives the block's value
@@ -57,7 +59,7 @@ time(b: block) := {
 // `x is instant`, `x is date` of a time of that form, a Duration or Instant too (decision time-word): the emitter asks
 // it (core/emitter/runtime_words.warp time_test_code), its own `x is time` the core's; lib/units asks it beside its
 // quantities of time
-time_valued(x, kind: text): bool := {
+time_valued(x, kind: text) as bool := {
 	if x is Duration { return kind == "time" or kind == "duration" }
 	if x is Instant { return kind == "time" or kind == "instant" }
 	x is time and (kind == "time" or time_form_names#(x.form + 1) == kind)
@@ -72,21 +74,25 @@ class Instant {
 	ms: int
 	zone: text = "UTC"
 	// another Instant: the earlier first. A duration (`now > 9.hours`, `now > 17h`) compares the matching part
-	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month
-	compare(other: Instant or number or Duration) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else instant_part_compare(wall(), other)
+	// (decision time-word, Interviewer REVISION 2026-11-05): under a day the time of day, else the day of the month.
+	// A time the core holds compares as this Instant in its form: a date its day, a time of day its time of day,
+	// a local time its wall clock, an instant itself (`now > 1970-01-01`, `now < 17:30`)
+	compare(other: Instant or number or Duration or time) := if other is Instant then ms - other.ms else if other is number then bare_number_refused(other) else if other is Duration then instant_part_compare(wall(), other) else time_order(in_form(other.form), other)
+	// this Instant as a time the core holds of that form (lib/time.warp TimeForm): what compare sets beside one
+	in_form(form: int) := if form == date_form then date() else if form == clock_form then time() else if form == local_form then time_of(local_form, wall() * nanos_per_milli) else time_of(instant_form, ms * nanos_per_milli)
 	// seconds east of UTC its zone has then
-	offset(): int := zone_offset(zone_named(zone), ms /! 1000)
+	offset() as int := zone_offset(zone_named(zone), ms /! 1000)
 	// its milliseconds on its zone's wall clock, which its calendar fields read: now.year, now.month, now.day,
 	// now.hour, now.minute, now.second
-	wall(): int := ms + offset() * 1000
+	wall() as int := ms + offset() * 1000
 	year() := date_of(wall()).year
 	month() := date_of(wall()).month
 	day() := date_of(wall()).day
 	// the day of the week on its wall clock: now.weekday is Monday … Sunday
 	weekday() := Weekday(weekday_of_day(day_number(wall())))
-	hour(): int := wall() % 86400000 /! 3600000
-	minute(): int := wall() % 3600000 /! 60000
-	second(): int := wall() % 60000 /! 1000
+	hour() as int := wall() % 86400000 /! 3600000
+	minute() as int := wall() % 3600000 /! 60000
+	second() as int := wall() % 60000 /! 1000
 	// its time of day and its day on its wall clock, times themselves (decision time-word): now.time, now.date
 	time() := time_of(clock_form, wall() % 86400000 /! 1000 * nanos_per_second)
 	date() := time_of(date_form, day_number(wall()))
@@ -99,10 +105,10 @@ class Instant {
 	zoned(zone_name: text) := Instant(ms, zone_name)
 	// RFC 3339, the milliseconds without trailing zeros: 2026-10-25T11:43:40.692Z, 2026-10-25T11:43:40.5Z; in another
 	// zone its wall clock and offset, 2026-10-25T12:43:40.692+01:00 (the zone's name is .zone)
-	text() := format_date(wall()) + "T" + format_time(wall()) + millis_fraction(ms % 1000) + (if zone == UTC_ZONE then "Z" else offset_written(offset()))
+	text() := date_text(wall()) + "T" + time_text(wall()) + millis_fraction(ms % 1000) + (if zone == UTC_ZONE then "Z" else offset_written(offset()))
 }
 // +01:00, -04:00, +05:30: seconds east of UTC as RFC 3339 writes them
-offset_written(seconds: int): text := (if seconds < 0 then "-" else "+") + two_digits(abs(seconds) /! 3600) + ":" + two_digits(abs(seconds) % 3600 /! 60)
+offset_written(seconds: int) as text := (if seconds < 0 then "-" else "+") + two_digits(abs(seconds) /! 3600) + ":" + two_digits(abs(seconds) % 3600 /! 60)
 
 // a bare number beside an Instant names no unit (decision instant-bare-number): `t > 5` is refused
 bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, or " + n + " AM"
@@ -110,15 +116,15 @@ bare_number_refused(n: number) := raise "" + n + " what? write t > " + n + " h, 
 // mostly a clock time meant
 instant_part_compare(ms: int, other: Duration) := {
 	d = int(other.ms)
-	if d < 86400000 { warning("comparing an Instant with the duration " + format_duration(d) + " compares the time of day: did you mean " + clock_words(d) + "?") }
-	else { warning("comparing an Instant with the duration " + format_duration(d) + " compares the day of the month") }
+	if d < 86400000 { warning("comparing an Instant with the duration " + units_text(d) + " compares the time of day: did you mean " + clock_words(d) + "?") }
+	else { warning("comparing an Instant with the duration " + units_text(d) + " compares the day of the month") }
 	instant_part(ms, d) - d
 }
 // the matching part of an Instant's milliseconds for a duration of d ms: the time of day under a day, else the day of
 // the month counted from 1 (`now >= 15 days`: the 15th or later)
 instant_part(ms, d) := if d < 86400000 then ms % 86400000 else date_of(ms).day * 86400000
 // "9 AM", "5 PM", "12 AM", "9:30 AM": the clock time a duration since midnight names
-clock_words(d): text := {
+clock_words(d) as text := {
 	minutes = d % 86400000 /! 60000
 	h = minutes /! 60
 	m = minutes % 60
@@ -126,18 +132,18 @@ clock_words(d): text := {
 	"" + shown + (if m == 0 then "" else ":" + two_digits(m)) + (if h < 12 then " AM" else " PM")
 }
 // ".692", ".69", ".5", or nothing on a whole second
-millis_fraction(millis): text := {
+millis_fraction(millis) as text := {
 	if millis == 0 then return ""
 	if millis % 100 == 0 then return "." + millis /! 100
 	if millis % 10 == 0 then return "." + two_digits(millis /! 10)
 	"." + two_digits(millis /! 10) + millis % 10
 }
 
-day_number(ms: int): int := ms /! 86400000
+day_number(ms: int) as int := ms /! 86400000
 // the date of milliseconds as {year, month, day} (lib/prelude.warp civil_from_days)
 public date_of(ms: int) := civil_from_days(day_number(ms))
 // ISO weekday: Monday 1 … Sunday 7
-weekday(ms: int): int := (day_number(ms) + 3) % 7 + 1
+weekday(ms: int) as int := (day_number(ms) + 3) % 7 + 1
 // the days of the week in ISO order, Monday 1 … Sunday 7: `match today.weekday { Saturday | Sunday => "weekend" }`
 enum Weekday { Monday = 1, Tuesday, Wednesday, Thursday, Friday, Saturday, Sunday }
 // today's date on the run's wall clock as {year, month, day, weekday}
@@ -147,21 +153,28 @@ public today() := {
 	{year: date.year, month: date.month, day: date.day, weekday: Weekday(weekday(wall))}
 }
 public add_days(ms, n) := ms + n * 86400000
-days_between(from, to): int := day_number(to) - day_number(from)
-two_digits(n): text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
-// ISO 8601: 2026-10-07
-format_date(ms): text := {
+days_between(from, to) as int := day_number(to) - day_number(from)
+two_digits(n) as text := if n < 0 then "-" + two_digits(0 - n) else if n < 10 then "0" + n else "" + n
+// ISO 8601: 2026-10-07, what now.date shows
+date_text(ms) as text := {
 	d = date_of(ms)
 	// the year in 4 digits (0001), as RFC 3339 writes it
 	padded(d.year, 4) + "-" + two_digits(d.month) + "-" + two_digits(d.day)
 }
-// the time of day, UTC: 13:05:09
-format_time(ms): text := {
+// the time of day, UTC: 13:05:09, what now.time shows
+time_text(ms) as text := {
 	s = (ms % 86400000) /! 1000
 	two_digits(s /! 3600) + ":" + two_digits(s % 3600 /! 60) + ":" + two_digits(s % 60)
 }
 // the day number of a proleptic Gregorian date (lib/prelude.warp days_from_civil)
-days_from_date(year, month, day): int := days_from_civil(year, month, day)
+days_from_date(year, month, day) as int := days_from_civil(year, month, day)
+// the date of its fields, date(2024, 2, 29) as the literal 2024-02-29; a field outside its calendar is an error, never
+// rolled over into the next month (wiki/Footguns.md "Dates")
+public date(year: int, month: int, day: int) as date := {
+	if month < 1 or month > 12 { raise "month out of range: " + text(month) + " (1 to 12)" }
+	if day < 1 or day > days_in_month(year, month) { raise "day out of range: " + padded(year, 4) + "-" + two_digits(month) + "-" + two_digits(day) }
+	time_of(date_form, days_from_date(year, month, day))
+}
 // "2026-10-07" → milliseconds since 1970 at midnight UTC
 // strict (card lib-audit-bugfixes-2): YYYY-MM-DD of digits (a 4-digit year; 1970-1-1 too), the month 1-12 and the day within it, else a raise
 // naming the text, no silent roll-over into the next month or year. An RFC 3339 date-time is read too (card
@@ -169,29 +182,30 @@ days_from_date(year, month, day): int := days_from_civil(year, month, day)
 // date and time; Z, z or ±hh:mm (-00:00 the same instant as Z); a fraction of any length, cut to milliseconds; hours
 // 0-23, minutes and seconds 0-59 (24:00 and the leap second 23:59:60 are refused: no leap seconds are kept); no
 // week (2026-W45-3) or ordinal (2026-309) dates
-parse_date(t): int := {
+t: text as Instant := Instant(date_ms(t))
+date_ms(t) as int := {
 	if #t > 10 { return date_time_ms(t) }
 	parts = split(t, "-")
-	if count(parts) != 3 or not parts.all(p => is_digits(p)) or #(parts#1) != 4 or #(parts#2) > 2 or #(parts#3) > 2 { raise "parse_date: \"" + t + "\" is no YYYY-MM-DD date" }
+	if count(parts) != 3 or not parts.all(p => is_digits(p)) or #(parts#1) != 4 or #(parts#2) > 2 or #(parts#3) > 2 { raise "\"" + t + "\" as Instant: no YYYY-MM-DD date" }
 	year = int(parts#1)
 	month = int(parts#2)
 	day = int(parts#3)
-	if month < 1 or month > 12 { raise "parse_date: \"" + t + "\": no month " + str(month) }
-	if day < 1 or day > days_in_month(year, month) { raise "parse_date: \"" + t + "\": no day " + str(day) + " in that month" }
+	if month < 1 or month > 12 { raise "\"" + t + "\" as Instant: no month " + text(month) }
+	if day < 1 or day > days_in_month(year, month) { raise "\"" + t + "\" as Instant: no day " + text(day) + " in that month" }
 	days_from_date(year, month, day) * 86400000
 }
-// an RFC 3339 date-time's milliseconds since 1970 (parse_date)
-date_time_ms(t: text): int := {
-	no_time = "parse_date: \"" + t + "\" is no YYYY-MM-DD date"
+// an RFC 3339 date-time's milliseconds since 1970 (date_ms)
+date_time_ms(t: text) as int := {
+	no_time = "\"" + t + "\" as Instant: no YYYY-MM-DD date"
 	sep = t[10: 11]
 	if not (sep == "T" or sep == "t" or sep == " ") { raise no_time }
-	day = parse_date(t[0: 10])
+	day = date_ms(t[0: 10])
 	rest = t[11: #t]
 	if #rest < 9 or rest[2: 3] != ":" or rest[5: 6] != ":" or not is_digits(rest[0: 2] + rest[3: 5] + rest[6: 8]) { raise no_time }
 	hour = int(rest[0: 2])
 	minute = int(rest[3: 5])
 	second = int(rest[6: 8])
-	if hour > 23 or minute > 59 or second > 59 { raise "parse_date: \"" + t + "\" names no time of day (hours 0-23, minutes and seconds 0-59, no leap seconds)" }
+	if hour > 23 or minute > 59 or second > 59 { raise "\"" + t + "\" as Instant: no time of day (hours 0-23, minutes and seconds 0-59, no leap seconds)" }
 	at = 8
 	millis = 0
 	if rest[at: at + 1] == "." {
@@ -205,28 +219,27 @@ date_time_ms(t: text): int := {
 	offset = 0
 	if zone != "Z" and zone != "z" {
 		if #zone != 6 or not (zone[0: 1] == "+" or zone[0: 1] == "-") or zone[3: 4] != ":" or not is_digits(zone[1: 3] + zone[4: 6]) { raise no_time }
-		if int(zone[1: 3]) > 23 or int(zone[4: 6]) > 59 { raise "parse_date: \"" + t + "\": no offset " + zone }
+		if int(zone[1: 3]) > 23 or int(zone[4: 6]) > 59 { raise "\"" + t + "\" as Instant: no offset " + zone }
 		offset = (int(zone[1: 3]) * 60 + int(zone[4: 6])) * 60000
 		if zone[0: 1] == "-" { offset = 0 - offset }
 	}
 	day + ((hour * 60 + minute) * 60 + second) * 1000 + millis - offset
 }
-// milliseconds as the largest units: 5430000 → "1h 30m 30s", 250 → "250ms"; a duration value itself reads as
-// `1 hour 30 minutes 30 seconds` (core/runtime.warp duration_text)
-format_duration(ms): text := {
-	if ms < 0 then return "-" + format_duration(0 - ms)
-	if ms < 1000 then return "" + ms + "ms"
-	s = ms /! 1000
+// milliseconds as the largest units, the seconds as the shell's time writes them: 5430000 → "1h 30m 30s", 207 →
+// "0.207s", 61500 → "1m 1.5s"; what `d as text` gives
+units_text(ms: int) as text := {
+	if ms < 0 then return "-" + units_text(0 - ms)
+	if ms < 60000 then return seconds_text(ms)
 	parts = []
-	if s >= 86400 { parts = parts + ["" + s /! 86400 + "d"] }
-	if s % 86400 >= 3600 { parts = parts + ["" + s % 86400 /! 3600 + "h"] }
-	if s % 3600 >= 60 { parts = parts + ["" + s % 3600 /! 60 + "m"] }
-	if s % 60 > 0 { parts = parts + ["" + s % 60 + "s"] }
+	if ms >= 86400000 { parts += [text(ms /! 86400000) + "d"] }
+	if ms % 86400000 >= 3600000 { parts += [text(ms % 86400000 /! 3600000) + "h"] }
+	if ms % 3600000 >= 60000 { parts += [text(ms % 3600000 /! 60000) + "m"] }
+	if ms % 60000 > 0 { parts += [seconds_text(ms % 60000)] }
 	join(parts, " ")
 }
-is_leap_year(year): bool := year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-days_in_month(year, month): int := {
-	if not (month is int) or month < 1 or month > 12 { raise "days_in_month: the month " + str(month) + " is not 1 to 12" }
+is_leap_year(year) as bool := year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+days_in_month(year, month) as int := {
+	if not (month is int) or month < 1 or month > 12 { raise "days_in_month: the month " + text(month) + " is not 1 to 12" }
 	if month == 2 then (if is_leap_year(year) then 29 else 28) else if month == 4 or month == 6 or month == 9 or month == 11 then 30 else 31
 }
 
@@ -292,41 +305,41 @@ time_zones = [
 	Zone("Pacific/Honolulu", -36000, Dst.Never)
 ]
 
-zone_named(name: text): Zone := time_zones#(zone_index(name) + 1)
+zone_named(name: text) as Zone := time_zones#(zone_index(name) + 1)
 // a zone's place in time_zones from 0, as a zoned time's info holds it
-zone_index(name: text): int := {
+zone_index(name: text) as int := {
 	for at in 0 ..< #time_zones { if time_zones#(at + 1).name == name { return at } }
 	raise "unknown time zone " + name + ": not in the time zone rules (lib/time.warp time_zones)"
 }
 // ISO weekday of a day number: Monday 1 … Sunday 7
-weekday_of_day(days: int): int := (days + 3) % 7 + 1
+weekday_of_day(days: int) as int := (days + 3) % 7 + 1
 // the day number of the last Sunday of a month
-last_sunday(year: int, month: int): int := {
+last_sunday(year: int, month: int) as int := {
 	last = days_from_date(year, month, days_in_month(year, month))
 	last - weekday_of_day(last) % 7
 }
 // the day number of the n-th Sunday of a month, counting from 1
-nth_sunday(year: int, month: int, n: int): int := {
+nth_sunday(year: int, month: int, n: int) as int := {
 	first = days_from_date(year, month, 1)
 	first + (7 - weekday_of_day(first)) % 7 + 7 * (n - 1)
 }
 // the year (UTC) of seconds since 1970
-year_of_seconds(seconds: int): int := date_of(seconds * 1000).year
+year_of_seconds(seconds: int) as int := date_of(seconds * 1000).year
 // European summer time: from 01:00 UTC on the last Sunday of March to 01:00 UTC on the last Sunday of October
-european_summer(year: int, seconds: int): bool := {
+european_summer(year: int, seconds: int) as bool := {
 	start = last_sunday(year, 3) * day_seconds + hour_seconds
 	end = last_sunday(year, 10) * day_seconds + hour_seconds
 	seconds >= start and seconds < end
 }
 // US daylight time: from 02:00 local standard time on the second Sunday of March to 02:00 local daylight time on the
 // first Sunday of November
-united_states_summer(year: int, seconds: int, standard: int): bool := {
+united_states_summer(year: int, seconds: int, standard: int) as bool := {
 	start = nth_sunday(year, 3, 2) * day_seconds + 2 * hour_seconds - standard
 	end = nth_sunday(year, 11, 1) * day_seconds + 2 * hour_seconds - standard - hour_seconds
 	seconds >= start and seconds < end
 }
 // seconds east of UTC in effect in a zone at seconds since 1970
-zone_offset(zone: Zone, seconds: int): int := {
+zone_offset(zone: Zone, seconds: int) as int := {
 	year = year_of_seconds(seconds)
 	summer = match zone.dst {
 		Never: false
@@ -338,7 +351,7 @@ zone_offset(zone: Zone, seconds: int): int := {
 // the instant (seconds since 1970) a wall time (seconds since 1970 on the zone's wall clock) means in a zone: of the
 // summer and the winter offset, those that hold at the instant they give; one is the answer, none (skipped by a
 // transition) or both (repeated) need the choice, else it fails as calendar.rs Zone::resolve does
-zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
+zone_instant(zone: Zone, wall: int, choice: Disambiguation) as int := {
 	later = wall - zone.standard
 	if zone.dst == Dst.Never { return later }
 	earlier = later - hour_seconds
@@ -360,6 +373,8 @@ zone_instant(zone: Zone, wall: int, choice: Disambiguation): int := {
 // nanoseconds, its info the zone's index and offset in minutes above the form (extensions/time_values.warp), its zone's
 // name beside them
 nanos_per_second = 1000000000
+nanos_per_milli = 1000000
+instant_form = 0
 date_form = 1
 local_form = 2
 zoned_form = 4
@@ -382,12 +397,12 @@ zoned_at(at: int, nanos: int) := {
 }
 // the instant a wall time (seconds since 1970 on the zone's clock) means as a calendar shift lands on it: a repeated
 // one the earlier, a skipped one moved past the gap (RFC 5545, Temporal's "compatible")
-compatible_instant(zone: Zone, wall: int): int := {
+compatible_instant(zone: Zone, wall: int) as int := {
 	earlier = zone_instant(zone, wall, Disambiguation.Earlier)
 	if earlier + zone_offset(zone, earlier) == wall then earlier else zone_instant(zone, wall, Disambiguation.Later)
 }
 
-// Date patterns (card lib-date-patterns): format_pattern(time, "yyyy-MM-dd HH:mm") and parse_pattern(text, pattern), UTC.
+// Date patterns (card lib-date-patterns): format(time, Pattern("yyyy-MM-dd HH:mm")) and parse(text, Pattern(…)), UTC.
 // A run of one letter is a field: yyyy year, yy its last two digits, MMMM month name, MMM its first three letters,
 // MM month 01-12, M 1-12, dd day 01-31, d 1-31, EEEE weekday name, EEE its first three letters, HH hour 00-23, H 0-23,
 // mm minute, ss second, SSS millisecond; any other character, and text in 'single quotes', is itself
@@ -395,7 +410,7 @@ MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "
 WEEKDAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 PATTERN_LETTERS = "yMdEHmsS"
 // the pattern as its parts: a field as [letter, run length], literal text as a text
-pattern_parts(pattern: text): list := {
+pattern_parts(pattern: text) as list := {
 	parts = []
 	i = 1
 	while i <= #pattern {
@@ -405,41 +420,42 @@ pattern_parts(pattern: text): list := {
 			while close <= #pattern and pattern#close != '\'' { close += 1 }
 			parts += [if close == i + 1 then "'" else pattern[i: close - 1]]
 			i = close + 1
-		} else if PATTERN_LETTERS.contains(str(c)) {
+		} else if PATTERN_LETTERS.contains(text(c)) {
 			run = 1
 			while i + run <= #pattern and pattern#(i + run) == c { run += 1 }
-			parts += [[str(c), run]]
+			parts += [[text(c), run]]
 			i += run
 		} else {
-			parts += [str(c)]
+			parts += [text(c)]
 			i += 1
 		}
 	}
 	parts
 }
-padded(n: int, width: int): text := { t = str(abs(n)); sign = if n < 0 then "-" else ""; while #t + #sign < width { t = "0" + t }; sign + t }
-// the time (an Instant or milliseconds since 1970) written in the pattern: format_pattern(0, "d MMM yyyy") is "1 Jan 1970"
-format_pattern(time: any, pattern: text): text := {
-	ms = if time is Instant then time.ms else time
+padded(n: int, width: int) as text := { t = text(abs(n)); sign = if n < 0 then "-" else ""; while #t + #sign < width { t = "0" + t }; sign + t }
+// the time written in the pattern: format(Instant(0), Pattern("d MMM yyyy")) is "1 Jan 1970"
+public format(time: Instant, pattern: Pattern): text := pattern_text(time.ms, pattern.written)
+pattern_text(ms: int, pattern: text) as text := {
 	d = date_of(ms)
 	s = (ms % 86400000) /! 1000
 	fields = {"y": d.year, "M": d.month, "d": d.day, "H": s /! 3600, "m": s % 3600 /! 60, "s": s % 60, "S": ms % 1000}
-	pattern_parts(pattern).map(part => if part is list then field_text(part#1, part#2, fields, ms) else str(part)).join("")
+	pattern_parts(pattern).map(part => if part is list then field_text(part#1, part#2, fields, ms) else text(part)).join("")
 }
-field_text(letter: text, run: int, fields: map, ms: int): text := {
+field_text(letter: text, run: int, fields: map, ms: int) as text := {
 	if letter == "E" { name = WEEKDAY_NAMES#(weekday(ms) as int); return if run >= 4 then name else name[0: 3] }
 	if letter == "M" and run >= 3 { name = MONTH_NAMES#(fields["M"] as int); return if run >= 4 then name else name[0: 3] }
 	if letter == "y" and run == 2 { return padded(fields["y"] % 100, 2) }
 	padded(fields[letter], run)
 }
 // the milliseconds since 1970 a text written in the pattern names (UTC; missing fields 1970-01-01 00:00:00.000); a text
-// that does not follow the pattern raises, naming where: parse_pattern("2026-11-04 14:05", "yyyy-MM-dd HH:mm")
-parse_pattern(t: text, pattern: text): int := {
+// that does not follow the pattern raises, naming where: parse("2026-11-04 14:05", Pattern("yyyy-MM-dd HH:mm"))
+parse(t: text, pattern: Pattern) as Instant := Instant(pattern_ms(t, pattern.written))
+pattern_ms(t: text, pattern: text) as int := {
 	values = {"y": 1970, "M": 1, "d": 1, "H": 0, "m": 0, "s": 0, "S": 0}
 	at = 0
 	for part in pattern_parts(pattern) {
 		if not (part is list) {
-			part = str(part)
+			part = text(part)
 			if t[at: at + #part] != part { pattern_mismatch(t, pattern, at, "'" + part + "'") }
 			at += #part
 		} else if part#1 == "M" and part#2 >= 3 {
@@ -454,28 +470,38 @@ parse_pattern(t: text, pattern: text): int := {
 		} else {
 			// a field of 1 letter takes as many digits as follow, else exactly its run
 			width = if part#2 == 1 then digits_at(t, at) else part#2
-			if width == 0 or digits_at(t, at) < width { pattern_mismatch(t, pattern, at, str(part#2) + " digits") }
+			if width == 0 or digits_at(t, at) < width { pattern_mismatch(t, pattern, at, text(part#2) + " digits") }
 			n = int(t[at: at + width])
 			values[part#1] = if part#1 == "y" and part#2 == 2 then 2000 + n else n
 			at += width
 		}
 	}
 	if at != #t { pattern_mismatch(t, pattern, at, "the end") }
-	if values["M"] < 1 or values["M"] > 12 or values["d"] < 1 or values["d"] > days_in_month(values["y"], values["M"]) { raise "parse_pattern: " + t + " names no date" }
-	if values["H"] > 23 or values["m"] > 59 or values["s"] > 59 or values["S"] > 999 { raise "parse_pattern: " + t + " names no time of day (hours 0-23, minutes and seconds 0-59, milliseconds 0-999)" }
+	if values["M"] < 1 or values["M"] > 12 or values["d"] < 1 or values["d"] > days_in_month(values["y"], values["M"]) { raise "parse: " + t + " names no date" }
+	if values["H"] > 23 or values["m"] > 59 or values["s"] > 59 or values["S"] > 999 { raise "parse: " + t + " names no time of day (hours 0-23, minutes and seconds 0-59, milliseconds 0-999)" }
 	days_from_date(values["y"], values["M"], values["d"]) * 86400000 + ((values["H"] * 60 + values["m"]) * 60 + values["s"]) * 1000 + values["S"]
 }
-pattern_month(i: int, run: int): text := if run >= 4 then MONTH_NAMES#i else MONTH_NAMES#i[0: 3]
-pattern_weekday(i: int, run: int): text := if run >= 4 then WEEKDAY_NAMES#i else WEEKDAY_NAMES#i[0: 3]
+pattern_month(i: int, run: int) as text := if run >= 4 then MONTH_NAMES#i else MONTH_NAMES#i[0: 3]
+pattern_weekday(i: int, run: int) as text := if run >= 4 then WEEKDAY_NAMES#i else WEEKDAY_NAMES#i[0: 3]
 // how many digits follow at the 0-based position
-digits_at(t: text, at: int): int := { n = 0; while at + n < #t and is_digit(t#(at + n + 1)) { n += 1 }; n }
-pattern_mismatch(t: text, pattern: text, at: int, expected: text) := raise "parse_pattern: \"" + t + "\" does not match \"" + pattern + "\": " + expected + " expected at character " + str(at + 1)
+digits_at(t: text, at: int) as int := { n = 0; while at + n < #t and is_digit(t#(at + n + 1)) { n += 1 }; n }
+pattern_mismatch(t: text, pattern: text, at: int, expected: text) := raise "parse: \"" + t + "\" does not match \"" + pattern + "\": " + expected + " expected at character " + text(at + 1)
 
-// Durations as text (card lib-durations), milliseconds as format_duration takes them
+// Durations as text (card lib-durations): "1h30m" as Duration, "PT1H30M" as Duration; format(d, long: yes), format(d, iso: yes)
+t: text as Duration := Duration(written_duration_ms(t))
+// the ISO 8601 form when it starts with P, else the short one
+written_duration_ms(t: text) as int := if #t > 0 and t#1 == 'P' then iso_duration_ms(t) else short_duration_ms(t)
+// a duration styled: format(d, long: yes) "1 hour 30 minutes", format(d, iso: yes) "PT1H30M"; its plain text is d as text
+public format(d: Duration, long = no, iso = no): text := {
+	ms = int(round(d.ms))
+	if long { return long_duration_text(ms) }
+	if iso { return iso_duration_text(ms) }
+	raise "format(" + units_text(ms) + ") names no style: write d as text, or format(d, long: yes), format(d, iso: yes)"
+}
 DURATION_UNITS = {"d": 86400000, "h": 3600000, "m": 60000, "s": 1000, "ms": 1}
 // "1h30m", "2d 4h", "45s", "500ms" → milliseconds: whole numbers each with its unit (d h m s ms), blanks between
 // them allowed; anything else raises naming what is wrong
-parse_duration(t: text): int := {
+short_duration_ms(t: text) as int := {
 	total = 0
 	at = 1
 	units = 0
@@ -483,7 +509,7 @@ parse_duration(t: text): int := {
 		if t#at == ' ' { at += 1; continue }
 		start = at
 		while at <= #t and is_digit(t#at) { at += 1 }
-		if at == start { raise "parse_duration: \"" + t + "\": a number expected at character " + str(at) + " (like 1h30m, 2d 4h, 500ms)" }
+		if at == start { raise "\"" + t + "\" as Duration: a number expected at character " + text(at) + " (like 1h30m, 2d 4h, 500ms)" }
 		n = int(t[start - 1: at - 1])
 		unit_start = at
 		while at <= #t and is_letter(t#at) { at += 1 }
@@ -495,19 +521,19 @@ parse_duration(t: text): int := {
 			word_end = w
 			while word_end <= #t and is_letter(t#word_end) { word_end += 1 }
 			unit = t[w - 1: word_end - 1]
-			if unit == "" { duration_refused(t, "a unit is missing after " + str(n) + " (d, h, m, s or ms)") }
-			if DURATION_UNITS.has(unit) { duration_refused(t, "the unit " + unit + " must follow " + str(n) + " without a blank (like 5" + unit + ")") }
+			if unit == "" { duration_refused(t, "a unit is missing after " + text(n) + " (d, h, m, s or ms)") }
+			if DURATION_UNITS.has(unit) { duration_refused(t, "the unit " + unit + " must follow " + text(n) + " without a blank (like 5" + unit + ")") }
 		}
-		if not DURATION_UNITS.has(unit) { duration_refused(t, "unknown unit \"" + unit + "\" after " + str(n) + " (d, h, m, s or ms)") }
+		if not DURATION_UNITS.has(unit) { duration_refused(t, "unknown unit \"" + unit + "\" after " + text(n) + " (d, h, m, s or ms)") }
 		total += n * DURATION_UNITS[unit]
 		units += 1
 	}
-	if units == 0 { raise "parse_duration: \"" + t + "\" names no duration (like 1h30m, 2d 4h, 500ms)" }
+	if units == 0 { raise "\"" + t + "\" as Duration: names no duration (like 1h30m, 2d 4h, 500ms)" }
 	total
 }
-duration_refused(t: text, why: text) := raise "parse_duration: \"" + t + "\": " + why
+duration_refused(t: text, why: text) := raise "\"" + t + "\" as Duration: " + why
 // the long form: 5400000 → "1 hour 30 minutes", 0 → "0 seconds", 1500 → "1 second 500 milliseconds"
-format_duration_long(ms: int): text := {
+long_duration_text(ms: int) as text := {
 	if ms == 0 { return "0 seconds" }
 	sizes = [[86400000, "day"], [3600000, "hour"], [60000, "minute"], [1000, "second"], [1, "millisecond"]]
 	rest = abs(ms)
@@ -515,12 +541,12 @@ format_duration_long(ms: int): text := {
 	for size in sizes { n = rest /! size#1; if n > 0 { parts += [counted(n, size#2)] }; rest = rest % size#1 }
 	(if ms < 0 then "-" else "") + parts.join(" ")
 }
-counted(n: int, word: text): text := str(n) + " " + word + (if n == 1 then "" else "s")
+counted(n: int, word: text) as text := text(n) + " " + word + (if n == 1 then "" else "s")
 // ISO 8601 durations of days and times → milliseconds: "PT1H30M", "P2DT4H", "P1W", "PT0.5S"; years and months have no
 // fixed length, so P1Y and P1M raise, as does any other text
-parse_iso_duration(t: text): int := {
-	if #t < 2 { raise "parse_iso_duration: \"" + t + "\" is incomplete (like PT1H30M)" }
-	if t#1 != 'P' { raise "parse_iso_duration: \"" + t + "\" does not start with P (like PT1H30M)" }
+iso_duration_ms(t: text) as int := {
+	if #t < 2 { raise "\"" + t + "\" as Duration: incomplete (like PT1H30M)" }
+	if t#1 != 'P' { raise "\"" + t + "\" as Duration: no P at the start (like PT1H30M)" }
 	total = 0
 	in_time = no
 	at = 2
@@ -529,7 +555,7 @@ parse_iso_duration(t: text): int := {
 		if t#at == 'T' { if in_time { iso_refused(t, "a second T") }; in_time = yes; at += 1; continue }
 		start = at
 		while at <= #t and (is_digit(t#at) or t#at == '.') { at += 1 }
-		if at == start { iso_refused(t, "a number and its designator expected at character " + str(start)) }
+		if at == start { iso_refused(t, "a number and its designator expected at character " + text(start)) }
 		if at > #t { iso_refused(t, "a designator is missing after " + t[start - 1: at - 1]) }
 		n = float(t[start - 1: at - 1])
 		d = t#at
@@ -537,27 +563,27 @@ parse_iso_duration(t: text): int := {
 		fields += 1
 		if not in_time and (d == 'Y' or d == 'M') { iso_refused(t, "years and months have no fixed length in milliseconds") }
 		size = if not in_time and d == 'W' then 604800000 else if not in_time and d == 'D' then 86400000 else if in_time and d == 'H' then 3600000 else if in_time and d == 'M' then 60000 else if in_time and d == 'S' then 1000 else 0
-		if size == 0 { iso_refused(t, "no designator " + str(d) + (if in_time then " after T" else " before T")) }
+		if size == 0 { iso_refused(t, "no designator " + text(d) + (if in_time then " after T" else " before T")) }
 		total += round(n * size) as int
 	}
 	if fields == 0 { iso_refused(t, "it names no amount") }
 	total
 }
-iso_refused(t: text, why: text) := raise "parse_iso_duration: \"" + t + "\": " + why
+iso_refused(t: text, why: text) := raise "\"" + t + "\" as Duration: " + why
 // milliseconds as ISO 8601: 5400000 → "PT1H30M", 187200000 → "P2DT4H", 500 → "PT0.5S", 0 → "PT0S"
-format_iso_duration(ms: int): text := {
+iso_duration_text(ms: int) as text := {
 	if ms == 0 { return "PT0S" }
 	rest = abs(ms)
 	days = rest /! 86400000; rest = rest % 86400000
 	hours = rest /! 3600000; rest = rest % 3600000
 	minutes = rest /! 60000; rest = rest % 60000
-	seconds = if rest == 0 then "" else if rest % 1000 == 0 then str(rest /! 1000) + "S" else str(rest /! 1000) + millis_fraction(rest % 1000) + "S"
-	time = (if hours > 0 then str(hours) + "H" else "") + (if minutes > 0 then str(minutes) + "M" else "") + seconds
-	(if ms < 0 then "-" else "") + "P" + (if days > 0 then str(days) + "D" else "") + (if time == "" then "" else "T" + time)
+	seconds = if rest == 0 then "" else if rest % 1000 == 0 then text(rest /! 1000) + "S" else text(rest /! 1000) + millis_fraction(rest % 1000) + "S"
+	time = (if hours > 0 then text(hours) + "H" else "") + (if minutes > 0 then text(minutes) + "M" else "") + seconds
+	(if ms < 0 then "-" else "") + "P" + (if days > 0 then text(days) + "D" else "") + (if time == "" then "" else "T" + time)
 }
 // t seen from now (each an Instant or milliseconds since 1970): "3 minutes ago", "in 2 days", "just now" within 5
 // seconds; the largest whole unit of seconds, minutes, hours, days, weeks, months (30 days) and years (365 days)
-relative_time(t: any, now: any): text := {
+relative_time(t: any, now: any) as text := {
 	diff = (if t is Instant then t.ms else t) - (if now is Instant then now.ms else now)
 	size = abs(diff)
 	if size < 5000 { return "just now" }
@@ -595,12 +621,12 @@ lengths_vary = "cannot order durations that compare differently on different dat
 # the order of rust-harness:src/time/mod.rs TimeForm: a form's code is its index there
 enum TimeForm { Instant, Date, Local, Duration, Zoned, Clock }
 time_forms = [TimeForm.Instant, TimeForm.Date, TimeForm.Local, TimeForm.Duration, TimeForm.Zoned, TimeForm.Clock]
-form_of(code: int): TimeForm := time_forms#(code + 1)
+form_of(code: int) as TimeForm := time_forms#(code + 1)
 
 # the operators a time takes at run time, the operator index of the Rust twin (TIME_OPERATORS)
 enum TimeOperator { Add, Sub, Mul }
 time_operators = [TimeOperator.Add, TimeOperator.Sub, TimeOperator.Mul]
-time_operator(code: int): TimeOperator := time_operators#(code + 1)
+time_operator(code: int) as TimeOperator := time_operators#(code + 1)
 
 # an operand of + - *: a time, a duration or a whole number. A time of any form but Duration: its position is
 # nanoseconds (Instant, Local, Zoned since 1970, Clock since midnight) or days since 1970 (Date); a zoned one's zone
@@ -608,24 +634,24 @@ time_operator(code: int): TimeOperator := time_operators#(code + 1)
 # a program's own `class Span` or `class Moment` stays its own, and time.classes lists only the module's values
 enum TimeOperand { AtTime(form: TimeForm, position: int, zone: int), Lasting(month_count: int, day_count: int, nano_count: int), Whole(count: int) }
 
-at_time(form: TimeForm, position: int): TimeOperand := AtTime(form, position, -1)
-moved(moment: TimeOperand, position: int): TimeOperand := AtTime(moment.form, position, moment.zone)
-span_plus(a: TimeOperand, b: TimeOperand): TimeOperand := Lasting(a.month_count + b.month_count, a.day_count + b.day_count, a.nano_count + b.nano_count)
-span_scaled(span: TimeOperand, factor: int): TimeOperand := Lasting(span.month_count * factor, span.day_count * factor, span.nano_count * factor)
-has_calendar_parts(span: TimeOperand): bool := span.month_count != 0 or span.day_count != 0
+at_time(form: TimeForm, position: int) as TimeOperand := AtTime(form, position, -1)
+moved(moment: TimeOperand, position: int) as TimeOperand := AtTime(moment.form, position, moment.zone)
+span_plus(a: TimeOperand, b: TimeOperand) as TimeOperand := Lasting(a.month_count + b.month_count, a.day_count + b.day_count, a.nano_count + b.nano_count)
+span_scaled(span: TimeOperand, factor: int) as TimeOperand := Lasting(span.month_count * factor, span.day_count * factor, span.nano_count * factor)
+has_calendar_parts(span: TimeOperand) as bool := span.month_count != 0 or span.day_count != 0
 
 # the floor quotient and the remainder (0 ≤ r < divisor) of value by a positive divisor
-floor_split(value: int, divisor: int): list := {
+floor_split(value: int, divisor: int) as list := {
 	quotient = value /! divisor
 	[quotient, value - quotient * divisor]
 }
 
 # the day since 1970 and the nanoseconds into it of a date or local time (times.rs time_parts)
-day_and_nanos(moment: TimeOperand): list := if moment.form == TimeForm.Date then [moment.position, 0] else floor_split(moment.position, nanos_per_day)
+day_and_nanos(moment: TimeOperand) as list := if moment.form == TimeForm.Date then [moment.position, 0] else floor_split(moment.position, nanos_per_day)
 
 # `moment + span`, the span already signed: calendar.rs `Time.add`. The month count first, then the days: 2024-01-31
 # + 1 month is refused, + 1 month 2 days too (no 2024-02-31 to add the days to)
-shift_time(moment: TimeOperand, span: TimeOperand): TimeOperand := match moment.form {
+shift_time(moment: TimeOperand, span: TimeOperand) as TimeOperand := match moment.form {
 	TimeForm.Zoned => shift_zoned(moment, span)
 	TimeForm.Instant => {
 		if has_calendar_parts(span) { raise no_calendar }
@@ -652,7 +678,7 @@ shift_time(moment: TimeOperand, span: TimeOperand): TimeOperand := match moment.
 
 # `z + 1 day` keeps the wall clock across a clock change, `z + 24 hours` the elapsed time: the calendar part moves
 # the wall clock, resolved in the zone as a calendar shift lands (compatible_instant), then the exact part the instant
-shift_zoned(moment: TimeOperand, span: TimeOperand): TimeOperand := {
+shift_zoned(moment: TimeOperand, span: TimeOperand) as TimeOperand := {
 	zone = time_zones#(moment.zone + 1)
 	seconds = floor_split(moment.position, nanos_per_second)
 	wall = at_time(TimeForm.Local, (seconds#1 + zone_offset(zone, seconds#1)) * nanos_per_second)
@@ -662,24 +688,24 @@ shift_zoned(moment: TimeOperand, span: TimeOperand): TimeOperand := {
 }
 
 # `a - b` of two times of one form: the days between dates, else an exact duration
-time_difference(a: TimeOperand, b: TimeOperand): TimeOperand := {
+time_difference(a: TimeOperand, b: TimeOperand) as TimeOperand := {
 	if a.form != b.form { raise mismatched }
 	if a.form == TimeForm.Date { return Whole(a.position - b.position) }
 	Lasting(0, 0, a.position - b.position)
 }
 
-operator_sign(op: TimeOperator): int := if op == TimeOperator.Add then 1 else -1
+operator_sign(op: TimeOperator) as int := if op == TimeOperator.Add then 1 else -1
 
 # `3 * d` is `d * 3`, `d + t` is `t + d`. The cases are told apart by `is` and built bare (`Whole(2)`): a match on
 # an enum's cases with data and `Whole(2)` don't hold their data yet (card enum-case-data)
-time_arithmetic(a: TimeOperand, b: TimeOperand, op: TimeOperator): TimeOperand := {
+time_arithmetic(a: TimeOperand, b: TimeOperand, op: TimeOperator) as TimeOperand := {
 	if a is Lasting { return lasting_arithmetic(a, b, op) }
 	if a is AtTime { return moment_arithmetic(a, b, op) }
 	if b is Whole { raise not_arithmetic }
 	time_arithmetic(b, a, op)
 }
 
-lasting_arithmetic(span: TimeOperand, b: TimeOperand, op: TimeOperator): TimeOperand := {
+lasting_arithmetic(span: TimeOperand, b: TimeOperand, op: TimeOperator) as TimeOperand := {
 	if b is AtTime {
 		if op != TimeOperator.Add { raise not_arithmetic }
 		return time_arithmetic(b, span, op)
@@ -692,7 +718,7 @@ lasting_arithmetic(span: TimeOperand, b: TimeOperand, op: TimeOperator): TimeOpe
 	span_plus(span, span_scaled(b, operator_sign(op)))
 }
 
-moment_arithmetic(moment: TimeOperand, b: TimeOperand, op: TimeOperator): TimeOperand := {
+moment_arithmetic(moment: TimeOperand, b: TimeOperand, op: TimeOperator) as TimeOperand := {
 	if b is Lasting {
 		if op == TimeOperator.Mul { raise not_arithmetic }
 		return shift_time(moment, span_scaled(b, operator_sign(op)))
@@ -706,7 +732,7 @@ moment_arithmetic(moment: TimeOperand, b: TimeOperand, op: TimeOperator): TimeOp
 
 # -1, 0 or 1 as `a` is shorter, as long or longer than `b` on every date (Duration.compare); an order that depends
 # on the date is an error. Daylight saving moves an exact part against the calendar part by at most an hour
-duration_order(a: TimeOperand, b: TimeOperand): int := {
+duration_order(a: TimeOperand, b: TimeOperand) as int := {
 	difference = span_plus(a, span_scaled(b, -1))
 	if not has_calendar_parts(difference) {
 		if difference.nano_count > 0 { return 1 }
@@ -753,7 +779,7 @@ lasting_of(d: Duration or any) := if d is Duration then lasting_nanos(round(d.ms
 # the exact duration of nanoseconds, as a quantity of time moves a time
 lasting_nanos(nanos: int) := time_of(duration_form_code, nanos)
 time_operation(a_form: int, a_position: int, a_months: int, a_days: int, b_form: int, b_position: int, b_months: int, b_days: int, operator: int) := operand_value(time_arithmetic(operand_of(a_form, a_position, a_months, a_days), operand_of(b_form, b_position, b_months, b_days), time_operator(operator)))
-operand_of(form: int, position: int, months: int, days: int): TimeOperand := {
+operand_of(form: int, position: int, months: int, days: int) as TimeOperand := {
 	if form < 0 { return Whole(position) }
 	if form == duration_form_code { return Lasting(months, days, position) }
 	# a zoned time's info above its form, read as a duration's days: its zone's index, its offset above that
@@ -771,5 +797,5 @@ duration_value(span: TimeOperand) := {
 	if not within_signed(span.day_count, day_limit) or not within_signed(span.month_count, month_limit) { raise too_long }
 	time_of(duration_form_code + (span.day_count % info_day_range) * info_days + span.month_count * info_months, span.nano_count)
 }
-within_signed(count: int, limit: int): bool := count >= - limit and count < limit
-form_code(form: TimeForm): int := (0 to 5).filter(code => form_of(code) == form)#1
+within_signed(count: int, limit: int) as bool := count >= - limit and count < limit
+form_code(form: TimeForm) as int := (0 to 5).filter(code => form_of(code) == form)#1

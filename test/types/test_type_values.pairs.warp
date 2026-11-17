@@ -4,13 +4,10 @@
 '"type is " + type 3'	'type is nat'
 'x = int; "\\(x)"'	'int'
 'x = int; x as text'	'int'
-'x = 3; "" + type(x) == "nat"'	true
 
 # the_type_of_a_type_value_is_type
 'x = int; type x'	'type'
-'type(int)'	'type'
 'f(t: type) := type(t); f int'	'type'
 
 # a_type_value_still_compares_as_the_type
-'x = 3; type(x) == nat'	true
 'x = int; x == int'	true

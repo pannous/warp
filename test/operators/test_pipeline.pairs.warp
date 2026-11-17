@@ -7,5 +7,5 @@
 
 # a_braceless_call_is_the_piped_value
 'square := it*it; numbers=[1 2 3 4]; r = square numbers |> sum; r'	30
-'square(x) := x*x; square 3 |> str'	'9'
+'square(x) := x*x; square 3 |> text'	'9'
 'xs=[1 2 3]; print xs |> sum; 1'	1

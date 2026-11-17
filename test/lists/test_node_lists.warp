@@ -5,9 +5,9 @@ is! 'def g(xs){ s=0; for i in 0..#xs { s+=xs#(i+1) }; s }; g((0..3000).map(x=>x)
 is! 'def swap(arr, i, j) { temp = arr[i]; arr[i] = arr[j]; arr[j] = temp; return arr }; swap([1 2 3], 0, 2)' [3, 2, 1]
 
 # a_recursive_list_function_passes_its_array
-is! 'def qs(arr, lo, hi) { if lo >= hi { return arr }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; arr = qs(arr, lo, i - 1); return qs(arr, i + 1, hi) }; xs = [5 3 9 1 7]; qs(xs, 0, 4)' [1, 3, 5, 7, 9]
-is! 'def qs(arr, lo, hi) { if lo >= hi { return arr }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; arr = qs(arr, lo, i - 1); return qs(arr, i + 1, hi) }; xs = [5 3 9 1 7]; ys = qs(xs, 0, 4); xs#1' 5
-is! 'def qs(arr, lo, hi) { if lo >= hi { return arr }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; arr = qs(arr, lo, i - 1); return qs(arr, i + 1, hi) }; xs = (0..500).map(x => (x * 499) % 500); ys = qs(xs, 0, 499); ys#1 + ys#500' 499
+is! 'qs!(arr, lo, hi) := { if lo >= hi { return }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; qs!(arr, lo, i - 1); qs!(arr, i + 1, hi) }; xs = [5 3 9 1 7]; qs!(xs, 0, 4); xs' [1, 3, 5, 7, 9]
+is! 'qs!(arr, lo, hi) := { if lo >= hi { return }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; qs!(arr, lo, i - 1); qs!(arr, i + 1, hi) }; xs = [5 3 9 1 7]; qs!(xs, 0, 4); xs#1' 1
+is! 'qs!(arr, lo, hi) := { if lo >= hi { return }; pivot = arr[hi]; i = lo; for j in lo..hi { if arr[j] < pivot { t = arr[i]; arr[i] = arr[j]; arr[j] = t; i = i + 1 } }; t = arr[i]; arr[i] = arr[hi]; arr[hi] = t; qs!(arr, lo, i - 1); qs!(arr, i + 1, hi) }; xs = (0..500).map(x => (x * 499) % 500); qs!(xs, 0, 499); xs#1 + xs#500' 499
 
 # a_list_parameter_walked_by_a_for_loop_takes_the_array
 is! 'total(xs) := { s=0; for x in xs { s+=x }; s }; big=(0..20000).map(x=>x); t=0; for k in 0..3 { t += total(big) }; t' 599970000

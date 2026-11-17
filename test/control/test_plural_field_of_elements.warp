@@ -2,6 +2,6 @@
 
 # a_plural_field_wherever_the_singular_resolves
 is! 'class Q{name: text}
-qs = [Q("Al"), Q("Bo")]; str(names of qs)' '["Al" "Bo"]'
+qs = [Q("Al"), Q("Bo")]; text(names of qs)' '["Al" "Bo"]'
 is! 'class Q{name: text}
-qs = [Q("Al"), Q("Bo")]; str(qs.names)' '["Al" "Bo"]'
+qs = [Q("Al"), Q("Bo")]; text(qs.names)' '["Al" "Bo"]'

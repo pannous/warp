@@ -1,0 +1,20 @@
+# Stein's binary gcd matches Euclid on random and wide values (notes/binary_gcd.md)
+
+# a fixed generator, so the cross-check is the same every run, plus every pair of a wide set
+is! 'use math
+s = 1
+i = 0
+ok = yes
+while i < 64 {
+	s = (s * 1103515245 + 12345) % 2147483648
+	a = (s % 100000) - 50000
+	s = (s * 1103515245 + 12345) % 2147483648
+	b = (s % 100000) - 50000
+	if gcd_binary(a, b) != gcd_euclid(a, b) { ok = no }
+	i = i + 1
+}
+wide = [0, 1, -1, 2^62, 2^63, 2^70, -(2^80), 3 * 2^65]
+for a in wide {
+	for b in wide { if gcd_binary(a, b) != gcd_euclid(a, b) { ok = no } }
+}
+ok' yes

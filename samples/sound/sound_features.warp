@@ -6,6 +6,6 @@ print "the sound module contains many useful functions and tweaks"
 print help(sound)
 
 for trick in dir(sound):
-	print "sound trick: " + trick
 	print help(trick)
 	print function(trick).definition
+	print ""

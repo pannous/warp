@@ -1,0 +1,4 @@
+# `interface` and `protocol` declare a trait as `trait` does (wiki/trait.md; card trait-alias)
+'trait Shape { area() }; class Sq { side: int; area() := side * side }; s: Shape = Sq(3); s.area()'	9
+'interface Shape { area() }; class Sq { side: int; area() := side * side }; s: Shape = Sq(3); s.area()'	9
+'protocol Shape { area() }; class Sq { side: int; area() := side * side }; s: Shape = Sq(3); s.area()'	9

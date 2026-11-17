@@ -1,0 +1,4 @@
+// An Image saved and read back is the same picture, its transparency kept (lib/image.warp save, lib/png.warp png_bytes;
+// card image-save-alpha): a fully and a half transparent pixel stay so, an opaque one opaque.
+'use image; use file; f = temp_folder() + "/saved.png"; p = image(3, 1, (x, y) => [with_alpha(red, 0), with_alpha(blue, 0.5), green][x]); save(p, f); image(f).pixels.map(alpha_of)'	[0, 128, 255]
+'use image; use file; f = temp_folder() + "/saved.png"; p = image(4, 3, (x, y) => rgb(x * 60, y * 90, 7)); save(p, f); q = image(f); [q.width, q.height, q.pixels == p.pixels]'	[4, 3, yes]

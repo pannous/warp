@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # WHATWG URL tests (web-platform-tests url/resources/urltestdata.json, vendored here) against lib/url; not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/url/url_test.py [--fails GROUP|all]
+# usage: [WARP="warp --lib $PWD/lib"] test/url/url_test.py [--fails GROUP|all]
 # lib/url is an RFC 3986 parser (parse_url, resolve_url): see README.md for the selection rule and the skipped
 # categories. A case without a base runs url_text(parse_url(input)); with one, resolve_url(base, input). href and the
 # parts are compared: protocol = scheme + ":", username = user, password, hostname = host ([…] for IPv6),
 # port, host = hostname[:port], pathname = path, search = "?" + query, hash = "#" + fragment (both "" when empty).
 # A failure case passes when lib raises.
-import json, os, re, subprocess, sys, tempfile, collections
+import json, os, re, subprocess, sys, tempfile, collections, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__))
 data = [c for c in json.load(open(os.path.join(here, "urltestdata.json"), encoding="utf-8")) if isinstance(c, dict)]
 SPECIAL = ("http", "https", "ws", "wss", "ftp")
@@ -88,7 +90,7 @@ for c in data:
     run.append(c)
 prog = PRELUDE + "".join('print(run(%s))\nprint("@@")\n' % (W(c["input"]) if not c.get("base") else W(c["base"]) + ", " + W(c["input"])) for c in run)
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False, encoding="utf-8") as fh: fh.write(prog)
-outs = [o.strip() for o in subprocess.run(["warp", fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
+outs = [o.strip() for o in subprocess.run([*WARP, fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
 FIELDS = ["href", "protocol", "username", "password", "hostname", "port", "host", "pathname", "search", "hash"]
 for k, c in enumerate(run):
     o = outs[k] if k < len(outs) else "CRASH"

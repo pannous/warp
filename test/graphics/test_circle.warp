@@ -1,0 +1,10 @@
+# Filled-circle pixels of radius 50. Source: samples/advanced/circle.warp
+# (the same comprehension the sample paints). The count is near π·50² (~7854);
+# the center is ink and a corner is paper.
+
+is! 'width = height = 400
+radius = 50
+center = height / 2
+surface = [(y - center)^2 + (x - center)^2 < radius * radius for y in 0..height for x in 0..width]
+inked = count([p for p in surface if p])
+inked >= 7800 and inked <= 7900 and surface[center * width + center] and not surface[0]' yes

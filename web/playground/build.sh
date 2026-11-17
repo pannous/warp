@@ -4,22 +4,24 @@
 # the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
 # menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
-# Usage: build.sh [compiler|served <site>|site <site>]   (all when omitted)
+# Usage: build.sh [--lib <folder>] [compiler|served [<site>]|site <site>]   (all when omitted)
 #   compiler  → warp-lib/: the installed lib/ (its warp.wasm, runtime.wasm, modules/ and sources), no machine code
 #   site <site> → collects the built page into a fresh <site> folder, as deployed (pages.yml, scripts/browser-dry-run.sh)
 #   served <site> → <site>/served-files.js for a collected site; every build writes the repository's
+#   served → the repository's served-files.js alone, for a warp-lib/ linked in from elsewhere (after-push.sh)
 set -euo pipefail
 
 page="$(cd "$(dirname "$0")" && pwd)"
 repository="$(cd "$page/../.." && pwd)"
 source "$repository/scripts/lib/packages.sh"
-# the compilers: WARP_LIB, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else the
-# installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
-OWN_LIBRARY="$repository/lib"
-[ -f "$OWN_LIBRARY/warp.wasm.inputs" ] || OWN_LIBRARY="$(dirname "$(command -v warp)")/lib"
-INSTALLED_LIBRARY="${WARP_LIB:-$OWN_LIBRARY}"
-# the sources a compiler bakes in: one built from a commit where they differ ships its lag to the page
-COMPILER_SOURCES=(core 'lib/*.warp')
+# the compilers: --lib <folder>, else this checkout's own (scripts/rebuild.sh pure <tree> writes them into lib/), else
+# the installed ones beside the warp on $PATH (~/dev/bin/lib links to the current build)
+INSTALLED_LIBRARY="$repository/lib"
+[ -f "$INSTALLED_LIBRARY/warp.wasm.inputs" ] || INSTALLED_LIBRARY="$(dirname "$(command -v warp)")/lib"
+if [ "${1:-}" = --lib ]; then INSTALLED_LIBRARY=$2; shift 2; fi
+# the sources a compiler bakes in (scripts/compiler-inputs.sh: core/ and extensions/ but not core/native/, the native
+# warp's own, and lib/'s modules): one built from a commit where they differ ships its lag to the page
+COMPILER_SOURCES=(core extensions ':(exclude)core/native' 'lib/*.warp')
 # what the browser cannot use of it: wasmtime's machine code, native libraries, kept values, stale compilers
 NOT_FOR_THE_BROWSER=(--exclude='*.cwasm' --exclude='*.cwasm.key' --exclude='*.dylib' --exclude='*.so' --exclude='*.kept'
 	--exclude='*.stale' --exclude='*.inputs' --exclude='warp-self.wasm*' --exclude='data/')
@@ -39,7 +41,7 @@ PRELOADED_SOURCES=('*.warp' 'extensions/sugar/*.warp' 'modules/index.tsv' 'modul
 COMPILER_EXPORTS=(main _start memory text_heap trap_detail trap_position trap_name show trap_message shown_at shown_from returned_error
 	error_of new_empty new_int new_bool new_float new_codepoint new_text new_symbol new_key new_list new_type new_bytes new_ints
 	new_floats new_spelled_key new_spelled_list item_count item_at int_item_at float_item_at gpu_list_place gpu_list_cell
-	is_textual)
+	is_textual node_encoding asked_rule_word)
 # core/commands/commands.warp WASM_OPT's features: Binaryen's -all would add exact references Firefox refuses
 WASM_OPT_FEATURES=(--enable-gc --enable-reference-types --enable-bulk-memory --enable-multivalue --enable-sign-ext
 	--enable-nontrapping-float-to-int --enable-mutable-globals --enable-tail-call --enable-simd --enable-extended-const
@@ -70,7 +72,7 @@ built_of_changed() {
 }
 
 build_compiler() {
-	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or WARP_LIB=<lib>)" >&2; exit 1; }
+	[ -f "$INSTALLED_LIBRARY/warp.wasm" ] || { echo "error: no warp.wasm in $INSTALLED_LIBRARY (warp rebuild, or build.sh --lib <lib>)" >&2; exit 1; }
 	refuse_lagging_compiler
 	rm -rf "$page/warp-lib"
 	rsync -aL "${NOT_FOR_THE_BROWSER[@]}" "$INSTALLED_LIBRARY/" "$page/warp-lib/"
@@ -180,10 +182,16 @@ print("// made by build.sh: the files the server has (host-files.js isUnserved)\
 	echo "built $1"
 }
 
+# the samples' generated assets, which git ignores, fetched where missing (scripts/sample-assets.sh: ez_forest's tree
+# meshes), one path a line; a page built without them says so, its tree samples then fail
+sample_assets() {
+	scripts/sample-assets.sh fetch >/dev/null || echo "build.sh: the samples' assets were not fetched: ez_forest and tree_study fail in the page" >&2
+	scripts/sample-assets.sh list
+}
 # the repository's files, as the dev server and test_in_browser.py serve them from the repository root
 write_repository_served_files() {
 	# plus the compiler's lib/ and the packages, which git ignores
-	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find web/playground/warp-lib -type f 2>/dev/null || true; package_files; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
+	{ git -c core.quotepath=off ls-files --cached --others --exclude-standard; linked_folder_files; find -L web/playground/warp-lib -type f -not -name .DS_Store 2>/dev/null || true; package_files; sample_assets; find web/playground/lib -name '*.wasm'; } | write_served_files "$page/served-files.js"
 }
 
 # the files under each tracked link to a folder, by the link's path: lib/compiler -> ../core serves
@@ -208,10 +216,16 @@ write_site_served_files() {
 
 # the repository's tracked files of these paths copied into <site> at their paths; the regular ones, not the links
 shipped_tracked() {
-	local site=$1 file
+	local site=$1
 	shift
-	git ls-files -z -- "$@" | while IFS= read -r -d '' file; do
-		[ -L "$file" ] || { mkdir -p "$site/$(dirname "$file")" && cp "$file" "$site/$file"; }
+	git -c core.quotepath=off ls-files -- "$@" | shipped "$site"
+}
+
+# the files named on stdin, one a line, copied into <site> at their paths; the regular ones, not the links
+shipped() {
+	local file
+	while IFS= read -r file; do
+		[ -L "$file" ] || { mkdir -p "$1/$(dirname "$file")" && cp "$file" "$1/$file"; }
 	done
 }
 
@@ -232,6 +246,8 @@ collect_site() {
 	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
 	shipped_tracked "$site" samples
+	# and their generated assets, which git ignores
+	sample_assets | shipped "$site"
 	# the files the tour's examples read, at their repository paths too: `use wasm "test/fixtures/…/rust_demo.wasm"`,
 	# `import test/fixtures/wasm/zlib` (its .wasm and .warp), else the page's compile meets an unknown name
 	for named in $(grep -oE '(test|lib|data)/[A-Za-z0-9_./-]+' "$page/examples.js" | sort -u); do
@@ -259,39 +275,59 @@ stamp_assets() {
 }
 
 case "${1:-all}" in
-	served) write_site_served_files "$2"; exit ;;
+	served) if [ -n "${2:-}" ]; then write_site_served_files "$2"; else write_repository_served_files; fi; exit ;;
 	site) collect_site "$2"; exit ;;
 	compiler) build_compiler ;;
 	all) build_compiler ;;
-	*) echo "usage: $0 [compiler|served <site>|site <site>]" >&2; exit 2 ;;
+	*) echo "usage: $0 [compiler|served [<site>]|site <site>]" >&2; exit 2 ;;
 esac
 
-# the compiled module samples/wasm/import_compiled.warp links (samples/wasm/shapes.wasm, a link to it), built behind the
-# page's runtime.wasm, as scripts/samples.sh builds it natively
-WARP_LIB="$INSTALLED_LIBRARY" warp build --module test/fixtures/compiled/shapes.warp || echo "warning: no test/fixtures/compiled/shapes.wasm: wasm/import_compiled fails in the page" >&2
+# the compiled modules of test/fixtures/compiled (samples/wasm/import_compiled.warp links shapes.wasm, a link to it),
+# built behind the page's runtime.wasm, as scripts/samples.sh builds them natively
+for fixture in test/fixtures/compiled/*.warp; do
+	warp --lib "$INSTALLED_LIBRARY" build --module "$fixture" || echo "warning: no ${fixture%.warp}.wasm: the samples and tests importing it fail in the page" >&2
+done
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
 python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
-import collections, json, os, re, sys
+import collections, glob, json, os, re, sys
 # a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
 # menu (test_in_browser.py HOST_LINE)
 NOT_IN_PAGE = re.compile(r"^# host: (native|none)\b", re.M)
+# the authors' working notes stay in the source but not on the page: a comment holding TODO or DONE (or a `# todo`) is
+# left out, the whole line when it is a comment, else from its `#` or `//` on; a comment line that starts with the
+# marker opens a note block, which runs on through the comment lines after it, up to a blank line or code
+WORK_NOTE = re.compile(r"(?:^|\s)(?:#|//)(?:(?!\s#|\s//).)*?(?:\b(?:TODO|DONE)\b|(?:(?<=#)|(?<=//))\s*todo\b).*$")
+NOTE_BLOCK = re.compile(r"^\s*(?:#|//)\s*(?:TODO|DONE|todo)\b")
+COMMENT_LINE = re.compile(r"^\s*(?:#|//)")
+# and our card and decision keys, `(card finger-paint-slow)`: a reader gets the rule, never our bookkeeping
+KEY_ASIDE = re.compile(r"\s*\((?:card|decision)s? [a-z0-9]+(?:-[a-z0-9]+)+[^)]*\)")
+def shown(source):
+	if not any(WORK_NOTE.search(line) or KEY_ASIDE.search(line) for line in source.splitlines()): return source
+	kept, in_block = [], False
+	for line in map(lambda line: KEY_ASIDE.sub("", line), source.splitlines()):
+		in_block = bool(NOTE_BLOCK.match(line)) or (in_block and bool(COMMENT_LINE.match(line)))
+		if in_block: continue
+		note = WORK_NOTE.search(line)
+		before = line[:note.start()].rstrip() if note else line
+		if before or not note: kept.append(before)
+	return "\n".join(kept) + "\n"
 files = collections.defaultdict(list)
 for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
 names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
-samples = {name: open(path, encoding="utf-8").read() for name, path in names.items()}
+samples = {name: shown(open(path, encoding="utf-8").read()) for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
 	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
 	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
 	# a sample's <name>.args beside it, one argument a line, as `use os; args` gives them natively in the tests
-	# (tests/common arguments_beside): a song visualizer plays its first seconds only (card playground-browser)
-	beside = {name: path[:-len(".warp")] + ".args" for name, path in names.items()}
-	arguments = {name: open(file, encoding="utf-8").read().splitlines() for name, file in beside.items() if os.path.exists(file)}
+	# (tests/common arguments_beside) and scripts/samples.sh, by its file: a song visualizer plays its first seconds
+	# only (card playground-browser), a golf sample gets its inputs though the menu leaves it out
+	arguments = {file[:-len(".args")] + ".warp": open(file, encoding="utf-8").read().splitlines() for file in sorted(glob.glob("samples/*/*.args"))}
 	script.write("const SAMPLE_ARGUMENTS = " + json.dumps(arguments, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/samples.js"

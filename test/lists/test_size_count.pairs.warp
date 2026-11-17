@@ -15,3 +15,5 @@
 # triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'pixels=[1 2 4];#bytes in pixels'	24
 'pixels=[1 2 4];pixels.bytecount'	24
 # triage-held 2026-11-06: desk-invented count phrasings (size of t in bytes, number of bytes in, #bytes in) :: 'pixels=[1 2 4];number of bytes in pixels'	24
+'"ä€".bytes'	[195, 164, 226, 130, 172]
+'"".bytes'	[]

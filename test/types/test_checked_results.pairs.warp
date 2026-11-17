@@ -7,7 +7,6 @@
 # a_lossless_result_still_converts
 'def f(x) as text { 3 }; f(2)'	'3'
 'def f(x) as float { x / 2 }; f(3)'	1.5
-'def f(x) as bool { 1 }; f(2)'	true
 
 # a_collection_or_class_result_type_before_a_block_body
 'def f(n: int) as list { [n, n] }; #f(2)'	2

@@ -48,10 +48,12 @@ self.servingPage = (shared, port) => self.postMessage({ type: "serving", shared,
 self.servedPage = response => self.postMessage({ type: "served", response });
 addPageSoundWords(post); // host-tasks.js
 const hooks = {
+	// a program's main may wait for a JS promise (driver.js programRan): evaluate awaits its run
+	waits: true,
 	print: (text, stream) => post({ type: "print", text, stream }),
 	module: bytes => post({ type: "module", bytes }),
 	// host-media.js paintFrame: its words move to the page, not copied
-	paint: (frame, width, height, canvas, shaded) => post({ type: "paint", frame, width, height, canvas, shaded }, frame && [frame.words.buffer]),
+	paint: (frame, width, height, canvas, shaded, scale) => post({ type: "paint", frame, width, height, canvas, shaded, scale }, frame && [frame.words.buffer]),
 	gpuCanvas: canvas => post({ type: "gpu canvas", ...canvas }), // host-gpu.js gpuPainted
 	savePicture: (path, words, width, height) => post({ type: "picture", path, words, width, height }, [words.buffer]), // host-media.js save_picture
 	sound: sound => self.playSamples(sound),
@@ -96,7 +98,7 @@ async function loadCompiler() {
 async function evaluate(code) {
 	panicMessage = undefined;
 	try {
-		return evaluatedNatively(code, self.programFile, hooks);
+		return await evaluatedNatively(code, self.programFile, hooks);
 	} catch (crash) {
 		compiler = undefined;
 		return { value: `compiler crashed: ${crash.message}`, error: true, crashed: true, warnings: [], runtime_warnings: [], hints: [], notes: [] };
@@ -119,7 +121,7 @@ const ready = loadCompiler().then(() => stage("warming up the compiler") || warm
 
 // `use python` runs in Pyodide (host.js registers its call): loaded on first use, since a host call cannot wait for it
 const PYODIDE_URL = "https://cdn.jsdelivr.net/pyodide/v0.29.5/full/";
-const USES_PYTHON = /\buse\s+python\b/;
+const USES_PYTHON = /\buse\s+(?:\S+\s+from\s+)?python\b/; // use python, use python json, use json from python
 let python; // the loading or loaded Pyodide with the bridge (web/playground/foreign_python.py)
 function loadPython() {
 	python ??= (async () => {
@@ -141,8 +143,9 @@ function loadPython() {
 }
 // the modules a program imports (python_import("numpy")): Pyodide's packages among them loaded before the run, as
 // natively they are installed beside libpython
-const PYTHON_IMPORT = /python_import\("([\w.]+)"\)/g;
-const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, name]) => `import ${name}`).join("\n");
+// the Python modules a program names: python_import("numpy"), use python numpy, use numpy from python
+const PYTHON_IMPORT = /python_import\("([\w.]+)"\)|\buse\s+python\s+([\w.]+)|\buse\s+([\w.]+)\s+from\s+python\b/g;
+const pythonImports = code => [...code.matchAll(PYTHON_IMPORT)].map(([, ...names]) => `import ${names.find(Boolean)}`).join("\n");
 registerForeignRuntime("python", {
 	prepare: code => USES_PYTHON.test(code) && loadPython().then(pyodide => pyodide.loadPackagesFromImports(pythonImports(code), { messageCallback: () => {} }))
 		.catch(failure => post({ type: "print", text: `Python could not load: ${failure.message}\n`, stream: 2 })),
@@ -196,12 +199,20 @@ self.onmessage = async ({ data }) => {
 	if (data.system) return Object.assign(self.pageSystemValues ??= {}, data.system); // host.js system_value
 	if (data.environment) return Object.assign(self, { pageEnvironment: data.environment, pageSecrets: data.secrets }); // host-files.js os.env, withPageSecret
 	if (data.stored) return Object.assign(storedValues, data.stored) && Object.assign(sessionValues, data.session); // host-files.js STD_ADAPTERS.store
-	stage("waiting for the compiler");
-	await ready;
-	stage("loading the database");
-	await globalThis.loadKept?.(); // host-files.js: `database[k]`'s values and the written files, once
+	await waitedFor("waiting for the compiler", ready);
+	await waitedFor("loading the database", globalThis.loadKept?.()); // host-files.js: `database[k]`'s values and the written files, once
 	return inTurn(() => handleMessage(data));
 };
+
+// a stage named only while the worker really waits: a message after the compiler loaded once must not log "waiting for
+// the compiler" again, which read as the compiler loading anew for every example (card compiler-reload-per-example)
+const awaited = new WeakSet();
+async function waitedFor(name, promise) {
+	if (!promise || awaited.has(promise)) return;
+	stage(name);
+	await promise;
+	awaited.add(promise);
+}
 
 async function handleMessage(data) {
 	if (data.warm) return warmUp();
@@ -216,8 +227,7 @@ async function handleMessage(data) {
 	}
 	if (live) stopListening(live);
 	live = undefined;
-	stage("checking the compiler");
-	if (!compiler) await loadCompiler();
+	if (!compiler) await loadCompiler(); // (it names its download as a stage)
 	stage("preparing foreign runtimes");
 	await prepareForeignRuntimes(data.code); // host.js: a runtime that loads asynchronously loads before the run
 	stage("waiting for the task workers");

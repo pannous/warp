@@ -1,6 +1,6 @@
 class Box { size: int }
 enum Thing { Holds(box: Box), Counts(count: int) }
-f(a: Thing, b: Thing): int := match a {
+f(a: Thing, b: Thing) as int := match a {
 	Counts(c) => {
 		if b is Counts { raise "two" }
 		f(b, a)

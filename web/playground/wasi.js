@@ -1,7 +1,7 @@
 // A small WASI preview1 for the programs and the compiler in the page (driver.js): arguments, clocks, randomness, stdout and
 // stderr to a callback, and a file system whose "." is the repository root, read with synchronous GETs (FILE_ROOT;
 // directories through the static server's listing page (?listing: test_in_browser.py lists a directory even when it
-// holds an index.html), cached per worker) and whose /include holds the C headers warp's FFI reads (WARP_INCLUDE), with an empty /tmp. Writes land in an in-memory overlay that lives as
+// holds an index.html), cached per worker) and whose /include holds the C headers warp's FFI reads, with an empty /tmp. Writes land in an in-memory overlay that lives as
 // long as the instance (one test), so a test can write a scratch file and read it back. Unknown calls: ENOSYS.
 
 const ERRNO = { SUCCESS: 0, BADF: 8, INVAL: 28, NOENT: 44, NOSYS: 52, NOTDIR: 54 };
@@ -22,11 +22,9 @@ const HOME_DIRECTORY = "/home";
 const PREOPENS = new Map([[ROOT_FD, "."], [INCLUDE_FD, INCLUDE_DIRECTORY], [TEMPORARY_FD, TEMPORARY_DIRECTORY], [REPOSITORY_FD, REPOSITORY_DIRECTORY], [HOME_FD, HOME_DIRECTORY]]);
 const isRepository = fd => fd === ROOT_FD || fd === REPOSITORY_FD;
 const INCLUDE_URL = new URL("/__include__/", self.location.href).href;
-// WARP_INCLUDE replaces the compiler's include directories (src/formats/ffi_parser.rs), so it looks in exactly one place;
-// WARP_HTTP_STUB is test_in_browser.py's stub answering any status and body (tests/common serve); TMPDIR the scratch; HOME the page's own files;
+// TMPDIR the scratch; HOME the page's own files;
 // TZ the browser's time zone, the run's zone `now` reads (lib/time.warp local_zone_name, decision local-now)
-const ENVIRONMENT = [`WARP_INCLUDE=${INCLUDE_DIRECTORY}`, `WARP_HTTP_STUB=${new URL("/__stub__", self.location.href).href}`,
-	`TMPDIR=${TEMPORARY_DIRECTORY}`, `HOME=${HOME_DIRECTORY}`, `TZ=${Intl.DateTimeFormat().resolvedOptions().timeZone}`];
+const ENVIRONMENT = [`TMPDIR=${TEMPORARY_DIRECTORY}`, `HOME=${HOME_DIRECTORY}`, `TZ=${Intl.DateTimeFormat().resolvedOptions().timeZone}`];
 const ALL_RIGHTS = 0xffffffffffffffffn;
 const RANDOM_CHUNK = 65536; // crypto.getRandomValues limit per call
 const DIRENT_HEADER = 24;

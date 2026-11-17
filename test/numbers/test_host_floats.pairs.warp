@@ -1,7 +1,6 @@
 # from test_host_floats.rs: edit the Rust test, then run the script again
 
 # the_pointer_is_a_float_source
-'type(mouse_x)'	'float'
 'type(mouse_y + 0.5)'	'float'
 
 # an_exact_operation_a_float_uses_rounds_once

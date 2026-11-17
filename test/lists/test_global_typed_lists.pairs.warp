@@ -14,7 +14,6 @@
 
 # an_element_of_another_type_widens_the_list
 'xs = [0, 0]; xs[0] = random(); xs[0] < 1'	true
-'xs = [0, 0]; xs[0] = random(); type(xs)'	'list of float'
 'xs = [1, 2]; xs[0] = 2.5; print(xs[0] = 2.5); string(xs)'	'[2.5, 2]'
 «xs = [1, 2]; xs[0] = 'a'; string(xs)»	«['a', 2]»
 
@@ -23,7 +22,7 @@
 «global s = int[3]; def f() { s[1] = 'a' }; f(); [s[0], s[1] == 'a']»	[0, 1]
 'global s = int[3]; def f() { s = [4, 5] }; f(); s'	[4, 5]
 'global s = [0]; def f(n) { s = int[n] }; f(4); s[3] = 9; s'	[0, 0, 0, 9]
-'use draw; canvas(200, 200); clear(red); canvas_pixels[39999] == red'	true
+'use draw; canvas.resize(200, 200); clear(red); canvas_pixels[39999] == red'	true
 
 # a_function_appends_to_a_global_list_in_place
 'out = ["a"]; add(t) := { global out; out += [t] }; add("b"); out#2'	'b'

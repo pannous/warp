@@ -1,0 +1,10 @@
+# and/or give one of their operands, a condition reads its truthiness (wiki/truthiness.md; decision and-or-values)
+'7 and "hi"'	"hi"
+'0 and 5'	0
+'0 or 5'	5
+'3 or 4'	3
+'ø or 3'	3
+'name = ""; name or "anonymous"'	"anonymous"
+'[] or [1]'	[1]
+'if 0 or 5 { "taken" } else { "not" }'	"taken"
+'1 and 0 or 2'	2

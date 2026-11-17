@@ -22,7 +22,7 @@ warp: a data format and wasm-first language, the successor of wasp (C++, ~/wasp/
 ## Three layers (decision core-is-self: keeps the core from bloating)
 - **core/**: only what the compiler needs to compile itself. Aim: about 30% of the compiler, and shrinking.
 - **extensions/**: every other language feature, baked in through one static hook table.
-- **lib/**: modules programs import. A new feature goes into an extension or a library, never into the core;
+- **lib/**: the standard library, modules any program may use; code a few samples share stays in samples/. A new feature goes into an extension or a library, never into the core;
   the language is never simplified to shrink the core (scripts/vitals.py measures the split).
 - Everything else has its own place: demos and examples in samples/, tests in test/, tools in scripts/. Never a
   demo, sample or test fixture in core/, extensions/ or lib/ (an aquarium demo is a sample, not an extension).
@@ -58,7 +58,7 @@ one command table.
 - `warp rebuild`: builds warp.wasm anew from lib/ (nothing rebuilds it automatically); the gate needs only warp.wasm.
   `warp rebuild self` runs that self test and promotes; `scripts/promote-self.sh [--background] [<tree>]` does that
   every once in a while, in parallel, and never fails its caller. A worktree's compilers live in <worktree>/lib/
-  itself (`WARP_LIB=<worktree>/lib`), main's beside the binary
+  itself (`warp --lib <worktree>/lib`), main's beside the binary
 - A form outside the emitter's core is refused loudly (`outside the core: …`)
 
 ### Node AST (the enum in `core/node.warp`)
@@ -208,7 +208,7 @@ before asking a question). After a context swap, this file and your role file be
   plain warp can say it (`on Key.escape {…}` is a call of `on(event, handler: block)`, no rule). A `rewrite` rule
   only for a spelling plain warp cannot parse or mean; its commit names why a function would not do.
 - Wording: a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
-  file sits in extensions/sugar/); "library" means only modules programs import.
+  file sits in extensions/sugar/); "library" means only the standard library in lib/.
 - Core and extensions: every change to core/ or extensions/ (small fixes included), any new syntax, pass, keyword or
   sugar rule goes to warp-interviewer BEFORE the work (root cause, files, size); only the user's OK starts it, not the
   Supervisor's. Sugar goes to extensions/sugar/*.warp, a capability to extensions/<name>.warp. Ask with the smallest
@@ -277,7 +277,7 @@ before asking a question). After a context swap, this file and your role file be
   the compiler bakes in (a library change needs no rebuild): lib/ only (modules; the sugar rules are core)
   runs hello on the installed compilers in seconds; core/ or prelude.warp, aliases.warp, math.warp, rule_words.warp
   make it say REBUILDING and run `scripts/rebuild.sh pure <worktree>` first (published to the shared store, so the
-  install after the landing push reuses it). Then `WARP_LIB=<worktree>/lib /Users/me/dev/bin/warp <program>` / `warp test
+  install after the landing push reuses it). Then `/Users/me/dev/bin/warp --lib <worktree>/lib <program>` / `warp --lib … test
   <folders>`. A core change also runs `scripts/self-check.sh <worktree>`. Never rebuild in the main checkout. One
   heavy job (rebuild, self-check) of yours at a time. Machine-wide, rebuild.sh runs at most 5 compiler builds at once
   (<store>/build-slots, WARP_BUILD_SLOTS); "all 5 build slots taken, waiting" is normal, never work around it.
@@ -285,7 +285,8 @@ before asking a question). After a context swap, this file and your role file be
   short"): a failed build's log is read, never rebuilt to see the error or "to be sure"; never `--force` past a wait,
   never kill another session's build. A lib/-only change compiles nothing (a rebake, about a minute).
 - Kill only your own processes, by PID (the hook .claude/hooks/no-pattern-kill.sh refuses pkill/killall). Every CLI
-  run that might paint gets `WARP_WINDOW=0` (WARP_NO_WINDOW=1 until the new warp is installed). No browsers on the Mac.
+  run that might paint gets `--no-window` (or `WARP_WINDOW=0`). No visible browsers on the Mac; a single headless page
+  check (web/playground/test_in_browser.py, agent-browser Chrome, nice, one at a time) is fine; whole tours stay in CI.
 - The wiki is the specification: a rewrite of what a wiki page says (a rule, an example's result, a dropped or new
   form; not typos, links or layout) goes to warp-interviewer first, with the old and the new text; the Interviewer
   approves it. A worker's wiki-only change otherwise lands as usual.
@@ -299,6 +300,8 @@ before asking a question). After a context swap, this file and your role file be
   branch or worktree for it. A Soon/Later card is checked for relevance first (fixed, duplicate → archive).
   The column is the priority, for topic cards too; the user's own cards (drafts, issues not "Added by <session> with
   `todo add`") stay where the user put them.
+- When idle, take the next card of your roadmap yourself (`todo pick --topic <roadmap>`, then `todo take`); the Supervisor
+  names your roadmap and may hand you an urgent card first.
 - Every branch has a card: comment branch, tip and state on it; a parked branch gets its handover as a card note (`todo note`).
 - No Ready column, no merge queue. The worker does not land the branch. Finished work is handed
   to the integrator (Handoff, below), noted `land: <branch> <tip>` (`todo landing`). A finished branch
@@ -309,6 +312,10 @@ before asking a question). After a context swap, this file and your role file be
 - Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/). core/ or extensions/ needs a
   compiler build: never quick.
 - A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
+- Sprint (user, from 2026-11-16): a new card only when it reduces existing ones (a split that closes others, a
+  shared root cause); features come only from the user.
+- A new card's title is one plain sentence the user understands without context (what goes wrong or is wanted);
+  keys, names and paths go in the body.
 - Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - Edge cases never halt progress: a lib fix that needs no rebuild, else a card in Later with the root cause, and
   you take the next card.
@@ -331,12 +338,14 @@ main and the playground. The worker does not land it, push it to main, or publis
 ## Done
 - A major feature ships with samples/<topic>.warp (chmod +x) and its wiki page updated in the same task.
 - Landing checks, then the handoff: `warp format yes <files>` on the .warp files you wrote; merge origin/main into
-  the branch (a real merge, its message summing up the change); on that merge the smoke test (core/ or extensions/:
-  + `scripts/self-check.sh` + `scripts/gate.sh --tiers 1 <worktree>`); hand the branch and a patch to
+  the branch (a real merge, its message summing up the change); on that merge the checks of its path (below); hand the branch and a patch to
   warp-integrator, who lands it (notes/agents/integrator.md "Landing"). Then `todo done <card> <commit>`.
-- Express mode: a phase is handed to the integrator as soon as its smoke (+ self-check and gate for core/) is green;
-  never wait for slower tests. The next phase starts at once, branched from that tip; what the slower tests find is
-  fixed forward as new commits, never by rewriting the landed phase. Only a red smoke on the merge stops the next phase.
+- Paths, checked on that merge, phase by phase; what later tests find is fixed forward, never by rewriting a landed
+  phase:
+  - **express** (the default): a green smoke alone (the compiler builds and says Hello).
+  - **normal**: smoke + `scripts/self-check.sh` + `scripts/gate.sh --tiers 1 <worktree>`.
+  - **careful**, for a change that may break the core for everyone (parser, emitter, value layout, self build, seed
+    or rebuild steps): normal plus the touched test folders.
 - Results the user can try get a try line (`/Users/me/dev/bin/warp <full path>`) to warp-interviewer.
 - Never retire holding a card: done, or `todo release <card> "done: …; left: …; branch: …"`.
 - After the push remove your worktree and branches (local and remote). Deleting merged/stale things needs no

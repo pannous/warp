@@ -23,7 +23,7 @@
   Next big ones: emit 29 MB, runtime prepend 25 MB, 28 passes 45 MB (sugar-rule passes half)
 - hello-compile-allocations probe (worktree runtime-prepend): runtime.wasm read 16.4 MB (232 KB file: ~70 B per byte,
   each byte a boxed Int Node + i64box via text_byte_list), warp.runtime decode 8.2 MB, module_rules_of 1.6 MB/24 calls
-  (no disk read without WARP_LIB: file_text = parser.warp file_source). Int boxing has one site, emitter.warp:626;
+  (no disk read without --lib: file_text = parser.warp file_source). Int boxing has one site, emitter.warp:626;
   Node fields are immutable, so small Int nodes could be shared (shape sent)
 - shared small ints landed (194b3d1e70, runtime nodes.warp int_node, -128..1023): hello 192.6 -> 176.2 MB, read_bytes of
   runtime.wasm 245.7 -> 214.8. Traps: runtime files take no top-level constants (zero-argument words instead); a Node
@@ -33,7 +33,7 @@
 - definition-slices (845734129f): prelude_definitions() (83ab6595ed) cut the whole prelude anew whenever no earlier
   file_slices call had filled source_slices (order-dependent; shebang `env` made os a candidate in samples/hello).
   definition_slices now takes baked LIBRARY_SLICES for any bundled text, file_slices folded in. Compile peak footprint,
-  WARP_LIB on both sides: hello.warp ("hi") 190.4 -> 143.8 MiB, samples/hello 232.0 -> 151.1 MiB. O(n²) cut of
+  --lib on both sides: hello.warp ("hi") 190.4 -> 143.8 MiB, samples/hello 232.0 -> 151.1 MiB. O(n²) cut of
   unbundled text: card definition-slices-quadratic
 - shared subtrees (walk-children-rebuild): a pass's walk returns n itself when every child came back same_node; fresh
   hello unchanged at ~218 MiB RSS; pure rebuild 664 s, 4.86 GB RSS. The peak was not the compiler (flat ~1.13 GB) but

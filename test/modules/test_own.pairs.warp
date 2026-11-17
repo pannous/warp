@@ -5,3 +5,6 @@
 # a program's own definition of a linked module's name of another arity adds to it: the module's word stays linked
 'use math; clamp(x) := 9; clamp(5, 0, 3) + clamp(1)'	12
 'use units; m(x) := 7; m(1)'	7
+# a definition on a ; line shadows a module word as one written on its own line, wherever the use stands
+'use json; parse(t) := 5; parse("[1]")\nuse regex'	5
+'parse(t) := 5; parse("[1]")\nuse json'	5

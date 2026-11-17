@@ -11,6 +11,7 @@ source "$(dirname "$0")/lib/results-header.sh"
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 shift $(( $# > 0 ))
 [ -f "$tree/web/playground/warp-lib/warp.wasm" ] || { echo "error: $tree/web/playground/warp-lib/warp.wasm is missing: web/playground/build.sh" >&2; exit 2; }
+for path in "$@"; do [ -e "$tree/$path" ] || { echo "error: no such test path $tree/$path" >&2; exit 2; }; done
 results=$tree/test/tests-web.txt
 before=$(mtime_of "$results" 2>/dev/null)
 python3 "$tree/web/playground/test_in_browser.py" --tests "$@"

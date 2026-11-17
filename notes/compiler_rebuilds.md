@@ -27,7 +27,7 @@ A self build takes 5-11 minutes and has been killed for lack of memory on the bo
   lib/<compiler>.wasm.inputs names the current inputs hash. Otherwise it copies the shared store's pair of that hash.
   Only when neither has one does it build and publish the result. `--check` never builds and exits 3 on a miss.
 - Where the native warp finds the pair (core/native/driver.warp library_found, compiler_path): in its lib/ folder,
-  $WARP_LIB, else the lib/ beside the executable, the folder its links lead to, then <prefix>/share/warp.
+  --lib, else the lib/ beside the executable, the folder its links lead to, then <prefix>/share/warp.
   A store entry is only ever a source: no lookup reads the store directly.
 - `scripts/self-check.sh` checks the pair for the branch's inputs, taken from lib/ or the store. On a miss it says
   "REBUILD NEEDED" and checks the existing pair. `--rebuild` builds the missing pair.
@@ -55,7 +55,7 @@ self-check's stage two in <hash>/stage-two.record/) holds
   <store>/seeds/), the warp binary (sha, path), the sha of every input file; sources.tar.gz: those files themselves
 - build.log: the whole output
 - time: `/usr/bin/time -l` of the compile (CPU, wall, peak memory); rebuilds.log's `built` line carries its CPU
-- profile.txt, sample.gz, perf.map: the function profile of the whole run (WARP_PROFILE=perfmap and macOS sample every
+- profile.txt, sample.gz, perf.map: the function profile of the whole run (warp --profile and macOS sample every
   10 ms through scripts/profile.sh -a, from scripts/build-slot.sh WARP_BUILD_RECORD): no CPU cost, a few % wall.
 So a build's time and hotspots are read from its record, never by building again; a lib-only build (a stored compiler reused, its runtime and modules made anew) is recorded too.
 A compiler's first run after it lands in the store is cold and reads about 3% more instructions retired (idioms
@@ -81,6 +81,15 @@ Records start with build-keeps; older store entries have only their one-line .in
   whose HEAD is origin/main with core unchanged.
 - The directories are write-once: a published file is never overwritten.
 - <store>/rebuilds.log gets one line per rebuild.sh hit or miss: time, tree, hash, result.
+
+## A compiler's NFC (card unicode-module-linking)
+
+A program compares texts by NFC through lib/unicode's module, linked at the first comparison that needs it
+(core/runtime/text.warp equal_texts: only a text with a code point NFC may change). A compiler's own texts never need
+it: the whole build (the seed's compile of compiler.warp, then the runtime and modules steps) runs with no
+modules/unicode.wasm at all (checked 2026-11-13). So a compiler carries no library of its own: should it ever compare
+such a text, it links the installed warp's (driver lazy_library), and a module of other GC types fails loudly, naming
+the folder. The `<compiler>.library/` folders that each compiler once carried are gone.
 
 ## The store in short
 

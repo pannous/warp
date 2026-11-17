@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
-# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two cloud layers, aerial perspective and AgX tone mapping, 
-# all pur warp functions that paint(ocean, width, height) compiles to one fragment shader. 
+# A sunset sea, after web-ocean (github.com/Noniv/web-ocean, MIT): waves, sun glitter, whitecaps, a warm sky with two cloud layers, aerial perspective and AgX tone mapping,
+# all pur warp functions that paint(ocean, width, height) compiles to one fragment shader.
 # Each pixel casts a ray from the camera: it marches down onto the waves or goes up into the sky.
 # web-ocean simulates its waves by FFT on a quadtree mesh over several passes; here they are a sum of wind waves, each one dragging the next along (cheap, and the crests stay sharp)
 use math

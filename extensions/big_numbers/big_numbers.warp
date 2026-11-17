@@ -10,7 +10,7 @@ use "pow.warp"
 # `x as rational` of a run-time float (decision float-as-rational; Rust twin float_as_exact in
 # rust-harness:src/wasm_emitter/numbers/float_text.rs): the exact value of its shortest digits, 1.4142135623730951 as
 # 14142135623730951/10^16; ∞ and NaN have no fraction
-float_as_exact(x: float): Node := {
+float_as_exact(x: float) as Node := {
 	# x - x is 0 for every finite x, NaN for ∞ and NaN
 	if x - x != 0 { not_a_finite_number() }
 	if x == 0 { return exact_ratio(0, 1) }
@@ -35,7 +35,7 @@ float_as_exact(x: float): Node := {
 	exact_ratio(sign * digits, multiplied_within_64_bits(multiplied_within_64_bits(1, 5, fives), 2, twos))
 }
 # n · factor^times of n ≥ 0; beyond 64 bits it fails as an int64 overflow (Rust's twin goes on in big ints)
-multiplied_within_64_bits(n: int, factor: int, times: int): int := {
+multiplied_within_64_bits(n: int, factor: int, times: int) as int := {
 	for i in 0..times {
 		if n > int_quotient(9223372036854775807, factor) { overflow_of_int64() }
 		n = n * factor
@@ -45,7 +45,7 @@ multiplied_within_64_bits(n: int, factor: int, times: int): int := {
 # `base ^ exponent` of exact numbers (rust-harness:src/wasm_emitter/numbers/exact.rs exact_pow): an int exponent only, a negative one
 # inverts the base first: 2^-2 is 1/4, (2/3)^2 is 4/9; a rational exponent fails here, which traps.rs names. An int
 # to a positive power is unbounded, 2^10000 a big int of 3011 digits (big_ints.warp)
-exact_pow(base: Node, exponent: Node): Node := {
+exact_pow(base: Node, exponent: Node) as Node := {
 	if is_ratio(exponent) { fail() }
 	times = unboxed_int(exponent)
 	if times < 0 {
@@ -58,11 +58,11 @@ exact_pow(base: Node, exponent: Node): Node := {
 	fraction_kept(ratio_of(int_pow(ratio_numerator(base), times), int_pow(ratio_denominator(base), times)), base, base)
 }
 # the digits of a decimal past 18 places over 10^places (emitter literals.warp big_decimal)
-decimal_ratio(digits: text, places: int): Node := big_ratio(big_int_of_digits(digits), big_int_power(10, places))
+decimal_ratio(digits: text, places: int) as Node := big_ratio(big_int_of_digits(digits), big_int_power(10, places))
 # the emitter's calls (core/emitter operators.warp, literals.warp, emitter.warp)
 # (2/3)^2 is 4/9 (decision exact-power); a ratio exponent has no exact power, (2/3)^(1/2) is the float one
-extended_power(base: Node, exponent: Node): Node := if is_ratio(exponent) then held(float_pow(float_of_node(base), float_of_node(exponent))) else exact_pow(base, exponent)
-extended_exact_float(x: float): Node := float_as_exact(x)
-extended_decimal(digits: text, places: int): Node := decimal_ratio(digits, places)
-extended_float_power(x: float, y: float): float := float_pow(x, y)
-extended_cube_root(x: float): float := float_cbrt(x)
+extended_power(base: Node, exponent: Node) as Node := if is_ratio(exponent) then held(float_pow(float_of_node(base), float_of_node(exponent))) else exact_pow(base, exponent)
+extended_exact_float(x: float) as Node := float_as_exact(x)
+extended_decimal(digits: text, places: int) as Node := decimal_ratio(digits, places)
+extended_float_power(x: float, y: float) as float := float_pow(x, y)
+extended_cube_root(x: float) as float := float_cbrt(x)

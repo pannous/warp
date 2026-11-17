@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 # html5lib-tests tokenizer cases (test/html/html5lib-tokenizer) against lib/html; not part of smoke.
-# usage: WARP_LIB=$PWD/lib test/html/tokenizer_test.py [--fails FILE|all]
+# usage: [WARP="warp --lib $PWD/lib"] test/html/tokenizer_test.py [--fails FILE|all]
 # lib/html has no HTML tokenizer: it decodes character references (html_unescape). A case applies when its initial
 # state is Data or RCDATA, its output is only Character tokens, and (in the Data state) its input holds no "<"; it
 # passes when html_unescape(input) is the characters joined. Every other case is counted as not applicable, by reason.
 # Parse errors are not compared (lib reports none).
-import json, os, re, subprocess, sys, tempfile, collections
+import json, os, re, subprocess, sys, tempfile, collections, shlex
+# the warp under test: WARP, a command (warp --lib <tree>/lib), else the warp on PATH
+WARP = shlex.split(os.environ.get("WARP", "warp"))
 here = os.path.dirname(os.path.abspath(__file__)); base = os.path.join(here, "html5lib-tokenizer")
 def unesc(s): return re.sub(r"\\u([0-9A-Fa-f]{4})", lambda m: chr(int(m.group(1), 16)), s)
 def W(s):
@@ -36,7 +38,7 @@ for f in sorted(x for x in os.listdir(base) if x.endswith(".test")):
 prog = "use html\n" + "".join('print(to_json_text(html_unescape(%s)))\nprint("@@")\n' % W(c[3]) for c in cases)
 prog = prog.replace("use html\n", "use html\nuse json\nto_json_text(t: text): text := to_json(t)\n", 1)
 with tempfile.NamedTemporaryFile("w", suffix=".warp", delete=False, encoding="utf-8") as fh: fh.write(prog)
-outs = [o.strip("\n") for o in subprocess.run(["warp", fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
+outs = [o.strip("\n") for o in subprocess.run([*WARP, fh.name], capture_output=True, text=True, errors="replace").stdout.split("@@\n")]
 tot, ok, fails = collections.Counter(), collections.Counter(), []
 for k, (g, desc, state, inp, want) in enumerate(cases):
     o = outs[k] if k < len(outs) else "CRASH"

@@ -20,30 +20,24 @@ COMPILE_COST_PROGRAMS=(
 instructions_of() {
 	local counted status
 	counted=$(mktemp "${TMPDIR:-/tmp}/compile-cost.XXXXXX")
-	if [ $warp_platform = mac ]; then
-		timeout "$COMPILE_COST_SECONDS" /usr/bin/time -l -o "$counted" "$@" >/dev/null 2>&1
-		status=$?
-		awk '/instructions retired/ { print $1 }' "$counted"
-	else
-		timeout "$COMPILE_COST_SECONDS" perf stat -x, -e instructions:u -o "$counted" "$@" >/dev/null 2>&1
-		status=$?
-		awk -F, '/instructions/ { print $1 }' "$counted"
-	fi
+	timeout "$COMPILE_COST_SECONDS" "${instruction_counter[@]}" "$counted" "$@" >/dev/null 2>&1
+	status=$?
+	instructions_counted "$counted"
 	rm -f "$counted"
 	return $status
 }
-compile_cost_counter() { [ $warp_platform = mac ] || command -v perf >/dev/null; }
+compile_cost_counter() { [ "${instruction_counter[*]}" != instructions_uncounted ]; }
 
 # compile_costs_measured <lib> <binary>: `name<TAB>instructions` of each program, the lowest of two runs after one
 # unmeasured (a fresh lib/ compiles its modules' machine code first)
 compile_costs_measured() {
-	local lib=$1 binary=$2 i name program first second
+	local lib=$1 binary=$2 i name first second run
 	for ((i = 0; i < ${#COMPILE_COST_PROGRAMS[@]}; i += 2)); do
-		name=${COMPILE_COST_PROGRAMS[i]} program=${COMPILE_COST_PROGRAMS[i + 1]}
-		export WARP_NO_WINDOW=1 WARP_HINTS=0
-		WARP_LIB=$lib instructions_of "$binary" "$program" >/dev/null &&
-			first=$(WARP_LIB=$lib instructions_of "$binary" "$program") &&
-			second=$(WARP_LIB=$lib instructions_of "$binary" "$program") ||
+		name=${COMPILE_COST_PROGRAMS[i]}
+		run=("$binary" --no-window --no-hints --lib "$lib" "${COMPILE_COST_PROGRAMS[i + 1]}")
+		instructions_of "${run[@]}" >/dev/null &&
+			first=$(instructions_of "${run[@]}") &&
+			second=$(instructions_of "${run[@]}") ||
 			{ echo "compile-cost: $name failed to run with $lib" >&2; return 1; }
 		printf '%s\t%s\n' "$name" $((first < second ? first : second))
 	done

@@ -12,3 +12,9 @@
 # refused: two variants declaring no result, and a default whose known result a typed variant declares
 'h(x) := 1; h(x) := 2; h(x): float := x / 2; h 1'	error	decision default-variant: a second definition of h taking as many arguments can never run
 'k(x) := "a"; k(x): text := "b"; k 1'	error	decision default-variant: the k declaring no result gives a text, as its k: text does
+# each arity groups its own variants: another arity of the name beside them changes nothing
+'f(x: list or number) := 1; f(a, b) := a + b; f(a, b): float := a * 1.5; f(1, 2)'	3
+'f(a, b) := a + b; f(a, b): float := a * 1.5; f(x: list or number) := 1; f(1, 2)'	3
+'f(x: list or number) := 1; f(a, b) := a + b; f(a, b): float := (a + b) * 1.5; x: float = f(1, 2); x'	4.5
+# passed as a value, the word is its default
+'half(x) := x /! 2; half(x): float := x * 0.5; [2, 4].map(half)'	[1, 2]

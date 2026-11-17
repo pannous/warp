@@ -8,9 +8,9 @@
 'double(x):=x*2; double all [1,2]'	[2, 4]
 'adder(n) := (x => x+n); adder(5)(1)'	6
 'fs = [x => x*3]; fs[0](3)'	9
-'f(x):=x; str([f])'	"[f]"
+'f(x):=x; text([f])'	"[f]"
 'f(x):=x+1; f.name'	"f"
-'str(type(sqrt))'	"builtin: (x:number) -> number"
+'text(type(sqrt))'	"builtin: (x:number) -> number"
 'm = {f: x => x * 2}; m.f(3)'	6
 'g = |x| x*2; g(3)'	6
 'sum := fold +; sum [1,2,3]'	6
@@ -29,6 +29,6 @@
 'move(x, from, to):=to; move 1 from: 2 to: 3'	3
 'neg(x):=-x; neg - 3'	3
 '[1.7, 2.2].map(floor)'	[1, 2]
-'x=(y=>y+1); str(x)'	"y => y+1"
-'str(type(./n.txt))'	"path"
+'x=(y=>y+1); text(x)'	"y => y+1"
+'text(type(./n.txt))'	"path"
 'f() := { return 1, 2 }; f()'	[1, 2]

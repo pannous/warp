@@ -10,7 +10,7 @@ alias UnionFind => DisjointSet
 
 class DisjointSet { parent = []; sizes = []; parts = 0
 	init(n) := {
-		if n != floor(n) or n < 0 { raise "DisjointSet needs a whole count >= 0, not " + str(n) }
+		if n != floor(n) or n < 0 { raise "DisjointSet needs a whole count >= 0, not " + text(n) }
 		n = (floor(n)) as int
 		parent = []
 		sizes = []
@@ -39,5 +39,5 @@ class DisjointSet { parent = []; sizes = []; parts = 0
 }
 
 disjoint_check(n, x) := {
-	if x != floor(x) or x < 1 or x > n { raise "disjoint: no element " + str(x) + " in 1.." + str(n) }
+	if x != floor(x) or x < 1 or x > n { raise "disjoint: no element " + text(x) + " in 1.." + text(n) }
 }

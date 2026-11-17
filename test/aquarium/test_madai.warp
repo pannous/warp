@@ -1,0 +1,26 @@
+# samples/gpu/aquarium.warp swims the Fish Kit madai (samples/gpu/fish_mesh.warp, notes/aquarium.md, notes/fish.md).
+# The school is several sizes of one posed mesh. A ray through a moved, turned, scaled copy
+# hits at the single mesh's distance times the scale, and takes that triangle's colour.
+
+# eight fish, no two the same size, the largest more than twice the smallest
+is! 'use "../../samples/gpu/aquarium.warp"
+same = no
+for i in 0..fish_count {
+	for j in 0..i {
+		if fish_scale(i) == fish_scale(j) { same = yes }
+	}
+}
+fish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2' yes
+
+# one triangle, then the same triangle scaled, moved and turned. The second fish is the one on the ray;
+# the first sits behind it. The phase slot reads the second copy of the triangle.
+is! 'use "../../samples/gpu/aquarium.warp"
+use math
+tri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+fish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)
+single = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)
+hit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])
+tint = fish_tint(hit)
+single ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001' yes
+
+# the baked bream: the ray through one posed fish, and through a larger copy of that same pose, agree

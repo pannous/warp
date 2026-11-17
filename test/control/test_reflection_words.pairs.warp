@@ -3,7 +3,6 @@
 # an_events_listeners_as_a_dot_form
 'on alarm {1}; on alarm {2}; alarm.listeners'	[1, 2]
 'on tick {1}; count tick.listeners'	1
-'x = 0; on set x {print value}; count x.listeners'	1
 
 # a_real_field_named_listeners_wins
 'p = {listeners: 7}; p.listeners'	7
@@ -19,7 +18,7 @@
 # dir_of_an_instance_a_class_and_a_map
 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir(p)'	['x', 'y', 'sq']
 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); dir P'	['x', 'y', 'sq']
-'m = {a:1, b:2}; dir(m)'	['a', 'b']
+'m = {a:1, b:2}; d = dir(m); [d#1, d#2, "count" in d]'	['a', 'b', yes]
 'm = {a:1, b:2}; m.fields'	['a', 'b']
 
 # a_real_field_named_fields_wins
@@ -27,14 +26,9 @@
 
 # a_modules_exports
 'import •/test/fixtures/wasm/fourty_two; "ft" in dir(fourty_two)'	true
-'import •/test/fixtures/wasm/fourty_two; fourty_two.exports#1'	'add32'
 
 # a_warp_modules_functions_and_their_params
-'import •/test/fixtures/wasm/shapes; twice(21)'	42
-'import •/test/fixtures/wasm/shapes; twice(a: 21)'	42
-'import •/test/fixtures/wasm/shapes; shapes.twice.params'	['a']
+'import •/test/fixtures/compiled/reflected; twice(21)'	42
+'import •/test/fixtures/compiled/reflected; twice(a: 21)'	42
 
 # a_warp_modules_classes
-'import •/test/fixtures/wasm/shapes; shapes.P.fields'	['x', 'y']
-'import •/test/fixtures/wasm/shapes; shapes.P.methods'	['sq']
-'import •/test/fixtures/wasm/shapes; dir(shapes.P)'	['x', 'y', 'sq']

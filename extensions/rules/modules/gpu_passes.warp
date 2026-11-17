@@ -1,0 +1,10 @@
+# lib/gpu_passes.warp's rules that run code at compile time, rule words of extensions/rules/shader_holes.warp: the compiler
+# keeps them, taken with the module's own (rewrites.warp module_rule_paths; decision library-zero-bake-plan 1b)
+// paint([advect, pressure, show]): the shaders run in list order, each but the last drawing into the field of its name,
+// which any of them reads as `$advect(at)`, the latest written earlier in the frame, else last frame's; the last shows
+// (wiki/graphics.md "Fields and passes"; `poisson with {which: 1}` a pass with values of its own)
+rewrite paint([$items...]) => paint_passes([$passes...], $size...) where $passes = shader_passes($items, $program, $source) and $size = paint_size($program)
+// paint([velocity: advect, density: forward, show]) of program functions: each pass before the last draws the field it
+// names, declared `velocity = field(2, columns, rows)`, which a function reads at a cell, velocity(x, y); the last paints
+// as paint(f) does (lib/shaders.warp function_pass)
+rewrite paint([$items...]) => paint_passes([$passes...], $size...) where $passes = function_passes($items, $program) and $size = paint_size($program)

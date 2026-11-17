@@ -6,19 +6,19 @@ play(F♯4, 5ms)
 round(F♯4 * 100)' 36999
 is! 'use sound
 play(Bb3, 5ms)
-Bb3' 233.08
+round(Bb3 as float, 2)' 233.08
 is! 'use sound
 play(C♯5, 5ms)
 C♯5 == D♭5' true
 is! 'use sound
 melody([C4 Eb4 G4], 5ms)
-Eb4' 311.13
+round(Eb4 as float, 2)' 311.13
 
 # every_octave_is_a_note
 is! 'use sound
-A0' 27.5
+A0 as float' 27.5
 is! 'use sound
-C8' 4186.01
+round(C8 as float, 2)' 4186.01
 is! 'use sound
 round(note("G#7").hertz() * 100) == round(G♯7 * 100)' true
 

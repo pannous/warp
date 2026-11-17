@@ -2,4 +2,4 @@
 
 # the_listeners_of_an_event_are_a_list
 'on alarm {1}; on alarm {2}; listeners of alarm'	[1, 2]
-'on alarm {1}; h = on alarm {2}; emit alarm; h'	2
+'on alarm {1}; h = on alarm {2}; emit alarm; h'	Listener{event: "alarm", number: 2}

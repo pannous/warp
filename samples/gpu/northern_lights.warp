@@ -2,72 +2,69 @@
 # Northern lights over a frozen lake. Curtains of light hang from wavy lines that drift with time, each in its own
 # color. Stars twinkle behind them, hills stand in front, and the lake below mirrors it all.
 # The wheel makes the lights stronger or fainter.
-use compute_toys
-lights = compute_toy(shader {
+lights = shader {
 	const CURTAINS = 4;
 
 	// smooth noise: the hashes of the four corners of the cell, blended
-	fn noise(p: float2) -> f32 {
+	fn noise(p: vec2f) -> f32 {
 		let cell = floor(p);
 		let inside = fract(p);
 		let blend = inside * inside * (3 - 2 * inside);
-		let bottom = mix(hash(cell), hash(cell + float2(1, 0)), blend.x);
-		let top = mix(hash(cell + float2(0, 1)), hash(cell + float2(1, 1)), blend.x);
+		let bottom = mix(hash(cell), hash(cell + vec2f(1, 0)), blend.x);
+		let top = mix(hash(cell + vec2f(0, 1)), hash(cell + vec2f(1, 1)), blend.x);
 		return mix(bottom, top, blend.y);
 	}
 
 	// the hills' height at x: two octaves of noise
 	fn ridge(x: f32) -> f32 {
-		return -.17 + .12 * noise(float2(x * 2, 3)) + .05 * noise(float2(x * 7, 9));
+		return -.17 + .12 * noise(vec2f(x * 2, 3)) + .05 * noise(vec2f(x * 7, 9));
 	}
 
 	// light of curtain number index at the point: brightest just above its wavy hem, fading upward
-	fn curtain(at: float2, index: f32, t: f32) -> f32 {
+	fn curtain(at: vec2f, index: f32, t: f32) -> f32 {
 		let drift = t * (.05 + .02 * index);
 		let hem = .22 + .07 * index + .15 * sin(at.x * (1.5 + index * .4) + drift * 6)
-			+ .08 * noise(float2(at.x * 3 + drift * 4, index * 7));
+			+ .08 * noise(vec2f(at.x * 3 + drift * 4, index * 7));
 		let above = at.y - hem;
 		if (above < 0) { return exp(above * 40) * .4; }
-		let rays = .3 + .7 * noise(float2(at.x * 40 + index * 13, t * .6));
+		let rays = .3 + .7 * noise(vec2f(at.x * 40 + index * 13, t * .6));
 		return exp(-above * (9 + 2 * index)) * rays;
 	}
 
-	fn sky(at: float2, t: f32) -> float3 {
-		var color = mix(float3(.01, .02, .06), float3(0, 0, .02), clamp(at.y, 0, 1));
+	fn sky(at: vec2f, t: f32) -> vec3f {
+		var color = mix(vec3f(.01, .02, .06), vec3f(0, 0, .02), clamp(at.y, 0, 1));
 		// stars: one cell in a few holds one, twinkling at a pace of its own
 		let cell = floor(at * 300);
 		let star = hash(cell);
 		if (star > .996) {
-			color += float3(.8) * (.6 + .4 * sin(t * 3 + star * 90));
+			color += vec3f(.8) * (.6 + .4 * sin(t * 3 + star * 90));
 		}
-		let hues = array<float3, CURTAINS>(float3(.1, 1, .45), float3(.15, .8, .9), float3(.6, .3, 1), float3(1, .25, .5));
+		let hues = array<vec3f, CURTAINS>(vec3f(.1, 1, .45), vec3f(.15, .8, .9), vec3f(.6, .3, 1), vec3f(1, .25, .5));
 		for (var i = 0; i < CURTAINS; i++) {
-			color += hues[i] * curtain(at, f32(i), t) * .6 * clamp(mouse.zoom, .2, 3);
+			color += hues[i] * curtain(at, f32(i), t) * .6 * clamp(pow(1.05, $mouse_wheel), .2, 3);
 		}
 		return color;
 	}
 
-	@compute @workgroup_size(16, 16)
-	fn main_image(@builtin(global_invocation_id) id: vec3u) {
-		let screen_size = textureDimensions(screen);
-		if (id.x >= screen_size.x || id.y >= screen_size.y) { return; }
+	@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f {
 		// y counts up from the horizon, two thirds of the way down
-		let at = float2(f32(id.x) - .5 * f32(screen_size.x), .65 * f32(screen_size.y) - f32(id.y)) / f32(screen_size.y);
-		let t = time.elapsed;
-		var color: float3;
-		if (at.y >= 0) {
-			color = sky(at, t);
-			if (at.y < ridge(at.x) + .2) { color = float3(.005, .01, .02); }
+		let pixel = floor(at.xy);
+		let p = vec2f(pixel.x - .5 * $size.x, .65 * $size.y - pixel.y) / $size.y;
+		let t = $time;
+		var color: vec3f;
+		if (p.y >= 0) {
+			color = sky(p, t);
+			if (p.y < ridge(p.x) + .2) { color = vec3f(.005, .01, .02); }
 		} else {
 			// the lake mirrors the sky, darker and rippled
-			let ripple = .004 * sin(at.y * 300 + t * 2);
-			let mirrored = float2(at.x + ripple, -at.y);
+			let ripple = .004 * sin(p.y * 300 + t * 2);
+			let mirrored = vec2f(p.x + ripple, -p.y);
 			color = sky(mirrored, t) * .45;
-			if (mirrored.y < ridge(mirrored.x) + .2) { color = float3(.004, .008, .015); }
+			if (mirrored.y < ridge(mirrored.x) + .2) { color = vec3f(.004, .008, .015); }
 		}
-		textureStore(screen, id.xy, float4(color, 1));
+		return vec4f(pow(clamp(color, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0);
 	}
-})
+}
 # every frame until the window closes
 on frame: paint(lights)
 on key: exit

@@ -11,17 +11,17 @@
 // come back (card web-apis-rest).
 
 const GPU_ENTRY_POINT = "main";
-const NO_GPU_DRAWING = "use draw draws through pixels on a page (gpu_drawing is no here), so draw_shape, draw_show and draw_shader never run";
 const GPU_BINDING = 0;
 // what a shader that does not compile is said as, natively too (lib/host/native_host/gpu.warp shader_failure)
 const SHADER_SUBJECT = "the shader: ";
 // `@group(0) @binding(1) var<storage, read_write> ys: array<f32>`: its binding, name and element type (src/graphics/gpu.rs STORAGE_ARRAY)
-const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<[^>]*>)?\s+(\w+)\s*:\s*array<(\w+)/g;
+const STORAGE_ARRAY = /@binding\((\d+)\)(?:\s*@group\(\d+\))?\s*var(?:<\s*storage\s*(?:,\s*(\w+)\s*)?>)?\s+(\w+)\s*:\s*array<(\w+)/g;
 // an array<f16>'s cells as their raw bits: it takes only a GPU list [f16], whose cells are bound as they are
 const ELEMENT_ARRAYS = { i32: Int32Array, u32: Uint32Array, f16: Uint16Array };
 const HALF_FEATURE = "shader-f16";
 const HALVES_ENABLED = "enable f16";
 // said where the GPU lacks it, as natively (lib/host/native_host/gpu.warp NO_HALVES)
+const VEC4F_BYTES = 16;
 const NO_HALVES = "this GPU offers no f16 (WebGPU's shader-f16), which the shader's enable f16 needs";
 const WORD_BYTES = 4; // WebGPU writes, copies and binds buffers in whole 4-byte words
 // appended to gpu_render's shader (after it, so its line numbers stay the user's): one triangle covering the image
@@ -37,14 +37,32 @@ const TRIANGLE_CORNERS = 3;
 const OWN_VERTEX_STAGE = /@vertex\s+fn\s+(\w+)/;
 const QUAD_CORNERS = 4;
 const INSTANCES_NAME = "instances";
+// values.indices is a uint32 index buffer, not a storage array. values.depth attaches depth32float (lib/host/native_host/gpu.warp)
+const INDICES_NAME = "indices";
+const DEPTH_NAME = "depth";
+const INDIRECT_NAME = "indirect";
+const COMPUTE_NAME = "compute";
+const WORKGROUPS_NAME = "workgroups";
+// values.compute's passes: each `@compute … fn name`, dispatched in source order before the draw
+const COMPUTE_ENTRY = /@compute\b[^{]*?\bfn\s+(\w+)/g;
+// a field (wiki graphics.md "Fields and passes"): a compute shader's fixed-length read_write array that no value names,
+// `var<storage, read_write> particles: array<vec4f, 4096>`, zeroed on the first frame and kept across the program's
+// frames; the draw reads it as values.particles
+const FIELD_ARRAY = /var<\s*storage\s*,\s*read_write\s*>\s+(\w+)\s*:\s*(array<\s*(.+?)\s*,\s*(\d+)\s*>)\s*;/g;
+// an array element's stride in bytes, by its WGSL type
+const ELEMENT_STRIDES = [[/^(f32|i32|u32|atomic<[iu]32>)$/, 4], [/^vec2(f|i|u|<[fiu]32>)$/, 8], [/^vec[34](f|i|u|<[fiu]32>)$/, 16]];
+const fields = new Map(); // the task Worker's: program canvas (or shader) + field declaration → its buffer
+const MOST_STORAGE_ARRAYS = 12;
+const MOST_BOUND_ARRAYS = 8;
+const DEPTH_FORMAT = "depth32float";
 // a quad's color over the ones drawn before it: source alpha, as `vec4f(color, alpha)` says
 const OVER = { color: { srcFactor: "src-alpha", dstFactor: "one-minus-src-alpha" }, alpha: { srcFactor: "one", dstFactor: "one-minus-src-alpha" } };
 const PIXEL_BYTES = 4;
 const ROW_ALIGNMENT = 256; // a copied row is padded to 256 bytes
 const OPAQUE = 0xFF000000;
-// what a painting shows before a shader colored it: the paper of lib/draw.warp (host-media.js PAINT_PAPER), not black
-const PAPER_SHADE = 250 / 255;
-const PAPER = { r: PAPER_SHADE, g: PAPER_SHADE, b: PAPER_SHADE, a: 1 };
+// what a painting shows before a shader colored it: the paper of lib/draw.warp (host-media.js PAINT_PAPER, in dark mode
+// PAINT_INK), not black
+const paperColor = () => { const shade = (darkTheme() ? PAINT_INK : PAINT_PAPER) / 255; return { r: shade, g: shade, b: shade, a: 1 }; };
 const VALUES_NAME = "values"; // gpu_render's values as the shader names them
 const VALUES_BINDING = 0;
 // `$previous(at)` (card shader-read): the color the shader left at pixel `at` in its previous frame of this size, black
@@ -57,6 +75,20 @@ const PREVIOUS_FRAME_BINDING = 1;
 // (lib/host/native_host/gpu.warp STORAGE_BINDING)
 const STORAGE_BINDING = 2;
 const STORAGE_PREFIX = "warp_values_";
+// a picture among paint's values (width, height, pixels 0xAARRGGBB, one without an alpha byte opaque) is a texture
+// `values.<name>` names, from this binding on; the samplers a shader names after it, as compute.toys names them
+// (lib/host/native_host/gpu.warp PICTURE_BINDING, SAMPLERS)
+const PICTURE_BINDING = 16;
+const SAMPLER_BINDING = 24;
+const PICTURE_PREFIX = "warp_picture_";
+const MOST_PICTURES = 8;
+const PICTURE_FORMAT = "bgra8unorm"; // a 0xAARRGGBB word is its bytes B, G, R, A in memory
+const ALPHA_FROM = 0x1000000;
+const SAMPLERS = [
+	{ name: "nearest", filter: "nearest", address: "clamp-to-edge" }, { name: "bilinear", filter: "linear", address: "clamp-to-edge" },
+	{ name: "nearest_repeat", filter: "nearest", address: "repeat" }, { name: "bilinear_repeat", filter: "linear", address: "repeat" },
+];
+const TRILINEAR_SAMPLERS = ["trilinear", "trilinear_repeat"];
 const PREVIOUS_FRAME = `
 @group(0) @binding(${PREVIOUS_FRAME_BINDING}) var warp_previous_frame: texture_2d<f32>;
 fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
@@ -65,6 +97,7 @@ fn ${PREVIOUS_FUNCTION}(at: vec2f) -> vec4f {
 }`;
 const PREVIOUS_WORDS = ["last", "feedback", "before"]; // a value missing under these hints at $previous (src/graphics/shader_holes.rs)
 const previousFrames = new Map(); // the task Worker's: shader → the texture it drew last
+let keptDepth; // the depth target of the last values.depth paint, cleared each frame that asks for one
 const UNIFORM_ALIGNMENT = 16; // a uniform struct is a whole number of 16-byte rows
 // the WGSL type of a value of 1…4 floats and its alignment in bytes
 const VALUE_TYPES = [, ["f32", 4], ["vec2f", 8], ["vec3f", 16], ["vec4f", 16]];
@@ -144,7 +177,7 @@ async function encodedComputePass(device, shader, workgroups, bound, before = ()
 // the holes every shader has (src/graphics/shader_holes.rs BUILTIN_HOLES), filled here when the shader reads them and the
 // program gave none: the image's size, seconds since the first render, the renders before, the pointer and key over
 // the canvas (canvas.js, self.pagePointer)
-const BUILTIN_HOLES = ["width", "height", "size", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"];
+const BUILTIN_HOLES = ["width", "height", "size", "pixel_scale", "time", "frame", "mouse", "mouse_down", "mouse_wheel", "key"];
 let firstRender, renders = 0;
 function builtinValues(shader, width, height) {
 	const shared = name => {
@@ -152,7 +185,7 @@ function builtinValues(shader, width, height) {
 		return at >= 0 ? Atomics.load(self.pagePointer.values, at) : 0;
 	};
 	firstRender ??= performance.now();
-	const value = { width, height, size: [width, height], time: (performance.now() - firstRender) / 1000, frame: renders++,
+	const value = { width, height, size: [width, height], pixel_scale: 1, time: (performance.now() - firstRender) / 1000, frame: renders++,
 		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), mouse_wheel: shared("mouse_wheel"), key: shared("key") };
 	return Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
 }
@@ -175,6 +208,11 @@ async function gpuCanvas({ id, replaces }) {
 	const canvas = await answeredWithin(arrivingCanvas(id).canvas, "canvas from the page");
 	arrivingCanvases.delete(id);
 	paintCanvases.delete(replaces);
+	// the program's fields go on into the canvas of its new size
+	for (const [key, buffer] of [...fields]) if (key.startsWith(`${replaces}\n`)) {
+		fields.delete(key);
+		fields.set(`${id}${key.slice(String(replaces).length)}`, buffer);
+	}
 	const context = canvas.getContext("webgpu");
 	if (!context) throw new Error(NO_CANVAS_CONTEXT); // the program paints through pixels then (gpuPainted)
 	const format = navigator.gpu.getPreferredCanvasFormat();
@@ -188,18 +226,42 @@ async function gpuCanvas({ id, replaces }) {
 	return id;
 }
 
-const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: PAPER, storeOp: "store" });
+const paperAttachment = image => ({ view: image.createView(), loadOp: "clear", clearValue: paperColor(), storeOp: "store" });
 
+// the shader without its comments, each line where it was: a name only a comment says (`bilinear taps`) binds nothing,
+// as the pipeline's layout, which follows the code, binds nothing for it
+const uncommented = code => code.replace(/\/\*[\s\S]*?\*\//g, comment => comment.replace(/[^\n]/g, "")).replace(/\/\/[^\n]*/g, "");
 // the pixels the fragment shader colored, row by row; given a `canvas` id, drawn into that page canvas instead
 async function gpuRendered({ shader, width, height, values, canvas }) {
+	shader = uncommented(shader);
 	const device = await theGpuDevice();
 	const painted = paintCanvases.get(canvas);
 	if (canvas !== undefined && !painted) throw new Error(CANVAS_MISSING);
-	const { declarations, bytes: valueBytes, arrays } = valuesLayout(values);
-	const read = arrays.filter(({ name }) => holeRead(shader, name));
-	shader = read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader);
-	const storages = read.map(({ name }, at) => `\n@group(0) @binding(${STORAGE_BINDING + at}) var<storage, read> ${STORAGE_PREFIX}${name}: array<vec4f>;`).join("");
+	const indexed = Array.isArray(values?.[INDICES_NAME]) ? values[INDICES_NAME] : null;
+	if (indexed && !indexed.length) throw new Error(`${VALUES_NAME}.${INDICES_NAME} is empty`);
+	const withDepth = !!Number(values?.[DEPTH_NAME]);
+	const indirect = Array.isArray(values?.[INDIRECT_NAME]) ? values[INDIRECT_NAME] : null;
+	if (indirect && indirect.length !== 4 && indirect.length !== 5) throw new Error(`${VALUES_NAME}.${INDIRECT_NAME} is four numbers, or five for an indexed draw`);
+	if (indirect?.length === 5 && !indexed) throw new Error("an indexed indirect draw is five numbers and needs indices");
+	if (indirect?.length === 4 && indexed) throw new Error("an indexed indirect draw is five numbers");
+	const compute = values?.[COMPUTE_NAME] == null ? "" : String(values[COMPUTE_NAME]);
+	if (compute && !compute.includes("@compute")) throw new Error("the compute shader needs @compute fn main");
+	const workgroups = [1, 1, 1];
+	const asked = values?.[WORKGROUPS_NAME];
+	if (asked != null) {
+		const counts = [asked].flat();
+		if (counts.length < 1 || counts.length > 3 || counts.some(count => !Number.isInteger(count) || count < 1)) throw new Error(`${VALUES_NAME}.${WORKGROUPS_NAME} is one to three positive ints`);
+		counts.forEach((count, at) => { workgroups[at] = count; });
+	}
+	const { declarations, bytes: valueBytes, arrays, pictures } = valuesLayout(values);
+	const kept = compute ? keptFields(device, compute, values, canvas ?? shader) : [];
+	const [renamed, read] = arraysRenamed(shader, [...arrays, ...kept]);
+	if (read.length > MOST_BOUND_ARRAYS) throw new Error("a paint binds at most 8 arrays");
+	const pictured = picturesRead(renamed, pictures);
+	shader = pictured.renamed;
+	const storages = read.map((array, at) => storageDeclared(STORAGE_BINDING + at, array)).join("") + pictured.declarations;
 	const ownVertexStage = shader.match(OWN_VERTEX_STAGE)?.[1];
+	if (indexed && !ownVertexStage) throw new Error("indexed draw needs the shader's own vertex stage");
 	const vertices = ownVertexStage ? "" : FULL_IMAGE_VERTICES;
 	const readsPrevious = new RegExp(`\\b${VALUES_NAME}\\.${PREVIOUS_HOLE}\\b`).test(shader);
 	const code = readsPrevious
@@ -211,27 +273,62 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 	const canvasImage = painted?.context.getCurrentTexture();
 	const image = canvasImage && !readsPrevious ? canvasImage : device.createTexture({ size: [width, height], format, usage });
 	device.pushErrorScope("validation");
-	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${code}`, () => {
-		const groupLayout = declarations || readsPrevious || read.length ? bindingsGroupLayout(device, !!declarations, readsPrevious, read.length) : undefined;
+	const blendQuads = !!ownVertexStage && !(indexed && withDepth);
+	const { pipeline, groupLayout } = compiledOnce(compiledPipelines, `${format}\n${withDepth ? 1 : 0}\n${indexed ? 1 : 0}\n${code}`, () => {
+		const groupLayout = declarations || readsPrevious || read.length || pictured.read.length || pictured.samplers.length ? bindingsGroupLayout(device, !!declarations, readsPrevious, read.length, pictured) : undefined;
 		const layout = groupLayout ? device.createPipelineLayout({ bindGroupLayouts: [groupLayout] }) : "auto";
 		const pipeline = device.createRenderPipeline({
 			layout,
 			vertex: { module, entryPoint: ownVertexStage ?? VERTEX_ENTRY_POINT },
-			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [ownVertexStage ? { format, blend: OVER } : { format }] },
-			...ownVertexStage ? { primitive: { topology: "triangle-strip" } } : {},
+			fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [blendQuads ? { format, blend: OVER } : { format }] },
+			...ownVertexStage && !indexed ? { primitive: { topology: "triangle-strip" } } : {},
+			...indexed ? { primitive: { topology: "triangle-list" } } : {},
+			...withDepth ? { depthStencil: { format: DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: "less-equal" } } : {},
 		});
 		return { pipeline, groupLayout };
 	});
 	const previous = readsPrevious ? previousFrame(device, `${format}\n${shader}`, image) : undefined;
-	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous, read) : undefined;
-	const released = () => uniform?.buffers.forEach(buffer => buffer.destroy());
+	const extras = arrays.filter(({ name }) => !read.some(item => item.name === name));
+	for (const array of arrays) if (array.file) array.bytes = await atlasBytes(array.file);
+	const textures = pictured.read.map(picture => pictureTexture(device, picture));
+	const pictureEntries = [
+		...textures.map((texture, at) => ({ binding: PICTURE_BINDING + at, resource: texture.createView() })),
+		...pictured.samplers.map((sampler, at) => ({ binding: SAMPLER_BINDING + at, resource: pictureSampler(device, sampler) })),
+	];
+	const uniform = groupLayout ? uniformBinding(device, groupLayout, declarations ? valueBytes : undefined, previous, read, extras, pictureEntries) : undefined;
+	const released = () => {
+		uniform?.buffers.forEach(buffer => buffer.destroy());
+		textures.forEach(texture => texture.destroy());
+		indexBuffer?.destroy();
+		indirectBuffer?.destroy();
+	};
+	const depth = withDepth ? depthTarget(device, width, height) : undefined;
+	const indexUsage = GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST | (compute ? GPUBufferUsage.STORAGE : 0);
+	const indexBuffer = indexed && device.createBuffer({ size: indexed.length * PIXEL_BYTES, usage: indexUsage });
+	if (indexBuffer) device.queue.writeBuffer(indexBuffer, 0, new Uint32Array(indexed));
+	const indirectBuffer = indirect && device.createBuffer({ size: indirect.length * PIXEL_BYTES, usage: GPUBufferUsage.INDIRECT | GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+	if (indirectBuffer) device.queue.writeBuffer(indirectBuffer, 0, new Uint32Array(indirect));
 	const encoder = device.createCommandEncoder();
-	const pass = encoder.beginRenderPass({ colorAttachments: [paperAttachment(image)] });
+	if (withDepth) pyramidBuffer(device, width, height);
+	if (compute) await dispatchCull(device, encoder, compute, workgroups, { ...(uniform?.named ?? {}), ...Object.fromEntries(kept.map(({ name, buffer }) => [name, buffer])), ...indexBuffer ? { [INDICES_NAME]: indexBuffer } : {}, ...indirectBuffer ? { [INDIRECT_NAME]: indirectBuffer } : {}, ...keptPyramid ? { pyramid: keptPyramid.buffer } : {} });
+	const pass = encoder.beginRenderPass({
+		colorAttachments: [paperAttachment(image)],
+		...depth ? { depthStencilAttachment: { view: depth.createView(), depthClearValue: 1, depthLoadOp: "clear", depthStoreOp: "store" } } : {},
+	});
 	pass.setPipeline(pipeline);
 	if (uniform) pass.setBindGroup(0, uniform.bindings);
-	if (ownVertexStage) pass.draw(QUAD_CORNERS, Math.max(0, Math.trunc(values?.[INSTANCES_NAME] ?? 1)));
+	const instances = Math.max(0, Math.trunc(values?.[INSTANCES_NAME] ?? 1));
+	if (indirectBuffer && indexed) {
+		pass.setIndexBuffer(indexBuffer, "uint32");
+		pass.drawIndexedIndirect(indirectBuffer, 0);
+	} else if (indirectBuffer) pass.drawIndirect(indirectBuffer, 0);
+	else if (indexBuffer) {
+		pass.setIndexBuffer(indexBuffer, "uint32");
+		pass.drawIndexed(indexed.length, instances);
+	} else if (ownVertexStage) pass.draw(QUAD_CORNERS, instances);
 	else pass.draw(TRIANGLE_CORNERS);
 	pass.end();
+	if (withDepth) encodePyramid(device, encoder, depth, width, height);
 	if (canvasImage && image !== canvasImage)
 		encoder.copyTextureToTexture({ texture: image }, { texture: canvasImage }, [Math.min(width, canvasImage.width), Math.min(height, canvasImage.height)]);
 	// a painting into the page's canvas answers once the GPU drew it, as the native window's surface waits for the
@@ -254,16 +351,83 @@ async function gpuRendered({ shader, width, height, values, canvas }) {
 // the WGSL declaring `values` (appended, so the shader's line numbers stay the user's) and the uniform's bytes, laid out
 // as WGSL aligns its members (lib/host/native_host/gpu.warp values_laid_out); its lists of more than 4 numbers or of
 // vectors as storage arrays [{name, numbers}], 4 numbers a vec4f
+// EZAT version 1: zlib RGBA8. The value is `file#id#sha256`, the same file the native host reads.
+const ATLAS_MAGIC = 0x54415a45;
+const ATLAS_VERSION = 1;
+const ATLAS_RGBA8 = 1;
+const ATLAS_HEAD = 44;
+const ATLAS_ENTRY = 28;
+let atlasCacheKey = "";
+let atlasCacheBytes = null;
+
+async function inflateZlib(payload) {
+	if (typeof DecompressionStream === "function") {
+		const stream = new Blob([payload]).stream().pipeThrough(new DecompressionStream("deflate"));
+		return new Uint8Array(await new Response(stream).arrayBuffer());
+	}
+	throw new Error("atlas: this page has no zlib inflate");
+}
+
+async function atlasBytes(spec) {
+	if (spec === atlasCacheKey && atlasCacheBytes) return atlasCacheBytes;
+	const parts = spec.split("#");
+	if (parts.length !== 3) throw new Error("atlas: a baked atlas is file#id#hash");
+	const file = readBytes(parts[0]);
+	const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
+	if (file.byteLength < ATLAS_HEAD || view.getUint32(0, true) !== ATLAS_MAGIC) throw new Error(`atlas: ${parts[0]} is not an EZAT atlas`);
+	if (view.getUint32(4, true) !== ATLAS_VERSION) throw new Error(`atlas: ${parts[0]} is a different version`);
+	const digest = [...file.subarray(12, ATLAS_HEAD)].map(byte => byte.toString(16).padStart(2, "0")).join("");
+	if (digest !== parts[2]) throw new Error(`atlas: ${parts[0]} does not match its source hash`);
+	const entries = view.getUint32(8, true);
+	const id = Number(parts[1]);
+	let found = null;
+	for (let i = 0; i < entries; i++) {
+		const base = ATLAS_HEAD + i * ATLAS_ENTRY;
+		if (view.getUint32(base, true) !== id || view.getUint32(base + 12, true) !== ATLAS_RGBA8) continue;
+		found = {
+			raw: view.getUint32(base + 16, true),
+			payload: view.getUint32(base + 20, true),
+			at: view.getUint32(base + 24, true),
+		};
+	}
+	if (!found || found.at + found.payload > file.byteLength) throw new Error(`atlas: ${parts[0]} has no RGBA8 entry ${parts[1]}`);
+	const pixels = await inflateZlib(file.subarray(found.at, found.at + found.payload));
+	if (pixels.byteLength !== found.raw) throw new Error(`atlas: ${parts[0]} did not inflate`);
+	// rounded up to a whole vec4f, the least a storage array<vec4f> binds (a one-pixel atlas is 4 bytes)
+	const padded = new Uint8Array(Math.ceil(pixels.byteLength / VEC4F_BYTES) * VEC4F_BYTES);
+	padded.set(pixels);
+	atlasCacheKey = spec;
+	atlasCacheBytes = padded;
+	return padded;
+}
+
+const isPicture = value => value !== null && typeof value === "object" && !Array.isArray(value) && "pixels" in value;
 function valuesLayout(values) {
-	const members = [], floats = [], arrays = [];
+	const members = [], floats = [], arrays = [], pictures = [];
 	const padded = (numbers, alignment) => { while (numbers.length % (alignment / 4)) numbers.push(0); };
 	for (const [name, value] of Object.entries(values ?? {})) {
+		// an index buffer and the depth switch are host draw state, not uniform members
+		if (name === INDICES_NAME || name === DEPTH_NAME || name === INDIRECT_NAME || name === COMPUTE_NAME || name === WORKGROUPS_NAME) continue;
+		if (isPicture(value)) {
+			if (pictures.length === MOST_PICTURES) throw new Error(`${VALUES_NAME}.${name} is one picture too many: paint's values hold at most ${MOST_PICTURES}`);
+			const width = Number(value.width), height = Number(value.height), pixels = Array.from(value.pixels ?? []);
+			if (!(width >= 1 && height >= 1 && pixels.length === width * height)) throw new Error(`${VALUES_NAME}.${name} is a picture of width × height pixels`);
+			pictures.push({ name, width, height, pixels: Uint32Array.from(pixels, pixel => (pixel >>> 0) >= ALPHA_FROM ? pixel >>> 0 : (pixel >>> 0) + OPAQUE) });
+			continue;
+		}
+		// a file the host reads into the storage buffer (the baked atlas)
+		if (typeof value === "string") {
+			if (arrays.length === MOST_STORAGE_ARRAYS) throw new Error(`${VALUES_NAME}.${name} is one list too many: paint's values hold at most ${MOST_STORAGE_ARRAYS}`);
+			arrays.push({ name, file: value });
+			continue;
+		}
 		// a list of lists: one vec4f per item, its missing coordinates 0
 		const vectors = Array.isArray(value) && value.some(Array.isArray);
 		if (vectors && value.some(item => [item].flat().length > VECTOR_FLOATS)) throw new Error(`${VALUES_NAME}.${name} is a list of vectors of up to four numbers, got ${JSON.stringify(value)}`);
 		const numbers = vectors ? value.flatMap(item => [...[item].flat(), 0, 0, 0, 0].slice(0, VECTOR_FLOATS)) : [value].flat();
 		if (!numbers.every(number => typeof number === "number")) throw new Error(`${VALUES_NAME}.${name} is a number or a list of numbers, got ${JSON.stringify(value)}${PREVIOUS_WORDS.includes(name) ? "; the shader's own previous frame is $previous(at)" : ""}`);
 		if (vectors || numbers.length > VECTOR_FLOATS) {
+			if (arrays.length === MOST_STORAGE_ARRAYS) throw new Error(`${VALUES_NAME}.${name} is one list too many: paint's values hold at most ${MOST_STORAGE_ARRAYS}`);
 			padded(numbers, UNIFORM_ALIGNMENT);
 			arrays.push({ name, numbers: new Float32Array(numbers.length ? numbers : [0, 0, 0, 0]) });
 			continue;
@@ -274,39 +438,108 @@ function valuesLayout(values) {
 		floats.push(...numbers);
 		members.push(`${name}: ${type}`);
 	}
-	if (!members.length) return { declarations: "", bytes: new ArrayBuffer(0), arrays };
+	if (!members.length) return { declarations: "", bytes: new ArrayBuffer(0), arrays, pictures };
 	padded(floats, UNIFORM_ALIGNMENT);
 	const declarations = `\nstruct WarpValues { ${members.join(", ")} }\n@group(0) @binding(${VALUES_BINDING}) var<uniform> ${VALUES_NAME}: WarpValues;`;
-	return { declarations, bytes: new Float32Array(floats).buffer, arrays };
+	return { declarations, bytes: new Float32Array(floats).buffer, arrays, pictures };
 }
+// [the shader with each picture it reads renamed, those pictures, the samplers it names], their declarations
+function picturesRead(shader, pictures) {
+	const read = pictures.filter(({ name }) => holeRead(shader, name));
+	const renamed = read.reduce((code, { name }) => code.replace(holePattern(name), PICTURE_PREFIX + name), shader);
+	if (TRILINEAR_SAMPLERS.some(name => new RegExp(`\\b${name}\\b`).test(renamed))) throw new Error("a trilinear sampler needs mipmaps, which a picture among paint's values has none of: sample it bilinear or bilinear_repeat");
+	const declares = name => new RegExp(`\\b(fn|var|let|const)\\s+${name}\\b`).test(renamed);
+	const samplers = SAMPLERS.filter(({ name }) => new RegExp(`\\b${name}\\b`).test(renamed) && !declares(name));
+	const declarations = read.map(({ name }, at) => `\n@group(0) @binding(${PICTURE_BINDING + at}) var ${PICTURE_PREFIX}${name}: texture_2d<f32>;`).join("")
+		+ samplers.map(({ name }, at) => `\n@group(0) @binding(${SAMPLER_BINDING + at}) var ${name}: sampler;`).join("");
+	return { renamed, read, samplers, declarations };
+}
+// a picture's texture, its pixels written into it
+function pictureTexture(device, { width, height, pixels }) {
+	const texture = device.createTexture({ size: [width, height], format: PICTURE_FORMAT, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
+	device.queue.writeTexture({ texture }, pixels, { bytesPerRow: width * PIXEL_BYTES, rowsPerImage: height }, [width, height]);
+	return texture;
+}
+const pictureSamplers = new Map();
+const pictureSampler = (device, { name, filter, address }) => {
+	if (!pictureSamplers.has(name)) pictureSamplers.set(name, device.createSampler({ magFilter: filter, minFilter: filter, addressModeU: address, addressModeV: address, addressModeW: address }));
+	return pictureSamplers.get(name);
+};
+// the compute shader's fields, each {name, type, buffer}: kept under `owner` (the program's canvas, else its shader)
+function keptFields(device, compute, values, owner) {
+	return [...compute.matchAll(FIELD_ARRAY)].filter(([, name]) => !(name in (values ?? {}))).map(([, name, type, element, length]) => {
+		const stride = ELEMENT_STRIDES.find(([pattern]) => pattern.test(element.replaceAll(/\s/g, "")))?.[1];
+		if (!stride) throw new Error(`the field ${name} holds ${element}: a field's elements are numbers or vectors of them`);
+		const key = `${owner}\n${name}: ${type}`;
+		if (!fields.has(key)) fields.set(key, storageBuffer(device, stride * Number(length)));
+		return { name, type, buffer: fields.get(key) };
+	});
+}
+
 // `values.name` in a shader, whole
 const holePattern = name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`, "g");
 const holeRead = (shader, name) => holePattern(name).test(shader);
 
 // an explicit layout holding the uniform and the previous frame, so a shader that leaves `values` unread still binds them
 const SHADER_STAGES = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
-const bindingsGroupLayout = (device, takesValues, readsPrevious, arrayCount) => device.createBindGroupLayout({ entries: [
+const bindingsGroupLayout = (device, takesValues, readsPrevious, arrayCount, pictured = { read: [], samplers: [] }) => device.createBindGroupLayout({ entries: [
 	...takesValues ? [{ binding: VALUES_BINDING, visibility: SHADER_STAGES, buffer: { type: "uniform" } }] : [],
 	...Array.from({ length: arrayCount }, (_, at) => ({ binding: STORAGE_BINDING + at, visibility: SHADER_STAGES, buffer: { type: "read-only-storage" } })),
 	...readsPrevious ? [{ binding: PREVIOUS_FRAME_BINDING, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: "unfilterable-float" } }] : [],
+	...pictured.read.map((_, at) => ({ binding: PICTURE_BINDING + at, visibility: SHADER_STAGES, texture: { sampleType: "float" } })),
+	...pictured.samplers.map((_, at) => ({ binding: SAMPLER_BINDING + at, visibility: SHADER_STAGES, sampler: { type: "filtering" } })),
 ] });
 
 // this frame's values in a uniform buffer (no bytes: none), its storage arrays and the previous frame, bound as the
 // layout says; the buffers are destroyed once the frame is read
-function uniformBinding(device, groupLayout, bytes, previous, arrays) {
+function uniformBinding(device, groupLayout, bytes, previous, arrays, extras = [], pictureEntries = []) {
 	const filled = (data, usage) => {
 		const buffer = device.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
 		device.queue.writeBuffer(buffer, 0, data);
 		return buffer;
 	};
 	const buffer = bytes && filled(bytes, GPUBufferUsage.UNIFORM);
-	const storages = arrays.map(({ numbers }) => filled(numbers, GPUBufferUsage.STORAGE));
+	// a field's buffer is kept, not filled anew
+	const storages = arrays.map(array => array.buffer ?? filled(array.bytes ?? array.numbers, GPUBufferUsage.STORAGE));
+	const extraBuffers = extras.map(array => filled(array.bytes ?? array.numbers, GPUBufferUsage.STORAGE));
 	const entries = [
 		...buffer ? [{ binding: VALUES_BINDING, resource: { buffer } }] : [],
 		...storages.map((storage, at) => ({ binding: STORAGE_BINDING + at, resource: { buffer: storage } })),
 		...previous ? [{ binding: PREVIOUS_FRAME_BINDING, resource: previous.createView() }] : [],
+		...pictureEntries,
 	];
-	return { buffers: [...buffer ? [buffer] : [], ...storages], bindings: device.createBindGroup({ layout: groupLayout, entries }) };
+	const named = Object.fromEntries([
+		...arrays.map(({ name }, at) => [name, storages[at]]),
+		...extras.map(({ name }, at) => [name, extraBuffers[at]]),
+	]);
+	return { buffers: [...buffer ? [buffer] : [], ...storages.filter((storage, at) => !arrays[at].buffer), ...extraBuffers], bindings: device.createBindGroup({ layout: groupLayout, entries }), named };
+}
+
+// the compute shader writes buffers the draw then reads. Its storage names are the value names, plus indices and indirect.
+async function dispatchCull(device, encoder, shader, workgroups, named) {
+	const declared = storageArrays(shader);
+	if (declared.length > MOST_BOUND_ARRAYS) throw new Error("a compute shader binds at most 8 arrays");
+	if (!declared.length) throw new Error("the compute shader declares no storage array");
+	const bound = declared.map(array => {
+		const buffer = named[array.name];
+		if (!buffer) throw new Error(`the compute shader's array ${array.name} has no values`);
+		const integer = array.element === "u32" || array.element === "i32";
+		if (integer && array.name !== INDICES_NAME && array.name !== INDIRECT_NAME) throw new Error(`${array.name} is float values, and the compute shader asks for ${array.element}`);
+		return { binding: array.binding, buffer };
+	});
+	const module = await gpuModule(device, shader);
+	// one layout for every pass, so each binds all the arrays, those it leaves unread too
+	const groupLayout = device.createBindGroupLayout({ entries: declared.map(({ binding, access }) => ({ binding, visibility: GPUShaderStage.COMPUTE, buffer: { type: access === "read" ? "read-only-storage" : "storage" } })) });
+	const layout = device.createPipelineLayout({ bindGroupLayouts: [groupLayout] });
+	const bindings = device.createBindGroup({ layout: groupLayout, entries: bound.map(({ binding, buffer }) => ({ binding, resource: { buffer } })) });
+	for (const [, entryPoint] of shader.matchAll(COMPUTE_ENTRY)) {
+		const pipeline = compiledOnce(compiledPipelines, `${entryPoint}\n${shader}`, () => device.createComputePipeline({ layout, compute: { module, entryPoint } }));
+		const pass = encoder.beginComputePass();
+		pass.setPipeline(pipeline);
+		pass.setBindGroup(0, bindings);
+		pass.dispatchWorkgroups(workgroups[0], workgroups[1], workgroups[2]);
+		pass.end();
+	}
 }
 
 // the frame `shader` drew last when it has the size of `image` (a black one otherwise), and `image` kept as the next
@@ -333,8 +566,8 @@ const theGpuDevice = async () => gpuDevice ??= await gpuDeviceOrFailure();
 async function gpuDeviceOrFailure() {
 	const adapter = await answeredWithin(self.navigator.gpu?.requestAdapter(), "adapter");
 	if (!adapter) throw new Error("this browser offers no WebGPU adapter");
-	// f16 shaders where the adapter has them (array<f16> after `enable f16`)
-	const requiredFeatures = adapter.features.has(HALF_FEATURE) ? [HALF_FEATURE] : [];
+	// f16 shaders where the adapter has them, and float32-filterable where an rgba32float field needs linear samples
+	const requiredFeatures = [HALF_FEATURE, "float32-filterable"].filter(feature => adapter.features.has(feature));
 	const device = await answeredWithin(adapter.requestDevice({ requiredFeatures }), "device");
 	// a lost device (the GPU process restarted) is asked for anew by the next job, with all made on it
 	device.lost.then(() => forgetDevice(device));
@@ -354,7 +587,73 @@ function answeredWithin(promise, what, waitMs = GPU_DEVICE_WAIT_MS) {
 function forgetDevice(device) {
 	if (gpuDevice !== device) return;
 	gpuDevice = undefined;
+	keptDepth = undefined;
+	keptPyramid?.buffer.destroy();
+	keptPyramid = undefined;
 	[compiledModules, compiledPipelines, paintCanvases, previousFrames].forEach(made => made.clear());
+}
+
+// one depth32float target for this size, cleared by the pass that draws into it (gpu.warp depth_target)
+function depthTarget(device, width, height) {
+	if (keptDepth?.width === width && keptDepth?.height === height) return keptDepth.texture;
+	keptDepth?.texture.destroy();
+	const texture = device.createTexture({ size: [width, height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+	keptDepth = { texture, width, height };
+	return texture;
+}
+
+// one max depth per 8 by 8 tile, kept for the next frame. A new size starts at the far plane.
+let keptPyramid;
+const pyramidTiles = (width, height) => [Math.ceil(width / 8), Math.ceil(height / 8)];
+function pyramidBuffer(device, width, height) {
+	const [tilesX, tilesY] = pyramidTiles(width, height);
+	const n = tilesX * tilesY;
+	if (keptPyramid?.n === n && keptPyramid.width === width && keptPyramid.height === height) return keptPyramid.buffer;
+	keptPyramid?.buffer.destroy();
+	const buffer = device.createBuffer({ size: n * PIXEL_BYTES, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST });
+	device.queue.writeBuffer(buffer, 0, new Float32Array(n).fill(1));
+	keptPyramid = { buffer, n, width, height };
+	return buffer;
+}
+function encodePyramid(device, encoder, depth, width, height) {
+	const [tilesX, tilesY] = pyramidTiles(width, height);
+	const shader = `@group(0) @binding(0) var src: texture_depth_2d;
+@group(0) @binding(1) var<storage, read_write> pyramid: array<f32>;
+@compute @workgroup_size(1) fn main() {
+	let tiles_x = ${tilesX}u;
+	let tiles_y = ${tilesY}u;
+	let width = ${width}u;
+	let height = ${height}u;
+	for (var ty = 0u; ty < tiles_y; ty++) {
+		for (var tx = 0u; tx < tiles_x; tx++) {
+			var far = 0.0;
+			let x0 = tx * 8u;
+			let y0 = ty * 8u;
+			for (var dy = 0u; dy < 8u; dy++) {
+				for (var dx = 0u; dx < 8u; dx++) {
+					let x = x0 + dx;
+					let y = y0 + dy;
+					if (x < width && y < height) {
+						let d = textureLoad(src, vec2i(i32(x), i32(y)), 0);
+						if (d > far) { far = d; }
+					}
+				}
+			}
+			pyramid[ty * tiles_x + tx] = far;
+		}
+	}
+}`;
+	const module = device.createShaderModule({ code: shader });
+	const pipeline = device.createComputePipeline({ layout: "auto", compute: { module, entryPoint: GPU_ENTRY_POINT } });
+	const view = depth.createView();
+	const pass = encoder.beginComputePass();
+	pass.setPipeline(pipeline);
+	pass.setBindGroup(0, device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries: [
+		{ binding: 0, resource: view },
+		{ binding: 1, resource: { buffer: keptPyramid.buffer } },
+	] }));
+	pass.dispatchWorkgroups(1, 1, 1);
+	pass.end();
 }
 
 // after a failed job: a device lost by it is forgotten before the program asks again (its loss is said a moment later)
@@ -408,7 +707,7 @@ async function gpuReadBacks(device, encoder, readbacks) {
 }
 
 // the storage arrays the shader declares, each with the typed array of its elements: f32 unless array<i32>, array<u32> or array<f16>
-const storageArrays = shader => [...shader.matchAll(STORAGE_ARRAY)].map(([, binding, name, element]) => ({ binding: Number(binding), name, element, Elements: ELEMENT_ARRAYS[element] ?? Float32Array }));
+const storageArrays = shader => [...shader.matchAll(STORAGE_ARRAY)].map(([, binding, access, name, element]) => ({ binding: Number(binding), access, name, element, Elements: ELEMENT_ARRAYS[element] ?? Float32Array }));
 
 // the typed array of the numbers a compute shader reads at @binding(0) (natively gpu.rs element_of)
 const gpuElements = shader => storageArrays(shader).find(array => array.binding === GPU_BINDING)?.Elements ?? Float32Array;
@@ -447,18 +746,294 @@ function joinedWords(arrays) {
 	return words;
 }
 
-// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits)
-const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array, Uint16Array];
-const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16"];
+// a GPU list's cells by gpu_list_cell (extensions/gpu_lists/runtime.warp GpuCell): f32, i32, u32, f16 (as raw bits),
+// a vector's f32 lanes
+const GPU_LIST_CELLS = [Float32Array, Int32Array, Uint32Array, Uint16Array, Uint16Array, Float32Array, Float32Array, Float32Array];
+const GPU_CELL_NAMES = ["f32", "i32", "u32", "f16", "bf16", "vec2", "vec3", "vec4"];
 const plainArrays = arrays => Object.fromEntries(Object.entries(arrays).map(([name, array]) => [name, Array.from(array)]));
 // gpu_compute's {values} as a list; a kernel's floats and an image's pixels as {words}, given back as raw bytes
 // (writeSharedWords), not as JSON
+// gpu_fields / gpu_pass / gpu_show / gpu_picture (card gpu-multipass): ping-pong targets that stay on the GPU.
+// One command encoder holds every pass of a frame; nothing is read back until gpu_picture. field_<name>(uv), uv in 0..1.
+const MOST_FIELDS = 8;
+const FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const fieldSets = new Map();
+const passPipelines = new Map();
+let nextFieldId = 0;
+let fieldsDevice = null;
+let fieldsChoice = null;
+let fieldSampler = null;
+let openEncoder = null;
+let passFrame = 0;
+let passFrameOpen = false;
+const pendingBuffers = [];
+const releasePending = () => { pendingBuffers.splice(0).forEach(buffer => buffer.destroy()); };
+const encoderOf = device => {
+	if (!openEncoder) {
+		device.pushErrorScope("validation");
+		openEncoder = device.createCommandEncoder();
+	}
+	return openEncoder;
+};
+const takeEncoder = device => {
+	const encoder = encoderOf(device);
+	openEncoder = null;
+	return encoder;
+};
+const openPassFrame = () => { if (!passFrameOpen) { passFrame++; passFrameOpen = true; } };
+const closePassFrame = () => { passFrameOpen = false; };
+function fieldsOn(device) {
+	if (fieldsDevice && fieldsDevice !== device) {
+		fieldSets.clear();
+		passPipelines.clear();
+		fieldSampler = null;
+		fieldsChoice = null;
+		openEncoder = null;
+		releasePending();
+	}
+	fieldsDevice = device;
+}
+async function textureRenderable(device, format) {
+	device.pushErrorScope("validation");
+	let texture;
+	try {
+		texture = device.createTexture({ size: [1, 1], format, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+	} catch (failure) {
+		await device.popErrorScope();
+		return false;
+	}
+	const error = await device.popErrorScope();
+	texture.destroy();
+	return !error;
+}
+async function fieldsChoiceOf(device) {
+	fieldsOn(device);
+	if (fieldsChoice) return fieldsChoice;
+	const float32 = device.features.has("float32-filterable");
+	const candidates = [
+		{ name: "rgba16float", filterable: true },
+		{ name: "rgba32float", filterable: float32 },
+		{ name: "rgba8unorm", filterable: true },
+	];
+	for (const candidate of candidates) {
+		if (await textureRenderable(device, candidate.name)) { fieldsChoice = candidate; return candidate; }
+	}
+	throw new Error("gpu_fields: this GPU has no render target for a field");
+}
+const samplerOf = (device, filterable) => fieldSampler ??= device.createSampler({
+	addressModeU: "clamp-to-edge", addressModeV: "clamp-to-edge", addressModeW: "clamp-to-edge",
+	magFilter: filterable ? "linear" : "nearest", minFilter: filterable ? "linear" : "nearest",
+});
+function fieldNames(names) {
+	if (!Array.isArray(names) || names.length < 1 || names.length > MOST_FIELDS) throw new Error("gpu_fields takes 1 to 8 names");
+	const kept = [];
+	for (const name of names) {
+		if (!FIELD_NAME.test(name)) throw new Error(`gpu_fields: ${name} is not a field name`);
+		if (kept.includes(name)) throw new Error(`gpu_fields: ${name} is named twice`);
+		kept.push(name);
+	}
+	return kept;
+}
+function fieldValues(shader, width, height, given) {
+	openPassFrame();
+	const shared = name => {
+		const at = self.pagePointer?.names.indexOf(name) ?? -1;
+		return at >= 0 ? Atomics.load(self.pagePointer.values, at) : 0;
+	};
+	firstRender ??= performance.now();
+	const value = {
+		width, height, size: [width, height], pixel_scale: 1, time: (performance.now() - firstRender) / 1000, frame: passFrame,
+		mouse: [shared("mouse_x"), shared("mouse_y")], mouse_down: shared("mouse_down"), mouse_wheel: shared("mouse_wheel"), key: shared("key"),
+	};
+	const holes = Object.fromEntries(BUILTIN_HOLES.filter(name => new RegExp(`\\b${VALUES_NAME}\\.${name}\\b`).test(shader)).map(name => [name, value[name]]));
+	return { ...holes, ...(given ?? {}) };
+}
+function fieldSample(name, binding, filterable) {
+	const tex = `field_${name}_tex`;
+	const declared = `\n@group(0) @binding(${binding}) var ${tex}: texture_2d<f32>;`;
+	if (filterable) return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet placed = clamp(uv, vec2f(0.0), vec2f(1.0));\n\treturn textureSampleLevel(${tex}, field_sampler, placed, 0.0);\n}`;
+	return `${declared}\nfn field_${name}(uv: vec2f) -> vec4f {\n\tlet size = vec2f(textureDimensions(${tex}));\n\tlet at = clamp(uv, vec2f(0.0), vec2f(1.0)) * size - vec2f(0.5);\n\tlet low = vec2i(floor(at));\n\tlet f = fract(at);\n\tlet last = vec2i(size) - vec2i(1);\n\tlet s00 = textureLoad(${tex}, clamp(low, vec2i(0), last), 0);\n\tlet s10 = textureLoad(${tex}, clamp(low + vec2i(1, 0), vec2i(0), last), 0);\n\tlet s01 = textureLoad(${tex}, clamp(low + vec2i(0, 1), vec2i(0), last), 0);\n\tlet s11 = textureLoad(${tex}, clamp(low + vec2i(1, 1), vec2i(0), last), 0);\n\treturn mix(mix(s00, s10, f.x), mix(s01, s11, f.x), f.y);\n}`;
+}
+// each storage array of these the shader reads, `values.mesh` its own array warp_values_mesh: [the shader so renamed,
+// those it reads]
+function arraysRenamed(shader, arrays) {
+	const read = arrays.filter(({ name }) => holeRead(shader, name));
+	return [read.reduce((code, { name }) => code.replace(holePattern(name), STORAGE_PREFIX + name), shader), read];
+}
+// a storage array's declaration: a field read by the draw its own type, an atomic read as its plain number
+const storageDeclared = (binding, { name, type = "array<vec4f>" }) => `\n@group(0) @binding(${binding}) var<storage, read> ${STORAGE_PREFIX}${name}: ${type.replaceAll(/atomic<(\w+)>/g, "$1")};`;
+function passShader(shader, declarations, reads, filterable) {
+	let code = shader;
+	if (!OWN_VERTEX_STAGE.test(shader)) code += FULL_IMAGE_VERTICES;
+	code += declarations;
+	let binding = 1;
+	if (filterable && reads.length) {
+		code += "\n@group(0) @binding(1) var field_sampler: sampler;";
+		binding = 2;
+	}
+	for (const name of reads) code += fieldSample(name, binding++, filterable);
+	return code;
+}
+async function passPipeline(device, code, format, ownVertex) {
+	const key = `${format}\n${ownVertex ? 1 : 0}\n${code}`;
+	if (passPipelines.has(key)) return passPipelines.get(key);
+	const module = await gpuModule(device, code);
+	device.pushErrorScope("validation");
+	const pipeline = device.createRenderPipeline({
+		layout: "auto",
+		vertex: { module, entryPoint: ownVertex ?? VERTEX_ENTRY_POINT },
+		fragment: { module, entryPoint: GPU_ENTRY_POINT, targets: [{ format }] },
+		...ownVertex ? { primitive: { topology: "triangle-strip" } } : {},
+	});
+	const error = await device.popErrorScope();
+	if (error) throw new Error(`${SHADER_SUBJECT}${error.message}`);
+	passPipelines.set(key, pipeline);
+	return pipeline;
+}
+function setOf(device, id) {
+	fieldsOn(device);
+	const set = fieldSets.get(id);
+	if (!set) throw new Error(`no fields ${id}`);
+	return set;
+}
+async function drawInto(device, shader, values, set, target, format) {
+	const choice = await fieldsChoiceOf(device);
+	const laid = valuesLayout(values);
+	// (a list it reads is a storage array, bound after the fields as paint binds its own)
+	const [renamed, arrays] = arraysRenamed(shader, laid.arrays);
+	const reads = set.order.filter(name => new RegExp(`\\bfield_${name}\\b`).test(shader));
+	const firstArray = (choice.filterable && reads.length ? 2 : 1) + reads.length;
+	const code = passShader(renamed, laid.declarations, reads, choice.filterable) + arrays.map((array, at) => storageDeclared(firstArray + at, array)).join("");
+	const ownVertex = shader.match(OWN_VERTEX_STAGE)?.[1];
+	const pipeline = await passPipeline(device, code, format, ownVertex);
+	const entries = [];
+	const written = (data, usage) => {
+		const buffer = device.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST });
+		device.queue.writeBuffer(buffer, 0, data);
+		pendingBuffers.push(buffer);
+		return { buffer };
+	};
+	if (laid.declarations) entries.push({ binding: VALUES_BINDING, resource: written(laid.bytes, GPUBufferUsage.UNIFORM) });
+	let binding = 1;
+	if (choice.filterable && reads.length) {
+		entries.push({ binding: 1, resource: samplerOf(device, true) });
+		binding = 2;
+	}
+	for (const name of reads) entries.push({ binding: binding++, resource: set.fields[name].front.createView() });
+	for (const array of arrays) entries.push({ binding: binding++, resource: written(array.file ? await atlasBytes(array.file) : array.numbers, GPUBufferUsage.STORAGE) });
+	const group = entries.length ? device.createBindGroup({ layout: pipeline.getBindGroupLayout(0), entries }) : undefined;
+	const pass = encoderOf(device).beginRenderPass({ colorAttachments: [{ view: target.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
+	pass.setPipeline(pipeline);
+	if (group) pass.setBindGroup(0, group);
+	const instances = Math.max(1, Math.trunc(values?.[INSTANCES_NAME] ?? 1));
+	pass.draw(ownVertex ? QUAD_CORNERS : TRIANGLE_CORNERS, ownVertex ? instances : 1);
+	pass.end();
+}
+async function gpuFields(job) {
+	const device = await theGpuDevice();
+	const names = fieldNames(job.names);
+	const width = job.width, height = job.height;
+	if (width < 1 || height < 1) throw new Error("gpu_fields needs a positive width and height");
+	const choice = await fieldsChoiceOf(device);
+	const label = names.join(",");
+	for (const set of fieldSets.values()) {
+		if (set.width === width && set.height === height && set.label === label) return { id: set.id, width, height, format: choice.name };
+	}
+	const fields = {};
+	const usage = GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING;
+	for (const name of names) {
+		fields[name] = {
+			front: device.createTexture({ size: [width, height], format: choice.name, usage }),
+			back: device.createTexture({ size: [width, height], format: choice.name, usage }),
+		};
+	}
+	const encoder = device.createCommandEncoder();
+	for (const field of Object.values(fields)) {
+		for (const texture of [field.front, field.back]) {
+			const pass = encoder.beginRenderPass({ colorAttachments: [{ view: texture.createView(), loadOp: "clear", storeOp: "store", clearValue: { r: 0, g: 0, b: 0, a: 0 } }] });
+			pass.end();
+		}
+	}
+	device.queue.submit([encoder.finish()]);
+	const set = { id: ++nextFieldId, width, height, label, order: names, fields };
+	fieldSets.set(set.id, set);
+	return { id: set.id, width, height, format: choice.name };
+}
+async function gpuPass(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	const field = set.fields[job.into];
+	if (!field) return -1;
+	const choice = await fieldsChoiceOf(device);
+	const values = fieldValues(job.shader, set.width, set.height, job.values);
+	await drawInto(device, job.shader, values, set, field.back, choice.name);
+	const kept = field.front;
+	field.front = field.back;
+	field.back = kept;
+	return 0;
+}
+async function finishPasses(device) {
+	if (!openEncoder) return;
+	const encoder = openEncoder;
+	openEncoder = null;
+	await gpuSubmitted(device, encoder);
+	releasePending();
+}
+function packedPixels(bytes, width, height, rowBytes) {
+	const pixels = new Uint32Array(width * height);
+	for (let row = 0, pixel = 0; row < height; row++)
+		for (let at = row * rowBytes; at < row * rowBytes + width * PIXEL_BYTES; at += PIXEL_BYTES)
+			pixels[pixel++] = (OPAQUE | bytes[at] << 16 | bytes[at + 1] << 8 | bytes[at + 2]) >>> 0;
+	return pixels;
+}
+async function gpuShow(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	if (job.canvas === undefined) {
+		await finishPasses(device);
+		closePassFrame();
+		return 0;
+	}
+	const painted = paintCanvases.get(job.canvas);
+	if (!painted) throw new Error(CANVAS_MISSING);
+	const values = fieldValues(job.shader, job.width ?? set.width, job.height ?? set.height, job.values);
+	const canvasImage = painted.context.getCurrentTexture();
+	await drawInto(device, job.shader, values, set, canvasImage, painted.format);
+	const encoder = takeEncoder(device);
+	await gpuSubmitted(device, encoder);
+	await answeredWithin(device.queue.onSubmittedWorkDone(), "drawn frame", GPU_WORK_WAIT_MS);
+	closePassFrame();
+	releasePending();
+	return 1;
+}
+async function gpuPicture(job) {
+	const device = await theGpuDevice();
+	const set = setOf(device, job.id);
+	const width = job.width ?? set.width, height = job.height ?? set.height;
+	const values = fieldValues(job.shader, width, height, job.values);
+	const image = device.createTexture({ size: [width, height], format: "rgba8unorm", usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC });
+	await drawInto(device, job.shader, values, set, image, "rgba8unorm");
+	const encoder = takeEncoder(device);
+	const rowBytes = Math.ceil(width * PIXEL_BYTES / ROW_ALIGNMENT) * ROW_ALIGNMENT;
+	const readback = readbackBuffer(device, rowBytes * height);
+	encoder.copyTextureToBuffer({ texture: image }, { buffer: readback, bytesPerRow: rowBytes, rowsPerImage: height }, [width, height]);
+	const bytes = new Uint8Array(await gpuReadBack(device, encoder, readback));
+	image.destroy();
+	closePassFrame();
+	releasePending();
+	return packedPixels(bytes, width, height, rowBytes);
+}
 const GPU_JOBS = {
 	gpu_compute: async job => ({ values: job.arrays ? plainArrays(await gpuComputedArrays(job)) : Array.from(await gpuComputedFloats(job)) }),
 	// gpu_compute over GPU lists (changed in place): the arrays left as one run of words, in the order given
 	gpu_arrays: async job => ({ words: joinedWords(Object.values(await gpuComputedArrays(job))) }),
 	gpu_kernel: async job => ({ words: await gpuComputedFloats(job) }),
 	gpu_render: async job => ({ words: await gpuRendered(job) }),
+	gpu_fields: async job => ({ values: await gpuFields(job) }),
+	gpu_pass: async job => ({ values: await gpuPass(job) }),
+	gpu_show: async job => ({ values: await gpuShow(job) }),
+	gpu_picture: async job => ({ words: await gpuPicture(job) }),
+	gpu_fields_format: async () => ({ values: (await fieldsChoiceOf(await theGpuDevice())).name }),
 	gpu_canvas: async job => ({ values: await gpuCanvas(job) }),
 	gpu_paint: async job => ({ values: (await gpuRendered(job), job.canvas) }),
 	gpu_paints: async () => ({ values: [await theGpuDevice().then(() => 1, failure => failureText(failure))] }),
@@ -469,7 +1044,7 @@ const GPU_JOBS = {
 // again by the next run, and not on every frame of this one); without, paint(f, …) of a warp function paints f on the
 // CPU, as the run's warning says once
 const GPU_PAINTS = "gpu_paints"; // lib/prelude.warp gpu_paints()
-const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw on the GPU is native only (draw_shape below), so never here
+const GPU_DRAWING = "gpu_drawing"; // lib/draw.warp: use draw draws its shapes on the GPU (gpuDrawing)
 const PAINTS_ON_CPU = "paint: a function paints on the CPU"; // src/graphics/paint.rs
 let gpuPaintsHere = false;
 function gpuPaints(holder) {
@@ -479,6 +1054,14 @@ function gpuPaints(holder) {
 		gpuPaintsHere = answer === 1;
 		if (!gpuPaintsHere) holder.warnings.push(`${PAINTS_ON_CPU}: ${answer}`);
 	}
+	return gpuPaintsHere;
+}
+
+// gpu_drawing: use draw's shapes drawn on the GPU while the page shows the paintings (a test page, which shows none,
+// reads the CPU's pixels) and a shader paints here; asked without gpuPaints' warning, which is about paint(f, …)
+function gpuDrawing() {
+	if (!self.pageSystemValues?.window_open || !hasTaskWorkers()) return false;
+	gpuPaintsHere ||= gpuJob("gpu_paints", {})[0] === 1;
 	return gpuPaintsHere;
 }
 
@@ -540,7 +1123,7 @@ function gpuTaskWorker() {
 }
 
 addHostPart({
-	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? false : undefined,
+	systemValue: (value, holder) => value === GPU_PAINTS ? gpuPaints(holder) : value === GPU_DRAWING ? gpuDrawing() : undefined,
 	words: (holder, hooks, { program }) => {
 		const plain = node => guestPlain(program(), node);
 		// floats, also the whole ones (newGuestValue would make 3 an Int); ints of an array<i32> or array<u32>
@@ -549,8 +1132,19 @@ addHostPart({
 		const warnOnce = (notice, detail) => {
 			if (!holder.warnings.some(warning => warning.startsWith(notice))) holder.warnings.push(`${notice}: ${detail}`);
 		};
+		// a picture among the values whose pixels are colors (an Image's, shown as color words): its pixels read as the
+		// native warp reads paint's pixels, a chunk of words at a time (pixels_at), its field `pixels` the instance's item
+		const picturesRead = (values, plained) => {
+			for (const [name, node] of guestEntries(program(), values) ?? []) {
+				const value = plained[name];
+				if (!isPicture(value) || typeof value.pixels?.[0] === "number") continue;
+				const pixels = guestItem(program(), node, Object.keys(value).indexOf("pixels"));
+				value.pixels = guestInt32s(program(), pixels, Number(value.width) * Number(value.height), "pixels_at");
+			}
+			return plained;
+		};
 		const renderValues = (shader, width, height, values) =>
-			({ ...builtinValues(shader, width, height), ...(values == null ? {} : plain(values)) });
+			({ ...builtinValues(shader, width, height), ...(values == null ? {} : picturesRead(values, plain(values))) });
 		const renderJob = (shader, width, height, values) =>
 			({ shader, width: Number(width), height: Number(height), values: renderValues(shader, Number(width), Number(height), values) });
 		// the pixels as a Uint32Array, for gpu_render and for paint given a shader (host.js, P234)
@@ -593,13 +1187,21 @@ addHostPart({
 			gpuJob("gpu_canvas", { id, replaces }, [], Float32Array, worker);
 			return { id, width, height };
 		};
-		// a GPU list [f32] of the program's (extensions/gpu_lists/runtime.warp): its cells where they are in the module's memory,
-		// undefined for any other value
-		const gpuCells = value => {
-			const place = program().gpu_list_place ? program().gpu_list_place(value) : -1n;
-			if (place < 0n) return undefined;
-			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell?.(value) ?? 0n)];
-			return new Cells(program().memory.buffer, Number(place >> 32n), Number(place & 0xFFFFFFFFn));
+		// a GPU list of the program's (extensions/gpu_lists/runtime.warp)
+		const isGpuList = value => Boolean(program().is_gpu_list?.(value));
+		// its cells as the module stages them (gpu_list_place copies them in, gpu_list_room does not), a view valid
+		// until another list is staged; undefined for any other value
+		const stagedCells = (value, staged) => {
+			if (!isGpuList(value)) return undefined;
+			const place = staged(value);
+			const Cells = GPU_LIST_CELLS[Number(program().gpu_list_cell(value))];
+			return new Cells(program().memory.buffer, Number(BigInt.asUintN(64, place) >> 32n), Number(program().gpu_list_bytes(value)) / Cells.BYTES_PER_ELEMENT);
+		};
+		const gpuCells = value => stagedCells(value, program().gpu_list_place);
+		// numbers the GPU left written into a GPU list's own cells
+		const gpuCellsKept = (value, left) => {
+			stagedCells(value, program().gpu_list_room).set(left);
+			program().gpu_list_kept(value);
 		};
 		// gpu_compute of a map holding GPU lists: those changed where they are and given back themselves, the other
 		// arrays as new lists, all bound and read back in one job without a text of them
@@ -616,15 +1218,14 @@ addHostPart({
 				const length = lengths[name], Elements = elements[name] ?? Float32Array;
 				const left = new Elements(words.buffer, words.byteOffset + at * WORD_BYTES, length);
 				at += wordBytes(length * Elements.BYTES_PER_ELEMENT) / WORD_BYTES;
-				const cells = gpuCells(value); // read anew: the module's memory may have grown meanwhile
-				if (cells) cells.set(left);
-				return [name, cells ? value : numberList(left, Elements)];
+				if (isGpuList(value)) gpuCellsKept(value, left);
+				return [name, isGpuList(value) ? value : numberList(left, Elements)];
 			}));
 		};
 		// an array<f16> takes only a GPU list [f16], whose cells it binds as they are, and a GPU list [f16] only one
 		// (natively gpu.warp halves_unmatched)
 		// a GPU list's cell type by name, undefined for any other value
-		const gpuCellName = value => gpuCells(value) && GPU_CELL_NAMES[Number(program().gpu_list_cell(value))];
+		const gpuCellName = value => isGpuList(value) ? GPU_CELL_NAMES[Number(program().gpu_list_cell(value))] : undefined;
 		// why an array cannot bind what it is given (natively gpu.warp cells_unfit): an array<f16> takes only a GPU list
 		// [f16], whose cells it binds as they are, and a GPU list [f16] only one; a GPU list [bf16] has no WGSL array
 		// type yet (card gpu-lists)
@@ -634,6 +1235,7 @@ addHostPart({
 				const array = declared.find(array => array.name === name), cell = gpuCellName(value);
 				if (!array) continue;
 				if (cell === "bf16") throw new Error(`the GPU list [bf16] ${name} has no WGSL array type to bind as yet`);
+				if (cell?.startsWith("vec")) throw new Error(`the GPU list [${cell}] ${name} binds in paint's values; gpu_compute's arrays take lists of numbers`);
 				if ((array.element === "f16") === (cell === "f16")) continue;
 				throw new Error(array.element === "f16" ? `the shader's array<f16> ${name} takes a GPU list [f16]: make it as ${name}: [f16] = …` : `the GPU list [f16] ${name} needs the shader's array<f16>, not array<${array.element}>`);
 			}
@@ -642,13 +1244,13 @@ addHostPart({
 			const entries = guestEntries(program(), numbers);
 			const code = plain(shader);
 			cellsChecked(code, entries ?? [[storageArrays(code).find(array => array.binding === GPU_BINDING)?.name, numbers]]);
-			if (entries?.some(([, value]) => gpuCells(value))) return computedInPlace(code, entries, workgroups);
-			const cells = gpuCells(numbers);
+			if (entries?.some(([, value]) => isGpuList(value))) return computedInPlace(code, entries, workgroups);
+			const cells = gpuCells(numbers)?.slice();
 			if (cells) {
 				// changed in place, as natively (lib/host/native_host/gpu.warp array_left): the list itself is the value
-				const copy = cells.slice();
-				const left = gpuJob("gpu_kernel", { shader: code, numbers: copy, workgroups: Number(workgroups) }, [copy.buffer], gpuElements(code));
-				gpuCells(numbers).set(left.subarray(0, cells.length)); // the module's memory may have grown meanwhile
+				const length = cells.length; // counted before the job: handing the copy to the task Worker empties it
+				const left = gpuJob("gpu_kernel", { shader: code, numbers: cells, workgroups: Number(workgroups) }, [cells.buffer], gpuElements(code));
+				gpuCellsKept(numbers, left.subarray(0, length));
 				return numbers;
 			}
 			const given = plain(numbers);
@@ -665,14 +1267,76 @@ addHostPart({
 			const pixels = holder.gpuRendered(plain(shader), width, height, values);
 			return newGuestInts(program(), pixels);
 		};
+		// the field sets this program made, so a show knows the canvas size before the worker draws
+		const fieldMeta = new Map();
+		const metaOf = id => {
+			const meta = fieldMeta.get(Number(id));
+			if (!meta) throw new Error(`no fields ${id}`);
+			return meta;
+		};
+		const plainValues = values => values == null ? {} : plain(values);
+		const fieldsMade = (width, height, names) => {
+			const made = gpuJob("gpu_fields", { width: Number(width), height: Number(height), names: [...plain(names)] });
+			fieldMeta.set(made.id, made);
+			return BigInt(made.id);
+		};
+		const passRecorded = (shader, fields, into, values) => {
+			metaOf(fields);
+			const recorded = gpuJob("gpu_pass", { shader: String(plain(shader)), id: Number(fields), into: String(plain(into)), values: plainValues(values) });
+			return BigInt(recorded);
+		};
+		const fieldJob = (shader, fields, values) => {
+			const meta = metaOf(fields);
+			return { shader: String(plain(shader)), id: Number(fields), values: plainValues(values), width: meta.width, height: meta.height };
+		};
+		// the page canvas, as paint of a shader draws into it (paintedInCanvas): one canvas of this size
+		const fieldShown = job => {
+			for (const retry of [false, true]) {
+				if (paintCanvas?.width !== job.width || paintCanvas?.height !== job.height) paintCanvas = newPaintCanvas(job.width, job.height, paintCanvas?.id);
+				try {
+					return gpuJob("gpu_show", { ...job, canvas: paintCanvas.id });
+				} catch (failure) {
+					paintCanvas = undefined;
+					if (retry || !failure.message.endsWith(CANVAS_MISSING)) throw failure;
+				}
+			}
+		};
+		const shownAt = (job) => {
+			if (hooks.gpuCanvas && !canvasFailure) {
+				try { return BigInt(fieldShown(job)); }
+				catch (failure) {
+					canvasFailure = failure.message;
+					warnOnce(CANVAS_FAILED, canvasFailure);
+				}
+			}
+			return BigInt(gpuJob("gpu_show", job));
+		};
+		const shown = (shader, fields, values) => shownAt(fieldJob(shader, fields, values));
+		const shownSized = (shader, fields, width, height, values) => {
+			const job = fieldJob(shader, fields, values);
+			job.width = Number(width);
+			job.height = Number(height);
+			return shownAt(job);
+		};
+		const pictured = (shader, fields, values) => newGuestInts(program(), gpuJob("gpu_picture", fieldJob(shader, fields, values), [], Uint32Array));
+		const picturedSized = (shader, fields, width, height, values) => {
+			const job = fieldJob(shader, fields, values);
+			job.width = Number(width);
+			job.height = Number(height);
+			return newGuestInts(program(), gpuJob("gpu_picture", job, [], Uint32Array));
+		};
+		const fieldsFormat = () => newGuestValue(program(), gpuJob("gpu_fields_format", {}));
 		// a WGSL error inside a `try` is the program's to catch, as every host word's failure (host.js raisedInProgram)
 		return {
 			gpu_computed: computed,
 			gpu_render: rendered,
-			// use draw on the GPU (src/graphics/gpu_canvas.rs) is native only: lib/draw.warp asks gpu_drawing first
-			draw_shape: () => { throw new Error(NO_GPU_DRAWING); },
-			draw_show: () => { throw new Error(NO_GPU_DRAWING); },
-			draw_shader: () => { throw new Error(NO_GPU_DRAWING); },
+			gpu_fields: fieldsMade,
+			gpu_pass_recorded: passRecorded,
+			gpu_show: shown,
+			gpu_picture: pictured,
+			gpu_show_sized: shownSized,
+			gpu_picture_sized: picturedSized,
+			gpu_fields_format: fieldsFormat,
 		};
 	},
 });

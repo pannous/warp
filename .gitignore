@@ -3,8 +3,6 @@ target
 *.wasm
 # … but the test fixtures, which need clang, wasi-libc or wasm-tools to build (card wasm-fixtures-ignored)
 !/test/fixtures/wasm/*.wasm
-# (shapes.wasm is a warp-compiled module an older compiler wrote, no fixture source of its own)
-/test/fixtures/wasm/shapes.wasm
 # the library index `warp rebuild` writes beside the prebuilt modules
 lib/modules/index.tsv
 lib/modules/sugar_rules.packed
@@ -31,17 +29,18 @@ notes/session
 data/
 /data
 !src/lowering/data/
-# the compilers `warp rebuild` builds in a lib/ (WARP_LIB's folder itself), with their machine code, inputs and kept values
+# the compilers `warp rebuild` builds in a lib/ (--lib's folder itself), with their machine code, inputs and kept values
 /lib/warp.wasm*
 /lib/warp-self.wasm*
 /lib/runtime.wasm.cwasm
 # the machine code a linked run keeps beside runtime.wasm and each prebuilt module (driver.warp machine_code_file)
 /lib/runtime.wasm.driver.*
 /lib/modules/*.cwasm*
+/lib/modules/*.built-of
 # … and beside every other module a run links, test/fixtures/wasm's too
 *.driver.cwasm*
 # warp's wasmtime C API and native libraries, copied in by scripts/wasmtime-c-api.sh (card wasmtime-bundled)
-/lib/libwarp_wasmtime.*
+/lib/libwarp_*
 /lib/libwgpu_native.*
 /lib/compiler.wasm*
 /lib/compiler-self.wasm*
@@ -69,6 +68,9 @@ data/
 samples/**/*.database.sqlite
 # the values samples/storage/store.warp keeps (a run writes them beside it)
 samples/**/*.stored.json
+# the pictures samples/graphics/load_bmp.warp and make_image.warp save beside them
+samples/graphics/evening.bmp
+samples/graphics/sunset.bmp
 /tune.mid
 
 .wrangler

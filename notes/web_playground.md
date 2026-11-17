@@ -200,9 +200,9 @@ worker's hooks.paint, the page draws one canvas per call under the output (playg
 is ink, 0 paper); a painting the size of the last replaces it at once.
 - Natively it writes a PNG to <temp>/warp-paint/paint.png (core/native/driver.warp `painted`) and names it on stderr;
   the native host module shows paintings in a window instead (lib/host/native_host/window.warp, never under
-  WARP_NO_WINDOW or CI).
-- samples/advanced/circle.warp paints a short diagonal (one loop moving x and y together), samples/advanced/filled_circle.warp
-  the filled circle with two loops.
+  --no-window or CI).
+- samples/advanced/circle.warp paints a filled circle with a pixel comprehension, samples/advanced/filled_circle.warp
+  the same with two loops.
 - Prints show as they arrive, like paintings: `print "Watch it turn blue."` before a slow paint is read while it
   renders. Only an animation (after its first sleep) holds a text frame back until the next one begins (playground.js
   printedChunk).

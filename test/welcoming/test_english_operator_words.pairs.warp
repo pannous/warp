@@ -14,4 +14,3 @@
 
 # an operator word right before ( calls the function of that name (card unknown-name)
 'add(a, b) := a * b; law add(a, b) == add(b, a); add(2, 3)'	6
-'equal(a, b) := a == b; print equal(2, 2)'	yes

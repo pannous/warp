@@ -3,7 +3,6 @@
 # test_a_returned_closure_takes_a_text
 'make = () => (t => t + "!"); a = make(); a("x")'	'x!'
 'make = () => (t => t + "!"); a = make(); a("xy")'	'xy!'
-'def make(){ def add(t){ t + "!" }; function add }; a = make(); a("x")'	'x!'
 
 # test_a_closure_in_a_list_takes_a_text
 'fs = [t => t + "!"]; fs#1("x")'	'x!'

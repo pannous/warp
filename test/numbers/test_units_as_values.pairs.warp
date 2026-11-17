@@ -11,7 +11,7 @@
 'use units; 6km / 2000m'	3
 'use units; x = 300ms; x is Time'	true
 'use units; x = 2km; if x > 1500m then "far" else "near"'	'far'
-'use units; try str(3km + 2s) else "no"'	'no'
+'use units; try text(3km + 2s) else "no"'	'no'
 'use units; m = 5; m * 3'	15
 'use units; quantity("2.5 km").in("m")'	2500
 'use units; quantity("6 m²").in("cm²")'	60000

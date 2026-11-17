@@ -1,4 +1,5 @@
 # from test_frame_event.rs: edit the Rust test, then run the script again
+// needs: display
 
 # on_key_hears_the_paint_windows_keys
 is! 'keys = ""

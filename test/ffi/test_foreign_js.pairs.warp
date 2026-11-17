@@ -1,4 +1,5 @@
 # from test_foreign_js.rs: edit the Rust test, then run the script again
+// needs: js
 
 # test_js_globals
 'use js Math; Math.max(1, 5)'	5
@@ -16,3 +17,8 @@
 # test_foreign_printing_keeps_the_answer_channel
 'use js console; console.log(1); 3'	3
 'use python builtins; builtins.print(1); 3'	3
+
+# use js window: the page's Window, WebIDL's WindowProxy (document.defaultView) the same, its members checked (card use-js-window)
+'use js window; window.atob("aGk=")'	'hi'
+'use js window; window.document.defaultView.atob("aGk=")'	'hi'
+'use js window; window.nonsense'	error	Window has no nonsense

@@ -103,11 +103,15 @@ function inputDetail(field) {
 // (site.js) and the native warp's app window (lib/host/native_host/webview_bridge.js) listen so; markup-forms.js adds submit
 const KEY_EVENT = "key";
 const fieldDetail = happened => inputDetail(happened.composedPath()[0]);
+// a key pressed inside an element is that element's event of the key's name: `input{ on enter {…} }` hears Enter,
+// `on escape {…}` Escape (data-warp-enter="1", lib/markup.warp html_handler_attribute)
+const keyEventName = pressed => pressed.key.toLowerCase();
 function listenToElements(root, handle) {
 	const events = { click: () => ({}), input: fieldDetail, ...Object.fromEntries(Object.keys(FIELD_EVENT_TYPES).map(event => [event, fieldDetail])), ...self.FORM_EVENTS };
 	for (const [event, detail] of Object.entries(events)) {
 		root.addEventListener(FIELD_EVENT_TYPES[event] ?? event, happened => handle(elementEvent(event, happened, detail(happened)), happened));
 	}
+	root.addEventListener("keydown", pressed => handle(elementEvent(keyEventName(pressed), pressed, fieldDetail(pressed)), pressed));
 	document.addEventListener("keydown", pressed => isTyping(pressed.target) || handle({ event: KEY_EVENT, detail: { key: pressed.key } }, pressed));
 }
 function isTyping(target) {

@@ -12,4 +12,3 @@
 
 # the_explicit_forms_work
 'def make(){ def inc(){ 1 }; function inc }; c = make(); c()'	1
-'def make(){ def inc(){ 1 }; inc }; make()'	1

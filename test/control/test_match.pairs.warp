@@ -11,7 +11,7 @@
 
 # a match is a value inside a phrase, a call and a list too
 'x = 3; "is " + match x { 3 => "three"; _ => "other" }'	'is three'
-'str(match 2 { 1 => "a"; _ => "b" })'	'b'
+'text(match 2 { 1 => "a"; _ => "b" })'	'b'
 '[match 1 { 1 => "one"; _ => "?" }, 5]'	["one", 5]
 
 'g(age) := match age { 0 to 12 => "child"; 13 to 19 => "teen"; 65.. => "senior"; other => "adult" }; [g(5), g(15), g(70), g(40)]'	["child", "teen", "senior", "adult"]

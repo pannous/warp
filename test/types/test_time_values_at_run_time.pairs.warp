@@ -1,7 +1,7 @@
 # from test_time_values_at_run_time.rs: edit the Rust test, then run the script again
 
 # test_a_time_joins_a_text
-'d = 2024-01-31T10:30; print d; str(d)'	'2024-01-31T10:30'
+'d = 2024-01-31T10:30; print d; text(d)'	'2024-01-31T10:30'
 
 # test_fields_at_run_time
 'd = 2024-02-29; print d; d.month'	2

@@ -51,7 +51,7 @@ def print_grid(grid) {
 		for x in 0..9 {
 			if x % 3 == 0 and x > 0 { line = line + "| " }
 			value = cell(grid, x, y)
-			line = line + (if value == 0 then "." else str(value)) + " "
+			line = line + (if value == 0 then "." else text(value)) + " "
 		}
 		print line
 	}

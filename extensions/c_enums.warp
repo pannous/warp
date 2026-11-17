@@ -6,16 +6,16 @@
 
 case_number_type = "int"
 
-c_enum_crossings(program: Node): Node := {
+c_enum_crossings(program: Node) as Node := {
 	crossing = declared_c_functions.filter(d => #d > 5 and (d#6.any(word => word != "") or d#7 != ""))
 	if #crossing == 0 then program else bottom_up(program, n => enum_crossing(n, crossing))
 }
-enum_crossing(n: Node, crossing: list): Node := {
+enum_crossing(n: Node, crossing: list) as Node := {
 	for d in crossing { if is_call_named(n, d#1) { return crossed_call(n, d) } }
 	n
 }
 # (an argument for each parameter the host doesn't fill, c_filled_types)
-crossed_call(call: Node, d: list): Node := {
+crossed_call(call: Node, d: list) as Node := {
 	enums = (0 ..< #d#3).filter(at => d#3[at] not in c_filled_types).map(at => d#6[at])
 	arguments = items_of(call)[1 ..]
 	passed = (0 ..< #arguments).map(at => if at < #enums and enums[at] != "" then Key(arguments[at], Op.As, symbol(case_number_type)) else arguments[at])

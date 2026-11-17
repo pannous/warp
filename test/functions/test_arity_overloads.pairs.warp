@@ -17,3 +17,5 @@
 
 # an_overloaded_name_called_on_a_receiver_is_the_variant_counting_it
 'f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)'	13
+# one name with a definition of defaults spanning counts beside another of a count among them: its typed overloads tell them apart (card double-verb-time)
+'class D { ms: int }; g(d: D, long = no, iso = no) := "L"; g(t: text, v) := "T"; [g(D(1), yes, no), g("a", 1), g(D(1))]'	["L", "T", "L"]

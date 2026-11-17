@@ -1,0 +1,16 @@
+// needs: network
+# World events (card world-events, user 2026-11-14; notes/world_events.md): public event sources as feeds, read live.
+# The world changes, so each case checks what holds whatever it does: an edit is of the wiki asked for, a price is a
+# probability, a quake is at least as strong as asked
+
+# Wikipedia's recent changes (server-sent events): the edits of the wiki asked for, each with a title
+'use wikipedia; edits = changes("enwiki").take(3); [count(edits), edits.all(e => e.wiki == "enwiki" and e.title is text)]'	[3, yes]
+
+# Polymarket: the busiest markets, and a market's yes price lies between 0 and 1
+'use polymarket; count(markets(3))'	3
+'use polymarket; p = price(markets(1)#1.slug); p >= 0 and p <= 1'	yes
+'use polymarket; first = prices(markets(1)#1.slug).take(1)#1; first >= 0 and first <= 1'	yes
+'use polymarket; r = try market("no-such-market-of-warp"); r failed'	yes
+
+# USGS earthquakes: the day's quakes of at least the magnitude asked for
+'use earthquakes; quakes(4.5).take(2).all(q => q.mag >= 4.5 and q.title is text)'	yes

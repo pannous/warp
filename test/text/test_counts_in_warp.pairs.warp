@@ -7,6 +7,6 @@
 'f(t) := t.count("an"); f("banana")'	2
 
 # count_of_is_a_word_of_every_program
-'count_of("banana", "an")'	2
-'"banana".count_of("an")'	2
-'use text; count_of("banana", "an")'	2
+'count("banana", "an")'	2
+'"banana".count("an")'	2
+'use text; count("banana", "an")'	2

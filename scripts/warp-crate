@@ -9,7 +9,7 @@ A crate manifest (lib/crates/<name>.warp) is a lib/native file whose foreign lin
 
 warp-crate generates a cdylib wrapping each item in an `extern "C"` function of the foreign line's name, builds it with
 cargo, caches it under ~/.cache/warp/crates (by crate, manifest, toolchain and target) and writes
-  lib/lib<library>.so      the C library the native warp dlopens (WARP_LIBRARY_PATH, LD_LIBRARY_PATH or DYLD_LIBRARY_PATH)
+  lib/lib<library>.so      the C library the native warp dlopens (LD_LIBRARY_PATH or DYLD_LIBRARY_PATH)
   native/<library>.warp    the manifest without its `= rust` parts: plain foreign lines and warp words (`use <library>`)
 Nothing in the native warp knows a crate. Commands:
   warp-crate build <manifest.warp>...   generate, build (cached) and install; prints the library and native file
@@ -42,7 +42,7 @@ from pathlib import Path
 GENERATOR_VERSION = "1"
 HERE = Path(__file__).resolve().parent
 RUNTIME = HERE / "crate_adapter" / "runtime.rs"
-CACHE = Path(os.environ.get("WARP_CRATES_CACHE", Path.home() / ".cache" / "warp" / "crates"))
+CACHE = Path.home() / ".cache" / "warp" / "crates"  # the native warp looks there too (extensions/c_imports crates_cache)
 LIB_DIR, NATIVE_DIR, TARGET_DIR = CACHE / "lib", CACHE / "native", CACHE / "target"
 DYLIB = ("lib", ".dylib") if sys.platform == "darwin" else ("lib", ".so")
 MANIFESTS = HERE.parent / "lib" / "crates"

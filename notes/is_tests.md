@@ -21,7 +21,8 @@ is! 'use sin;sin π' 0
   nothing. An empty column keeps its place (`'y'⇥ø⇥note`). A text alone is a program, never a pair: an expected ø is
   written `'y'⇥ø`.
 - The code column is a quoted text, so an interpolation inside it is written `\\(x)`: a bare `\(x)` reaches the
-  program as the plain text `(x)` (test_linear_arrays, test_catch_binding). A test file named `*_local*` is ignored
+  program as the plain text `(x)` (test_linear_arrays, test_catch_binding). Likewise an escape meant for a text inside the
+  code: `"a\\r\\nb"`; a bare `\r\n` reaches the program as a raw Windows line end, read as a newline. A test file named `*_local*` is ignored
   by the user's global gitignore (`*_LOCAL*`, case-insensitive here): name it otherwise.
 - A commented-out pair is a skipped test, its note naming the card of the regression that broke it: `warp test` prints
   `⊘ skipped "fib 10" 55: card fib-memo: regression`. So a commit breaking a few lines can land: forward crunch per line.
@@ -41,7 +42,7 @@ is its own program in a child process (`warp run <code>` in the test file's fold
 load-stretched 120 s wall clock as a TIME), so a hang, trap or crash fails only that test. The children are forks of
 the one `warp test` process, which loads the engine and the machine code of warp.wasm, runtime.wasm and the prebuilt
 modules once (card resident-wasm-instance): no process start, engine or machine code load per case. Every case takes a slot of one machine-wide pool
-(~/.cache/warp/test-slots, as many lock files as cores, WARP_TEST_SLOTS overrides): parallel runs of sessions, the
+(~/.cache/warp/test-slots, as many lock files as cores, `warp test --slots <n>` takes fewer): parallel runs of sessions, the
 gate and sweeps queue for the slots instead of piling up (card shared-test-slots). Its `use` reads from
 the test file's folder. An expected column that is not data (`π`, `(-1)`, `1 + pi`) runs through warp.wasm too.
 Prints ⊘ for skipped pairs, a ✗ line per failure (`file:line "code" expected: got …`), then `m of n failed in f files,
@@ -50,6 +51,11 @@ test too. A case over 2 s (the runner marks it ⏱) lives in test/slow/<topic>/,
 (card slow-test-relocation), which a folder's walk passes by: `warp test test/slow`, `--slow` and `--each` (the full
 suite) run it. The verdict lines print in file order after the run, so two runs (pure and self) diff line by line.
 `warp "2+3*4"` / `warp self "…"`: inline code through the warp compiler, `use` reading from the current folder.
+A test that needs what not every machine has (the Mac has all of it, the cloud box little) says so (card
+test-env-needs): `// needs: gpu js` in a file's first 8 lines for all its cases, `needs: gpu` opening a pair's note column
+or ending an `is!` line (`// needs: gpu`) for one. Each need is one shell probe (extensions/commands/tests.warp
+MACHINE_PROBES: macos js gpu display cargo packages uniscript network raylib); a case whose need the machine lacks is
+skipped, said with the need (`⊘ file: 3 cases skipped, need js`), never dropped. An unknown need is an error.
 
 ## Known gaps (cards)
 - eval of code holding π, time literals, nan, inf, complex: "parse_code: π cannot cross to another task yet": card

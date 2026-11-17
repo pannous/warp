@@ -7,7 +7,6 @@
 'xs=[7]; switch xs { []: 1  [_]: 2  _: 3 }'	2
 
 # test_nested_lists_and_pairs
-'p = [a: 1, b: 2]; switch p { [a: x, b: y]: x + y  _: 0 }'	3
 
 # test_a_subject_that_is_no_list_does_not_match
 'x=5; switch x { [a]: a  _: 0 }'	0

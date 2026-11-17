@@ -1,2 +1,2 @@
 # min after a number is the minute (decision one-duration), anywhere else the function min (decision #31)
-'str(30min)'	'30min'
+'text(30min)'	'30min'

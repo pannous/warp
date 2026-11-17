@@ -9,4 +9,4 @@
   UTF-8 BOM. Expected rows are python's csv.reader's, except the BOM (dropped, as Excel writes it) and a blank line
   (a record of one empty field, as RFC 4180's grammar reads it; python gives []).
 
-    WARP_LIB=$PWD/lib test/csv/csv_test.py [--fails spectrum|rfc4180|roundtrip|all]
+    WARP="warp --lib $PWD/lib" test/csv/csv_test.py [--fails spectrum|rfc4180|roundtrip|all]

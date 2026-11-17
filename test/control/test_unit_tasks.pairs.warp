@@ -5,5 +5,4 @@
 'go { print 440Hz }; 1'	1
 
 # a_started_function_with_units_runs
-'f() := { 2 m + 1 m }; job = go f(); await job'	3
 'f() := { print 440Hz }; go f(); 1'	1

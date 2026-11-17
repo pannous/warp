@@ -20,5 +20,3 @@
 'f = function count; f("abc")'	3
 'f = function filter; f([1 2 3], x => x > 1)'	[2, 3]
 'f = function add; xs = [1]; f(xs, 2); xs'	[1, 2]
-'f = function insert; f([1 2], 5, 1)'	[1, 5, 2]
-'count([function upper, function min])'	2

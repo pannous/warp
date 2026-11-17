@@ -1,6 +1,6 @@
 #!/usr/bin/env warp
 # Rust crates from crates.io: `use cargo <crate>` links the crate built as a WebAssembly module, natively and in the page
-# (scripts/warp-crate wasm lib/crates/strsim.warp wrote lib/crates/strsim.wasm); its free functions take and give
+# (warp build crate --wasm lib/crates/strsim.warp wrote lib/crates/strsim.wasm); its free functions take and give
 # numbers and texts. Crates of objects (regex.Regex, semver.Version) wait for a handle design
 
 use cargo strsim
