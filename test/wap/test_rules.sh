@@ -13,4 +13,7 @@ hi"
 # a result type after `as` (wiki/function.md: `f() as int := 3` reports its result as int)
 check "a result type written with as" "$(ran result 'greet(t: text) as text := t
 print greet("hi")')" "hi"
+# a hole inside a template text is the spelling of what it took, the longer hole name first (notes/rewrites.md)
+check "a hole inside a template text" "$(ran spelled 'rule hail $who $whom => print "hi $who and $whom"
+hail ann bob')" "hi ann and bob"
 exit $((failures > 0))
