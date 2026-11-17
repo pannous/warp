@@ -25,8 +25,8 @@ emitted(program: Seq) as Module := {
 # the instructions of a kernel form
 code(n: Node, m: Module, output: int) as list := match n {
 	Seq(statements) => statements.flat_map(statement => code(statement, m, output))
-	Call(callee, arguments) => if callee == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused_call(n)
-	_ => raise "not a kernel form: " + n
+	Call(callee, arguments) => if callee == symbol("print") and #arguments == 1 and arguments#1 is text then printed(arguments#1, m, output) else refused(n, "the emitter takes no call but print of a text yet")
+	_ => refused(n, "not a kernel form")
 }
 
 # a text and its line end placed in memory, then written to stdout: fd_write(1, [address, length], 1, written)
@@ -36,5 +36,3 @@ printed(line: text, m: Module, output: int) as list := {
 	iovec = added_data(m, little_endian(text_address) + little_endian(#bytes))
 	[I32_CONST] + signed(STDOUT) + [I32_CONST] + signed(iovec) + [I32_CONST] + signed(1) + [I32_CONST] + signed(WRITTEN_ADDRESS) + [CALL] + unsigned(output) + [DROP]
 }
-
-refused_call(n: Node) := raise "wap emits no call but print of a text yet: " + n

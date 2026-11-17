@@ -10,6 +10,8 @@
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
+use "core/stage.wap"
+use "core/errors.wap"
 use "core/parse/reader.wap"
 use "core/rules/lowering.wap"
 use "core/emit/wasm.wap"

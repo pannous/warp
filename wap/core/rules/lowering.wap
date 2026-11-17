@@ -8,13 +8,15 @@
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
 # the program as one Seq of its statements
-lowered_program(program: Node) as Seq := Seq(statements_of(program).map(lowered))
+lowered_program(program: Node) as Seq := staged(program, whole => Seq(statements_of(whole).map(lowered)))
 
-lowered(n: Node) as Node := match n {
+# a form as kernel, built where the form was written (core/stage.wap)
+lowered(n: Node) as Node := staged(n, lowered_form)
+lowered_form(n: Node) as Node := match n {
 	Text(value) => n
 	Number(value) => n
-	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else refused(n)
-	_ => refused(n)
+	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
+	_ => not_lowered(n)
 }
 
 # a sequence of statements gives each, any other node is the one statement
@@ -24,4 +26,4 @@ statements_of(n: Node) as list := match n {
 	_ => [n]
 }
 
-refused(n: Node) := raise "wap does not lower this form yet: " + n
+not_lowered(n: Node) := refused(n, "wap does not lower this form yet")
