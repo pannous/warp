@@ -19,8 +19,9 @@ node_order(a: Node, b: Node) as int := {
 	float_order(float_of_node(a), float_of_node(b))
 }
 # `a < b`, `a <= b`, `a > b`, `a >= b` of two values known only at run time, the order the operator's place in
-# ORDERINGS: two times as times, an instance by its compare, texts and characters by their bytes, ints and exact rationals exactly, anything else as the floats it
-# holds, an instance as its float() (card emitter-inlines: one call where the emitter wrote the whole of it at each)
+# ORDERINGS: two times as times, texts and characters by their bytes, ints and exact rationals exactly, anything else
+# as the floats it holds, an instance as its float() or else its compare (card emitter-inlines: one call where the
+# emitter wrote the whole of it at each)
 node_compared(a: Node, b: Node, ordering: int) as bool := {
 	if kind_code(a) == Kind.Time and kind_code(b) == Kind.Time { return extended_time_holds(a, b, ordering) }
 	if exact_ints(a, b) { return ordered_as(int_order_of(unboxed_int(a), unboxed_int(b)), ordering) }
