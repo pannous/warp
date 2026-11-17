@@ -324,36 +324,17 @@ shapes match.
   word or a bracket) is the prefix operator. `a -1` is `[a, -1]`; `a-1` and `a - 1` are infix.
 - **Q9 `true`/`false`/`null`:** the reader gives `Symbol`; the alias table decides.
 - **Q10 comments:** kept as Meta, on the next item or on the item that ends the line.
+- **Q1 `a{x}`:** a head glued to a bracket group is `Key(head, Glue, group)`: `a{x:1}` is `Key(a, Glue, {x:1})`,
+  `f(x)` is `Key(f, Glue, (x))`, distinct from `a:{x:1}` (`Key(a, Colon, …)`). Only head + bracket; other glued
+  runs stay Q2's list. (User proposed it with a "?": confirm when the reader is built.)
+- **Q2 glue:** runs without brackets (`3ms`, `a-b`) are a List with separator `None`; no new Separator case.
+- **Q5 operator runs:** the reader splits operator characters itself, as wasp: it joins only a repeat or a
+  following `=` (`==`, `<=`); `x=-1` reads `=` then `-1`.
+- **Q6 `#`:** the reader detects comments; the glued `#` operator (count, `#use`) comes later, in step 2.
+- **Q7 other bracket pairs `‖x‖ ⟨x⟩ ⌈x⌉`:** a `Bracket` case Other; details later.
+- **Q8 interpolation:** the reader returns the raw Text; a step-2 rule splits the `${…}` holes.
+- **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Eq, 1)` (user, with a "?").
+- **Q12 duplicate keys:** the reader marks them with a Meta warning on the curly list; step 3 decides.
 
 ## 7. Open questions for the user (wasp and warp differ); recommendation first
 
-- **Q1 `a{x}`.** Wasp: a named node with children (T:2035-2040). warp prints it as `a: {x: 1}`, which loses the
-  difference from `a:{x:1}`. **Rec:** `G(a C(…))`, one general form for `f(x)`, `xs[i]` and `3ms`; no new Node case.
-- **Q2 Glue as `Separator.None` or a new `Glued`.** **Rec:** reuse `None` ("nothing between"). It is ambiguous only
-  for lists of fewer than two items, where it doesn't matter; no Node change.
-- **Q3 Indentation.** Is an indented block exactly `{…}` (T:3319: `a⏎\tb` == `a{b}`), glued to the line before it?
-  What is the indent unit (wasp: tab or 2 spaces, W:253)? **Rec:** yes, a curly list with separator Newline. Tabs, or
-  any consistent run of spaces; mixing them is refused (W:269).
-- **Q4 `-1`.** The backbone says no token rule, but JSON5 wants `[-1]` to be a Number with no rules loaded.
-  - **Rec:** a sign glued to digits at the start of an item (after a blank, an opener, a separator or nothing) is a
-    negative Number. Wasp does the same (W:926-928).
-  - This gives exactly the backbone's results: `a -1` is `[a, -1]`; `a-1` and `a - 1` are infix.
-  - Alternative: `G(- 1)` everywhere. That reader is purer, but data read with no rules loaded gets the wrong shape.
-- **Q5 Operator runs.** Should the reader take the maximal glyph run (`=-` in `x=-1`), or join like wasp, only on a
-  repeat or `=` (W:883-889)? **Rec:** maximal run. Step 2 splits a run the table doesn't know into known operators,
-  longest first, and refuses a split that reads two ways. The table stays in lib.
-- **Q6 `#`.** Wasp and warp agree: a comment between blanks (or before `!` or `#`), the count when glued.
-  **Rec:** keep this, and move `#use` directives to step 2.
-- **Q7 Other bracket pairs `‖x‖ ⟨x⟩ ⌈x⌉`.** `Bracket` has no case for them. **Rec:** read them as
-  `G(Symbol("⌈⌉") R(x))`, a call of the bracket's name (W:1111-1122). The reader never produces `Bracket.Less`. A
-  same-glyph pair doesn't nest: `‖a ‖b‖ c‖` is refused.
-- **Q8 Interpolation.** **Rec:** the reader returns the raw `Text`. A step-2 rule splits the holes and reads each
-  one; wasp did this in the reader (W:634-666).
-- **Q9 `true`/`false`/`null` in pure data.** **Rec:** the reader gives `Symbol`, and the data loader applies the
-  alias table (principle 6). The YAML `country: NO` footgun (wiki/Footguns.md:382-386) shows why.
-- **Q10 Comments.** Keep them as Meta (wiki/data.md), or drop them as wasp does (W:837)? **Rec:** keep them, on the
-  next item or on the item that ends the line.
-- **Q11 `=` in data.** Wasp's data mode read `=` as `:` (P:201). **Rec:** the reader never does this. Whether
-  config-style `a = 1` becomes a key is a step-2 alias for the user to decide.
-- **Q12 Duplicate keys** (`{a:1 a:2}` is an error, wiki/Footguns.md:514). **Rec:** the reader notes them as a Meta
-  warning on a curly list. Step 3 decides, because code blocks may redefine a name.
