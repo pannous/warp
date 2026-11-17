@@ -11,8 +11,6 @@
 
 # a call of a function with its arguments, the forms after it: `print "Hello"` is Call(print, ["Hello"]), (Call print "Hello")
 pattern Call = (Call $called: Symbol $arguments...: Node)
-# type Call < Node = (Call callee: Symbol arguments: list)
-# type Call < Node { tag: Symbol arguments: list }
 
 # forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
 # list value, a block runs a, then b
