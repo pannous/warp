@@ -19,12 +19,13 @@ Read first: notes/first_principles.md. The plan this belongs to: notes/backbone.
 
 ## How a kernel form is declared
 
-Each form is a named pattern of `Node`, code with holes (wap/kernel/forms.wap; user 2026-11-17: kernel forms are
-patterns, no classes):
+Each form is a named pattern of `Node`, code with holes wap/kernel/forms.wap :
 
 ```warp
 pattern If = data((If $cond $then_part $else_part))
 ```
+
+Think of a [[pattern]] as lightweight ad hoc class where each 'instance' arises only through structure.
 
 One declaration gives four uses (extensions/match_patterns.warp, test/types/test_pattern_types.warp):
 
