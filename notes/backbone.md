@@ -216,6 +216,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 3. ~~Folder~~: decided, wap/ (kernel/, core/; preload and library later).
 4. **The kernel list:** start the case-by-case discussion from notes/kernel.md's 13 forms plus primitives?
 
+## Open, not built yet
+
+- **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
+  names the module is not built.
+
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)
