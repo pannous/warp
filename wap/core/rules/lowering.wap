@@ -14,6 +14,7 @@
 #   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
+#   [a, b]                   a list, data as the reader reads it, its items lowered
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
@@ -65,6 +66,7 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
+	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
@@ -93,6 +95,7 @@ primitive_of(operation: Node, n: Node) as Node := match operation {
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
 assigned(place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
+	Get(subject, key) => Set(lowered(place), value)
 	_ => Set(place, value)
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)

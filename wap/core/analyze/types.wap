@@ -86,6 +86,8 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
+	Get(subject, key) => get_typed(n, subject, key, s, f)
+	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
 	Symbol(name) => name_typed(n, s, f)
 	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
@@ -160,7 +162,11 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 }
 
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
-set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
+	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
+	_ => name_set_typed(n, place, value, s, f)
+}
+name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
 	wanted = declared_type(place) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
@@ -168,6 +174,32 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	remembered(name, type, s, f)
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
+}
+
+# a list's item given a value of the list's item type; the Set itself gives none
+item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
+	wanted = value_type(place)
+	given = typed_form(value, s, f, wanted)
+	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the list holds ${wanted}") }
+	refitted(Set(place, given), n)
+}
+
+# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
+# list takes the type its place wants.
+list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
+	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
+	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
+}
+
+# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
+	held = typed_form(subject, s, f, ø)
+	item = item_type(value_type(held)) ?? refused(subject, "this has no items to take by their place")
+	place = typed_form(key, s, f, symbol(INT_TYPE))
+	if not fits_type(place, symbol(INT_TYPE)) { refused(key, "an item's place is an int") }
+	with_type_of(refitted(Get(held, place), n), item)
 }
 
 # a name's value: a parameter, local or global, of the type given to it
