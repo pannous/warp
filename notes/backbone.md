@@ -277,3 +277,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
+- **`#xs` counts only lists of ints** (wap/preload/prelude.wap `#(xs: list<int>)`). Reason: the preload cannot write
+  one `#` for every item type until a type may be written with a variable; one copy per item type would repeat it.
+  Paid off with type variables (`#(xs: list<T>): int`).

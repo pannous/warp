@@ -30,6 +30,7 @@ INT_INSTRUCTIONS = {
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
 	name = text(operation)
 	if INT_INSTRUCTIONS.has(name) { return instruction_code(form, arguments, INT_INSTRUCTIONS[name]) }
+	if operation == symbol("array_len") { return Code(I64, arguments#1.instructions + ARRAY_LEN + I64_EXTEND_I32_U) }
 	if operation == symbol("print_text") { return helper_call(form, arguments, [nullable(text_type(p.m))], helper(p, "print_text", printing_function)) }
 	refused(form, "no primitive of this name")
 }

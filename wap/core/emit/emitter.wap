@@ -85,13 +85,15 @@ class Placed {
 code(form: Node, p: Program, f: Frame) as Code := match form {
 	Block(statements) => block_code(statements, p, f)
 	Define(name, parameters, body) => postponed(form, p, f)
-	Set(place, value) => set_code(form, declared_name(place), code(value, p, f), p, f)
+	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Return(value) => return_code(form, value, p, f)
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), items.flat_map(item => code(item, p, f).instructions) + instruction(ARRAY_NEW_FIXED, [list_of(form, p), #items]))
+	Get(subject, key) => Code(layout(form, p), item_reached(subject, key, p, f) + instruction(ARRAY_GET, [list_of(subject, p)]))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
@@ -202,9 +204,18 @@ function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
 }
 
 # a parameter's type, as the typing stage gives it
-parameter_type(parameter: Node, p: Program) as list := {
-	type = fact_of(declared_name(parameter), TYPE) ?? refused(parameter, "a parameter reached the emitter untyped")
-	layout_of(type, p.m) ?? refused(parameter, "the emitter has no value layout for this type yet")
+parameter_type(parameter: Node, p: Program) as list := layout(declared_name(parameter), p)
+# the layout of a typed form's value
+layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m) ?? refused(n, "the emitter has no value layout for this type yet")
+# the GC array type of a typed list
+list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m) ?? refused(n, "this is no list")
+# a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
+item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
+
+# A value given to a place: a name, which then has that value, or a list's item, which leaves none
+assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
+	Get(subject, key) => Code([], item_reached(subject, key, p, f) + code(value, p, f).instructions + instruction(ARRAY_SET, [list_of(subject, p)]))
+	_ => set_code(form, declared_name(place), code(value, p, f), p, f)
 }
 
 # A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
