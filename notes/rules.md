@@ -28,7 +28,5 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
-- unless (core/sugar/conditions.wap) is not loaded yet: the typing stage reads no If until wap-if lands; then it
-  joins RULE_FILES and its two run tests (branch wap-rules, test/wap/test_rules.sh) come back.
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `if … then … else`, `=>`) move into core/sugar rules next.
