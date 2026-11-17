@@ -5,19 +5,64 @@
 # print is a function), and so does a module that `use`s this one. It learns facts only, the program keeps its shape:
 #   declares        on each top-level definition: name: signature
 #   declarations    on the program: the list of them, in the order written
+#   uses            on the program: the files its `use "path"` statements name, the path taken from its own folder
 #
 #   x := 3                  x: ø               a value
 #   f(a: int, b) := a       f: [a: int, b]     a function and its parameters, as written
 #   g() := 1                g: []              a function of no parameters
+#   n := 1                  n: []              a constant, a function of no parameters as the kernel reads it
 #
 # Only the top level declares: names inside a function belong to its scopes, which the binding analysis resolves
 # (core/analyze/scope.wap). A statement that defines nothing declares nothing.
+
+use path
+
+USE_WORD = "use"
 
 declared_program(program: Node) as Node := {
 	statements = top_level_statements(program).map(declared_statement)
 	declarations = []
 	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
-	with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
+	used = statements.filter(is_use).map(statement => Text(path_join(dirname(file_of(program) ?? "."), used_path(statement))))
+	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
+	with_fact(declared, USES, List(used, Bracket.Square, Separator.Comma))
+}
+
+# `use "path"`: a statement that brings in a module, no code
+is_use(statement: Node) as bool := match statement {
+	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 == symbol(USE_WORD) and items#2 is text
+	_ => no
+}
+used_path(statement: Node) as text := match statement { List(items, bracket, separator) => text(items#2) }
+# the files a declared program uses, in the order written
+uses_of(program: Node) as list := match fact_of(program, USES) {
+	List(items, bracket, separator) => items.map(text)
+	_ => []
+}
+
+# The modules a program uses, each file declared once by declare_file (read, operators, this stage), the modules they
+# use too, every module after the ones it uses. Two modules that use each other are refused, naming the chain.
+class Modules { modules: list; files: list }
+modules_used(program: Node, declare_file: function) as list := {
+	visited = Modules([], [])
+	modules_visited(program, [file_of(program)], declare_file, visited)
+	visited.modules
+}
+modules_visited(code: Node, chain: list, declare_file: function, visited: Modules) := {
+	for file in uses_of(code) {
+		if chain.contains(file) { refused(code, "these modules use each other: " + (chain + [file]).join(" → ")) }
+		if not visited.files.contains(file) {
+			module = declare_file(file)
+			modules_visited(module, chain + [file], declare_file, visited)
+			visited.modules = visited.modules + [module]
+			visited.files = visited.files + [file]
+		}
+	}
+}
+# the module of that file among the declared ones
+module_of(file: text, modules: list) as Node := {
+	for module in modules { if file_of(module) == file { return module } }
+	refused(Text(file), "this module was never declared")
 }
 
 # what a declared program declares, `name: signature` each
@@ -43,7 +88,8 @@ declaration_of(statement: Node) as Node? := match statement {
 signature_of(head: Node) as Node? := match head {
 	Key(name, Op.Colon, type) => signature_of(name)
 	Key(name, Op.None, group) => match name { Symbol(word) => Key(name, Op.Colon, List(arguments_of(group), Bracket.Square, Separator.Comma)); _ => ø }
-	_ => value_named(head)
+	Symbol(name) => Key(head, Op.Colon, List([], Bracket.Square, Separator.Comma))
+	_ => ø
 }
 # the value a name before = declares, also of `let x` and `global x`
 value_named(place: Node) as Node? := match place {

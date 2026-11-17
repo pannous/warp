@@ -89,7 +89,10 @@ The languages, each a set of Node shapes:
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
-  a value's signature ø), and on the program `declarations`, the list of them (core/analyze/declarations.wap).
+  a value's signature ø), and on the program `declarations`, the list of them, and `uses`, the files its `use "path"`
+  statements bring in (core/analyze/declarations.wap). Each used file is declared once, after the files it uses; a
+  program is bound inside the preload's declarations and those of the modules it uses itself, and the modules'
+  statements run before its own.
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
