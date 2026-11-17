@@ -415,7 +415,7 @@ function evaluatedNatively(code, file, hooks) {
 		if (compiled.failure) return { ...report(compiled.failure, FAILURE_STATUS), warnings };
 		hooks.module?.(compiled.module);
 		return afterwards(programRan(compiled.module, source, hooks), ({ status, said, value, holder }) => {
-			const html = status === 0 ? pageHtml(holder) : undefined;
+			const html = status === 0 ? shownHtml(holder) : undefined;
 			const events = html !== undefined && holder.exports.page_event ? pageEventsOf(html) : [];
 			// a page listens after main for its markup's events and its timers (lib/timers.warp, host-timers.js)
 			if (status === 0 && (events.length || holder.timers?.length)) hooks.listen?.(holder, events);
@@ -497,6 +497,11 @@ function utf16Index(code, { line, column }) {
 function pageHtml(holder) {
 	const render = holder?.exports.page_render;
 	return render && holder.value != null ? textOfArray(render(holder.value)) : undefined;
+}
+// the run's value shown as HTML where markup renders it, undefined where it shows as natively (page_rendered: a text)
+function shownHtml(holder) {
+	const rendered = holder?.exports.page_rendered;
+	return !rendered || holder.value == null || rendered(holder.value) ? pageHtml(holder) : undefined;
 }
 
 // the markup's attributes of data-warp-… that name no handler (markup.js)

@@ -19,13 +19,18 @@ node_order(a: Node, b: Node) as int := {
 	float_order(float_of_node(a), float_of_node(b))
 }
 # `a < b`, `a <= b`, `a > b`, `a >= b` of two values known only at run time, the order the operator's place in
-# ORDERINGS: texts and characters by their bytes, ints and exact rationals exactly, anything else as the floats it
-# holds, an instance as its float() (card emitter-inlines: one call where the emitter wrote the whole of it at each)
+# ORDERINGS: two times as times, texts and characters by their bytes, ints and exact rationals exactly, anything else
+# as the floats it holds, an instance as its float() or else its compare (card emitter-inlines: one call where the
+# emitter wrote the whole of it at each)
 node_compared(a: Node, b: Node, ordering: int) as bool := {
+	if kind_code(a) == Kind.Time and kind_code(b) == Kind.Time { return extended_time_holds(a, b, ordering) }
 	if exact_ints(a, b) { return ordered_as(int_order_of(unboxed_int(a), unboxed_int(b)), ordering) }
 	if textual_node(a) and textual_node(b) { return ordered_as(text_order(node_text(a), node_text(b)), ordering) }
 	x = number_held(a)
 	y = number_held(b)
+	# an instance with no number, an Instant, by its class's compare(other), as node_order: a module that never saw
+	# its class has no dispatcher for `<` (card pass-rate-regression)
+	if not numeric_node(x) or not numeric_node(y) { return ordered_as(instance_order(a, b), ordering) }
 	if kind_code(x) == Kind.Int and kind_code(y) == Kind.Int { return ordered_as(if is_plain_int(x) and is_plain_int(y) then int_order_of(unboxed_int(x), unboxed_int(y)) else extended_order(x, y), ordering) }
 	floats_ordered(float_of_node(x), float_of_node(y), ordering)
 }

@@ -62,6 +62,8 @@ handler_attribute_prefix = "data-warp-"
 // how a handler shows, its code left out: `on click {…}`
 handler_body_shown = "{" + "…" + "}"
 
+// whether the page shows the program's value as its HTML: markup does; a text stays a text, quoted as natively
+export page_rendered(value: any) as bool := not (value is text)
 // the HTML of the page's value, its handlers numbered anew from 1 in render order
 export page_render(value: html) := {
 	page_handlers = []

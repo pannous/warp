@@ -22,3 +22,4 @@ extended_type_word(n: Node) as text := {
 	fail()
 }
 extended_warned(message: text) as Node := warned(message)
+extended_time_holds(a: Node, b: Node, ordering: int) as bool := time_holds(a, b, ordering)
