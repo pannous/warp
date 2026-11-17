@@ -3,3 +3,5 @@
 'use sound; tempo = 100; for cycle in 0..3 { bass = go { play([C3 G3 A2 E3], beat 1) }; play([E4 D4 C4 D4 E4 E4 E4], beat(1/2)); await bass }; round(sound.seconds * 10)'	72
 # a rest alone holds the voice that long, as a rest in a melody does
 'use sound; play(rest, 1s); play C4; sound.seconds'	1.5
+# pause taking nothing is a rest (decision pause-overload); pause job still holds a task
+'use sound; play(pause, 1s); play C4; sound.seconds'	1.5

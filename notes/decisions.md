@@ -212,3 +212,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 2026-11-16 class-name-patterns (user, card union-return-types): `Name{…}` with Name a declared class matches/builds that class (match `Circle{r} =>`, `as A or B {…}`); other words stay tags.
 - 2026-11-16 spaced-hash-count (user, card kitchensink-broken-forms): a blank before `#` and none after is always the count (`test #letters == 3`, `xs #1` is no index any more); index is glued `xs#1`; print's exception goes.
 - 2026-11-16 trailing-operator-indent (user, card kitchensink-broken-forms): a line ending in an operator continues only onto a deeper-indented line (`total := fold +` then `total(xs)` → two lines).
+- 2026-11-17 pause-overload (user, card pause-playback-timing): pause is told apart by parameter and result type: `pause` taking nothing returns a rest Note (play(pause, 1s)); `pause job` holds a task.
