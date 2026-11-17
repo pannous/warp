@@ -15,6 +15,13 @@
 # the program's statements, emitted like its own functions, and a built-in's body is a Prim
 # (core/emit/primitives.wap).
 
+use "primitives.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
 # the bindings whose variables live in the function's frame
