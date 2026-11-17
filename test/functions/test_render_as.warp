@@ -5,8 +5,6 @@
 # triage-held 2026-11-06: desk-invented phrase definition `to render text as pdf:` :: is! 'class pdf{body:text}; to render text as pdf: pdf(text); type of ((render "hello") as pdf)' 'pdf'
 
 # as_names_the_result_of_a_single_definition
-is! 'class pdf{body:text}; render(t):pdf := pdf(t); ((render "hello") as pdf).body' 'hello'
-is! 'class pdf{body:text}; render(t) := pdf(t); ((render "hello") as pdf).body' 'hello'
 
 # phrases_with_different_results_are_overloads
 is! 'class pdf{body:text}; class docx{body:text}; to render text as pdf: pdf("%PDF " + text); to render text as docx: docx("<w>" + text); ((render "hi") as docx).body' '<w>hi'

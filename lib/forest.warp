@@ -3,11 +3,12 @@
 // its shift and species a mix of the cell. A view keeps the chunks whose boxes meet the
 // frustum and draws only a budget of them, near ones as whole trees and far ones as a
 // few of that chunk's own trees. Near and mid trees can be instanced meshes (lib/meshlets.warp);
-// far ones stay billboards. It is not Nanite: no cluster hierarchy. A grove also keeps one
+// far ones stay billboards, or baked impostors of the same meshes when that atlas entry is
+// present. It is not Nanite: no cluster hierarchy. A grove also keeps one
 // world bound and cone per draw, so a GPU cull can drop clusters. notes/forest.md.
+use bits
 use file
 use geometry
-use hash
 use math
 use meshlets
 
@@ -44,7 +45,9 @@ class Glance { x: float; y: float; z: float; yaw: float; pitch: float; fov: floa
 class Canopy { total: int; candidate: int; submitted: int; scenery: int; nearest: int; sprites: list; eye: list; right: list; up: list; forward: list }
 // sprites are the billboards still drawn. draws and spans are one cluster each, far to near: place x, z, yaw, scale
 // and first triangle, triangle count, kind, level.
-class Grove { sprites: list; draws: list; spans: list; meshed: int; kept: int; culled: int; triangles: int; bounds: list; cones: list }
+// tables: its levels' lists (grove_tables), made on the grove's first frame and kept for the frames after it, so a
+// frame makes no new GPU lists (a GPU list's memory is never given back)
+class Grove { sprites: list; draws: list; spans: list; meshed: int; kept: int; culled: int; triangles: int; bounds: list; cones: list; tables: list = [] }
 
 forest_mix(ix, iy) := {
 	n = ix * 374761393 + iy * 668265263 + 1442695041
@@ -59,7 +62,7 @@ forest_cells(index) := {
 	}
 }
 
-tree_place(index: int): list := {
+tree_place(index: int) as list := {
 	forest_cells(index)
 	cell_place(index % FOREST_SIDE, index /! FOREST_SIDE)
 }
@@ -85,7 +88,7 @@ forest_glance(glance) := {
 	}
 }
 
-picture_focal(height: number): float := {
+picture_focal(height: number) as float := {
 	if height <= 0 { raise "forest: picture height must be positive, not " + text(height) }
 	(height / 2.0) / tan(FOREST_FOV / 2.0)
 }
@@ -168,7 +171,7 @@ forest_chunk(cx, cz) := {
 	}
 }
 
-chunk_seen(cx: int, cz: int, glance: Glance): bool := {
+chunk_seen(cx: int, cz: int, glance: Glance) as bool := {
 	forest_chunk(cx, cz)
 	forest_glance(glance)
 	if chunk_reach(cx, cz, glance) > glance.far { return no }
@@ -180,7 +183,7 @@ tree_box(spot) := {
 	[spot#1 - half, 0.0, spot#2 - half, spot#1 + half, spot#3, spot#2 + half]
 }
 
-tree_seen(index: int, glance: Glance): bool := {
+tree_seen(index: int, glance: Glance) as bool := {
 	forest_glance(glance)
 	spot = tree_place(index)
 	not forest_outside(tree_box(spot), forest_planes(glance))
@@ -209,7 +212,7 @@ forest_fill(cx, cz, detail, room, picked, ex, ez) := {
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -257,7 +260,7 @@ forest_clip(cx, cz, detail, room, picked, planes, ex, ez, take: int = FAR_TAKE) 
 		dz = spot#2 - ez
 		found.add([spot, (dx * dx + dz * dz) as float])
 	}
-	found = sort_by(found, item => item#2 as float)
+	found = sort(found, by: item => item#2 as float)
 	for item in found {
 		if room <= 0 { break }
 		room = forest_spend(picked, item#1, detail, room)
@@ -288,13 +291,12 @@ forest_chunks(glance, side) := {
 			chunks.add([cx, cz, reach, full])
 		}
 	}
-	sort_by(chunks, chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
+	sort(chunks, by: chunk => (chunk#3 * 100000.0 + chunk#2 * 40.0 + chunk#1) as float)
 }
 
 forest_canopy(side, glance, candidate, picked) := {
 	axes = forest_basis(glance)
-	sprites = [[0.0, 0.0, 0.0, 0.0]]
-	for tree in reverse(picked) { sprites.add(tree) }
+	sprites = gpu_vectors([[0.0, 0.0, 0.0, 0.0]] + reverse(picked))
 	nearest = if count(picked) == 0 then -1 else (int(picked#1#4) /! SPRITE_DETAIL) % SPRITE_DETAIL
 	Canopy(side * side, candidate, count(picked), 1, nearest, sprites, [glance.x, glance.y, glance.z], axes#2, axes#3, axes#1)
 }
@@ -311,7 +313,7 @@ horizon_quota(reach, screen) := {
 }
 
 // side: trees along each edge of the square; the woods hold side * side of them.
-forest_view(glance: Glance, side: int = FOREST_SIDE): Canopy := {
+forest_view(glance: Glance, side: int = FOREST_SIDE) as Canopy := {
 	chunks = forest_chunks(glance, side)
 	planes = forest_planes(glance)
 	candidate = 0
@@ -336,7 +338,7 @@ forest_view(glance: Glance, side: int = FOREST_SIDE): Canopy := {
 
 // The same woods, with the budget split so near chunks stay whole and every farther chunk still sends trees.
 // `screen` is the picture height in pixels: it decides how many trees a far chunk is worth.
-forest_horizon(glance: Glance, side: int, budget: int, screen: number): Canopy := {
+forest_horizon(glance: Glance, side: int, budget: int, screen: number) as Canopy := {
 	if budget < 0 { raise "forest: a horizon budget must not be negative, not " + text(budget) }
 	if screen <= 0 { raise "forest: picture height must be positive, not " + text(screen) }
 	chunks = forest_chunks(glance, side)
@@ -452,16 +454,21 @@ grove_emit(visible, camera, scale, place, level, kind, level_index, room, draws,
 
 // Far draws first, so a blend without depth still paints the nearer tree last.
 grove_far_first(draws, spans, bounds, cones, distances) := {
-	if count(draws) < 2 { return [draws, spans, bounds, cones] }
-	order = reverse(sort_by([i for i in 1 to count(draws)], i => distances#i))
-	[[draws#i for i in order], [spans#i for i in order], [bounds#i for i in order], [cones#i for i in order]]
+	order = reverse(sort([i for i in 1 to count(draws)], by: i => distances#i))
+	[draws, spans, bounds, cones].map(rows => gpu_vectors([rows#i for i in order]))
+}
+// the rows as a GPU list of vec4, which paint uploads in one copy (wiki/graphics.md: the graphics libraries are
+// GPU-first)
+gpu_vectors(rows: list) := {
+	cells: [vec4] = rows
+	cells
 }
 
 // kits: the four TreeMesh values in species order, already pack_tree_meshes'd. Near and mid trees become clusters
 // until the budget; far trees, and near ones that do not fit, stay in sprites. Draws are far to near.
 // front > 0 meshes every sprite inside that many metres, largest crown first. The level is the one
 // whose error is still inside a pixel, and a level that does not fit steps one coarser.
-forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, budget: int, cap: int, mesh_far: float = 0.0, front: float = 0.0): Grove := {
+forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, budget: int, cap: int, mesh_far: float = 0.0, front: float = 0.0) as Grove := {
 	if not (canopy is Canopy) { raise "forest: a grove reads a Canopy, not " + text(canopy) }
 	forest_glance(glance)
 	if screen_height <= 0 { raise "forest: picture height must be positive, not " + text(screen_height) }
@@ -502,7 +509,7 @@ forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, 
 			meshable.add(i)
 		}
 	}
-	if front > 0.0 { meshable = [item#1 for item in sort_by(sized, item => item#2)] }
+	if front > 0.0 { meshable = [item#1 for item in sort(sized, by: item => item#2)] }
 	draws = []
 	spans = []
 	bounds = []
@@ -559,10 +566,7 @@ forest_grove(canopy: Canopy, glance: Glance, kits: list, screen_height: number, 
 		room = added#3
 		meshed = meshed + 1
 	}
-	sprites = []
-	for i in 1 to count(canopy.sprites) {
-		if not grove_dropped(drop, i) { sprites.add(canopy.sprites#i) }
-	}
+	sprites = gpu_vectors([canopy.sprites#i for i in 1 to count(canopy.sprites) if not grove_dropped(drop, i)])
 	ordered = grove_far_first(draws, spans, bounds, cones, distances)
 	Grove(sprites, ordered#1, ordered#2, meshed, kept, culled, tris, ordered#3, ordered#4)
 }
@@ -577,8 +581,18 @@ grove_known(seen, place) := {
 // Every level of each meshed tree, so a GPU pass can pick the level. The grove's own counts stay the CPU choice.
 // The list is draws, spans, bounds, cones, levels, trees. A level is first cluster, count, error.
 // A tree is first level, level count, and the local distance chosen_level uses.
-grove_lod(grove: Grove, kits: list, eye: list): list := {
+grove_lod(grove: Grove, kits: list, eye: list) as list := {
 	if not (grove is Grove) { raise "forest: a grove's levels need a Grove, not " + text(grove) }
+	if count(grove.tables) == 0 { grove.tables = grove_tables(grove, kits) }
+	tables = grove.tables
+	trees = [grove_tree(tables#6#i, tables#7#i, eye) for i in 1 to count(tables#6)]
+	[tables#1, tables#2, tables#3, tables#4, tables#5, trees]
+}
+// a tree's row: its first level, level count, and its distance from the eye
+grove_tree(tree: list, place: list, eye: list) as list := [tree#1, tree#2, grove_distance(eye, place#1, place#4 * 0.5, place#2) / place#4, 0.0]
+// the eye-free part of grove_lod: draws, spans, bounds and cones as GPU lists, then levels, trees (first level, level
+// count) and their places
+grove_tables(grove: Grove, kits: list) as list := {
 	grove_kits(kits)
 	draws = []
 	spans = []
@@ -607,42 +621,27 @@ grove_lod(grove: Grove, kits: list, eye: list): list := {
 			levels.add([0.0 + first_cluster, 0.0 + count(level.mesh.clusters), level.mesh.error, 0.0])
 			n = n + 1
 		}
-		apart = grove_distance(eye, place#1, place#4 * 0.5, place#2) / place#4
-		trees.add([0.0 + first_level, 0.0 + count(kit.levels), apart, 0.0])
+		trees.add([0.0 + first_level, 0.0 + count(kit.levels)])
 	}
-	[draws, spans, bounds, cones, levels, trees]
+	[draws, spans, bounds, cones].map(gpu_vectors) + [levels, trees, seen]
 }
 
 // The baked EZ Tree atlas (samples/graphics/ez_trees/atlas.bin). Grove is entry 1,
 // the ash close-up is entry 2. The stamp names the version, the source hash and
-// each entry's size. The hash is sha256 of the per-file sha256 hex lines in
-// atlas.sources, joined by newlines. A missing file, a different version or a
-// hash that is not the sources now is none: the caller builds the atlas itself.
+// each entry's size. A missing file or a different version is none: the caller
+// builds the atlas itself. The stamp is trusted to match its sources: atlas.py
+// bakes them together and sample-assets.sh ships them in one archive, so a run
+// never reads and hashes the 11 MB of textures (it took the page past its 30 s).
 ATLAS_VERSION = 1
 GROVE_ATLAS = 1
 ASH_ATLAS = 2
 // Four full-size leaves plus the bark row. The grove atlas stays 512-wide for the tests.
 NEAR_ATLAS = 3
-global atlas_hash_folder = ""
-global atlas_hash_kept = ""
-
-atlas_source_hash(folder: text): text := {
-	if folder == atlas_hash_folder and atlas_hash_kept != "" { return atlas_hash_kept }
-	list = folder + "/atlas.sources"
-	names = [name.trim() for name in read(list).split("\n") if name.trim() != ""]
-	digest = sha256(join([sha256(read(folder + "/" + name)) for name in names], "\n"))
-	atlas_hash_folder = folder
-	atlas_hash_kept = digest
-	digest
-}
-
-baked_atlas(folder: text, id: int): any := {
+baked_atlas(folder: text, id: int) as any := {
 	if not exists(folder + "/atlas.txt") or not exists(folder + "/atlas.bin") { return ø }
-	if not exists(folder + "/atlas.sources") { return ø }
 	parts = [part.trim() for part in read(folder + "/atlas.txt").split(" ") if part.trim() != ""]
 	if count(parts) < 6 or parts[0] != "EZAT" { return ø }
 	if (parts[1] as int) != ATLAS_VERSION { return ø }
-	if parts[2] != atlas_source_hash(folder) { return ø }
 	i = 3
 	while i + 2 < count(parts) {
 		if (parts[i] as int) == id {
@@ -652,4 +651,94 @@ baked_atlas(folder: text, id: int): any := {
 		i = i + 3
 	}
 	ø
+}
+
+// Baked impostors of the four EZ species (pine, oak, birch, autumn), one row each.
+// A row is the views around the trunk, and each view is a colour tile then its normal tile.
+// The quad uses the mesh scale (height times FOREST_TREE_SCALE) and this half-width, with the
+// trunk at the tree's x z and the base at y = 0, the same pivot the mesh draw uses.
+// notes/forest.md.
+IMPOSTOR_ATLAS = 4
+IMPOSTOR_VIEWS = 8
+IMPOSTOR_TILE_W = 216
+IMPOSTOR_TILE_H = 256
+ATLAS_ENTRY_BYTES = 28
+ATLAS_HEAD_BYTES = 44
+
+impostor_species(species: int) := {
+	if not (species is int) or species < 0 or species > 3 {
+		raise "forest: an impostor species is 0 to 3, not " + text(species)
+	}
+}
+
+impostor_checked(species: int, view: int) := {
+	impostor_species(species)
+	if not (view is int) or view < 0 or view >= IMPOSTOR_VIEWS {
+		raise "forest: an impostor view is 0 to " + text(IMPOSTOR_VIEWS - 1) + ", not " + text(view)
+	}
+}
+
+// Half the width of the finest level, in tree heights. The trunk stays at the origin.
+impostor_radius(mesh: TreeMesh) as float := {
+	if not (mesh is TreeMesh) or count(mesh.levels) == 0 {
+		raise "forest: an impostor radius needs a tree mesh, not " + text(mesh)
+	}
+	radius = 0.0
+	for vertex in mesh.levels#1.vertices {
+		reach = sqrt(vertex#1 * vertex#1 + vertex#3 * vertex#3)
+		if reach > radius { radius = reach }
+	}
+	if radius <= 0.0 { raise "forest: a tree mesh has no width" }
+	radius
+}
+
+// [x, y, width, height] of one tile. normal 0 is the colour, 1 the normal beside it.
+impostor_rect(species: int, view: int, normal: int = 0) as list := {
+	impostor_checked(species, view)
+	if normal != 0 and normal != 1 {
+		raise "forest: an impostor tile is colour or normal, not " + text(normal)
+	}
+	x = (view * 2 + normal) * IMPOSTOR_TILE_W
+	y = species * IMPOSTOR_TILE_H
+	[x, y, IMPOSTOR_TILE_W, IMPOSTOR_TILE_H]
+}
+
+// The view facing the camera, in the tree's own yaw, and the blend toward the next one.
+// [view, next, blend]. Angle 0 looks at the tree from its local +z, the same way the bake does.
+impostor_view(yaw: float, camera_x: float, camera_z: float, tree_x: float, tree_z: float) as list := {
+	dx = camera_x - tree_x
+	dz = camera_z - tree_z
+	if dx == 0.0 and dz == 0.0 { return [0, 1, 0.0] }
+	turn = cos(yaw)
+	spin = sin(yaw)
+	local_x = turn * dx + spin * dz
+	local_z = -spin * dx + turn * dz
+	angle = atan2(local_x, local_z)
+	if angle < 0.0 { angle = angle + FULL_TURN }
+	slot = angle / FULL_TURN * IMPOSTOR_VIEWS
+	if slot >= IMPOSTOR_VIEWS { return [0, 1, 0.0] }
+	view = int(slot)
+	if view < 0 { view = 0 }
+	[view, (view + 1) % IMPOSTOR_VIEWS, slot - view]
+}
+
+// yes when atlas.bin has this RGBA8 entry. The stamp can name an entry the file lacks,
+// which is the old archive beside a newer stamp: the caller keeps the procedural crown.
+atlas_has(folder: text, id: int) as bool := {
+	path = folder + "/atlas.bin"
+	if not exists(path) { return no }
+	bytes = read_bytes(path)
+	if count(bytes) < ATLAS_HEAD_BYTES { return no }
+	if bytes[0] != 69 or bytes[1] != 90 or bytes[2] != 65 or bytes[3] != 84 { return no }
+	if u32_at(bytes, 4) != ATLAS_VERSION { return no }
+	entries = u32_at(bytes, 8)
+	if entries < 1 or entries > 8 { return no }
+	if count(bytes) < ATLAS_HEAD_BYTES + entries * ATLAS_ENTRY_BYTES { return no }
+	i = 0
+	while i < entries {
+		base = ATLAS_HEAD_BYTES + i * ATLAS_ENTRY_BYTES
+		if u32_at(bytes, base) == id and u32_at(bytes, base + 12) == 1 { return yes }
+		i = i + 1
+	}
+	no
 }

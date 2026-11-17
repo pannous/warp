@@ -2,7 +2,7 @@
 // beyond the driver's own words, natively in warp over C libraries by plain FFI. No program uses it: the native
 // driver links it at the first question it does not answer itself (core/native/driver.warp host_export) and calls its
 // host_* words: the window's system values and its painting's layer (native_host/window.warp), the host words as
-// host_<word> (text_coverage there, sound's in native_host/sound.warp), and host_run_ended at the run's end
+// host_<word> (text_coverage there, sound's in native_host/sound.warp), host_run_ended at the run's end and host_waited while the console waits for a line
 use SDL3
 use bits
 use file
@@ -23,3 +23,5 @@ host_run_ended() := {
 	window_run_ended()
 	sounds_heard_out()
 }
+// the console waiting for its next line: the window a line painted takes its events in
+host_waited() := window_waited()

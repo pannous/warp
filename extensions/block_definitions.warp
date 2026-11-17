@@ -8,13 +8,13 @@ block_definition(n: Node, program: Node) := {
 	diagnose(call_of("block_definition", [defined_function_name(defined)]), defined)
 }
 # the statements of the block an if, else, while or for runs, [] of other code
-controlled_statements(n: Node): list := {
+controlled_statements(n: Node) as list := {
 	block = if is_key(n, Op.Then) or is_key(n, Op.Else) or is_key(n, Op.Do) then value_of(n) else if is_loop(n) then n#(#n) else ø
 	if block == ø { return [] }
 	if is_curly_group(block) then items_of(block) else [block]
 }
 # `f` of `f(y) := …` and of `f := y => …`, else ø
-defined_function_name(statement: Node): text? := {
+defined_function_name(statement: Node) as text? := {
 	plain = without_mark(statement)
 	parts = definition_of(plain)
 	if parts != ø { return parts.name }

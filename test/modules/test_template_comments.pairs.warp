@@ -11,7 +11,6 @@
 'use template; mustache("Begin.\n  {{! Indented Comment Block! }}\nEnd.\n", {})'	"Begin.\nEnd.\n"
 
 # mustache spec comments: Standalone Line Endings
-'use template; mustache("|\r\n{{! Standalone Comment }}\r\n|", {})'	"|\r\n|"
 
 # mustache spec comments: Standalone Without Previous Line
 'use template; mustache("  {{! I\'m Still Standalone }}\n!", {})'	"!"

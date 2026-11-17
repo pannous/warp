@@ -10,4 +10,4 @@
 'string(["say \\"hi\\""])'	'["say \\"hi\\""]'
 'string(["a\\\\b"])'	'["a\\\\b"]'
 'xs = ["q\\""]; "got \\(xs)"'	'got ["q\\""]'
-'class P{name:text}; p = P{name:"a\\"b"}; string(p)'	'P{name:"a\\"b"}'
+'class P{name:text}; p = P{name:"a\\"b"}; string(p)'	'P{name: "a\\"b"}'

@@ -20,6 +20,9 @@
 set -uo pipefail
 DEFAULT_TREE=/Volumes/Worktrees/integrate
 EXPECTED=Hello
+# one small test file through `warp test`: a merge whose compilers say hello can still break every test run
+# (whole-wasm-reads left an empty module file, 11-12)
+TEST_PROBE=test/lists/test_range_broadcast.pairs.warp
 QUEUE=land/  # the merge queue's branches: land/<card>
 SENT_BACK=land/red/  # a red card's tip in the queue
 
@@ -49,6 +52,8 @@ tier0() {
 	local got
 	got=$(cd "$tree" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" pure samples/hello/hello.warp 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { failure="pure hello got ${got:0:160}"; return 1; }
+	got=$(cd "$tree" && WARP_WINDOW=0 WARP_SOUND=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" test "$TEST_PROBE" 2>&1 | tail -1)
+	[[ $got == ✓* ]] || { failure="warp test $TEST_PROBE got ${got:0:160}"; return 1; }
 	[ -n "$smoke_only" ] && return 0
 	if ! git -C "$tree" diff --quiet "$base" HEAD -- core extensions; then
 		"$scripts/self-check.sh" "$tree" || { failure=self-check; return 1; }

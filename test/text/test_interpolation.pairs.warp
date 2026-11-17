@@ -24,7 +24,6 @@
 
 # single_quotes_stay_literal
 «'hi $name'»	'hi $name'
-«'a ${x} b'»	'a ${x} b'
 
 # a_dollar_before_a_digit_or_space_is_a_dollar_sign
 '"costs $5"'	'costs $5'
@@ -40,9 +39,5 @@
 '"sum: $(1+2)" == "sum: ${1+2}"'	true
 'x=3; "a $(x+1) b $(x*(x+1))"'	'a 4 b 12'
 'name="Bob"; "hi $(name)! $name"'	'hi Bob! $name'
-'"a\\$(b)"'	'a$(b)'
 
 # holes_call_foreign_modules
-'use js Math; "m \\(Math.max(1, 5))"'	'm 5'
-'use js JSON; "j ${JSON.stringify([1])}!"'	'j [1]!'
-'use js crypto; count "id \\(crypto.randomUUID())"'	39

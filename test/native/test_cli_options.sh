@@ -5,8 +5,6 @@
 # WARP=<tree>/data/gate/warp
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
 source "$(dirname "$0")/checks.sh"
-# the lib/ that warp runs with (its version names it), given to the native warp built here
-library=$("$warp" version 2>/dev/null | sed -n 's/.*(compiler.warp of \(.*\))$/\1/p')
 stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 
@@ -15,12 +13,13 @@ cp "$checkout"/core/native/*.warp "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
 [ -x "$stage/warp" ] || { echo "✗ warp build native warp.warp: $(tail -3 "$stage/build.log")"; exit 1; }
 native() { (cd "$stage" && ./warp --lib "$library" "$@" 2>&1); }
-# a word of a standard module named without its use is a hint (`fix: use sound`)
-printf 'print A4\n' >"$stage/hinted.warp"
+# another language's spelling of a word is a hint (`len`: warp says count); every standard module is used without a
+# `use`, so a module's word no longer hints
+printf 'print len("abc")\n' >"$stage/hinted.warp"
 check "hints by default" "$(native run hinted.warp | grep -c '^hint')" 1
-check "--no-hints before run" "$(native --no-hints run hinted.warp)" 440
-check "--no-hints after run" "$(native run --no-hints hinted.warp)" 440
-check "--no-hints before the file" "$(native --no-hints hinted.warp)" 440
+check "--no-hints before run" "$(native --no-hints run hinted.warp)" 3
+check "--no-hints after run" "$(native run --no-hints hinted.warp)" 3
+check "--no-hints before the file" "$(native --no-hints hinted.warp)" 3
 # an option before a command word run by a lib/ program (format, app, dev) stays an option: format counts one file
 printf 'x=1\n' >"$stage/unformatted.warp"
 check "--no-hints before format" "$(native --no-hints format unformatted.warp </dev/null | grep -o '^warp format: [0-9]* files')" "warp format: 1 files"

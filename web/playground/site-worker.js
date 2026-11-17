@@ -27,7 +27,7 @@ self.servedPage = response => post({ served: response });
 const hooks = {
 	print: (text, stream) => post({ print: { text, stream } }),
 	dispatch: event => post({ dispatch: event }), // site.js: markup.js dispatchToPage
-	paint: (frame, width, height, canvas, shaded) => post({ paint: { frame, width, height, shaded } }, frame && [frame.words.buffer]), // shown by the page (site.js)
+	paint: (frame, width, height, canvas, shaded, scale) => post({ paint: { frame, width, height, shaded, scale } }, frame && [frame.words.buffer]), // shown by the page (site.js)
 	listen: holder => startTimers(holder, id => timerShown(holder, id)), // host-timers.js
 };
 

@@ -1,0 +1,6 @@
+# for over an enum walks its cases in order (user card scales-iterable, 2026-11-16)
+'enum Color {red green blue}; out = []; for c in Color { out += [text(c)] }; out'	["red", "green", "blue"]
+'use sound; n = 0; for s in Scale { n += 1 }; n'	13
+# an enum's cases parted by blanks stay its cases where a rule fires in the program (kitchen sink, card kitchensink-broken-forms)
+'x = 2 kg; enum Size {small medium large}; Size.large'	large
+'job = go { 1 }; enum Color {red green}; Color.green'	green

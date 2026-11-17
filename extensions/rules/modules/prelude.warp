@@ -5,13 +5,12 @@
 // Rules of the prelude, so they meet paint before arity_overloads names its overloads, in every program
 rewrite paint($s) => paint($s, $size...) where $s is symbol and $size = paint_size($program)
 rewrite paint($s, $v) => paint($s, $size..., $v) where $s is symbol and $size = paint_size($program)
-// a paint of a shader the program assigns reads its holes from the variables of their names (extensions/rules/shader_holes.warp shader_values)
-rewrite paint($s, $w, $h, $v) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values($s, $v, $program)
-rewrite paint($s, $w, $h) => paint($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
+// a paint or render of a shader the program assigns, with values or without, reads its holes from the variables of
+// their names (extensions/rules/shader_holes.warp shader_values): one rule for every word that takes a shader
+rewrite $f($s, $w, $h, $v...) => $f($s, $w, $h, $filled) where $f in [paint, gpu_render] and $s is symbol and $filled = shader_values($s, $v, $program)
 // a shader block's paint without holes, with no values, so the rules below place it (card wgsl-error)
 rewrite paint($s, $w, $h) => paint($s, $w, $h, ø) where $s is symbol and $place = shader_place_of($s, $program, $source)
-// gpu_render(s, width, height): a shader's render without values of its own, its holes read as paint's
-rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, $filled) where $s is symbol and $filled = shader_values_of($s, $program)
+// gpu_render(s, width, height) of a shader without holes: no values of its own
 rewrite gpu_render($s, $w, $h) => gpu_render($s, $w, $h, [])
 // a list the program makes for the GPU (gpu_compute takes it) is made as a GPU list [f32] (decision gpu-bound-floats,
 // extensions/rules/rule_words.warp gpu_lists_packed): f32 cells in linear memory the GPU reads and writes where they are; `xs: [f32] = …` asks

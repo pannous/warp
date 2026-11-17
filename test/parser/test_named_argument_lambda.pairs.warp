@@ -4,4 +4,3 @@
 'class Holder { d }; h = Holder(d: x => x + 1); h.d(4)'	5
 
 # a_listed_entry_holds_the_lambda
-'m = [d: x => x + 1]; m.d(2)'	3

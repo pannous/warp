@@ -1,0 +1,4 @@
+# the program declares global angle; jaw_point's assignment must be named, not this line
+use "scope_span_jaw.warp"
+global angle = 0.9
+jaw_point()

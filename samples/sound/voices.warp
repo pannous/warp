@@ -4,7 +4,9 @@
 use sound
 
 tempo = 110
-bass = go { play([C3 G2 A2 F2], beat 1) }   # a voice of its own
-play([E4 G4 C5 B4 A4 C5 F4 A4], beat(1/2))    # starts together with the bass
-await bass
-wait(sound)
+3 times{
+	bass = go { play([C3 G2 A2 F2], beat 1) }   # a voice of its own
+	play([E4 G4 C5 B4 A4 C5 F4 A4], beat(1/2))    # starts together with the bass
+	await bass
+	wait(sound)
+}

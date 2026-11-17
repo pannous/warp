@@ -38,7 +38,7 @@ test 0 == tan(0.0)
 x = 0.5
 sin_x = sin(x)
 cos_x = cos(x)
-test 1 == sin_x * sin_x + cos_x * cos_x ≈ 1.0
+test sin_x * sin_x + cos_x * cos_x ≈ 1.0
 
 # ==============================================================================
 # Additional Math Functions
@@ -50,11 +50,11 @@ import fmin from "m"
 import fmod from "m"
 
 # Absolute value for floats
-test 3.14 ≈ fabs(-3.14) ≈ 3.14
+test fabs(-3.14) ≈ 3.14
 
 # Maximum/minimum of two values
-test 3.5 ≈ fmax(3.5, 2.1) ≈ 3.5
-test 2.1 ≈ fmin(3.5, 2.1) ≈ 2.1
+test fmax(3.5, 2.1) ≈ 3.5
+test fmin(3.5, 2.1) ≈ 2.1
 
 # Floating-point modulo
 test fmod(5.5, 2.0) ≈ 1.5

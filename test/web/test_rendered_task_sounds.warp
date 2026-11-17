@@ -6,3 +6,11 @@ job = go { play(C4, 0.2s) }
 play(E4, 0.1s)
 await job
 round(save(sound, "voices.wav") * 10)' 2
+
+# a task's melody sounds beside main's: the mix is as long as the longer voice (2.4 s), not both one after the other
+is! 'use sound
+tempo = 100
+bass = go { play([C3 G2 A2 F2], beat 1) }
+play([E4 D4 C4 D4 E4 E4 E4], beat(1/2))
+await bass
+round(save(sound, "together.wav") * 10)' 24

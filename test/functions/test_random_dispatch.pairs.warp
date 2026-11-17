@@ -14,7 +14,7 @@
 
 # random_of_a_whole_number_variable_stays_whole
 'n = 6; x = random n; x >= 0 and x < 6'	true
-'n = 6; x = random n; type x'	'int'
+'n = 6; x = random n; type x'	'nat'
 'use prelude; random_of(1)'	0
 
 # random_compared_takes_the_first_comparand

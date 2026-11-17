@@ -11,4 +11,5 @@
 'red.hex_text'	"#ff0000"
 'with_alpha(red, 0.5).hex_text'	"#ff000080"
 # a type's `format … as text` leaves lib/text's format(template, values) callable (card program-format)
-'type Flag < int; format Flag f as text := "F"; format("{} has {} items", ["cart", 3])'	"cart has 3 items"
+# an int type given to a parameter of its type, with no class in the program (sample paint_text_gpu's channels(blue))
+'type Meters < int; f(m: Meters) := m + 1; f(3 as Meters)'	4

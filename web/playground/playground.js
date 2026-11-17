@@ -188,8 +188,18 @@ function applySizes() {
 	editor.setOption("viewportMargin", fitted ? Infinity : DEFAULT_VIEWPORT_MARGIN);
 	editor.getWrapperElement().style.height = fitted ? "auto" : sizes.editor ? `${clamp(sizes.editor, EDITOR_HEIGHT_RANGE, innerHeight)}px` : "";
 	$("fit-code").setAttribute("aria-pressed", fitted);
+	for (const pane of FOLDABLE) {
+		const folded = Boolean(sizes[foldedSize(pane)]);
+		$(`collapse-${pane}`).parentElement.classList.toggle("collapsed", folded);
+		$(`collapse-${pane}`).setAttribute("aria-pressed", folded);
+	}
 	editor.refresh();
 }
+
+// ▾ beside ⛶ over the code and over the result (card code-result-parity): the pane folded to its bar, or back
+const FOLDABLE = ["code", "output"];
+const foldedSize = pane => `folded_${pane}`;
+const toggleFolded = pane => setSize(foldedSize(pane), sizes[foldedSize(pane)] ? undefined : 1);
 
 // ⛶ over the code (card fullscreen-toggle-icon): the editor as tall as its code, no scrolling inside it; again: the
 // height the resizer left
@@ -500,11 +510,12 @@ let sounding = []; // the playing and queued sounds, silenced when the next run 
 // then cannot start and the browser warns
 // missing userActivation (some headless builds): treat as before a click, so heard stays 0 and sound does not pace (card samples-page-sound-pipes)
 const beforeUserActivation = () => !navigator.userActivation || !navigator.userActivation.hasBeenActive;
-// a run's sounds so far, in seconds, which the page names below its result (showSounded): a program that only plays
+// a run's sound so far, in seconds, which the page names below its result (showSounded): where its last sound ends
+// on its voices, so sounds of tasks playing together count once, as save sound mixes them. A program that only plays
 // shows nothing else, and one run before the first click or key press stays silent
-function soundMade(run, { samples, rate, channels }) {
+function soundMade(run, { samples, rate, channels, place = run.sounded ?? 0 }) {
 	stopAfterTimeout(run);
-	run.sounded = (run.sounded ?? 0) + samples.length / Math.max(channels, 1) / rate;
+	run.sounded = Math.max(run.sounded ?? 0, place + samples.length / Math.max(channels, 1) / rate);
 }
 const SILENT_BEFORE_ACTIVATION = "silent: a browser plays sound only after a click or key press on the page, then run it again";
 function showSounded(seconds) {
@@ -698,11 +709,14 @@ function handOver(run) {
 
 // each painting shows at once, while the program still runs: one the size of the last replaces it, as a frame that
 // animates the run as natively each painting is the window's frame (card g_oldM: `if frame % 6 == 0 { render() }`
-// animates without a sleep; card example-native-mismatch: `on frame` never sleeps, and #ocean was stopped after 10 s)
+// animates without a sleep; card example-native-mismatch: `on frame` never sleeps, and #ocean was stopped after 10 s).
+// A program paints its shaders into one view: a GPU canvas of another size replaces the last too (an `on frame` painting
+// at the pane's size, which moved once the first canvas showed, left a second bee beside the first)
+const nextFrame = (last, painting) => sameShownSize(last, painting) || (last.canvas && painting.canvas);
 function painted(run, painting) {
 	const last = run.paintings.at(-1);
 	if (startsFrame(run, "paintings")) run.paintings = [];
-	else if (last && sameSize(last, painting)) {
+	else if (last && nextFrame(last, painting)) {
 		// (no standby Worker for it: one warming up its compiler while a finger paints took the stroke's frames on a slow
 		// machine, card register-fingers)
 		run.paintings.pop();
@@ -791,6 +805,21 @@ function stopPressed() {
 	listenTo([]);
 	setStatus(STOPPED);
 }
+// ⌘ . (Ctrl . elsewhere) stops the run, as the stop button does; so does Ctrl C, as in a terminal,
+// unless some text is selected, which it copies as usual (card command-dot-shortcut)
+const selectedText = () => {
+	const field = document.activeElement;
+	if (field && "selectionStart" in field && field.selectionStart !== field.selectionEnd) return true;
+	return getSelection().toString() !== "";
+};
+const stopsRun = key => key.key === "." && (key.metaKey || key.ctrlKey) ||
+	key.key === "c" && key.ctrlKey && !key.metaKey && !selectedText();
+addEventListener("keydown", key => {
+	if (stopsRun(key)) {
+		key.preventDefault();
+		stopPressed();
+	}
+}, true);
 
 function finish(run, report) {
 	clearTimeout(run.timer);
@@ -1451,6 +1480,7 @@ function startBugButton() {
 		$("bug-comment").focus();
 	};
 	$("bug-token").oninput = showBugSender;
+	$("bug-sender").onclick = askBugToken;
 	// a press outside an open menu (the bug report, ⋯) closes it, as Escape does; a comment begun stays (card clicking-outside)
 	const openMenus = () => [...document.querySelectorAll("details.tools[open]")];
 	addEventListener("pointerdown", press => openMenus().filter(menu => !menu.contains(press.target)).forEach(menu => menu.open = false));
@@ -1478,9 +1508,15 @@ function bugReport() {
 		token: $("bug-token").value.trim() || stored(BUG_TOKEN_KEY) || BUG_TOKEN };
 }
 
-// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket
+// who the report goes out as, said before it is sent: a browser without the owner token files a visitor's ticket, and
+// a press on that line opens the field to paste the token (Firefox clears it with the site's storage)
 const showBugSender = () => $("bug-sender").textContent = $("bug-token").value.trim() || stored(BUG_TOKEN_KEY)
-	? "as the owner" : "as a visitor: no owner token in this browser";
+	? "as the owner" : "as a visitor: no owner token in this browser (press to paste one)";
+const askBugToken = () => {
+	if (stored(BUG_TOKEN_KEY)) return;
+	$("bug-token").hidden = false;
+	$("bug-token").focus();
+};
 
 async function sendBugReport() {
 	const report = bugReport();
@@ -1505,7 +1541,7 @@ async function sendBugReport() {
 		$("bug-comment").value = "";
 		$("bug-express").checked = $("bug-quick").checked = false;
 		if (card) showBugStatus("card made: ", false, card, board);
-		else showBugStatus(`sent (${queued}): a card within minutes`);
+		else showBugStatus(`report received (${queued}); it becomes a card on the board within a few minutes`);
 	} catch (failure) {
 		showBugStatus(`not sent: ${failure.message}`, true);
 	}
@@ -1655,6 +1691,7 @@ function initialize() {
 	$("full-screen").onclick = toggleFullScreen;
 	$("fit-code").append($("full-screen").firstElementChild.cloneNode(true));
 	$("fit-code").onclick = toggleFitsCode;
+	for (const pane of FOLDABLE) $(`collapse-${pane}`).onclick = () => toggleFolded(pane);
 	$("shown-from").value = stored(SHOWN_FROM_KEY) ?? (stored(HINTS_KEY) === "off" ? "weak" : "hint");
 	store(HINTS_KEY, null);
 	$("shown-from").onchange = () => {

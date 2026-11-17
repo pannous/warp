@@ -17,7 +17,7 @@
 'max(1,min(5,2))'	2
 
 # test_min_keeps_its_types
-'min(a,b):=a*b; min(2,3)'	2
+'my_min(a,b):=a*b; min(2,3)'	2
 
 # test_min_max_arguments_must_be_side_effect_free
 'f(x):=x; min(f(1),2)'	1

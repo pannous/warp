@@ -5,5 +5,5 @@ use image
 
 photo = image(./photo.jpg)
 print "the photo is ${photo.width}×${photo.height}"
-middle = photo.grayed().blurred(1).cropped(40, 30, 80, 60)
-middle.show()
+middle = grayed photo |> blur(1) |> crop(40, 30, 80, 60)
+show middle

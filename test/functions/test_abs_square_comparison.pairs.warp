@@ -5,4 +5,4 @@
 'use math; abs -3 < 2 and square 3 < 10'	false
 
 # braceless_user_call_compares_beside_a_library_call
-'square(x):=x*x; abs -3 < 5 and square 3 < 10'	true
+'sq(x: int):=x*x; abs -3 < 5 and sq 3 < 10'	true

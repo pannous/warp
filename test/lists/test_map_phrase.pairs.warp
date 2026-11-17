@@ -1,0 +1,4 @@
+# the mapping phrase: `map xs to f` maps each item through f, `it` the item; `its name` is it.name (wiki/Features.md "its/their keyword")
+'class C{name:text}; cs = [C("a"), C("b")]; map cs to its name'	['a', 'b']
+'class C{name:text}; cs = [C("a"), C("b")]; map cs to name of it'	['a', 'b']
+'map [1, 2, 3] to it * 2'	[2, 4, 6]

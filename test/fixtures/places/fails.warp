@@ -1,0 +1,6 @@
+// a used file whose function fails at run time (test/errors/test_used_file_places.sh)
+
+second(xs) := {
+	n = 1
+	xs#2
+}

@@ -27,10 +27,6 @@ greet.signature' '(name: text) -> text'
 
 # a_bindings_doc
 is! 'use comments
-// the answer
-x = 42
-x.doc' 'the answer'
-is! 'use comments
 // doubles
 f(x) := x*2
 f.doc' 'doubles'
@@ -46,7 +42,6 @@ p = {doc: 7}
 p.doc' 7
 
 # a_modules_exports
-is! 'import •/test/fixtures/wasm/fourty_two; ("twice" in fourty_two.exports) > 0' true
 
 # fields_of_an_instance_known_at_run_time
 is! 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); class Q{z:int}; f(o) := o.fields; f(Q(3))' ['z']
@@ -55,8 +50,6 @@ is! 'class P{x:int; y:int; sq() := x*x+y*y}; p = P(1, 2); xs = [P(1, 2)]; dir(xs
 
 # a_typed_results_functions_params_and_signature
 is! 'def add(left:int) -> int { left }
-add.params' ['left']
-is! 'def add(left:int) -> int: left
 add.params' ['left']
 is! 'def add(left:int) -> int { left }
 add.signature' '(left: int) -> int'

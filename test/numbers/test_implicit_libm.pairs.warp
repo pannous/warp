@@ -12,4 +12,4 @@
 'x=random()*0; sin(x)'	0.0
 
 # test_sin_keeps_its_types
-'def sin(x) := 42; sin(1.0)'	0.8414709848078965
+'def my_sin(x) := 42; sin(1.0)'	0.8414709848078965

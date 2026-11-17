@@ -5,7 +5,7 @@ use time
 use units
 use tables
 
-ref = Instant(parse_date("2026-11-05T14:00:00Z"))
+ref = "2026-11-05T14:00:00Z" as Instant
 shops = [
 	{name: "Bakery", open: 6h, close: 13h},
 	{name: "Post office", open: 9h, close: 17h},

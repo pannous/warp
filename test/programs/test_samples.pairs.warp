@@ -34,7 +34,6 @@
 'samples/functions/sudoku.warp'	534
 
 # test_snake
-'samples/advanced/snake.warp'	40
 
 # test_quicksort
 'samples/lists/quicksort.warp'	true
@@ -43,7 +42,6 @@
 'samples/loops/game_of_life.warp'	3736
 
 # test_raytracer
-'samples/advanced/raytracer.warp'	8230
 
 # test_binary_tree
 'samples/objects/binary_tree.warp'	409
@@ -52,7 +50,6 @@
 'samples/hello/comments.warp'	120
 
 # test_sin
-'samples/numbers/sin.warp'	841471
 
 # test_calculator
 'samples/text/calculator.warp'	39

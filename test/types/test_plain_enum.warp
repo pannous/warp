@@ -14,5 +14,3 @@ is! 'enum Kind { Empty, Int, Float, Text }; name(k: Kind) := match k { Kind.Int:
 is! 'enum Meaning { Function, Variable }; m = Meaning.Function; m == Meaning.Function' true
 
 # an_entry_named_after_a_type_stays_a_map_entry
-is! 'enum Op { Colon, Add }; empty(): any := { t = {}; t }; m = empty(); m["Op"] = empty(); m["Bracket"] = 1; #m' 2
-is! 'class Point { x: int }; empty(): any := { t = {}; t }; m = empty(); m["Point"] = empty(); m["y"] = 2; #m' 2

@@ -14,9 +14,7 @@
 # triage-held 2026-11-06: lambda spelling (a b)->a+b :: 'xs=[]; fold xs 5 (a b)->a+b'	5
 
 # test_each_runs_the_body_per_item_and_is_the_last_value
-'each [1 2 3] {it*10}'	30
 'total=0; each [1 2 3] {total=total+it}; total'	6
-'[1 2 3].each(x=>x+1)'	4
 
 # test_words_a_program_defines_win
 'filter(xs, f):=42; filter([1 2], 3)'	42

@@ -27,3 +27,5 @@
 'use sound; hum(t: float) := 0.3 * t; play(hum, 0.03); 1'	1
 'use sound; play(./no_such_song.wav)'	error
 'use sound; play("no_such_song.wav")'	error
+# a MIDI file saved and read back: save(MidiFile(notes), path), midi_file(path).notes (wiki sound.md)
+'use sound; p = temp_folder() + "/warp_tune.mid"; save(MidiFile([[0, C4, 0.5, 100], [0.5, E4, 1, 90]]), p); n = midi_file(p).notes; delete_file(p); n'	[[0, 261.63, 0.5, 100], [0.5, 329.63, 1, 90]]

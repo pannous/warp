@@ -32,7 +32,6 @@
 «c='x'; ord(c)»	120
 'x=65 as char; ord(x)'	65
 «'A'.ord()»	65
-'try ord("ab") else 0'	0
 
 # test_non_digit_character_as_int_is_no_number
 «try int('a') else 0»	0

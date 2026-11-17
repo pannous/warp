@@ -1,0 +1,7 @@
+# a picture among paint's values is a texture the shader samples as values.<name> with the sampler it names: nearest
+# or bilinear, clamped at the edge or repeating (card gpu-texture-binds; wiki/graphics.md "Pixels and shaders")
+'use image; p = image(2, 1, (x, y) => if x == 0 then red else blue); s = shader { @fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { return textureSampleLevel(values.p, nearest, vec2f(0.25, 0.5), 0.0); } }; gpu_render(s, 1, 1, {p: p})'	[4294901760]	needs: gpu
+# a pixel without an alpha byte, rgb(…), is opaque
+# a pixel written after a paint shows at the next: the picture is never an old one (interviewer 11-14)
+'use image; p = image(1, 1, (x, y) => red); toy = shader { @compute @workgroup_size(16, 16) fn main_image(@builtin(global_invocation_id) id: vec3u) { textureStore(screen, id.xy, textureSampleLevel(channel0, nearest, vec2f(0.5), 0.0)); } }; gpu_render(toy, 1, 1, {channel0: p}); p.pixels[0] = blue; gpu_render(toy, 1, 1, {channel0: p})'	[4278190335]	needs: gpu
+# a sampler or picture a comment names binds nothing: the bind group holds what the shader's code uses (card mode-crashes)

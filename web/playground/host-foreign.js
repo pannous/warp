@@ -14,7 +14,14 @@ const SETTER_PREFIX = "set "; // src/modules/wasm_modules.rs SETTER_PREFIX: the 
 // (core/emitter/c_functions.warp, read as core/native/driver.warp foreign_of reads it)
 const C_FUNCTIONS_SECTION = "warp.c_functions";
 const IMPORTED_MEMORY_PAGES = 1; // src/wasm_emitter/mod.rs MEMORY: one page at least
-const PROMISE_REFUSAL = "gives a promise, which a program in the page cannot wait for; natively (the warp CLI) node awaits it";
+// JSPI: a run whose module waits for promises runs main through WebAssembly.promising, and foreign_await suspends it
+// until the promise foreign_call kept settles. Its module imports foreign_await, or foreign_settled (lib/prelude.warp)
+// from the prelude module linked beside it, which imports foreign_await itself
+const JSPI = typeof WebAssembly.Suspending === "function" && typeof WebAssembly.promising === "function";
+const AWAIT_WORD = "foreign_await";
+const WAITING_WORDS = [AWAIT_WORD, "foreign_settled"];
+const PROMISE_REFUSAL = JSPI ? "gives a promise, which this run cannot wait for (an eval while compiling, a built site): only the page's own run waits"
+	: "gives a promise, which this browser cannot wait for (it has no WebAssembly JSPI); Chrome and the warp CLI wait for it";
 
 // the runtimes foreign_call reaches in the page, by their name in `use <runtime> …`: call(module, member, arguments,
 // hooks) gives the member's plain value (arguments null: a read, no call); prepare(code), when given, readies the runtime
@@ -416,13 +423,14 @@ function moduleImports(holder, hooks, path) {
 	});
 }
 
-// a promise a foreign call gave: refused, as no run here waits (core/native/driver.warp's node awaits it)
+// a promise a foreign call gave where the run cannot wait for it (PROMISE_REFUSAL says why): refused
 function refusedPromise(called, promise) {
 	promise.then(undefined, () => {}); // its failure is not the program's: no unhandled rejection
 	throw new Error(`${called}: ${PROMISE_REFUSAL}`);
 }
 
 addHostPart({
+	started: run => { run.awaits = JSPI && importDescriptors(run.bytes).some(entry => WAITING_WORDS.includes(entry.name)); },
 	words: (holder, hooks, { program }) => {
 		// a module of another runtime (src/modules/foreign.rs), run by the runtime registered under its name
 		const foreignCall = (runtime, module, member, call, argumentList) => {
@@ -435,10 +443,20 @@ addHostPart({
 			const valueOf = result => newGuestValue(program_, result);
 			const result = foreign.call(moduleName, memberName, argumentValues, hooks);
 			const called = `${runtimeName} ${typeof moduleName === "string" ? moduleName : "value"}.${memberName}`;
-			return typeof result?.then === "function" ? refusedPromise(called, result) : valueOf(result);
+			if (typeof result?.then !== "function") return valueOf(result);
+			if (!holder.run.awaits) return refusedPromise(called, result);
+			holder.pending = result; // foreign_settled waits for it
+			return null;
+		};
+		const awaited = async () => {
+			const promise = holder.pending;
+			holder.pending = undefined;
+			return newGuestValue(program(), await promise);
 		};
 		return {
 			foreign_call: foreignCall,
+			foreign_pending: () => holder.pending ? 1n : 0n,
+			[AWAIT_WORD]: JSPI ? new WebAssembly.Suspending(awaited) : awaited,
 		};
 	},
 	imports: (holder, hooks) => ({

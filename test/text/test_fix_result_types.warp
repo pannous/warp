@@ -1,0 +1,11 @@
+# warp fix writes a function head's result type with as (decision result-type-as)
+is! 'use "../../lib/fix/fix.warp"; fixed("f(x): int := x + 1", [], yes)#1' "f(x) as int := x + 1\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("def f(x: int): text { text(x) }", [], yes)#1' "def f(x: int) as text { text(x) }\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("\tpick(m: map): Node? := m#1", [], yes)#1' "\tpick(m: map) as Node? := m#1\n"
+# a type as cannot say after a head, a match arm and a written as stay
+is! 'use "../../lib/fix/fix.warp"; fixed("f(x): [int] := [x]", [], yes)#1' "f(x): [int] := [x]\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("Key(a, b): x", [], yes)#1' "Key(a, b): x\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("f(x) as int := x", [], yes)#1' "f(x) as int := x\n"
+# only: that rule's rewrites alone, the other rewrites and the layout left as written
+is! 'use "../../lib/fix/fix.warp"; fixed("x = len([1])\nf(x):  int := x", [], yes, "result type")#1' "x = len([1])\nf(x):  int := x\n"
+is! 'use "../../lib/fix/fix.warp"; fixed("x = len([1])\nf(x): int  :=  x", [], yes, "result type")#1' "x = len([1])\nf(x) as int  :=  x\n"

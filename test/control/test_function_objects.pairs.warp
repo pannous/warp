@@ -2,3 +2,6 @@
 
 # the_type_of_a_function_names_its_signature
 'type(sqrt)'	'builtin: (x:number) -> number'
+
+# a parameter named like a function is the value it holds: type(value) beside a method value() (card warp-build-failure)
+'class C { a: int; value() := 1 }; f(value) := type(value).name; f("a")'	'text'

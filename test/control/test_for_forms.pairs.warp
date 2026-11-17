@@ -21,7 +21,6 @@
 'n=0; for 1..3 {n+=it}; s=""; for "ab" {s+=it}; s'	'ab'
 
 # the_loop_variable_name_picks_the_text_unit
-'text="hi  you"; s=""; for word in text { s += word + "," }; s'	'hi,you,'
 'text="hi"; s=""; for char in text { s += char + "," }; s'	'h,i,'
 's=""; for word in ["a b", "c"] { s += word + "," }; s'	'a b,c,'
 

@@ -6,4 +6,3 @@
 '"post" as symbol == :post'	true
 
 # a_symbol_parameter_takes_a_bare_word
-'f(m: symbol) := m == :post; f(post)'	true

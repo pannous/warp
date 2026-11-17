@@ -7,3 +7,6 @@
 'use markup; greet(name) := "Hi " + name; other(x) := { p = x; p }; to_html(div{ p{ greet "Ann" } })'	'<div><p>Hi Ann</p></div>'
 'greet(name) := "Hi " + name; to_html(div{ p{ greet "Ann" } })'	'<div><p>Hi Ann</p></div>'
 'greet(name) := "Hi " + name; to_html(label{ greet "Ann" })'	'<label>Hi Ann</label>'
+
+# a library word among a tag's items is the word as written: samples/web/keyframes.warp's CSS reverse
+'use markup; to_html(p{ upper })'	'<p>upper</p>'

@@ -74,6 +74,10 @@ set_limb(n: any, at: int, value: int) from runtime
 made_case(made: any, call: any) from runtime
 # texts, their bytes and characters
 new_text(length: int): text from runtime
+# a text whose every byte is an ASCII character of its own (no CR LF pair, one character), made so once by a maker that
+# knows it: == compares its bytes, #t counts them, t#i reads one
+new_ascii_text(length: int): text from runtime
+is_ascii_text(t: text): bool from runtime
 copy_text(to: text, at: int, source: text, start: int, count: int) from runtime
 byte_count(t: text): int from runtime
 byte_at(t: text, at: int): int from runtime

@@ -1,0 +1,4 @@
+# Windows's line ends (card crlf-line-endings): a file written on Windows, or checked out there with core.autocrlf, ends
+# each line with \r\n, which the parser reads as \n. Taking out a \r that stands before a \n moves no other character's
+# line or column, so the pass gives no shifts (core/extension.warp source_passes)
+line_ends_extension = Extension{name: "line_ends", source_passes: [source => [source.replace("\r\n", "\n"), []]]}

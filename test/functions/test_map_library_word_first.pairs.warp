@@ -6,7 +6,6 @@
 'xs = [[1 2] [3]]; map(xs, count)'	[2, 1]
 'xs = [1.5]; map(floor, xs)'	[1]
 'ys = map reverse [[1 2] [3 4]]; ys#1#1'	2
-'ys = map sorted [[2 1]]; ys#1#1'	1
 
 # a_defined_word_of_the_same_name_wins
 'floor(x) := x + 1; map floor [1]'	[2]

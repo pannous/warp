@@ -5,14 +5,17 @@
 # skipped; the end of the input answers no.
 use os
 use file
+use diff
 use "fix.warp"
 
 check_word = "check"
 yes_word = "yes"
 # `warp format hash-comments` is accepted as beautify does, which always writes # comments
 option_words = [check_word, yes_word, "hash-comments"]
+# `warp fix yes only "result type" core`: only the hints whose rule says these words, nothing else changed
+only_word = "only"
 help_words = ["help", "--help", "-h"]
-usage = "warp beautify [check|yes] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; warp fix: the same)"
+usage = "warp beautify [check|yes] [only <rule words>] <file|folder|code>…  The layout plus the best-practice rewrites (// comments become #, other languages' words the warp words), shown as a diff and applied after \"apply? y/n\" (yes: without asking; only: just the rewrites whose rule says these words; warp fix: the same)"
 format_usage = "warp format [check|yes] [hash-comments] <file|folder|code>…  The canonical layout of warp code, only where the meaning stays, shown as a diff and applied after \"apply? y/n\" (check: list what would change, exit 1; hash-comments: // comments become #; warp lint: the same)"
 # the commands that lay out only, never rewriting a word; their // comments stay unless hash-comments
 layout_commands = ["format", "lint"]
@@ -24,27 +27,30 @@ skipped_folder_reason = "code golf counts bytes"
 not_warp_reason = "not a warp file"
 code_label = "code"
 # the compiler's answer to which standard modules a file uses without their `use` (warp uses, the implicit_use hint)
-uses_command = "warp uses "
+uses_command = "uses "
+# the compiler's readings of what the code leaves unwritten (warp readings): `line column fix` a line
+readings_command = "readings "
+reading_rule = "reading"
 
-is_folder(path: text): bool := (try list_files(path) else ø) != ø
-name_of_path(path: text): text := last(path.split("/"))
-has_warp_extension(path: text): bool := warp_extensions.any(extension => path.ends_with(extension))
+is_folder(path: text) as bool := (try list_files(path) else ø) != ø
+name_of_path(path: text) as text := last(path.split("/"))
+has_warp_extension(path: text) as bool := warp_extensions.any(extension => path.ends_with(extension))
 
 # warp code by its extension, or an extension-less script whose `#!` line names warp
-is_warp_file(path: text): bool := {
+is_warp_file(path: text) as bool := {
 	if name_of_path(path).contains(".") { return has_warp_extension(path) }
 	first = (try read(path) else "").split("\n")[0]
 	first.starts_with("#!") and first.contains("warp")
 }
 
 # why a path is not fixed: a golf folder or no warp file; "" when it is
-skip_reason(path: text): text := {
+skip_reason(path: text) as text := {
 	if is_folder(path) { return if name_of_path(path) in skipped_folders then skipped_folder_reason else "" }
 	if is_warp_file(path) then "" else not_warp_reason
 }
 
 # the warp files of a folder, sorted, its skipped entries left out silently
-warp_files(path: text): list := {
+warp_files(path: text) as list := {
 	if not is_folder(path) { return [path] }
 	found = []
 	for name in sort(list_files(path)) {
@@ -55,53 +61,29 @@ warp_files(path: text): list := {
 }
 
 # a name that means a file, never code: `x.warp`, `samples/hello/hello`
-looks_like_path(argument: text): bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
+looks_like_path(argument: text) as bool := has_warp_extension(argument) or (argument.contains("/") and not argument.contains(" "))
 
-# the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`, by their longest common subsequence
-print_diff(shown: text, old: text, new: text) := {
-	a = old.split("\n")
-	b = new.split("\n")
-	if old.ends_with("\n") { a = a[0 ..< #a - 1] }
-	if new.ends_with("\n") { b = b[0 ..< #b - 1] }
-	# common[i * width + j]: the length of the longest common subsequence of a[i..] and b[j..]
-	width = #b + 1
-	common = [0 for k in 0 ..< (#a + 1) * width]
-	i = #a - 1
-	while i >= 0 {
-		j = #b - 1
-		while j >= 0 {
-			common[i * width + j] = if a[i] == b[j] then common[(i + 1) * width + j + 1] + 1 else max(common[(i + 1) * width + j], common[i * width + j + 1])
-			j -= 1
-		}
-		i -= 1
-	}
-	i = 0
-	j = 0
+# the changed lines of old → new as `-`/`+` lines under `@@ <file>:<line>`
+shown_changes(shown: text, old: text, new: text) as list := {
+	found = []
+	line = 1
 	in_hunk = no
-	while i < #a or j < #b {
-		if i < #a and j < #b and a[i] == b[j] {
-			i += 1
-			j += 1
-			in_hunk = no
-		} else {
-			if not in_hunk {
-				print "@@ " + shown + ":" + (i + 1)
-				in_hunk = yes
-			}
-			if j == #b or (i < #a and common[(i + 1) * width + j] >= common[i * width + j + 1]) {
-				print "-" + a[i]
-				i += 1
-			} else {
-				print "+" + b[j]
-				j += 1
-			}
+	for edit in diff(text_lines(old.remove(suffix: "\n")), text_lines(new.remove(suffix: "\n"))) {
+		if edit#1 == "keep" { in_hunk = no } else if not in_hunk {
+			found += ["@@ " + shown + ":" + line]
+			in_hunk = yes
+		}
+		if edit#1 == "insert" { found += ["+" + edit#2] } else {
+			if edit#1 == "delete" { found += ["-" + edit#2] }
+			line += 1
 		}
 	}
+	found
 }
 
 # shows the diff and asks; the next line of the input answers, its end is no
-confirmed(shown: text, old: text, new: text): bool := {
-	print_diff(shown, old, new)
+confirmed(shown: text, old: text, new: text) as bool := {
+	for line in shown_changes(shown, old, new) { print line }
 	answer = input("apply? y/n ")
 	if answer == ø { print "" }
 	answer != ø and (answer.trim() == "y" or answer.trim() == "yes")
@@ -109,8 +91,8 @@ confirmed(shown: text, old: text, new: text): bool := {
 
 # the fix with a `use` line of each standard module the file uses without saying it, after its leading comments and
 # uses (beautify only: warp format lays out)
-with_uses_written(result: list, file: text): list := {
-	modules = command(uses_command + quoted_path(file)).split("\n").filter(module => module.trim() != "")
+with_uses_written(result: list, file: text) as list := {
+	modules = command(warp_command(uses_command + quoted_path(file))).split("\n").filter(module => module.trim() != "")
 	if #modules == 0 { return result }
 	lines = result[0].split("\n")
 	at = 0
@@ -119,36 +101,78 @@ with_uses_written(result: list, file: text): list := {
 	[(lines[0 ..< at] + uses + lines[at ..]).join("\n"), result[1] + uses.map(line => "" + (at + 1) + " " + line)]
 }
 
+# the code with each reading of the compiler's written over the word at its place, `xs = …` made a GPU list [vec4] as
+# `xs: [vec4] = …`, and the changes; `source` the file or the code itself, as warp readings takes it
+with_readings_written(code: text, source: text) as list := {
+	lines = code.split("\n")
+	changes = []
+	for reading in command(warp_command(readings_command + quoted_path(source))).split("\n") {
+		parts = reading.split(" ")
+		if #parts >= 3 and is_digits(parts[0]) and is_digits(parts[1]) {
+			at = int(parts[0]) - 1
+			column = int(parts[1]) - 1
+			fix = parts[2 ..].join(" ")
+			word = fix.split(":")[0]
+			line = lines[at]
+			if line[column ..].starts_with(word) and not line[column + #word ..].trim().starts_with(":") {
+				lines[at] = line[0 ..< column] + fix + line[column + #word ..]
+				changes += ["" + (at + 1) + " " + reading_rule]
+			}
+		}
+	}
+	[lines.join("\n"), changes]
+}
+
 # a change "<line> <rule>" as check lists it
-listed_change(shown: text, change: text): text := {
+listed_change(shown: text, change: text) as text := {
 	parts = change.split(" ")
 	shown + ":" + parts[0] + ": layout: " + change[(#parts[0] + 1) ..]
 }
 
+# the code fixed (fix.warp fixed) after the compiler's readings are written, and every change; with only, that rule's
+# hints alone
+fixed_with_readings(code: text, source: text, rules: list, rewriting: bool, only: text) as list := {
+	read = if only == "" then with_readings_written(code, source) else [code, []]
+	result = fixed(read[0], rules, rewriting, only)
+	[result[0], read[1] + result[1]]
+}
+
 # code given instead of files: printed fixed; in check, its changes listed, 1 when there are some
-fixed_code(code: text, checking: bool, rules: list, rewriting: bool): int := {
-	result = fixed(code, rules, rewriting)
+fixed_code(code: text, checking: bool, rules: list, rewriting: bool, only: text) as int := {
+	result = fixed_with_readings(code, code, rules, rewriting, only)
 	if not checking { print result[0] }
 	if checking { for change in result[1] { print listed_change(code_label, change) } }
 	if checking and #result[1] > 0 then 1 else 0
 }
 
 # the exit code: 1 when a file cannot be fixed or, with check, would change
-fix_command(command: text, arguments: list): int := {
+fix_command(command: text, arguments: list) as int := {
 	rewriting = command not in layout_commands
 	if arguments.any(argument => argument in help_words) {
 		print "  " + (if rewriting then usage else format_usage)
 		return 0
 	}
 	words = 0
-	while words < #arguments and arguments[words] in option_words { words += 1 }
+	only = ""
+	while words < #arguments and (arguments[words] in option_words or arguments[words] == only_word) {
+		if arguments[words] == only_word and words + 1 < #arguments {
+			words += 1
+			only = arguments[words]
+		}
+		words += 1
+	}
 	options = arguments[0 ..< words]
 	paths = arguments[words ..]
 	checking = check_word in options
 	without_asking = yes_word in options
-	rules = if rewriting or "hash-comments" in options then layout_rules else layout_rules.filter(rule => rule != hash_comment_rule)
+	rules = if only != "" then [] else if rewriting or "hash-comments" in options then layout_rules else layout_rules.filter(rule => rule != hash_comment_rule)
 	if #paths > 0 and paths.all(path => not exists(path) and not looks_like_path(path)) {
-		return fixed_code(paths.join(" "), checking, rules, rewriting)
+		return fixed_code(paths.join(" "), checking, rules, rewriting, only)
+	}
+	missing = paths.filter(path => not exists(path))
+	if #missing > 0 {
+		print "warp " + command + ": no file or folder " + missing.map(path => "'" + path + "'").join(", ") + ", nothing changed"
+		return 2
 	}
 	files = []
 	for path in paths {
@@ -168,8 +192,8 @@ fix_command(command: text, arguments: list): int := {
 			print file + ": not formatted: it cannot be read"
 			failed += 1
 		} else {
-			result = fixed(code, rules, rewriting)
-			if rewriting { result = with_uses_written(result, file) }
+			result = fixed_with_readings(code, file, rules, rewriting, only)
+			if rewriting and only == "" { result = with_uses_written(result, file) }
 			lines = #result[1]
 			if result[0] != code {
 				if checking {

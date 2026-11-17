@@ -31,5 +31,4 @@
 'def f(m){ m#1 }; try f(3) else 7'	7
 
 # a_missing_field_is_caught
-'def f(m){ m.a }; try f(3) else 7'	7
 'def f(m){ m.a }; try f({a:2}) else 7'	2

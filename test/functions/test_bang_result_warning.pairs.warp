@@ -1,0 +1,8 @@
+# a bang function that declares a result type warns: a changing (bang) function returns nothing
+# (decision answer-or-act). It is a warning, never a refusal: the program still runs.
+
+# a_bang_function_with_a_result_type_warns_and_still_compiles
+'sort!(xs: list): list := xs; 1'	1
+
+# a_bang_function_with_no_result_type_compiles_without_that_warning
+'sort!(xs: list) := { xs.sort! }; 1'	1

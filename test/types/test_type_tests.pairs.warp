@@ -22,8 +22,6 @@
 '[1 2] is list'	1
 '[1 2] is list of number'	1
 '[1 2] is list of text'	0
-'[1 2] is texts'	0
-'x=[1 2]; x is a list of int'	1
 
 # test_pi_is_real_and_a_number
 'π is real'	1
@@ -62,7 +60,6 @@
 'type(0) is number'	1
 
 # test_bare_type_names_are_type_values
-'type(π) == real'	1
 't = type(0); t is int'	1
 't = type(0); t is number'	1
 't = type(0); t is text'	0

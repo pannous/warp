@@ -1,0 +1,6 @@
+# a note or chord carries its length, ~ the tie, relative to the play's duration; ≈ of notes is the same nearest key
+# (decision note-frequency-duration, user 2026-11-13; user card courts-duration)
+'use sound; text([C4 ~ 2, (C4+E4+G4) ~ 4])'	'[C4~2, (C4+E4+G4)~4]'
+'use sound; text(play([C4, E4 ~ 2, G4 ~ ½, (C4+E4+G4) ~ 4], 100ms))'	'♪ 0.75 s'
+'use sound; [C4 ≈ C4, C4 ≈ D4, note(C4) + 0.2 ≈ C4]'	[yes, no, yes]
+'use sound; text(transpose(C4 ~ 2, 12))'	'C5~2'

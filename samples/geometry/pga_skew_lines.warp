@@ -1,0 +1,21 @@
+#!/usr/bin/env warp
+# Do these two lines meet, or are they skew? Two lines lie in one plane exactly when the scalar of their join (⋎) is 0;
+# skew ones are apart, and the segment between their closest points is square to both (card pga-visualization)
+use pga_draw
+canvas.resize(480, 360)
+
+l = point(-2, 0, 0) ⋎ point(2, 0, 0) # the x axis
+m = point(1, -2, 1.5) ⋎ point(1, 2, 1.5) # along y, 1.5 above
+near = closest(l, m)
+print(if coplanar(l, m) then "the lines meet at " + text(place(near#1)) else "the lines are skew, " + text(distance(near#1, m)) + " apart")
+print("closest points " + text(place(near#1)) + " and " + text(place(near#2)))
+
+clear(paper)
+sketch(l, blue)
+sketch(m, green)
+sketch(near#1, near#2, red)
+sketch(near, red)
+caption(near#1, text(place(near#1)), blue)
+caption(near#2, text(place(near#2)), green)
+caption(0, "do the lines meet, or are they skew?", ink)
+show()

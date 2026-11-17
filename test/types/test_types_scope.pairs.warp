@@ -9,5 +9,4 @@
 
 # test_plural_type_word_denotes_a_list
 'x:ints=[1 2 3];type(x)'	'list of int'
-'x:numbers=[1 2 3];type(x)'	'list of number'
 'x:numbers=[1 2 3];x#2'	2

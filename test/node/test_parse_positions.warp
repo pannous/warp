@@ -9,11 +9,6 @@ is! 'use comments
 t = "x = 1\\n// note\\n  n * " + "2"
 r = parse(t)
 r#2.column' 3
-is! 'use comments
-t = "x = 1\\n// note\\n  n * " + "2"
-r = parse(t)
-r#2.comment' 'note'
-is! 'use comments
 t = "x = 1\\n// note\\n  n * " + "2"
 r = parse(t)
 r#2 == data (n * 2)' true

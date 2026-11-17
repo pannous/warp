@@ -1,0 +1,9 @@
+# a module local named angle (test/scope/test_other_file_global_place.sh, decision loop-locals)
+# two lines so the assignment is not on the definition's first line (the old span used that)
+
+jaw_point() := {
+	keep = 0
+	keep = keep
+	angle = 1
+	angle
+}

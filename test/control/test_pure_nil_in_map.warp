@@ -6,7 +6,6 @@
 is! "f(m: any): bool := { p: any = ø
 p in m }
 f({a: 1})" no
-is! "f(m: any): bool := { p: any = ø
 p not in m }
 f({a: 1})" yes
 

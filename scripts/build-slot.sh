@@ -7,20 +7,45 @@
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (warp --profile),
 # and steps: when each `rebuild step` began (stamped below)
 set -uo pipefail
-DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test run (warp test while building, core/native/tests.warp WHILE_BUILDING); 5 drove the load to ~460
 LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line
+# an endless loop in a compile is stopped by the kernel (ulimit -t) and escalated as an urgent card, never left to spin
+# (a module compile looped 3 h 15 min unnoticed, 2026-11-16): each process may use this many times the CPU of main's
+# last whole compiler build, never less than the floor
+CPU_LIMIT_FACTOR=4
+CPU_LIMIT_FLOOR=900  # seconds
+CPU_LIMIT_STATUS=152  # 128 + SIGXCPU
 source "$(dirname "$0")/lib/platform.sh"
 store=$warp_store
-# <store>/build-slots/count, when present, sets the slots for every session at once (at night as many
-# as the load allows; the Supervisor raises and lowers it watching the load, notes/agents/night.md)
-build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
 scripts=$(cd "$(dirname "$0")" && pwd)
 log=${1:?usage: build-slot.sh <log> <command…>}
 shift
 record=${WARP_BUILD_RECORD:-}
-command -v lockf >/dev/null || { "$@" >>"$log" 2>&1; exit; }
+main_build_cpu() { awk '$1=="user"{print int($2)}' "$store/main/warp.record/time" 2>/dev/null; }
+cpu_limit() {
+	local limit=$(( ${1:-0} * CPU_LIMIT_FACTOR ))
+	[ "$limit" -gt $CPU_LIMIT_FLOOR ] && echo "$limit" || echo $CPU_LIMIT_FLOOR
+}
+export cpu_seconds=$(cpu_limit "$(main_build_cpu)")
+# endless_build <status>: a run the CPU limit stopped said loudly in the log and on stderr, and filed as an urgent card
+# (one per branch: the store keeps the failure, so the same inputs are not built again)
+endless_build() {
+	[ "$1" = $CPU_LIMIT_STATUS ] || return 0
+	shift
+	local branch message
+	branch=$(git branch --show-current 2>/dev/null || echo detached)
+	message="build-slot.sh: stopped after $cpu_seconds s of CPU (the limit: $CPU_LIMIT_FACTOR × main's build, at least $CPU_LIMIT_FLOOR s): an endless loop in the compile of branch $branch in $PWD: $*"
+	echo "$message" | tee -a "$log" >&2
+	timeout 60 todo add Now "endless build: $branch: a compile ran past $cpu_seconds s of CPU and was stopped (log $log)" --urgent --key "endless-build-$branch" >/dev/null 2>&1 ||
+		echo "build-slot.sh: the card could not be filed (todo add failed)" >&2
+}
+if ! command -v lockf >/dev/null; then
+	(ulimit -t "$cpu_seconds"; "$@" >>"$log" 2>&1)
+	status=$?
+	endless_build $status "$@"
+	exit $status
+fi
 mkdir -p "$store/build-slots"
 # A fair line (thirteen waiters each retrying every slot let a newcomer pass an hour-old waiter): each
 # waiter's ticket <seconds>.<pid> in the line, only the oldest live one tries the slots, and it leaves the line as soon
@@ -76,9 +101,9 @@ while :; do
 	place=$(place_in_line)
 	if [ "$place" = 1 ]; then
 		for slot in $(seq "$(build_slots)"); do
-			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; set -o pipefail; measured "$@" 2>&1 | stamped' measured "$@" >>"$log" 2>&1
+			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; ulimit -t "$cpu_seconds"; set -o pipefail; measured "$@" 2>&1 | stamped' measured "$@" >>"$log" 2>&1
 			status=$?
-			[ $status = $LOCK_HELD_ELSEWHERE ] || exit $status
+			[ $status = $LOCK_HELD_ELSEWHERE ] || { endless_build $status "$@"; exit $status; }
 		done
 	fi
 	[ -n "$waited" ] || { echo "build-slot.sh: all $(build_slots) build slots taken, waiting: number $place in line" >&2; waited=1; }

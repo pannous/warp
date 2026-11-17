@@ -1,68 +1,60 @@
-# Glyph and number atoms (card parser-coverage-2): truth glyphs `✓` `⊥`, vulgar fractions `½`, the exact constants
+# Glyph and number atoms (card parser-coverage-2): truth glyphs `✓` `⊥`, vulgar fractions `½`, the glyph words
 # `ⅈ`, `ε`, `ω`, an unknown entity `\:name`, a repeating decimal `0.3̅`
 # `\:nosuchthing`, an entity no table row names (expanded_entities replaced the known ones): the text as written
-unknown_entity(p: Parser): Node := {
+unknown_entity(p: Parser) as Node := {
 	if char_ahead(p, 1) != ':' or not is_alpha(char_ahead(p, 2)) { return ø }
 	end = name_end(p.code, p.at + 2, p.n)
 	unknown = "" + p.code[p.at .. end]
 	p.at = end
 	unknown
 }
-truth_atom(p: Parser): Node := {
+truth_atom(p: Parser) as Node := {
 	truth = truth_glyph_at(p)
 	if truth == "" { return ø }
 	p.at += truth.length
 	not FALSE_GLYPHS.contains(truth)
-}
-exact_atom(p: Parser): Node := {
-	constant = "$(p.code[p.at])"
-	advance(p)
-	exact_constant(constant)
 }
 # The glyphs that are true or false, longest spelling first: `✔️` is `✔` with an emoji variation selector
 # (card keyword-glyphs)
 TRUE_GLYPHS = ["✔️", "✓️", "☑️", "⊤", "✓", "✔", "☑", "✅", "🗸", "🗹"]
 FALSE_GLYPHS = ["⊥", "❌", "✗"]
 TRUTH_GLYPH_STARTS = by_first_character(TRUE_GLYPHS + FALSE_GLYPHS, glyph => glyph)
-truth_glyph_at(p: Parser): text := {
+truth_glyph_at(p: Parser) as text := {
 	for glyph in starting_here(TRUTH_GLYPH_STARTS, p, p.at) { if at_text(p, glyph) { return glyph } }
 	""
 }
-# The exact generators the core has no value for yet; `π`, `τ`, `ℯ` and `∞` are plain names lib/reals.warp defines
-EXACT_CONSTANTS = ["ε", "ω"]
 # the glyphs a library word gives the value of, each read as that word's call, which brings its module along
-# (implicit_uses.warp spelling_of): `ⅈ` is lib/complex's imaginary_unit(), `2ⅈ` twice it
-GLYPH_WORDS = {"ⅈ": "imaginary_unit"}
-glyph_word_call(p: Parser): Node := {
+# (implicit_uses.warp spelling_of): `ⅈ` is lib/complex's imaginary_unit(), `2ⅈ` twice it, `ε` and `ω` lib/hyperreal's
+# epsilon() and omega(); `π`, `τ`, `ℯ` and `∞` are plain names lib/reals.warp defines
+GLYPH_WORDS = {"ⅈ": "imaginary_unit", "ε": "epsilon", "ω": "omega"}
+glyph_word_call(p: Parser) as Node := {
 	word = GLYPH_WORDS["$(p.code[p.at])"]
 	advance(p)
 	call_of(word, [])
 }
-# no node of its own in warp yet (card node-more-cases): the number view, read as written
-exact_constant(word: text): Node := opaque(["number", word])
 # The Unicode vulgar fractions, each the numerator and denominator its NFKD decomposition writes (½ is 1⁄2)
 VULGAR_FRACTIONS = {"½": [1, 2], "↉": [0, 3], "⅓": [1, 3], "⅔": [2, 3], "¼": [1, 4], "¾": [3, 4], "⅕": [1, 5], "⅖": [2, 5], "⅗": [3, 5], "⅘": [4, 5], "⅙": [1, 6], "⅚": [5, 6], "⅐": [1, 7], "⅛": [1, 8], "⅜": [3, 8], "⅝": [5, 8], "⅞": [7, 8], "⅑": [1, 9], "⅒": [1, 10]}
 # `⅓` is the exact 1/3, a number: digits glued after it multiply it, `⅓9`, and so does a glued name, as after any
 # number, `⅓x` (parser.warp with_glued_factor)
-vulgar_fraction(p: Parser): Node := {
+vulgar_fraction(p: Parser) as Node := {
 	fraction = fraction_glyph(p)
 	if is_digit(char_here(p)) then Key(fraction, Op.Mul, atom(p)) else with_glued_factor(p, fraction)
 }
-fraction_glyph(p: Parser): Node := {
+fraction_glyph(p: Parser) as Node := {
 	parts = VULGAR_FRACTIONS[p.code[p.at]]
 	advance(p)
 	glyph_value(parts#1, parts#2)
 }
 # a glyph is one numeral, never a written fraction (decision fraction-glyphs): ½ is the decimal 0.5, which stays exact
 # and shows as one; ⅓, no decimal, is the ratio, which shows as 1/3 marked or not
-glyph_value(numerator: int, denominator: int): Node := {
+glyph_value(numerator: int, denominator: int) as Node := {
 	rest = denominator
 	while rest % 2 == 0 { rest = rest ÷ 2 }
 	while rest % 5 == 0 { rest = rest ÷ 5 }
 	if rest == 1 then float(numerator) / float(denominator) else keyed("/", int(numerator), int(denominator))
 }
 # `0.16̅`: the digits under an overline (U+0305, one grapheme with its digit) repeat forever
-overlined_digits(p: Parser): text := {
+overlined_digits(p: Parser) as text := {
 	period = ""
 	while p.at < p.n and p.code[p.at].ends_with("̅") and is_digit(p.code[p.at].replace("̅", "")) {
 		period = period + p.code[p.at].replace("̅", "")
@@ -91,12 +83,18 @@ read_repeating_decimal(p: Parser, written: text, literal: text): Node := {
 	period = overlined_digits(p)
 	if period != "" and written.contains(".") then repeating_decimal(written, period) else ø
 }
-# `ε`, `ω` as words: the exact constant, unless the word names a case (`E::ε`, `.ε`, an enum's)
-read_exact_word(p: Parser, word: text): Node := {
+# `2ε`, `3ω²`: a glyph word glued after a number multiplies it, as a glued name does (parser.warp with_glued_factor)
+read_glued_glyph_word(p: Parser, written: text, literal: text): Node := {
+	if not GLYPH_WORDS.has(char_here(p)) or name_end(p.code, p.at, p.n) > p.at + 1 { return ø }
+	factor = glyph_word_call(p)
+	Key(written_number(written), Op.Mul, read_suffix(p, factor, 0) ?? factor)
+}
+# `ε`, `ω` as words: the glyph word's call, unless the word names a case (`E::ε`, `.ε`, an enum's)
+read_glyph_word(p: Parser, word: text): Node := {
 	p.at += word.length
-	if not names_case(p, word.length) { return exact_constant(word) }
+	named_case = names_case(p, word.length)
 	p.at -= word.length
-	ø
+	if named_case then ø else glyph_word_call(p)
 }
 # `3½` after a whole number: the mixed number 3 + ½, 3.5 (decision mixed-number-glyph); `2.5½` names none, refused
 read_mixed_number(p: Parser, written: text, literal: text): Node := {
@@ -104,4 +102,4 @@ read_mixed_number(p: Parser, written: text, literal: text): Node := {
 	if literal.contains(".") or literal.contains("e") { raise "`" + literal + char_here(p) + "` at " + line_and_column(p.code, p.at) + ": a mixed number is whole before its fraction, 2½" }
 	Key(written_number(written), Op.Add, fraction_glyph(p))
 }
-glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(EXACT_CONSTANTS, exact_atom), reading_rows(GLYPH_WORDS.keys, glyph_word_call)]), number_suffix_readers: [read_repeating_decimal, read_mixed_number], keyword_readers: reading_rows(["ε", "Ε", "ω", "Ω"], read_exact_word)}
+glyph_atoms_extension = Extension{name: "glyph_atoms", atom_readers: joined_maps([reading_rows(VULGAR_FRACTIONS.keys, vulgar_fraction), {"\\": unknown_entity}, reading_rows(TRUTH_GLYPH_STARTS.keys, truth_atom), reading_rows(GLYPH_WORDS.keys, glyph_word_call)]), number_suffix_readers: [read_repeating_decimal, read_mixed_number, read_glued_glyph_word], keyword_readers: reading_rows(["ε", "ω"], read_glyph_word)}

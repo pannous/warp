@@ -9,8 +9,8 @@ Neither is named `forest.warp`: that name is what `use forest` loads.
 Near and mid trees can be the EZ Tree meshes in `lib/meshlets.warp` (`samples/graphics/ez_trees`, four species
 in order: pine, oak, birch, autumn). ez_forest's horizon view uses `forest_horizon`. The largest crowns, out to where a tall crown is about
 40 px, are the far stride of the medium preset (`*_far.eztree`, one leaf card in eight) while the triangle
-budget lasts. A crown that does not fit stays the shaded crown and the dark pine, the same billboard the
-earlier forest drew. The meshed trees sample the near atlas (full-size leaves, id 3 in `ez_trees/atlas.bin`). A fresh bin
+budget lasts. A crown that does not fit is the baked impostor of that species' finest mesh when
+atlas entry 4 is present, and otherwise the shaded crown and the dark pine. The meshed trees sample the near atlas (full-size leaves, id 3 in `ez_trees/atlas.bin`). A fresh bin
 (zlib RGBA8) is uploaded in one read; a missing or stale stamp rebuilds the `.rgba` beside it
 (sources and licences: `ez_trees/NOTICE.md`). `samples/graphics/tree_study.warp` draws the medium presets
 full size, the trees the EZ Tree demo opens on.
@@ -49,7 +49,8 @@ A tree
 whose sprite detail is near or mid picks a level with `chosen_level` (one pixel, `FOREST_PIXEL_ERROR`). The
 distance is divided by the tree's scale, because the stored error is in tree heights and the draw is
 `height * FOREST_TREE_SCALE` (1.6, the same scale the billboard shader reads as `$tree_scale`). Clusters of
-that level are frustum culled in the tree's own frame. Far sprites stay billboards. At most `MESH_TREE_CAP`
+that level are frustum culled in the tree's own frame. Far sprites are impostor quads of the same scale
+when atlas entry 4 is present, and the shaded crowns when it is missing. At most `MESH_TREE_CAP`
 (64) trees are meshed, and at most `MESH_TRIANGLE_BUDGET` (150000) triangles. The nearest meshable trees are
 taken first. A tree that does not fit stays a billboard, except the first, which may be partial. Draws are
 The draw uses a depth buffer. Triangles inside one cluster stay in file order.
@@ -75,13 +76,19 @@ ez_forest uses `paint` of a shader with its own vertex stage, which draws `insta
 (`lib/host/native_host/gpu.warp`, the existing instanced-quad path). The first `sprite_count` quads are the
 sprites that stayed billboards: the sky (which paints the meadow per pixel too) or a far tree. Each mesh cluster is then `MESHLET_TRIANGLES`
 quads, one a triangle and the last corner a repeat so the strip's second triangle has no area. The other storage
-arrays are the places, the triangle spans, the packed vertices, the texels (v and the vertex normal), and the triangles: six, which is
-the host's limit. The fragment draws a billboard tree lit by a low sun in the billboard's frame:
+arrays are the places, the triangle spans, the packed vertices, the texels (v and the vertex normal), the triangles,
+the near atlas and the impostor atlas: eight, which is the host's limit. The shade table is a constant in the shader.
+The fragment draws a billboard tree lit by a low sun in the billboard's frame:
 tiered ragged pines, oak and autumn crowns of seven clumps (backlit rims when the sun is behind), airy birches with
 scarred white bark, each tinted by a hash of its position; the sky quad paints sky, sun, clouds and, below the horizon,
 the meadow per pixel; everything hazes with distance. A mesh triangle samples the species bark or leaf from the near atlas. Leaves use a four-tap footprint
 so a small card does not sparkle, and the lighting is the study's hemisphere plus the forest sun, from the
 vertex normal (a coarse level with no stored normal uses the face). The sample starts at SIDE = 1000. The paint asks for a depth target. Sprites are drawn near-first so a farther
-fragment fails the depth test. Farther than the meshed band, a tree is the clumped crown or the tiered pine.
+fragment fails the depth test. Farther than the meshed band, an EZ sprite is the impostor: eight views around
+the trunk (`IMPOSTOR_VIEWS`), the two nearest blended by `impostor_view`, lit by the baked normal and the same
+sun, and alpha-tested like the leaves. The quad is the mesh scale tall, `impostor_radius` of the finest level
+wide, the trunk at the sprite's x z and the base at y = 0, with no height jitter. `atlas.py` bakes that sheet
+from the hero medium meshes into atlas entry 4 (version stays 1; entries 1–3 keep their compressed bytes).
+Without the entry the tree is the clumped crown or the tiered pine.
 
 A million trees are not uploaded. The GPU sees one view's sprites and the clusters that view meshed.

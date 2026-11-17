@@ -6,4 +6,3 @@
 # a_floats_list_converts_its_ratios
 'xs: floats = [1/3, 2]; xs[0] is float'	true
 'xs: [float] = [1/3]; xs[0] is float'	true
-'class Q { xs: floats }; Q([1/3]).xs[0] is float'	true

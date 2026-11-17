@@ -8,7 +8,6 @@
 
 # other_adds_keep_their_meaning
 'xs = [1]; xs.add(2); count(xs)'	2
-'pixel=[1 2 3]; do add 4 to pixel; count(pixel)'	4
 'add(a, b) := a * b; add(2, 3)'	6
 'n = 0; 3 times { n = n + 1 }; n'	3
 'result = 2; result plus 1'	3

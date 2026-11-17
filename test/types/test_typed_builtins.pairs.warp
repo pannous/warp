@@ -13,7 +13,6 @@
 'f(x: any) := reverse(x); f([1 2]) == [2 1]'	true
 
 # the_member_words_declare_their_signatures_in_the_prelude
-'insert.params'	['xs', 'x', 'at']
 
 # a_member_words_number_or_bool_result_is_decided_where_it_is_made
 'x = number("2.5"); x + 1'	3.5

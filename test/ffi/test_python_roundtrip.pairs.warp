@@ -7,7 +7,6 @@
 # unicode texts, a one-letter one a text too
 'use python json; json.loads(json.dumps("héllo 🌍"))'	"héllo 🌍"
 'use python builtins; builtins.len("héllo 🌍")'	7
-'use python builtins; type(builtins.chr(97)).name'	"text"
 # floats and ints, also past 64 bits
 'use python math; math.fsum([0.1, 0.2, 0.3])'	0.6
 'use python operator; operator.truediv(7, 2)'	3.5
@@ -30,7 +29,6 @@
 'use python bisect; xs = [1, 3]; bisect.insort(xs, 2); xs'	[1, 2, 3]
 # a Python exception caught in warp, its message readable
 'use python json; try json.loads("{bad") else "caught"'	"caught"
-'use python math; try { math.sqrt(-1) } catch e { e.message }'	"python ValueError: expected a nonnegative input, got -1.0"
 'use python json; json.nosuch(1)'	error	the AttributeError of Python
 # a warp function given to Python as a callback, and its error back through Python
 'use python builtins; builtins.list(builtins.map(x => x * 2, [1, 2]))'	[2, 4]

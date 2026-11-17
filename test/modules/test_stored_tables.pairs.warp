@@ -19,3 +19,4 @@
 'use storage; class U{n: int}; stored_add("u", U(1)); stored_page("u", U, 3, 2)'	[]
 'use storage; class U{name: text; age: int}; stored_add("u", U("Ann", 30)); stored_add("u", U("Bo", 4)); stored_found("u", U, "age > ?", [20])#1.name'	"Ann"
 «use storage; class U{name: text}; stored_add("u", U("it's")); count(stored_found("u", U, "name = ?", ["it's"]))»	1
+'use storage; class U{n: int}; stored_add("u", U(5)); stored_table("u", U)#1.n'	5

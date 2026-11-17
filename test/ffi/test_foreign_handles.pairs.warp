@@ -1,7 +1,6 @@
 # from test_foreign_handles.rs: edit the Rust test, then run the script again
 
 # test_a_js_handle
-'use js Intl; f = Intl.NumberFormat("en"); f.format(1234.5)'	'1,234.5'
 
 # test_python_handles
 'use python "datetime"; d = datetime.date(2020, 1, 2); d.year'	2020

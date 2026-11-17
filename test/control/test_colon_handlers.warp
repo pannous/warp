@@ -7,9 +7,6 @@ n + 1' 2
 is! 'n = 1
 on every 5 seconds: print n + 1
 n' 1
-is! 'n = 1
-at 9pm: print n
-n + 1' 2
 
 # a_listener_body_after_a_colon_is_the_rest_of_the_line
 is! 'x = 0

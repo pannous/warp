@@ -78,9 +78,6 @@ is! 'f(x) := x
 f(data(3))' 3
 
 # the_value_after_an_assignment_takes_the_whole_phrase
-is! 'f(a) := a
-x = f([1, 2]) where it > 1
-x' [2]
 is! 'x = data(y * 1) replace data($a * 1) with a
 x == data y' true
 

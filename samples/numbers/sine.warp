@@ -1,8 +1,8 @@
 #!/usr/bin/env warp
 # the sine function computed by hand from its Taylor series
-def sin(x:real):
+def sin(x: real):
 	if(x < 0) return - sin(-x)
-	x = x % τ # modulo 2π because it's periodic and we lose precision the further we leave zero 
+	x = x % τ # modulo 2π because it's periodic and we lose precision the further we leave zero
 
 	# magical taylor constants
 	S1 = -1 / 6
@@ -17,4 +17,4 @@ def sin(x:real):
 	r = S2 + z * (S3 + z * S4) + z * w * (S5 + z * S6)
 	return x + z * x * (S1 + z * r)
 
-sin(π / 2) == 1 # almost precise! 
+sin(π / 2) == 1 # almost precise!

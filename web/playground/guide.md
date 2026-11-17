@@ -154,7 +154,12 @@ Examples: conditions; samples: control_flow, fizzbuzz
 
 A loop repeats work, so you write it only once.
 
-`for` runs once for each number.
+Do something repeatedly:
+```warp
+3 times: print("hi")
+```
+
+`for` runs once for each number:
 
 ```warp
 for i in 1 to 3 { print i }
@@ -384,7 +389,7 @@ Complex numbers come with `use complex`: `ⅈ` is the imaginary unit, √-1.
 
 ```warp => "-5+10ⅈ"
 use complex
-text((3 + 4ⅈ) * (1 + 2ⅈ))
+(3 + 4ⅈ) * (1 + 2ⅈ)
 ```
 
 Examples: numbers; samples: simple, factorial, power, gcd, collatz, quadratic, sum, sin, sine, measurements, units_dynamic, dates, bits, complex_numbers, complex_roots
@@ -809,32 +814,51 @@ Examples: forms; samples: server, route_headers, hosting, worker
 
 ## Paint
 
-`use draw` paints pixels on a canvas, and `show()` shows it. A shader colors every pixel at once on the graphics card: [[#Shaders]] below.
+To draw on the canvas 
+```warp
+use draw
+canvas(200, 120)
+circle(60, 60, 40, red)
+rect(110, 30, 70, 60, blue)
+show()
+```
 
-`use image` loads a picture from a BMP or JPEG file, `image(./photo.jpg)`, or makes one from a function of the column and row, `image(64, 48, (x, y) => rgb(4 * x, 5 * y, 128))`. Its changes give a new picture: `flipped`, `mirrored`, `cropped`, `tinted`, `grayed`, `blurred`, `each_pixel`; `show()` paints it and `.save(./out.bmp)` writes it.
+```warp
+use image
+sunset = image(160, 90, (x, y) => rgb(255, 2 * y, 90 + x))
+sunset.mirrored.blurred.show()
+```
 
-Examples: frames; samples: paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles
+Pictures also load, change: `flipped`, `cropped`, `tinted`, `grayed`, `each_pixel` and save
+
+```warp
+use image
+photo = image(./samples/graphics/photo.jpg)
+postcard = photo.cropped(20, 10, 120, 90).mirrored.tinted(orange, 0.3)
+postcard.show()
+```
+
+Every pixel at once on the graphics card: [[#Shaders]].
+
+Examples: frames; samples: postcard, paint_text, color_swatches, finger_paint, paint_function, window_size, load_jpeg, load_bmp, make_image, circle, filled_circle, mandelbrot_canvas, particles, pga_visual
 
 ## Shaders
 
-A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a shader: it returns the pixel's color as red, green and blue between 0 and 1.
+A shader is a small program the graphics card (GPU) runs for every pixel at once. `paint` turns a warp function of the pixel's position into a **shader**: it returns the pixel's color as red, green and blue between 0 and 1.
 
 ```warp
 use math
-stripes(x, y) := [0.5 + 0.5 * sine(x / 4), 0.5 + 0.5 * sine(y / 4), 0.8]
+stripes(x, y) := [sine(x / 4), sine(y / 4), 1]
 paint(stripes, 64, 32)
 ```
 
-The function may call other functions; `shader_of(stripes)` shows the shader code it becomes. Paint it again in a loop for moving pictures.
-
-You can also write the shader yourself in WGSL, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
-`use compute_toys` runs shaders from [compute.toys](https://compute.toys) as they are: `compute_toy(shader { … })`.
+You write your shaders in the same language that you write your normal programs. It will be compiled to WGSL for the GPU, the web's shader language, inside `shader { … }`. In there `$name` reads the warp variable `name`.
 
 Examples: shader, "shader mouse"; samples: shader, webgpu, paint_text_gpu, shader_brush, shader_trails, warp_compiled_wgsl_shader, julia, voronoi, sdf_scene, ocean, scene_3d, kaleidoscope, lava_lamp, northern_lights, ringed_planet, manual_3d_object_viewer, gpu_visualizer, aquarium, gaussian_splats, fish, fluid_25d
 
 ## GPU
 
-Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and maps heavy enough to pay for the transfer move to an accelerator such as the graphics card (GPU).
+Warp parallelizes bulk operations *automatically*: lists of numbers run as [SIMD](https://en.wikipedia.org/wiki/Single_instruction,_multiple_data) loops, and big computations may move to an accelerator such as the graphics card (GPU), if it is heavy enough to pay for the transfer.
 
 To tune the performance yourself, ask for the GPU explicitly with `@gpu`:
 
@@ -845,8 +869,9 @@ total = sum(xs.map(x => sin(x) * exp(x) + cos(x * 3)) @gpu)
 
 A heavy `map` over a very long list of floats (sin, exp and the like, from about 300 000 items) runs on the graphics
 card by itself, and says so once. The graphics card computes in single precision, so results are approximate by
-design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` after the map, before it, or on a
-block or function when every digit counts; `@gpu` asks for the graphics card from about 30 000 items.
+design: a sum of 40 000 cosines may be off by about 40 000 × 2⁻¹¹. Write `@cpu` before or after a map, or on a
+block or function when every digit counts; 
+<!-- `@gpu` asks for the graphics card from about 30 000 items. -->
 
 [[#Shaders]] above shows how to draw directly on the GPU.
 
@@ -875,8 +900,20 @@ use sound
 play C4
 play(C4+E4+G4, 1s)
 play(chord(A3, minor), 1s)
-play(scale(D4, dorian), 150ms)
+🎶
 ```
+
+As always, to see everything that a module provides, you can use 
+```warp
+help(sound)
+```
+
+To find gems such as 
+```warp
+use sound
+play(scale(D4, dorian), 150ms) 
+```
+
 
 Examples: melody; samples: music, harmony
 
@@ -888,7 +925,6 @@ Examples: melody; samples: music, harmony
 use sound
 tempo = 120
 play([C4 E4 G4 E4], beat(1/2))
-play(Pattern("c3 ~ [c3 c3] e3"))
 ```
 
 Examples: ; samples: rhythm, sound_patterns

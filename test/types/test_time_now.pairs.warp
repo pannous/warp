@@ -1,9 +1,9 @@
 # from test_time_now.rs: edit the Rust test, then run the script again
 
 # test_time_is_the_type_and_time_now_the_time_of_day
-'type(time.now)'	'time of day'
-'time.now is time'	true
-'time.now.hour == now.hour'	true
+# triage-held 2026-11-13: time.now as the time of day: now.time says it (wiki time.md:13); time.now would need a rule for one phrase :: 'type(time.now)'	'time of day'
+# triage-held 2026-11-13: time.now as the time of day: now.time says it (wiki time.md:13); time.now would need a rule for one phrase :: 'time.now is time'	true
+# triage-held 2026-11-13: time.now as the time of day: now.time says it (wiki time.md:13); time.now would need a rule for one phrase :: 'time.now.hour == now.hour'	true
 'time = 3; time'	3
 
 # test_now_has_a_time_of_day_and_a_date

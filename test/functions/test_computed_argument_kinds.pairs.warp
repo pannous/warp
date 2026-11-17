@@ -10,3 +10,16 @@
 # a variable keeps its kind whatever another function names its parameters; inside, a parameter is any value
 'f(x: int) := "int"; f(x: float) := "float"; h(n) := n; n = 2 * 3; f(n)'	'int'
 'g(x) := "any"; g(x: int) := "int"; k(x) := g(x); x = 2; k("a")'	'any'
+
+# a variable's kind is its own scope's: another function's x = "a" leaves this x a float (card local-x-widening)
+'f() := { x = "a"; x }
+x = -1.005; round_to(x, 2)'	-1.01
+'f() := { x = "a"; x }
+g() := { x = -1.005; round_to(x, 2) }
+g()'	-1.01
+'g() := { x = -1.005; round_to(x, 2) }
+g()'	-1.01
+'f() := { x = "a"; x }
+g() := { x = -1.005; round_to(x, 2) }
+[f(), g()]'	["a", -1.01]
+'x = -1.005; h = () => round_to(x, 2); h()'	-1.01
