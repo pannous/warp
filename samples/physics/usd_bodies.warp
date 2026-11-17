@@ -153,11 +153,14 @@ damping_ratio(restitution) := {
 	-l / sqrt(pi * pi + l * l)
 }
 
+# from body i's centre of mass to the point p
+arm(w, i, p) := [p#1 - w.pos#(3 * i - 2), p#2 - w.pos#(3 * i - 1), p#3 - w.pos#(3 * i)]
+
 # the velocity of body i's point p
 point_vel(w, i, p) := {
 	v = body_vec(w.vel, i)
 	o = body_vec(w.spin, i)
-	r = [p#1 - w.pos#(3 * i - 2), p#2 - w.pos#(3 * i - 1), p#3 - w.pos#(3 * i)]
+	r = arm(w, i, p)
 	[v#1 + o#2 * r#3 - o#3 * r#2, v#2 + o#3 * r#1 - o#1 * r#3, v#3 + o#1 * r#2 - o#2 * r#1]
 }
 
@@ -196,7 +199,7 @@ def contact_force(w: World, a: int, b: int, p: float[], n: float[], depth: float
 
 # a force at point p added to body i's force and torque sums
 def exerted(w: World, force: float[], torque: float[], i: int, f: float[], p: float[]) {
-	r = [p#1 - w.pos#(3 * i - 2), p#2 - w.pos#(3 * i - 1), p#3 - w.pos#(3 * i)]
+	r = arm(w, i, p)
 	force#(3 * i - 2) = force#(3 * i - 2) + f#1
 	force#(3 * i - 1) = force#(3 * i - 1) + f#2
 	force#(3 * i) = force#(3 * i) + f#3

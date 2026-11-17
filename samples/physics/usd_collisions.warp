@@ -74,10 +74,11 @@ def drawn(w: World) {
 		fade = max(0.0, 1 - s#(5 * k + 3) / 0.6)
 		circle(h#1, h#2, focal * s#(5 * k + 4) / h#3 * 0.9, with_alpha(rgb(90, 95, 108), 0.4 * fade))
 	}
-	order = sort([k for k in 0 ..< count], by: k => -seen([s#(5 * k + 1), s#(5 * k + 2), s#(5 * k + 3)], e)#3)
+	shown = [seen([s#(5 * k + 1), s#(5 * k + 2), s#(5 * k + 3)], e) for k in 0 ..< count]
+	order = sort([k for k in 0 ..< count], by: k => -shown#(k + 1)#3)
 	for k in order {
 		c = w.bodies#int(s#(5 * k + 5)).color
-		p = seen([s#(5 * k + 1), s#(5 * k + 2), s#(5 * k + 3)], e)
+		p = shown#(k + 1)
 		r = focal * s#(5 * k + 4) / p#3
 		circle(p#1, p#2, r, shade(c, 0.55))
 		circle(p#1 - 0.15 * r, p#2 - 0.2 * r, r * 0.78, shade(c, 0.8))
