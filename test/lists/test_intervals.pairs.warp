@@ -37,3 +37,5 @@
 'use intervals; use time; total_length([extent(Instant(0), Instant(60000)), extent(Instant(30000), Instant(90000))])'	90000
 # an extent of two times, its bounds compared in the module as times (sample free_slots)
 'use intervals; use time; e = extent(Instant(1000), Instant(2000)); e.lo < e.hi'	yes
+# two dates in an extent, compared in the module as times
+'use intervals; e = extent(2024-01-01, 2024-02-01); e.lo < e.hi'	yes
