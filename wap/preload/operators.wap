@@ -31,6 +31,8 @@ class Alias { spelling: text, canonical: text, fixity: Fixity = Fixity.Anywhere,
 # "Functions group externally"). It joins its operands into a phrase; the stages after decide what the phrase means.
 glue_group = "access"
 juxtaposition_group = "juxtaposition"
+# the group whose left operand is a parameter list: its round brackets are the list, never a grouping
+parameters_group = "arrow"
 
 precedence_groups = [
 	Group("access", ["superscript"]),

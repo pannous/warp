@@ -49,9 +49,9 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 enum Side { Left, Right }
 
 # an operand of an operator, in brackets only when it would not be applied first without them: `1 + (2 * 3)` prints
-# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets
+# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets; a parameter list keeps its own, `(int) -> int`
 operand_text(operand: Node, call: Node, side: Side) as text := {
-	inner = ungrouped(operand)
+	inner = if side == Side.Left and group_written(call) == parameters_group then operand else ungrouped(operand)
 	if needs_brackets(inner, call, side) then "(" + formatted(inner) + ")" else formatted(inner)
 }
 
