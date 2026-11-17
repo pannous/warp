@@ -255,3 +255,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
+- **A used module's functions are emitted even when nothing calls them** (wap/compiler.wap: a module's bound statements
+  go first in the program's Block), while the preload's uncalled definitions are left out. Bends "smaller and faster".
+  Reason: a module is code whose statements must run, so it joins the program whole. Paid off when typing leaves out
+  the module definitions nothing calls, as it does the preload's.
