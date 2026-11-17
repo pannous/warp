@@ -85,7 +85,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
-	Get(subject, key) => get_typed(n, subject, key, s, f)
+	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
 	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
 	Symbol(name) => name_typed(n, s, f)
@@ -210,6 +210,18 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then typed_form(arguments#at, s, f, wanted#at) else given#at)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
+}
+# the function a name calls with these typed arguments, among these candidates, typed for their types
+function_chosen(n: Node, called: Node, candidates: list, given: list, s: TypingState, expected: Node?) as TypedFunction := function_typed(chosen_definition(n, called, candidates, given, expected), given.map(argument => value_type(argument)), s, n)
+# A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
+# Get then calls (records and maps come with Record and Map)
+part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = typed_form(subject, s, f, ø)
+	named = s.definitions.filter(definition => text(declared_name(written_name(definition))) == text(key))
+	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
+	chosen = function_chosen(n, key, named, [typed], s, expected)
+	called = with_fact(with_fact(refitted(Get(typed, key), n), BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
+	with_type_of(called, chosen.result)
 }
 # the definitions a called name may mean: the one it was bound or typed to, else its candidates
 candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {

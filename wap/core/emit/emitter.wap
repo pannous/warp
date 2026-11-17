@@ -93,7 +93,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(items, Bracket.Square, separator) => Code(layout(form, p), items.flat_map(item => code(item, p, f).instructions) + instruction(ARRAY_NEW_FIXED, [list_of(form, p), #items]))
-	Get(subject, key) => Code(layout(form, p), item_reached(subject, key, p, f) + instruction(ARRAY_GET, [list_of(subject, p)]))
+	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else Code(layout(form, p), item_reached(subject, key, p, f) + instruction(ARRAY_GET, [list_of(subject, p)]))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
