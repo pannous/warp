@@ -103,9 +103,17 @@ operated_form(n: Node) as Node := match n {
 	List(items, bracket, Separator.Space) => in_brackets(phrase_read(tokens_of(items)), bracket)
 	List(items, bracket, separator) => List(items.map(operated), bracket, separator)
 	Key(left, Op.Colon, right) => Key(operated(left), Op.Colon, operated(right))
-	Key(left, op, right) => refused(n, "the operator stage reads notation, not the old reader's fold of " + op)
+	Key(left, Op.None, right) => Key(operated(left), Op.None, operated(right))
+	Key(left, op, right) => key_read(n, left, op as text, right)
 	Symbol(spelling) => word_read(n, spelling)
 	_ => n
+}
+
+# a key the reader built by an operator (`a = 1`, the colon's rules) applied as that infix operator: (Call = a 1)
+key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
+	use = reading_as(placed_like(symbol(spelling), n), Fixity.Infix)
+	if use == ø { refused(n, "no infix operator " + spelling + " in the operator table") }
+	Call(symbol(use.spelling), [operated(left), operated(right)])
 }
 
 # a word standing alone, by its canonical spelling

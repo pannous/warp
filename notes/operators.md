@@ -6,8 +6,8 @@ wap/core/parse/operators.wap, the printer wap/core/format.wap. What the code dec
 - **One parse, juxtaposition included.** The stage is an operator-precedence parse in which juxtaposition is two
   groups of the table: glued (`3ms`, `f(x)`, `a.b(c)`; group access, with `.`) and spaced (looser than every
   expression operator, tighter than `|>`, `->`, `=`). Juxtaposition builds a phrase, not a Call: stage 2 decides it.
-  `print 1 + 2` is `[print, (Call + 1 2)]`. Asked the user whether `square 3 * 3` should be refused instead
-  (wiki/operator.md and wiki/precedence.md disagree); the table's one relation changes either way.
+  `print 1 + 2` is `[print, (Call + 1 2)]`, `square 3 * 3` is square(9) (user, decision spaced-call-precedence;
+  wiki/precedence.md's refusal line dropped).
 - **Spacing picks the fixity** (the minus rule, for every operator): attached only to what follows → prefix, with
   juxtaposition before it (`a -b` is `[a, (Call - b)]`); attached only to what precedes → postfix where it has one,
   else infix (`1- -3`); both or neither → infix. At the start of a phrase or after an operator, prefix.
