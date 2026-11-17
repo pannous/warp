@@ -7,7 +7,7 @@ FRESH_MARK = "·"
 
 # the template with each hole replaced by its binding
 built(template: Node, bindings: map) as Node := match template {
-	Symbol(name) => if bindings.has(name) then bindings[name] else symbol(name)
+	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
 		pattern = pattern_called(head)
 		if pattern == ø { Key(built(head, bindings), Op.None, List(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
@@ -18,6 +18,10 @@ built(template: Node, bindings: map) as Node := match template {
 	Number(value) => Number(value)
 	_ => template
 }
+
+# the items a rest hole took, written as one node where the template names it without dots: `$a` for `$a...` is the
+# phrase `print "a"` (core/parse/reader.wap phrase_of)
+taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items); _ => taken }
 
 # items of a template, a rest hole replaced by the items it took
 built_items(items: list, bindings: map) as list := {

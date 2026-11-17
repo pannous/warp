@@ -37,7 +37,7 @@ use "core/emit/emitter.wap"
 use "core/emit/primitives.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
-RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/definitions.wap"]
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/definitions.wap"]
 rule_file(name: text) as text := program.folder + "/" + name
 for file in RULE_FILES { rules_loaded(operated_program(notation(read(rule_file(file)), rule_file(file)))) }
 
@@ -55,8 +55,8 @@ prepared(code: Node, modules: list) as Block := bound_program(lowered_program(co
 # functions are there for any caller; typed, then rewritten by the typed rules
 compiled(file: text) as list := {
 	code_read = declared(file)
-	modules = modules_used(code_read, declared)
-	whole = Block((modules + [code_read]).flat_map(code => statements_in(prepared(code, modules))))
+	modules = modules_used(code_read, declared) + [code_read]
+	whole = Block(modules.flat_map(code => statements_in(prepared(code, modules))))
 	library_code = bound_program(lowered_program(preload), [])
 	module_bytes(emitted(typed_by_rules(typed_program(whole, library_code), library, library_code)))
 }
