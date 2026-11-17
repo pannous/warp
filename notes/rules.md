@@ -7,6 +7,11 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   operator stage and taken in when loaded: `pattern Name = shape` declares a pattern, `rule P => T` a rule. So a
   pattern is written in exactly the language it matches (operated code: `$a ÷ $b` is `(Call ÷ $a $b)`). The rule and
   pattern lines leave the program; what stays is surface.
+- **Rest holes anywhere:** `$xs...` takes as few items as let the parts after it match (all that remain when last),
+  so `if $c... then $a... else $b...` stops the condition at the first then. In a template `$xs...` splices the items,
+  `$xs` writes them as one node (a phrase, the item itself, ø for none).
+- **Refusals are rules too:** `rule P => refuse "fix-it"` refuses what P matches, by the usual specificity: the
+  dangling else `if a then if b then x else y` (core/sugar/conditions.wap).
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
   type, so `(If $c: Node $then: Node …)` is three typed holes). The type rides as the hole's `type` fact. A shape
   type (Node, Symbol, List, Key, Text, Number, Char, a declared pattern) is checked here; a value type (`$k: int`,
@@ -29,4 +34,4 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 ## Open
 
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
-- Lowering's hand cases (phrases, `if … then … else`, `=>`) move into core/sugar rules next.
+- Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
