@@ -189,11 +189,15 @@ named_definition(definition: Node) as list? := match definition {
 #
 # Code is matched as quoted code, `data((If $condition $then $else))`; a case or a value pattern reads its holes as
 # names, as an arm does. A type of a hole in code is a case of Node (`$name: Symbol`), the type word that tests it;
-# `Node` itself tests nothing. A body with no hole at all reads as before, its words binding (card named-pattern-holes).
+# `Node` itself tests nothing. Code in round brackets is code even without a hole, `pattern Break = (Break)`, built by
+# `Break()`. Any other body with no hole at all reads as before, its words binding (card named-pattern-holes).
 pattern_body(body: Node) as Node := {
-	if is_quote(body) or not nodes_in(body).any(is_hole_symbol) { return body }
+	holed = nodes_in(body).any(is_hole_symbol)
+	if is_quote(body) or not (holed or is_code_body(body)) { return body }
 	if is_value_body(body) then bottom_up(bottom_up(rest_holes_typed(body), field_shorthand), hole_unmarked) else List([quote_symbol, bottom_up(rest_holes_typed(body), code_hole_typed)], Bracket.Round, Separator.None)
 }
+# a round group that is no case call: code, `(Break)`, `(Call $called $arguments...)`
+is_code_body(body: Node) as bool := bracket_of(body) == "(" and not is_value_body(body)
 is_hole_symbol(n: Node) as bool := n is symbol and #name_of(n) > 1 and name_of(n).starts_with(HOLE_MARK)
 HOLE_MARK = "$"
 # a list, a map or a case `Key(…)`: matched as a value, its holes the names of an arm
@@ -345,7 +349,7 @@ pattern_constructor(statement: Node) as list := {
 	pattern = named#2
 	holes = pattern_holes(pattern)
 	value = built_value(pattern, holes)
-	if #holes == 0 or nodes_in(value).any(is_open_part) { return [] }
+	if (#holes == 0 and not is_quote(pattern)) or nodes_in(value).any(is_open_part) { return [] }
 	[Key(call_of(named#1, holes.map(hole => typed_parameter(pattern, hole))), Op.Define, value)]
 }
 # `_`, a rest word `*xs`, a type word (`int`; a capitalized `Key` is a case), or an operator missing a side, the rest `..`
