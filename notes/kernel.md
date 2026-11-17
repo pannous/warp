@@ -7,7 +7,7 @@ and its output is warp code that must type-check (Scala 3 typed quotes; Rust's m
 categories). notes/layers.md (notation / kernel / sugar) is the starting point; this note makes the kernel exact and
 measures what still knows surface forms. Research only: no code changed.
 
-## 1. The kernel: 14 forms
+## 1. The kernel: 13 forms
 
 One canonical Node shape each (today the emitter accepts several: `if` alone arrives as `Else(Then(If c))`,
 `Then(If c)` and `Question(c, Colon)`). A kernel head is a reserved `·` word no program can write, as the hidden words
@@ -15,53 +15,62 @@ One canonical Node shape each (today the emitter accepts several: `if` alone arr
 
 | # | form | warp it comes from | note |
 |---|------|--------------------|------|
-| 1 | literal: number, text, char, yes/no, ø, symbol, quoted Node | `3`, `"a"`, `'a'`, `data a + b` | quote = data that is not run |
+| 1 | literal: number, text, char, yes/no, ø, symbol; `quote` of a Node with `splice` holes | `3`, `"a"`, `'a'`, `data a + b`, `data f($x)` | quote = data that is not run; splice = the emitter's spliced quote |
 | 2 | name: a local, parameter or global read | `x` | |
 | 3 | `define name(params: T = d …): R := body` | functions, constants, `global` as an attribute | binds |
-| 4 | `set place = value`, place = name, `x.f`, `x#i` | `x = 1`, `p.x = 2`, `xs#1 = 3` | the effect |
+| 4 | place: `get place` and `set place = value`, place = name, `x.f`, `x#i` | `p.x`, `xs#1`, `x = 1`, `p.x = 2`, `xs#1 = 3` | read and write are twins |
 | 5 | `fn (params) body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` | closure conversion stays a kernel lowering |
 | 6 | `call f args` | `f(1, 2)`, `x.f(y)`, operators `a + b` | one call; dispatch by arity/type is a typed rule |
-| 7 | `prim word args` | intrinsics, runtime words, host words, `wasm i64.rem_s` | today 6 separate emitter branches |
+| 7 | `prim word args` | see the prim list below | today ~10 separate emitter branches |
 | 8 | `if c a b` | `if/unless/?:/then-else`, `x if c` | |
 | 9 | `seq a b …` (a block, its own scope) | `{…}`, `(a; b)`, indented lines | |
 | 10 | `loop body` with `break`, `continue`, `return v` | `while`, `for`, `n times`, `until` | `while c {b}` = `loop { if not c break; b }` |
 | 11 | `record Name {fields} variants` | `class`, `enum`, `type X = A \| B`, records | the one type declaration |
 | 12 | `case subject arms` (kind/variant test + bind) | `match`, node cases | kept as kernel: decision in layers.md #13 |
 | 13 | `try body handler` | `try x else y`, `catch e`, `except` | wasm try_table |
-| 14 | `phrase a b …` | `f x`, `print -1`, `width /height` | juxtaposition: the only form with no meaning of its own |
+
+The prims, each one emitter case instead of a branch per surface spelling: `convert x T` (every `as`: the
+emitter's `Op.As` branches per target today), `new_list items`, `new_map entries`, `new Name fields` (list, map and
+instance literals; today `Name{…}` vs `name:{…}` is decided inside the emitter), intrinsics, runtime words, host
+words, `wasm i64.rem_s`. A prim the kernel lacks means the emitter keeps a branch: that is the test of the list.
 
 Meta forms beside the kernel (they build the language, they compute nothing): `use module`, `rule …` (today `rewrite`,
 `infix operator`), `operator` rows (the notation's precedence table).
 
-`phrase` is the honest form for warp's type-directed readings: the reader leaves `f x` / `print -1` as a phrase,
-a typed rule gives it a meaning (`call print (-1)` where print takes a value), and a phrase no rule claims is the
-refusal naming its readings. Refuse-never-guess becomes one place instead of the ~30 parser and emitter spots of today.
+**`phrase` is not a kernel form.** Juxtaposition (`f x`, `print -1`, `width /height`) is a reader form: the reader
+leaves it as a phrase, a rule gives it a meaning before the kernel (`call print (-1)` where print takes a value), and a
+phrase no rule claims is refused with its readings. Refuse-never-guess becomes one place (the end of the signature
+stage) instead of the ~30 parser and emitter spots of today, and no phrase ever reaches the analyzer.
 
 Value layout assumed (unchanged, notes/self_hosting.md "Value layout"): int i64, float f64, yes/no i32, char i32,
 text `(array (mut i8))`, list `struct(len, items)`, everything of unknown kind a boxed `$Node(kind, data, value)`.
 The kernel needs nothing new from it: `prim` is the door to it.
 
-## 2. Two stages, read off the pattern
+## 2. Three stages, read off the pattern
 
 | stage | runs | pattern may ask | output | examples today |
 |---|---|---|---|---|
-| **spelling rule** | after parse, before analysis | shape only (+ scope: bound/unbound) | any warp, reaches the kernel | `for` → `while`, `try x else y`, `unless`, `a ?: b`, Rust `Color::Red`, comprehensions |
-| **typed rule** | after analysis, on kernel code | kinds and signatures of its holes | kernel code, analysed again; a type error in it is the rule's bug | `$a + $b: Meters`, `print -1`, `x is T`, `xs.map(f)` inlined, `d[1]` on a number-keyed map, broadcasting |
+| **1 shape** | after parse | shape only (+ scope: bound/unbound) | any warp | `for` → `while`, `try x else y`, `unless`, `a ?: b`, Rust `Color::Red`, comprehensions, ranges |
+| **2 signature** | after a declaration prescan, before analysis | declared signatures and types: `takes value`, `is function`, `is type`, `$x: Meters` of a declared parameter | kernel code | `print -1`, `x is T`, `print #xs`, overloads by arity, broadcasting over number parameters; every phrase resolved or refused here |
+| **3 kind** | after analysis, on kernel code | inferred kinds of its holes | kernel code, re-checked; a type error in it is the rule's bug | `d[1]` on a map that started `{}` (number_keys), `xs.map(f)` inlined by the item kind, `Meters + Meters` of variables |
 
-- The engine picks the stage from the pattern: a typed hole (`$a: Meters`) or a `where … takes/is function/is type`
-  makes a typed rule, everything else is a spelling rule. No author chooses a stage.
-- A typed rule's pattern is always a kernel form (spelling rules ran before), so **the analyzer only ever sees kernel
-  code**. That is what makes the split clean.
+- The engine picks the stage from the pattern: a shape-only pattern is stage 1, one asking a declared fact stage 2,
+  one asking an inferred kind stage 3. No author chooses a stage.
+- **Typed patterns are written in surface syntax** (`$a + $b where $a: Meters`) and lowered by stage 1 like any
+  code, so a stage-3 pattern is a kernel form and **the analyzer only ever sees kernel code**.
 - Measured: of the 410 rules in extensions/sugar/, 82 (20%) ask about names or signatures (`is function`,
-  `takes value`, `is type`); none asks for an inferred kind yet: the operator overloads (notes/rewrites.md "Typed
-  overloads") test the code's shape and leave run-time kinds to the built-in. Typed rules on the analyzer's kinds would
-  let `Meters + Meters` fire on variables, not only literals.
-- The cost: the analyzer runs today inside the emitter, after every pass. The typed stage moves it before lowering
-  and re-analyses each function a typed rule changed (a fixpoint, as the emitter's widening rounds already are).
+  `takes value`, `is type`): **all 82 need only stage 2**, a declaration prescan, no inference. None asks for an
+  inferred kind yet; the operator overloads (notes/rewrites.md "Typed overloads") test the code's shape and leave
+  run-time kinds to the built-in. Stage 3 lets `Meters + Meters` fire on variables, not only literals.
+- Stage 3 is not monotone: the analyzer widens kinds (int → float, a parameter widened by a later call), so a rule that
+  fired on an early kind could be wrong later. Stage-3 rules fire only on final kinds, then the changed functions are
+  re-checked; a re-check that changes a kind a rule fired on is a compile error naming the rule, never a silent
+  re-fire.
+- Prerequisite: rules indexed by head and compiled to matchers (a `match` per head, not the interpreted rule list).
+  Without it the cost gate (section 3) blocks the big moves; arity_overloads (945 lines) would be tried at every call.
 
-Recommendation: these two stages, chosen by the pattern, with `phrase` as the one ambiguous kernel form. Alternative
-(one stage, all rules after analysis) would make the analyzer understand every surface spelling: the bloat this
-removes.
+Recommendation: these three stages, chosen by the pattern. Alternative (one stage, all rules after analysis) would
+make the analyzer understand every surface spelling: the bloat this removes.
 
 ## 3. Rule mechanics
 
@@ -83,10 +92,10 @@ removes.
   compiles itself with the rule (stage 2 proves the rule on the compiler's own source), then
   scripts/refresh-seed.sh (stages A B C). A rule form the seed cannot parse waits for a refresh (notes/rewrites.md
   already hit this with `infix operator as`).
-- **Compile cost** (stage 3 self build ≈3.1 T instructions, 11-13; full rebuild ≈10 T). Three risks: (a) rules tried
+- **Compile cost** (self build ≈3.1 T instructions, 11-13; full rebuild ≈10 T). Three risks: (a) rules tried
   per node: the engine already narrows by head word (`sugar_rule_heads`); every moved pass needs a head (a kernel
   head, an operator or a word) or it scans everything; (b) re-analysis after typed rules: per changed function only;
-  (c) template interpretation vs. a compiled pass. Gate per step: `--times` phase of the rule stage and stage-3
+  (c) template interpretation vs. a compiled pass. Gate per step: `--times` phase of the rule stages and self-build
   instructions within +1%, else the step waits for rule indexing.
 
 ## 4. Census (measured 2026-11-17 on origin/main 644169bcb8: `wc -l`, `git grep`)
@@ -97,7 +106,7 @@ Marks: **K** kernel (stays), **I** kernel infrastructure (tree walk, modules, li
 ### core/passes (10,755 lines)
 | file | lines | mark | what |
 |---|---:|---|---|
-| rewrites.warp | 2,718 | I | the rule engine itself: grows the typed stage, may shrink once rules compile to `match` |
+| rewrites.warp | 2,718 | I | the rule engine itself: grows stages 2 and 3, shrinks once rules compile to head-indexed `match`es (see "Infrastructure rows") |
 | prelude_words.warp | 1,331 | I | reached definitions of prelude and modules |
 | arity_overloads.warp | 945 | T | `twice(n)` / `twice(a, b)`: call resolution by arity, receiver |
 | lambdas.warp | 931 | K ≈830 / T ≈100 | closure conversion (K); `xs.map(f)` inlining and map-fold fusion (T) |
@@ -150,10 +159,24 @@ Marks: **K** kernel (stays), **I** kernel infrastructure (tree walk, modules, li
 | source_checks.warp + lints.warp | 357 | C |
 | type_tests.warp | 81 | T (`x is T` where T is a type: already an engine condition) |
 
-### core/emitter (6,297 lines)
-The dispatch (`group_expression` + `key_expression`, emitter.warp 1216–1530) has 130 branches; at least 25 name a
-surface form (spaced calls, `raise` words, three `if` shapes, `as` per target, `+=`, `/=`, `++`, `.name`). Estimate
-~100 lines leave once kernel shapes are canonical. The rest is K.
+### core/emitter (6,297 lines): the biggest lever
+The dispatch (`group_expression` + `key_expression`, emitter.warp 1216–1530, 315 lines) is an ordered if-chain of
+130 branches over surface shapes; at least 25 name one directly (spaced calls `f 3 4`, `raise` words, three `if`
+shapes, `as` per target incl. `as rational`, `+=`, `/=`, `++` on characters, `.name`, time literals, `Name{…}` vs
+`name:{…}`). And the emitter infers kinds while it emits: every emit word returns `TypedCode(kind, code)`, and ~200
+lines widen, join or re-read kinds (`widen_parameter`, `joint_kind`, `pending`, `rereads`; grep counts 63 + 88 + 47)
+beside analyzer.warp's own inference. Splitting analysis from emission (the analyzer decides every kind, a canonical
+kernel lowering runs once, the emitter only translates typed kernel to wasm) is the change that shrinks core most:
+estimated 2–3 k of 6.3 k lines (advisor estimate, not measured; the measured floor is the 315-line dispatch plus the
+~200 kind lines). The rest (byte codes, module layout, encoding, GC types, closures) is K.
+
+### Infrastructure rows, re-examined
+| file | lines | finding |
+|---|---:|---|
+| core/passes/rewrites.warp | 2,718 | the engine has 22 kinds of `where` condition (14 code properties, 4 context words, `takes`, origin, comparisons, `in […]`; ≥172 lines by function name) and 7 ordered sugar stages (first, early, declaration, comprehension, iteration, late, main; ≥251 lines). Typed holes and three stages chosen by the pattern replace both: ≥420 lines measured, ~1 k estimated |
+| core/passes/prelude_words.warp | 1,331 | I: which definitions of the prelude and modules a program reaches (`with_reached` 117 lines), aliasing, slices. No surface form; its free-name walks (`names_within`, `names_bound_in`) are one of the duplicates below |
+| core/emitter/prebuilt.warp | 1,144 | I: runtime.wasm and prebuilt module linking, relocation. No surface form |
+| binding analysis, duplicated | — | at least 7 passes walk bindings themselves: scope.warp `bound_names`, lambdas `names_bound`, number_keys `names_assigned`, rewrites `bound_by_definition`, prelude_words `names_bound_in`/`names_within`, uses `names_in`, arity_overloads `bound_at`. One scope analysis on kernel code replaces them (not counted in the totals) |
 
 ### extensions/sugar rule families (802 lines, 410 rules; 82 ask about names/signatures → T, the rest S)
 | family | lines | rules | T | | family | lines | rules | T |
@@ -191,14 +214,16 @@ type_readers, value_settlers, block_words) fold into "rules".
 | core/passes | 10,755 | 3,509 (S 1,157, T 1,991, C 361) |
 | core/parsing | 4,363 | 1,852 (S 1,635, T 217) |
 | core/analysis | 2,389 | 438 (T 81, C 357) |
-| core/emitter | 6,297 | ~100 (estimate) |
+| core/emitter | 6,297 | ≥515 measured, 2–3 k estimated (split analysis from emission) |
+| rule engine (inside core/passes above) | | ≥420 measured, ~1 k estimated |
 | runtime 4,019, native 4,498, rest 850 | 9,367 | 0 (not surface forms) |
-| **core** | **33,171** | **≈5,900 (18%; 34% of the front end parsing + passes + analysis)** |
+| **core** | **33,171** | **measured ≥6.7 k (20%); with the estimates ≈9–10 k** |
 
-Plainly: most of core is the emitter, runtime, native driver, rule engine and module linking, none of which knows a
-surface form. Surface-form knowledge in core is ≈5.9 k lines; as rules it would be an estimated 600–1,200 lines (sugar
-averages 2 lines a rule; a pass's rule set is guessed at 5–10× shorter), plus ~1,000 lines of C checks moving to
-extension lints unchanged. The kernel core after the migration: ≈27 k lines, ≈21 k of it outside the front end.
+Plainly: the surface-form knowledge alone (passes, parser, analysis) is ≈5.8 k lines; as rules it would be an
+estimated 600–1,200 lines (sugar averages 2 lines a rule; a pass's rule set is guessed at 5–10× shorter), plus ~700
+lines of C checks moving to extension lints unchanged. The second, larger lever is the emitter doing analysis and
+dispatching on surface shapes. Realistic kernel core: **18–20 k lines** if the emitter split and the typed-hole engine
+deliver their estimates, ≈26 k on the measured part alone. Runtime, native driver and linking (≈11 k) stay as they are.
 
 ## 5. What rule patterns need (from the census)
 
@@ -244,22 +269,30 @@ So: typed holes, type variables and, for units, type-level integers at most. Dep
 ## 6. Migration (strangler: one surface form at a time, tests as the net)
 
 Each step: a rule file in extensions/sugar/ (or an extension), the pass or parser branch deleted in the same commit,
-the form's test folder plus self-check green, stage-3 instructions within +1%. Never two forms in one step.
+the form's test folder plus self-check green, self-build instructions within +1%. Never two forms in one step.
 
-1. **The kernel contract, measured.** core/kernel.warp: `is_kernel(n)` for the 14 shapes, run under `--kernel-report`
+0. **Ranges, the pilot the user picked** (a separate worker builds it): `a to b`, `a … b` as rules
+   (extensions/sugar/ranges.warp, 5 rules today).
+1. **The kernel contract, measured.** core/kernel.warp: `is_kernel(n)` for the 13 shapes, run under `--kernel-report`
    between passes and emitter, listing every non-kernel shape still reaching the emitter, by form and owner
-   (passes.warp pass_owners already names owners). No behavior change; it is the migration's progress bar and turns
-   the emitter's three `if` shapes into one (delete two branches). Tests: smoke, self-check.
-2. **`try` as a spelling rule.** core/passes/tries.warp (94 lines) → `extensions/sugar/tries.warp`:
-   `rewrite try $x else $y => try·(… )`, `try $x catch $e $h`; the parser's `try` branch family (160 lines) shrinks to
+   (passes.warp pass_owners already names owners). No behavior change; it is the migration's progress bar. Tests:
+   smoke, self-check.
+2. **Split analysis from emission (the highest yield).** One canonical lowering to kernel shapes before the emitter
+   (the three `if` shapes become one, every `as` a `convert` prim, literals `new_*` prims); the analyzer decides every
+   kind on kernel code; the emitter translates typed kernel and stops widening and dispatching on surface shapes. In
+   slices, one emitter branch family at a time, each slice deleting its branches. Estimated 2–3 k emitter lines; it is
+   also what stage 3 needs (kinds before lowering). Careful path (parser/emitter): self-check, gate, touched folders.
+3. **`try` as a spelling-rule pilot.** core/passes/tries.warp (94 lines) → `extensions/sugar/tries.warp`:
+   `rewrite try $x else $y => try·(… )`, `try $x catch $e $h`; the parser's `try` family (160 lines) shrinks to
    reading a phrase. Proves block holes and positions through a rule. Tests: test/control (test_bare_try,
    test_assert_else), test/errors.
-3. **`x is T` as the first typed rule.** core/analysis/type_tests.warp (81 lines) → a rule
-   `$x is $T where $T is type => is_type($x, "$T")`, which the engine can already say; then make `is type` read the
-   analyzer's facts instead of the program's spelling. Proves the typed stage and the stage-from-pattern choice.
-   Tests: test/types.
+4. **`number_keys` as the first stage-3 rule.** core/passes/number_keys.warp (173 lines): `d[1]` on a map that started
+   as `{}` reads the entry "1". A true inferred-kind rule (the map's kind comes from its first value), so it proves stage
+   3, final kinds and the re-check. (`x is T` is only stage 2 and proves less.) Tests: test/lists, test/types.
 
-Then by size of win: arity_overloads (945, T), node_matches + node_cases (648), plain_enums + enum_declarations (306),
-definitions (260), the parser's `if`/`for` heads (466).
+Before the big moves (arity_overloads 945, node_matches + node_cases 648): head-indexed compiled matchers (section
+2). Then by size of win: plain_enums + enum_declarations (306), definitions (260), the parser's `if`/`for` heads (466),
+one scope analysis replacing the duplicated binding walks.
 
-Open for the user (via warp-interviewer): the two-stage design above, and whether `phrase` becomes a kernel form.
+Open for the user (via warp-interviewer): the three stages chosen by the pattern; the emitter split as the first big
+step.
