@@ -5,3 +5,14 @@
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+
+# arithmetic and comparisons of ints, each one wasm instruction (floats join once overloads are chosen by type)
++(a: int, b: int) := prim i64_add(a, b)
+-(a: int, b: int) := prim i64_sub(a, b)
+*(a: int, b: int) := prim i64_mul(a, b)
+==(a: int, b: int) := prim i64_eq(a, b)
+!=(a: int, b: int) := prim i64_ne(a, b)
+<(a: int, b: int) := prim i64_lt_s(a, b)
+>(a: int, b: int) := prim i64_gt_s(a, b)
+<=(a: int, b: int) := prim i64_le_s(a, b)
+>=(a: int, b: int) := prim i64_ge_s(a, b)
