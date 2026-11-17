@@ -5,6 +5,9 @@
 # spellings milestone 1 needs are lowered here by hand:
 #   print "Hello"            a phrase: a word, then its arguments → Call(print, ["Hello"])
 #   print "a"; print "b"     statements → Block([…, …])
+#   { a; b }                 a block of code → Block([a, b])
+#   x = 1                    a value given to a name → Set(x, 1)
+#   f(x) := body             a function → Define(f, [x], body)
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
 # the program as one Block of its statements
@@ -19,14 +22,19 @@ lowered_form(n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
+	Symbol(name) => n
+	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
+	Key(place, Op.Assign, value) => if place is symbol then Set(place, lowered(value)) else not_lowered(n)
+	Key(List(items, Bracket.Round, separator), Op.Define, body) => if items#1 is symbol then Define(items#1, List(items[1 ..], Bracket.Round, Separator.Comma), lowered(body)) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
 	_ => not_lowered(n)
 }
 
-# a sequence of statements gives each, any other node is the one statement
+# a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {
 	List(items, Bracket.None, Separator.Newline) => items
 	List(items, Bracket.None, Separator.Semicolon) => items
+	List(items, Bracket.None, separator) => if #items == 1 then items else [n]
 	_ => [n]
 }
 

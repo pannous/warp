@@ -73,8 +73,9 @@ The languages, each a set of Node shapes:
   block holds the table of declared names and signatures.
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
-- **bound kernel:** kernel, unchanged, plus a fact on each name: what it refers to (a local, parameter, global,
-  function or library word) and where that is defined.
+- **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
+  `parameter`, `capture` of an enclosing function's name, `global`, `function` or `library`), and `defined_at`, the
+  defining name itself, positioned (core/analyze/scope.wap).
 - **typed kernel:** bound kernel plus each form's type, and on each `Call` the overload chosen.
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
@@ -204,3 +205,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
   Paid off when values show themselves through the runtime's show words, boxed into a $Node.
+- **A name the program binds nowhere is taken for a library word** (wap/core/analyze/scope.wap, `binding: library`)
+  without asking whether the library declares it. Bends "refuse, never guess": a misspelled name is not refused by
+  the binding analysis. Reason: the preload's declarations are not read yet. Paid off when the declare stage reads
+  them; then a name neither the program nor the library defines is refused, naming where it was written.
