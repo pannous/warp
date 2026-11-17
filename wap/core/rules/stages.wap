@@ -26,6 +26,9 @@ typed_rules = Rules({})
 class Fired { code: Node, fired: bool }
 
 # ---- loading
+#
+# A side of a rule may stand in brackets to keep its keys and operators inside: `rule ($h as $t := $b) => ($h: $t := $b)`.
+# Only a pattern's holes take a type (`$c: Node`); in a template `$h: $t` is the key it writes.
 
 # the rules and patterns of loaded code taken in, the code without them returned
 rules_loaded(code: Node) as Node := match code {
@@ -52,8 +55,8 @@ declaration_taken(called: text, arguments: list) as bool := {
 phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
 
 rule_added(written: Node, pattern: Node, template: Node) := {
-	normal = normalized(pattern)
-	output = normalized(template)
+	normal = normalized(ungrouped(pattern))
+	output = ungrouped(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	matcher = compiled_pattern(normal)
 	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))

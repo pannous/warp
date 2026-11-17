@@ -574,11 +574,11 @@ is_typed_hole(run: list) as bool := run.length == 2 and last_of(run).op == Op.Co
 # each hole's colon given the item after it as its type
 holes_typed(items: list) as list := {
 	typed = []
-	for item in items { if #typed > 0 and untyped_hole(typed.last) then typed[#typed - 1] = keyed(key_of(typed.last), Op.Colon, item) else typed.add(item) }
+	for item in items { if #typed > 0 and untyped_hole(typed.last) then typed[#typed - 1] = keyed(hole_of(typed.last), Op.Colon, item) else typed.add(item) }
 	typed
 }
 untyped_hole(n: Node) as bool := match n { Key(hole, Op.Colon, Empty) => is_hole_word(hole); _ => no }
-key_of(n: Node) as Node := match n { Key(key, op, value) => key; _ => n }
+hole_of(n: Node) as Node := match n { Key(hole, op, value) => hole; _ => n }
 
 # the items as one node: Empty for none, the item for one, else a phrase
 phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)
