@@ -37,10 +37,10 @@ GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], 
 HASH_COMMENT_FOLLOWERS = " \t\n!#"
 
 # a token: an atom (its node), an opening or closing bracket, a separator or a colon, with the blank before it
-enum TokenKind { Atom, Open, Close, Separator, Colon }
-class Token { kind: TokenKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no }
+enum LexemeKind { Atom, Open, Close, Separator, Colon }
+class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no }
 
-class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Token> = []; opened: list<Token> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Token? = ø; error: text = ""; failure: Node = Empty }
+class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty }
 
 # the notation of a text: its one item, the list of its items, Empty for none; text it cannot read is refused where
 # it was written (core/errors.wap)
@@ -71,15 +71,15 @@ read_token(r: Reader) := {
 	else if c == '/' and next == '/' and not after_colon(r) { line_comment(r, 2) }
 	else if c == '#' and r.blank and HASH_COMMENT_FOLLOWERS.contains(next) { line_comment(r, 1) }
 	else if c == '/' and (next == '*' or next == '#') { block_comment(r) }
-	else if OPENERS.contains(c) { opening(r, c, 1) }
-	else if CLOSERS.contains(c) { closing(r, c) }
+	else if OPENERS.contains(c) { bracket_opened(r, c, 1) }
+	else if CLOSERS.contains(c) { bracket_closed(r, c) }
 	else if c == ',' { separated(r, Separator.Comma, 1) }
 	else if c == ';' { separated(r, Separator.Semicolon, 1) }
 	else if QUOTES.contains(c) { quoted(r, c) }
 	else if is_digit(c) or (signs_number(r) and is_digit(next)) { number_read(r) }
-	else if c == ':' and next != ':' and next != '=' { token(r, TokenKind.Colon, Symbol(":"), 1) }
+	else if c == ':' and next != ':' and next != '=' { token(r, LexemeKind.Colon, Symbol(":"), 1) }
 	else if is_glyph(c) { glyphs_read(r, c) }
-	else if is_name_char(c) { word_read(r) }
+	else if is_name_char(c) { name_read(r) }
 	else { failed(r, "a character the reader does not know") }
 }
 
@@ -101,8 +101,8 @@ signs_number(r: Reader) as bool := {
 }
 
 # the token of a list at `i` (from 0), the last one
-token_at(tokens: list, i: int) as Token := tokens[i]
-last_of(tokens: list) as Token := tokens.last
+token_at(tokens: list, i: int) as Lexeme := tokens[i]
+last_of(tokens: list) as Lexeme := tokens.last
 
 # the text from `start` to `end` (code points, from 0)
 slice_of(r: Reader, start: int, end: int) as text := r.code[start .. end].join("")
@@ -110,12 +110,12 @@ slice_of(r: Reader, start: int, end: int) as text := r.code[start .. end].join("
 column(r: Reader) as int := r.at - r.line_start + 1
 
 # a token of `width` characters at the reader's place
-token(r: Reader, kind: TokenKind, node: Node, width: int) := added(r, kind, node, r.line, column(r), r.at + width)
+token(r: Reader, kind: LexemeKind, node: Node, width: int) := added(r, kind, node, r.line, column(r), r.at + width)
 
 # a token written at line:column, the reader going on at `end`; an atom takes the comments waiting before it
-added(r: Reader, kind: TokenKind, node: Node, line: int, column: int, end: int) := {
-	t = Token{kind: kind, node: node, bracket: Bracket.None, separator: Separator.None, glued: not r.blank, line: line, column: column}
-	if kind == TokenKind.Atom {
+added(r: Reader, kind: LexemeKind, node: Node, line: int, column: int, end: int) := {
+	t = Lexeme{kind: kind, node: node, bracket: Bracket.None, separator: Separator.None, glued: not r.blank, line: line, column: column}
+	if kind == LexemeKind.Atom {
 		t.node = commented(positioned(node, line, column), r.comments)
 		r.comments = []
 		r.line_atom = t
@@ -126,7 +126,7 @@ added(r: Reader, kind: TokenKind, node: Node, line: int, column: int, end: int) 
 }
 
 # the last token so far, ø before the first
-last_token(r: Reader) as Token? := if r.tokens.length > 0 then last_of(r.tokens) else ø
+last_token(r: Reader) as Lexeme? := if r.tokens.length > 0 then last_of(r.tokens) else ø
 
 # the first thing the reader cannot read, kept with what was written there
 failed(r: Reader, why: text) := failed_at(r, why, r.line, column(r))
@@ -165,7 +165,7 @@ block_comment(r: Reader) := {
 
 noted(r: Reader, comment: text) := if r.line_atom != ø then attach_comment(r.line_atom, comment) else pending(r, comment)
 pending(r: Reader, comment: text) := { r.comments += [comment] }
-attach_comment(t: Token, comment: text) := { t.node = commented(t.node, [comment]) }
+attach_comment(t: Lexeme, comment: text) := { t.node = commented(t.node, [comment]) }
 
 commented(n: Node, comments: list) as Node := {
 	if comments.length == 0 { return n }
@@ -176,19 +176,19 @@ commented(n: Node, comments: list) as Node := {
 
 # ── brackets, separators, indentation ──
 
-opening(r: Reader, c: text, width: int) := {
-	token(r, TokenKind.Open, Empty, width)
+bracket_opened(r: Reader, c: text, width: int) := {
+	token(r, LexemeKind.Open, Empty, width)
 	t = r.tokens.last
 	t.bracket = bracket_of(c)
 	r.opened += [t]
 }
 
-closing(r: Reader, c: text) := {
+bracket_closed(r: Reader, c: text) := {
 	if r.opened.length == 0 or last_of(r.opened).indented or last_of(r.opened).bracket != bracket_of(c) {
 		return failed(r, "this bracket closes no open bracket")
 	}
 	r.opened = r.opened[0 .. r.opened.length - 1]
-	token(r, TokenKind.Close, Empty, 1)
+	token(r, LexemeKind.Close, Empty, 1)
 	last_of(r.tokens).bracket = bracket_of(c)
 }
 
@@ -197,11 +197,11 @@ bracket_of(c: text) as Bracket := BRACKETS[(if OPENERS.contains(c) then OPENERS 
 # a separator; two in a row are one, the looser
 separated(r: Reader, separator: Separator, width: int) := {
 	last = last_token(r)
-	if last != ø and last.kind == TokenKind.Separator {
+	if last != ø and last.kind == LexemeKind.Separator {
 		if looseness(separator) > looseness(last.separator) { last.separator = separator }
 		r.at += width
 	} else {
-		token(r, TokenKind.Separator, Empty, width)
+		token(r, LexemeKind.Separator, Empty, width)
 		last_of(r.tokens).separator = separator
 	}
 	r.blank = yes
@@ -212,7 +212,7 @@ looseness(separator: Separator) as int := SEPARATOR_ORDER.index_of(separator)
 # a tab between two items of a line separates columns; elsewhere it is a blank
 tab(r: Reader) := {
 	last = last_token(r)
-	if last != ø and last.kind != TokenKind.Open and last.line == r.line { separated(r, Separator.Tab, 1) } else { r.at += 1; r.blank = yes }
+	if last != ø and last.kind != LexemeKind.Open and last.line == r.line { separated(r, Separator.Tab, 1) } else { r.at += 1; r.blank = yes }
 }
 
 # A new line separates, unless it opens or closes an indented block. Inside a bracket indentation means nothing.
@@ -228,7 +228,7 @@ new_line(r: Reader) := {
 
 separated_line(r: Reader) := {
 	last = last_token(r)
-	if last != ø and last.kind != TokenKind.Open { separated(r, Separator.Newline, 0) }
+	if last != ø and last.kind != LexemeKind.Open { separated(r, Separator.Newline, 0) }
 }
 
 # The indentation of the next line that holds code (empty lines and comment lines change nothing): a deeper one
@@ -250,7 +250,7 @@ indentation(r: Reader) := {
 	if depth > outer {
 		r.indents += [depth]
 		r.blank = no
-		opening(r, "{", 0)
+		bracket_opened(r, "{", 0)
 		last_of(r.tokens).indented = yes
 		return ø
 	}
@@ -276,9 +276,9 @@ indent_consistent(r: Reader, written: text) as bool := {
 dedent(r: Reader) := {
 	r.indents = r.indents[0 .. r.indents.length - 1]
 	r.opened = r.opened[0 .. r.opened.length - 1]
-	if last_of(r.tokens).kind == TokenKind.Separator { r.tokens = r.tokens[0 .. r.tokens.length - 1] }
+	if last_of(r.tokens).kind == LexemeKind.Separator { r.tokens = r.tokens[0 .. r.tokens.length - 1] }
 	r.blank = no
-	token(r, TokenKind.Close, Empty, 0)
+	token(r, LexemeKind.Close, Empty, 0)
 	last_of(r.tokens).bracket = Bracket.Curly
 	last_of(r.tokens).indented = yes
 }
@@ -286,10 +286,10 @@ dedent(r: Reader) := {
 # ── atoms ──
 
 # a run of name characters: a word, `$hole` and `π` included
-word_read(r: Reader) := {
+name_read(r: Reader) := {
 	end = r.at
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
-	token(r, TokenKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 }
 
 # operator glyphs: one glyph, joined with its repeats and one `=` after them (`==` `<=` `...` `**=`), Q5
@@ -297,7 +297,7 @@ glyphs_read(r: Reader, c: text) := {
 	end = r.at + 1
 	while end < r.n and r.code[end] == c { end += 1 }
 	if end < r.n and r.code[end] == '=' and c != '=' { end += 1 }
-	token(r, TokenKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 }
 
 # `12`, `-3`, `1_000`, `3.5`, `3.`, `1e-3`, `0xFF`: an int, or a float when it has a point or a negative exponent
@@ -331,7 +331,7 @@ number_read(r: Reader) := {
 		}
 	}
 	written = (if sign == '-' then "-" else "") + written.replace("_", "")
-	token(r, TokenKind.Atom, Number(if is_float then float(written) else whole(written)), end - r.at)
+	token(r, LexemeKind.Atom, Number(if is_float then float(written) else whole(written)), end - r.at)
 }
 
 # after the digits from `at` on, `_` between two digits included
@@ -344,7 +344,7 @@ hex_read(r: Reader, sign: text, from: int) := {
 	end = from
 	while end < r.n and (is_hex_digit(r.code[end]) or r.code[end] == '_') { end += 1 }
 	value = hex_number(slice_of(r, from, end).replace("_", ""))
-	token(r, TokenKind.Atom, Number(if sign == '-' then 0 - value else value), end - r.at)
+	token(r, LexemeKind.Atom, Number(if sign == '-' then 0 - value else value), end - r.at)
 }
 
 # an int as written, a float beyond the range of an int
@@ -372,7 +372,7 @@ quoted(r: Reader, quote: text) := {
 	if at >= r.n { return failed_at(r, "this text is never closed", start_line, start_column) }
 	content = (parts + [slice_of(r, copied, at)]).join("")
 	node: Node = if content.length == 1 then content#1 as codepoint else Text(content)
-	added(r, TokenKind.Atom, node, start_line, start_column, at + 1)
+	added(r, LexemeKind.Atom, node, start_line, start_column, at + 1)
 }
 
 # the escape at the backslash `at`: [what it reads as, the characters it takes], ø for an unknown one
@@ -421,30 +421,30 @@ placed(n: Node, line: int?, column: int?) as Node := if n == ø or line == ø th
 # ── pass 2: the separator cascade ───────────────────────────────────────────────────────────────────────────────────
 
 # the whole text: one item, the list of its items, or Empty
-built(tokens: list<Token>) as Node := level_node(body_read(tokens, 0).parts)
+built(tokens: list<Lexeme>) as Node := level_node(body_read(tokens, 0).parts)
 
-class Body { parts: list<Token>; at: int }
+class Body { parts: list<Lexeme>; at: int }
 
 # the tokens from `at` up to the closing bracket, a bracket's own list made of each inner bracket
-body_read(tokens: list<Token>, at: int) as Body := {
+body_read(tokens: list<Lexeme>, at: int) as Body := {
 	parts = []
-	while at < tokens.length and token_at(tokens, at).kind != TokenKind.Close {
+	while at < tokens.length and token_at(tokens, at).kind != LexemeKind.Close {
 		t = tokens[at]
-		if t.kind == TokenKind.Open {
+		if t.kind == LexemeKind.Open {
 			inner = body_read(tokens, at + 1)
-			parts += [Token{kind: TokenKind.Atom, node: bracketed(inner.parts, t), bracket: Bracket.None, separator: Separator.None, glued: t.glued, line: t.line, column: t.column}]
+			parts += [Lexeme{kind: LexemeKind.Atom, node: bracket_list(inner.parts, t), bracket: Bracket.None, separator: Separator.None, glued: t.glued, line: t.line, column: t.column}]
 			at = inner.at + 1
 		} else {
-			if t.kind != TokenKind.Separator or parts.length > 0 { parts += [t] }
+			if t.kind != LexemeKind.Separator or parts.length > 0 { parts += [t] }
 			at += 1
 		}
 	}
-	if parts.length > 0 and last_of(parts).kind == TokenKind.Separator { parts = parts[0 .. parts.length - 1] }
+	if parts.length > 0 and last_of(parts).kind == LexemeKind.Separator { parts = parts[0 .. parts.length - 1] }
 	Body{parts: parts, at: at}
 }
 
 # a bracket's list: its items split by the loosest separator inside; duplicate keys in `{…}` warned of (Q12)
-bracketed(parts: list<Token>, opener: Token) as Node := {
+bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	items = level_items(parts)
 	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
 	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
@@ -454,18 +454,18 @@ bracketed(parts: list<Token>, opener: Token) as Node := {
 listed(items: list, bracket: Bracket, separator: Separator) as Node := placed(List(items, bracket, separator), line_of(items#1), column_of(items#1))
 
 # the loosest separator among the parts, Space between two unglued atoms, None for a glued run
-loosest_separator(parts: list<Token>) as Separator := {
+loosest_separator(parts: list<Lexeme>) as Separator := {
 	found = Separator.None
 	for i in 0 ..< parts.length {
 		t = parts[i]
-		here = if t.kind == TokenKind.Separator then t.separator else if i > 0 and not t.glued and token_at(parts, i - 1).kind != TokenKind.Separator then Separator.Space else Separator.None
+		here = if t.kind == LexemeKind.Separator then t.separator else if i > 0 and not t.glued and token_at(parts, i - 1).kind != LexemeKind.Separator then Separator.Space else Separator.None
 		if looseness(here) > looseness(found) { found = here }
 	}
 	found
 }
 
 # the items of a level: the parts split by their loosest separator, each piece read one level tighter
-level_items(parts: list<Token>) as list := {
+level_items(parts: list<Lexeme>) as list := {
 	separator = loosest_separator(parts)
 	if separator == Separator.None { return if parts.length == 0 then [] else [glued_run(parts)] }
 	if separator == Separator.Space { return annotated(spaced(runs_of(parts))) }
@@ -474,24 +474,24 @@ level_items(parts: list<Token>) as list := {
 }
 
 # a level as one node: Empty, its one item, or the list of its items
-level_node(parts: list<Token>) as Node := {
+level_node(parts: list<Lexeme>) as Node := {
 	items = level_items(parts)
 	if items.length == 0 { return Empty }
 	if items.length == 1 then items#1 else listed(items, Bracket.None, loosest_separator(parts))
 }
 
 # the parts between the separators of this kind, the tighter separators kept inside each piece
-pieces_between(parts: list<Token>, separator: Separator) as list := {
+pieces_between(parts: list<Lexeme>, separator: Separator) as list := {
 	pieces = []
 	piece = []
 	for t in parts {
-		if t.kind == TokenKind.Separator and looseness(t.separator) >= looseness(separator) { pieces += [piece]; piece = [] } else { piece += [t] }
+		if t.kind == LexemeKind.Separator and looseness(t.separator) >= looseness(separator) { pieces += [piece]; piece = [] } else { piece += [t] }
 	}
 	pieces + [piece]
 }
 
 # the glued runs of a phrase: a new run at each part with a blank before it
-runs_of(parts: list<Token>) as list := {
+runs_of(parts: list<Lexeme>) as list := {
 	runs = []
 	run = []
 	for t in parts {
@@ -508,10 +508,10 @@ spaced(runs: list) as list := {
 	for i in 0 ..< runs.length {
 		run = runs[i]
 		rest = runs[i + 1 .. runs.length]
-		if run.length == 1 and token_at(run, 0).kind == TokenKind.Colon and i > 0 {
+		if run.length == 1 and token_at(run, 0).kind == LexemeKind.Colon and i > 0 {
 			return [keyed(phrase_of(items), phrase_of(spaced(rest)))]
 		}
-		if run.length > 1 and last_of(run).kind == TokenKind.Colon {
+		if run.length > 1 and last_of(run).kind == LexemeKind.Colon {
 			return items + [keyed(glued_run(run[0 .. run.length - 1]), phrase_of(spaced(rest)))]
 		}
 		items += [glued_run(run)]
@@ -525,7 +525,7 @@ phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.
 # a run without blanks: `x:40` splits at its first `:`, a run of one part is that part, else a glued list
 glued_run(run: list) as Node := {
 	for i in 1 ..< run.length {
-		if token_at(run, i).kind == TokenKind.Colon { return keyed(glued_run(run[0 .. i]), if i + 1 < run.length then glued_run(run[i + 1 .. run.length]) else Empty) }
+		if token_at(run, i).kind == LexemeKind.Colon { return keyed(glued_run(run[0 .. i]), if i + 1 < run.length then glued_run(run[i + 1 .. run.length]) else Empty) }
 	}
 	nodes = run.map(t => t.node)
 	if nodes.length == 1 then nodes#1 else listed(nodes, Bracket.None, Separator.None)
