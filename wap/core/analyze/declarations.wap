@@ -15,6 +15,11 @@
 # Only the top level declares: names inside a function belong to its scopes, which the binding analysis resolves
 # (core/analyze/scope.wap). A statement that defines nothing declares nothing.
 
+use "../errors.wap"
+use "../rules/lowering.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
 use path
 
 USE_WORD = "use"
@@ -23,7 +28,7 @@ declared_program(program: Node) as Node := {
 	statements = top_level_statements(program).map(declared_statement)
 	declarations = []
 	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
-	used = statements.filter(is_use).map(statement => Text(path_join(dirname(file_of(program) ?? "."), used_path(statement))))
+	used = statements.filter(is_use).map(statement => Text(normalize_path(path_join(dirname(file_of(program) ?? "."), used_path(statement)))))
 	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
 	with_fact(declared, USES, List(used, Bracket.Square, Separator.Comma))
 }
@@ -41,21 +46,21 @@ uses_of(program: Node) as list := match fact_of(program, USES) {
 }
 
 # The modules a program uses, each file declared once by declare_file (read, operators, this stage), the modules they
-# use too, every module after the ones it uses. Two modules that use each other are refused, naming the chain.
+# use too, every module after the ones it uses. Modules may use each other: a cycle is cut where it closes, so of two
+# such modules the one reached first runs last.
 class Modules { modules: list; files: list }
 modules_used(program: Node, declare_file: function) as list := {
-	visited = Modules([], [])
-	modules_visited(program, [file_of(program)], declare_file, visited)
+	visited = Modules([], [normalize_path(file_of(program) ?? ".")])
+	modules_visited(program, declare_file, visited)
 	visited.modules
 }
-modules_visited(code: Node, chain: list, declare_file: function, visited: Modules) := {
+modules_visited(code: Node, declare_file: function, visited: Modules) := {
 	for file in uses_of(code) {
-		if chain.contains(file) { refused(code, "these modules use each other: " + (chain + [file]).join(" → ")) }
 		if not visited.files.contains(file) {
-			module = declare_file(file)
-			modules_visited(module, chain + [file], declare_file, visited)
-			visited.modules = visited.modules + [module]
 			visited.files = visited.files + [file]
+			module = declare_file(file)
+			modules_visited(module, declare_file, visited)
+			visited.modules = visited.modules + [module]
 		}
 	}
 }

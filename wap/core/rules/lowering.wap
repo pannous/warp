@@ -21,6 +21,11 @@
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
 # the rule engine: `unless c { a }`, `c ? a : b`, `a if c`.
 
+use "../analyze/declarations.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
 # the canonical words of the literals, the kernel forms they are

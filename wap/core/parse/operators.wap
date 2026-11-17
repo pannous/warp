@@ -10,6 +10,11 @@
 # the same notation with each operator application a Call of its canonical spelling. An unrelated mix, a chain of a
 # group that refuses chaining, or an operator key the table lacks is refused.
 
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "../../preload/operators.wap"
+
 # ---- the table, checked when it is read
 
 # the group of that name; an unknown name in the table is refused

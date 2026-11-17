@@ -44,8 +44,8 @@ prepared(code: Node, modules: list) as Block := bound_program(lowered_program(co
 # functions are there for any caller
 compiled(file: text) as list := {
 	code_read = declared(file)
-	modules = modules_used(code_read, declared)
-	whole = Block((modules + [code_read]).flat_map(code => statements_in(prepared(code, modules))))
+	modules = modules_used(code_read, declared) + [code_read]
+	whole = Block(modules.flat_map(code => statements_in(prepared(code, modules))))
 	module_bytes(emitted(typed_program(whole, bound_program(lowered_program(preload), []))))
 }
 

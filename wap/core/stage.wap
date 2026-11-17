@@ -13,6 +13,8 @@
 # Later the stamp also carries the name of the rule or stage that built the node, for errors like
 # `line 4: unless … (rule extensions/…:3): …`.
 
+use "errors.wap"
+
 # n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
 # also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
 staged(n: Node, rewrite: function) as Node := with_facts_of(placed_like(rewrite(n), n), n)
