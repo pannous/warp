@@ -51,6 +51,7 @@ DATA_ALIGNMENT = 8
 BLOCK = [0x02]
 LOOP = [0x03]
 IF = [0x04]
+ELSE = [0x05]
 BRANCH = [0x0C]
 BRANCH_IF = [0x0D]
 # the type of a block that takes and leaves nothing

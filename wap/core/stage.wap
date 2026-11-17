@@ -106,6 +106,9 @@ BOUND_LIBRARY = "library"
 # on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
 # BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
 ASSIGNS = "assigns"
+# on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
+# program's in the whole block, `let x` a new one of the block's
+VARIABLES = "variables"
 # a name of several overloads gets CANDIDATES, their defining names innermost first, instead of DEFINED_AT; the typing
 # stage picks one and sets DEFINED_AT
 CANDIDATES = "candidates"
@@ -121,3 +124,5 @@ SIGNATURE = "signature"
 # `name: signature`; DECLARATIONS on the program, the list of them
 DECLARES = "declares"
 DECLARATIONS = "declarations"
+# on a program, the files it USES (`use "path"`), each a Text of the path resolved against the program's own folder
+USES = "uses"
