@@ -68,7 +68,7 @@ Three details:
 | Fn | `parameters body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
 | Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
 | Prim | `operation arguments` | nothing directly: library bodies (below) |
-| If | `cond then_part else_part` | `if`, `if … then … else`, `unless`, `a ? b : c`, `a if c`, `a or b` |
+| If | `cond then_part else_part` | `if/unless/?:/then-else`, `a if c` |
 | Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
 | While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
 | Break, Continue, Return | none, none, `value` | the same words |
@@ -107,8 +107,7 @@ The kinds of primitive:
 - **runtime words:** functions of the runtime written in warp (text, big numbers, equality …), notes/self_hosting.md
 - **host words:** what the host answers (print, files, time, graphics)
 
-The test of the list: whenever the emitter needs a branch that is none of the forms above, either a primitive is
-missing, or the branch is really a spelling and belongs in a rule.
+A prim the kernel lacks means the emitter keeps a branch: that is the test of the list. ??
 
 ## How a program reaches the kernel
 
