@@ -1,6 +1,7 @@
 # wap's data reader: a spec inspired by wasp
 
-Target: `wap/core/parse/reader.wap` (today a 7-line stub that calls warp's `parse`). Read first:
+Built: `wap/core/parse/reader.wap`, its cases printed back by `wap format` in test/wap/test_reader.sh; the notation it
+writes is defined in notes/backbone.md "Stage languages". Read first:
 notes/first_principles.md, notes/backbone.md, notes/wap.md "The pipeline".
 
 Citations. `W` = ~/dev/angles/wasp/source/Wasp.cpp, `P` = WaspParsers.cpp, `C` = CharUtils.cpp,
@@ -333,8 +334,8 @@ shapes match.
 - **Q6 `#`:** the reader detects comments; the glued `#` operator (count, `#use`) comes later, in step 2.
 - **Q7 other bracket pairs `‖x‖ ⟨x⟩ ⌈x⌉`:** a `Bracket` case Other; details later.
 - **Q8 interpolation:** the reader returns the raw Text; a step-2 rule splits the `${…}` holes.
-- **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Assign, 1)` (confirmed 2026-11-17; Op.Eq is `==`); spaced `a = 1` splits the phrase as
-  the colon does. Q1's Glue is warp's existing Op.None (the key of `Person{…}`), no new Op case.
+- **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Assign, 1)` (confirmed 2026-11-17; Op.Eq is `==`); spaced
+  `a = 1` splits the phrase as the colon does. Q1's Glue is warp's existing Op.None (the key of `Person{…}`), no new Op case.
 - **Q12 duplicate keys:** the reader marks them with a Meta warning on the curly list; step 3 decides.
 
 ## 7. Open questions for the user (wasp and warp differ); recommendation first

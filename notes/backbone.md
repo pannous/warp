@@ -60,13 +60,30 @@ lead first, as a change of this table.
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
-- **notation:** what the reader makes and nothing else (notes/reader.md §1): `Number`, `Char`, `Text`, `Symbol`,
-  `Key(left, Op.Colon, right)`, `List(items, bracket, separator)`, `Empty`, `Error`, with positions in `Meta`. An
-  operator is still a word inside a phrase: `a + b` is the phrase `[a, +, b]`. No `True`, `False`, `Type` or `Data`.
+- **notation:** what the reader makes and nothing else (notes/reader.md, wap/core/parse/reader.wap):
+  - atoms: `Number` (int, or float when written with a point or a negative exponent; `-1` glued at an item's start
+    is a negative Number, `a-1` is not), `Char` (a text of one code point), `Text` (escapes read; a template's `${…}`
+    and an extension's `\:name` kept as written), `Symbol` (a word, or an operator: a glyph with its repeats and one
+    `=`, `<=` `==` `...`; `:=`, `=>`, `and`, `yes`, `null` are all plain Symbols);
+  - three keys (reader.md Q1, Q11): `Key(key, Op.Colon, value)` and `Key(key, Op.Assign, value)` by the same rules,
+    `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and `x = a + b` all before and after;
+    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
+  - `List(items, bracket, separator)` in three uses: a phrase, items with blanks between, separator Space
+    (`a + b` is `[a, +, b]`); a glued run of no head and bracket, separator None (`a.b`, `3ms`, `a-b`, `-x`); a
+    bracketed list, Curly, Square or Round, with the loosest separator inside. Separators cascade (glue < space <
+    `,` < `;` < tab < newline), the loosest splitting first; a list never has one item unless bracketed. An
+    indented block is a Curly list with separator Newline, glued to the line before it like any bracket;
+  - `Empty` for an empty text and for `{}` and `()` (wiki/node.md: no items is the empty list whatever the bracket).
+    Facts in the metadata (core/stage.wap): positions; `comment` (a comment, on the next atom or on the atom ending
+    the line); `meta` (the `@annotations` before an item, without `@`); `warning` (a duplicate key in `{…}`). No
+    `True`, `False`, `Type`, `Data` or `Error`: a text it cannot read is refused.
 - **operated:** notation in which every operator phrase is read by the table: `a + b * c` is
   `(Call + a (Call * b c))`, every alias replaced by its canonical word (`≤` → `<=`), a prefix or postfix operator
   a `Call` of one argument, by the one minus rule. A mix of unrelated groups is refused. Juxtaposition that is no
-  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2.
+  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2. `=` keys are the call
+  `(Call = x 1)`; a glue key `Key(f, Op.None, (args))` stays, for stage 2 to read as a call, an index or a
+  constructor. Until the rule engine runs, core/rules/lowering.wap reads exactly these: a glued call, an operator
+  call (`=` → Set, `:=` → Define, `=>` → Fn), a phrase headed by a word, `{…}`, the literal words `yes` `no` `ø`.
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each definition's `Meta` names what it declares, and the program's
@@ -198,9 +215,24 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
+  §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
+  `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
+- **A URL is no atom yet: `http://x` reads as the key `http: //x`** (wap/core/parse/reader.wap), and `wap format`
+  prints it so, which reads back with `//x` as a comment. Bends "never degrade the input". Reason: the wiki says
+  nothing yet of URLs in code; a URL becomes one atom once a wiki page decides its spelling.
+- **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
+  wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
   any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
   function whose body is a host primitive.
+- **A program's `operator` declarations don't extend the table yet** (wap/preload/operators.wap, read by
+  core/parse/operators.wap). Bends "`operator` declarations extend the table". Reason: the operator stage runs before
+  declarations are collected; it needs a prescan of `operator` phrases of its own. Paid off with that prescan.
+- **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
+  operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
+  stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
+- **`format` prints no comments yet** (wap/core/format.wap). Comments ride in Meta; the printer reads only shapes.
 - **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
