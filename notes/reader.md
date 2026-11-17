@@ -341,6 +341,11 @@ shapes match.
   `{a: 1, b: 2}` and `a: b c` read as before (interviewer, 2026-11-17).
 - **URLs:** a word glued to `://` reads up to the next blank, bracket, separator or quote as one Text, any scheme
   alike (`http://x.com/a`, `file:///tmp`), as today's warp reads a bare URL (interviewer, 2026-11-17).
+- **Q14 type lists:** a word glued to `<` whose content is types (words, glued type lists, `(…) -> type`, apart by
+  `, `) up to a `>` is a glue key `Key(list, Op.None, List(types, Bracket.Less, Comma))`: `list<int>`,
+  `map<text, (int) -> int>`. Anything else is the comparison: `x<y and y>z`, `a<b`. A type list glued to an operand
+  after it, `a<b>c`, reads both ways and is refused, the fix-it blanks for comparisons (lead, decision hole-types,
+  2026-11-17).
 - **Q12 duplicate keys:** the reader marks them with a Meta warning on the curly list; step 3 decides.
 
 ## 7. Open questions for the user (wasp and warp differ); recommendation first

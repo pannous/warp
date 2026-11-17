@@ -56,7 +56,7 @@ lead first, as a change of this table.
 | signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-reader | bound kernel | typed kernel |
-| kind rules (stage 3) | core/rules/ | as stage 1 | typed kernel | typed kernel |
+| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader (engine: wap-operators) | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -69,7 +69,8 @@ The languages, each a set of Node shapes:
   - four keys (reader.md Q1, Q11, Q13): `Key(key, Op.Colon, value)`, `Key(key, Op.Assign, value)` and
     `Key(key, Op.Define, value)` by the same rules, `a:1` `a=1` tight, `a: b c` the rest of the phrase, `a b : c` and
     `x = a + b` all before and after; `=` and `:=` split before `:` (`x: int = 3` is `(x: int) = 3`);
-    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`;
+    `Key(head, Op.None, group)`, a head glued to a bracket, `f(x)` `a{x:1}` `xs[1]` `f(x)(y)`, and to a type list,
+    `list<int>` (reader.md Q14);
   - `List(items, bracket, separator)` in three uses: a phrase, items with blanks between, separator Space
     (`a + b` is `[a, +, b]`); a glued run of no head and bracket, separator None (`a.b`, `3ms`, `a-b`, `-x`); a
     bracketed list, Curly, Square or Round, with the loosest separator inside. Separators cascade (glue < space <
@@ -89,7 +90,10 @@ The languages, each a set of Node shapes:
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
-  a value's signature ø), and on the program `declarations`, the list of them (core/analyze/declarations.wap).
+  a value's signature ø), and on the program `declarations`, the list of them, and `uses`, the files its `use "path"`
+  statements bring in (core/analyze/declarations.wap). Each used file is declared once, after the files it uses; a
+  program is bound inside the preload's declarations and those of the modules it uses itself, and the modules'
+  statements run before its own.
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
@@ -231,6 +235,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
+  and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
+  a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
+  versions typing made before, not a new one.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
@@ -259,3 +267,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
   gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
   wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.
+- **A used module's functions are emitted even when nothing calls them** (wap/compiler.wap: a module's bound statements
+  go first in the program's Block), while the preload's uncalled definitions are left out. Bends "smaller and faster".
+  Reason: a module is code whose statements must run, so it joins the program whole. Paid off when typing leaves out
+  the module definitions nothing calls, as it does the preload's.

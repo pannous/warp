@@ -4,6 +4,9 @@
 # Run it with bash test/wap/test_rules.sh
 source "$(dirname "$0")/compile.sh"
 
+check "unless runs its body when the condition is no" "$(ran unless 'unless no { print "ran" }')" "ran"
+check "unless skips its body when the condition is yes" "$(ran skipped 'unless yes { print "skipped" }
+print "end"')" "end"
 check "a program's own rule" "$(ran own 'rule twice $body => { $body; $body }
 twice { print "hi" }')" "hi
 hi"

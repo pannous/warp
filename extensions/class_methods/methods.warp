@@ -944,7 +944,7 @@ map_key(n: Node, routing: Routing) as list := {
 	if not (is_key(n, Op.Dot) and value_of(n) is symbol) { return [] }
 	owner = static_type(key_of(n), routing)
 	word = name_of(value_of(n))
-	if owner == ø or owner not in routing.classes or word in fields_reaching(routing.classes, owner) or word in methods_reaching(routing.classes, owner) { return [] }
+	if owner == ø or owner not in routing.classes or word in fields_reaching(routing.classes, owner) or unaliased(word) in methods_reaching(routing.classes, owner) or word in methods_reaching(routing.classes, owner) { return [] }
 	[word]
 }
 # whether a value statically is an instance of a class having the map word
@@ -1053,10 +1053,13 @@ is_instance_call(n: Node, routing: Routing) as bool := {
 }
 # the routed method a member `.sum` or `.sum(…)` calls, else ø
 routed_member(member: Node, routing: Routing) as text? := {
-	method = if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else ø
-	if method == ø or method not in routing.methods { return ø }
+	written = if member is symbol then name_of(member) else if is_called_name(member) then name_of(member#1) else ø
+	if written == ø { return ø }
+	# `m.keys` as `m.keys()`: a word the prelude aliases is its method's as unaliased
+	method = if written in routing.methods then written else unaliased(written)
+	if method not in routing.methods { return ø }
 	taken = taken_counts(routing.classes, routing.names, method)
-	fits = if member is symbol then 0 in taken and not is_field_of_any(routing.classes, routing.names, method) else (#member - 1) in taken
+	fits = if member is symbol then 0 in taken and not is_field_of_any(routing.classes, routing.names, written) else (#member - 1) in taken
 	if fits then method else ø
 }
 # whether a value of that static type (ø: known only at run time) may be an instance of a class declaring the method

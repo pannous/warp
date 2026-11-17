@@ -290,7 +290,7 @@ named_arm(arm: Node, patterns: map) as Node := match arm {
 # `Definition: …` the pattern itself, `If(c, _, no): …` the pattern with its names bound by place to c, nothing and no
 arm_named_pattern(pattern: Node, patterns: map) as Node := match pattern {
 	Symbol(name): patterns.get(name) ?? pattern
-	List(call, Bracket.Round, Separator.None): if #call > 1 and call#1 is symbol and name_of(call#1) in patterns then placed_holes(patterns[name_of(call#1)], call[1 ..]) else pattern
+	List(call, Bracket.Round, Separator.None): if call#1 is symbol and name_of(call#1) in patterns then placed_holes(patterns[name_of(call#1)], call[1 ..]) else pattern
 	_: pattern
 }
 

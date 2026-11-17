@@ -15,6 +15,7 @@
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
+#   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
 #   while c { b }            a loop → While(c, b)
 #   return x                 → Return(x); a bare `return` → Return(ø)
@@ -47,7 +48,7 @@ lowered_program(program: Node) as Block := staged(program, whole => lowered_bloc
 # which variable x is in the whole block, the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
 lowered_block(statements: list) as Node := {
 	named = statements.filter(names_a_variable)
-	block = Block(statements.filter(statement => not names_a_variable(statement)).map(lowered))
+	block = Block(statements.filter(statement => not names_a_variable(statement) and not is_use(statement)).map(lowered))
 	if named is empty then block else with_fact(block, VARIABLES, List(named.map(variable_named), Bracket.Square, Separator.Comma))
 }
 names_a_variable(statement: Node) as bool := match statement {
@@ -68,7 +69,7 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if LITERAL_WORDS.has(name) then LITERAL_WORDS[name] else if STATEMENT_WORDS.has(name) then STATEMENT_WORDS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
-	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
+	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else not_lowered(n)
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	_ => not_lowered(n)
