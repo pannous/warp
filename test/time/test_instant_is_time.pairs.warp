@@ -3,3 +3,5 @@
 '[now().date is time, now().time is time]'	[yes, yes]
 'use units; [6s is time, 6s is duration, now() is duration]'	[yes, yes, no]
 '[5 is time, "x" is time]'	[no, no]
+# an Instant compares with a time the core holds in that time's form: a date by its day (decision time-word)
+'use time; [Instant(0).compare(1970-01-01), Instant(0).compare(1970-01-02) < 0, Instant(86400000).compare(1970-01-01) > 0]'	[0, yes, yes]
