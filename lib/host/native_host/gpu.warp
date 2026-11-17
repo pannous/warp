@@ -776,7 +776,8 @@ gpu_storage(name: text, cells: any) as int := {
 storage_bytes(cells: any) as int := vec4f_rounded(gpu_list_bytes(cells))
 // bytes rounded up to a whole vec4f, the least a storage array<vec4f> binds (a one-pixel atlas is 4 bytes)
 vec4f_rounded(bytes: int) as int := (bytes + VEC4F_BYTES - 1) /! VEC4F_BYTES * VEC4F_BYTES
-// where a GPU list's cells are staged in the program's memory (gpu_list_place, gpu_list_room), as C sees them; never a walk number by number where the
+// where a GPU list's cells are staged in the program's memory (gpu_list_place, gpu_list_room), as C sees them; never
+// a walk number by number where the
 // driver recorded no memory (the run's start records it)
 program_cells(place: int) as int := {
 	base = system_value("program memory")
@@ -1649,7 +1650,7 @@ storage_arrays(shader: text) as list := {
 		element = "f32"
 		for cell in ["i32", "u32", HALF] { if declaration.contains("array<" + cell) { element = cell } }
 		type = declaration.split(":")[1 ..].join(":").split(";")[0].trim()
-		declared.add(StorageArray(name, binding, element, ø, -1, "", parts[i].split(">")[0].contains("read_write"), type))
+		declared.add(StorageArray(name, binding, element, ø, "", parts[i].split(">")[0].contains("read_write"), type))
 	}
 	declared
 }
