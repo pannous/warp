@@ -52,3 +52,14 @@ fact_of(n: Node, name: text) as Node? := {
 	}
 	found
 }
+
+# The facts of a bound name, learned by core/analyze/scope.wap and read by every later stage: BINDING is what the
+# name refers to, one of the binding words below as a Symbol; DEFINED_AT the name that defined it, positioned.
+BINDING = "binding"
+DEFINED_AT = "defined_at"
+BOUND_LOCAL = "local"
+BOUND_PARAMETER = "parameter"
+BOUND_CAPTURE = "capture"
+BOUND_GLOBAL = "global"
+BOUND_FUNCTION = "function"
+BOUND_LIBRARY = "library"
