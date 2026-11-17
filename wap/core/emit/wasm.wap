@@ -25,6 +25,8 @@ I32 = [0x7F]
 I64 = [0x7E]
 F64 = [0x7C]
 ANYREF = [0x6E]
+# a reference to any array, ø included: the type every list<T> fits
+ARRAYREF = [0x6A]
 # the storage of an array of bytes, packed
 I8 = [0x78]
 # heap types, each its bytes (a declared type's is signed(index)), and type constructors
