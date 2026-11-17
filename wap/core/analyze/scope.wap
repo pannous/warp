@@ -26,7 +26,8 @@ class Definition { name: text; kind: text; definer: Node; depth: int }
 
 # the program bound inside the library, whose declarations (`name: signature`) it may use
 bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.map(library_word), PROGRAM_DEPTH))
-library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), BOUND_LIBRARY, name, LIBRARY_DEPTH) }
+# a library's word: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature ø)
+library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH) }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
 bound(n: Node, scope: list, depth: int) as Node := match n {
