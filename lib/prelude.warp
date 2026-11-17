@@ -1106,9 +1106,10 @@ kept_listeners(key: text, keep: function) as any := {
 	ø
 }
 
-// Python's range: `range(4)` is 0..4, `range(1, 4)` 1..4 (core/prelude_core.warp Range)
-range(stop: int) := 0 ..< stop
-range(start: int, stop: int) := start ..< stop
+// Python's range: `range(4)` is [0, 1, 2, 3], `range(1, 4)` [1, 2, 3]; a list the runtime can make, which knows no
+// class Range (core/prelude_core.warp)
+range(stop: int) as list := [i for i in 0 ..< stop]
+range(start: int, stop: int) as list := [i for i in start ..< stop]
 // the GPU host words, which a library answers (natively lib/host/native_host/gpu.warp over wgpu-native, the
 // playground's host-gpu.js over WebGPU); the shaders they run are written at compile time by extensions/rules/wgsl.warp
 gpu_computed(shader: node, values: node, count: int): node from host
