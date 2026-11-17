@@ -68,6 +68,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Set(place, value) => set_typed(n, place, value, s, f)
 	Call(called, arguments) => call_typed(n, called, arguments, s, f, expected)
 	Prim(operation, arguments) => prim_typed(n, operation, arguments, s, f)
+	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
 	Symbol(name) => name_typed(n, s, f)
 	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
@@ -96,6 +97,15 @@ block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: N
 functions_typed_from(definitions: list, s: TypingState) as list := {
 	keys = definitions.map(definition => place_key(declared_name(written_name(definition))))
 	s.functions.filter(typed => typed.key in keys).map(typed => typed.define)
+}
+
+# A choice: its condition a bool, each part expected the If's type; with both parts of one type the If has it
+if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	tested = typed_form(condition, s, f, symbol(BOOL_TYPE))
+	if value_type(tested) != symbol(BOOL_TYPE) { refused(condition, "a condition is yes or no") }
+	chosen = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	type = value_type(chosen#1)
+	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), if type == value_type(chosen#2) then type else ø)
 }
 
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
