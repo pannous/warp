@@ -20,4 +20,7 @@ format_check '[a - 1]' '[a - 1]'
 format_check 'a-b' 'a - b'
 format_check 'print -x' 'print (-x)'
 format_check 'print 1 + 2' 'print 1 + 2'
+# a spaced call takes the whole expression after it (decision spaced-call-precedence): brackets keep the other reading
+format_check '(square 3) * 3' '(square 3) * 3'
+format_check 'square(3) * 3' 'square(3) * 3'
 exit $((failures > 0))
