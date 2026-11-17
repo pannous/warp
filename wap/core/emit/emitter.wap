@@ -13,7 +13,7 @@ NEWLINE = 10
 WRITTEN_ADDRESS = 0
 
 # The module of a program: its statements become the body of `_start`, the function WASI runs.
-emitted(program: Seq) as Module := {
+emitted(program: Block) as Module := {
 	m = Module()
 	output = imported(m, "wasi_snapshot_preview1", "fd_write", [I32, I32, I32, I32], [I32])
 	start = added_function(m, [], [], code(program, m, output))
@@ -24,7 +24,7 @@ emitted(program: Seq) as Module := {
 
 # the instructions of a kernel form
 code(form, m: Module, output: int) as list := match form {
-	Seq(statements) => statements.flat_map(statement => code(statement, m, output))
+	Block(statements) => statements.flat_map(statement => code(statement, m, output))
 	Call(called, arguments) => if called == symbol("print") and #arguments == 1 and is_text_literal(arguments#1) then printed(arguments#1.value, m, output) else refused(form.origin, "the emitter takes no call but print of a text yet")
 	_ => refused(form.origin, "not a kernel form")
 }

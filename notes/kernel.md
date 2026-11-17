@@ -39,7 +39,7 @@ form.cond                          // read
 and the emitter is one function over the closed union:
 
 ```warp
-type Form = Literal | Name | Quote | Define | Get | Set | Fn | Call | Prim | If | Seq | While | Break | Continue | Return | Record | Case | Try
+type Form = Literal | Name | Quote | Define | Get | Set | Fn | Call | Prim | If | Block | While | Break | Continue | Return | Record | Case | Try
 emit(form: Form) := match form { If(c, a, b) => …; While(c, body) => …; … }
 ```
 
@@ -69,7 +69,7 @@ those describe notation, the classes describe the kernel.
 | Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
 | Prim | `operation arguments` | nothing directly: library bodies (below) |
 | If | `cond then_part else_part` | `if`, `unless`, `a ? b : c`, `a if c`, `a or b` |
-| Seq | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
+| Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
 | While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
 | Break, Continue, Return | none, none, `value` | the same words |
 | Record | `name fields variants` | `class`, `enum`, `type X = A \| B` |
@@ -77,7 +77,7 @@ those describe notation, the classes describe the kernel.
 | Try | `body handler` | `try … catch`, `try x else y`, `except` |
 
 How a few spellings reach the kernel:
-- `for x in xs { b }` is `Seq([i = iterator(xs), While(has_next(i), Seq([x = next(i), b]))])`.
+- `for x in xs { b }` is `Block([i = iterator(xs), While(has_next(i), Block([x = next(i), b]))])`.
 - `loop { b }` is `While(yes, b)`; `until c { b }` is `While(not c, b)`.
 - `a + b` is `Call(+, [a, b])`: an operator is a function (first principles). Whether `+` on two ints becomes a
   single wasm instruction is decided by `+`'s library definition, whose body is a primitive.

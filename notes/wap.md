@@ -117,7 +117,7 @@ A rule file is in core/sugar/ exactly when wap's own source uses its spelling; w
 
 ## State
 
-Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Literal, Call, Seq, as classes), core/parse/reader.wap (warp's
+Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Literal, Call, Block, as classes), core/parse/reader.wap (warp's
 `parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap and
 core/emit/wasm.wap. `print "Hello"` and several such lines run through wap's own stages; `print` is known by name
 in the emitter (a debt).

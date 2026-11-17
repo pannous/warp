@@ -19,5 +19,6 @@ class Call { called: Node; arguments: list; origin: Node = ø }
 # type Call < Node = (Call callee: Symbol arguments: list)
 # type Call < Node { tag: Symbol arguments: list }
 
-# forms run in order: a program, a block
-class Seq { statements: list; origin: Node = ø }
+# forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
+# list value, a block runs a, then b
+class Block { statements: list; origin: Node = ø }

@@ -5,11 +5,11 @@
 # spellings milestone 1 needs are lowered here by hand:
 #   "Hello", 3               a value → Literal("Hello")
 #   print "Hello"            a phrase: a word, then its arguments → Call(print, [Literal("Hello")])
-#   print "a"; print "b"     statements → Seq([…, …])
+#   print "a"; print "b"     statements → Block([…, …])
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
-# the program as one Seq of its statements
-lowered_program(program: Node) as Seq := staged(program, whole => Seq(statements_of(whole).map(lowered)))
+# the program as one Block of its statements
+lowered_program(program: Node) as Block := staged(program, whole => Block(statements_of(whole).map(lowered)))
 
 # code as a kernel form, its origin the code (core/stage.wap)
 lowered(n: Node) := staged(n, lowered_form)
