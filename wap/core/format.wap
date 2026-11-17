@@ -48,9 +48,18 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 
 enum Side { Left, Right }
 
-# an operand of an operator, in brackets unless it is applied first anyway
-operand_text(operand: Node, call: Node, side: Side) as text :=
-	if needs_brackets(operand, call, side) then "(" + formatted(operand) + ")" else formatted(operand)
+# an operand of an operator, in brackets only when it would not be applied first without them: `1 + (2 * 3)` prints
+# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets
+operand_text(operand: Node, call: Node, side: Side) as text := {
+	inner = ungrouped(operand)
+	if needs_brackets(inner, call, side) then "(" + formatted(inner) + ")" else formatted(inner)
+}
+
+# what round brackets around one item group, the item itself
+ungrouped(n: Node) as Node := match n {
+	List(items, Bracket.Round, separator) => if #items == 1 then ungrouped(items#1) else n
+	_ => n
+}
 
 needs_brackets(operand: Node, call: Node, side: Side) as bool := {
 	inner = group_written(operand)

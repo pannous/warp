@@ -37,10 +37,10 @@ preload = declared(PRELOAD)
 library = declarations_of(preload)
 
 # a file's text read and its operators read, then declared
-declared(file: text) as Node := declared_program(operated(notation(read(file), file)))
+declared(file: text) as Node := declared_program(operated_program(notation(read(file), file)))
 # declared code lowered and bound inside a library: the program inside the preload's, the preload inside none
 prepared(code: Node, around: list) as Block := bound_program(lowered_program(code), around)
 compiled(file: text) as list := module_bytes(emitted(typed_program(prepared(declared(file), library), prepared(preload, []))))
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
-if args#1 == "format" { print formatted(operated(notation(read(args#2), args#2))) } else { write_bytes(args#2, compiled(args#1)) }
+if args#1 == "format" { print formatted(operated_program(notation(read(args#2), args#2))) } else { write_bytes(args#2, compiled(args#1)) }
