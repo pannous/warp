@@ -200,3 +200,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`print` known by name in wap's emitter** (wap/core/emit/emitter.wap, milestone 1). Bends "built-ins are declared like
   any function". Reason: Hello needs one output before the kernel has Prim. Paid off when `print` becomes a library
   function whose body is a host primitive.
+- **A program's `operator` declarations don't extend the table yet** (wap/preload/operators.wap, read by
+  core/parse/operators.wap). Bends "`operator` declarations extend the table". Reason: the operator stage runs before
+  declarations are collected; it needs a prescan of `operator` phrases of its own. Paid off with that prescan.
+- **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
+  operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
+  stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
+- **`format` prints no comments yet** (wap/core/format.wap). Comments ride in Meta; the printer reads only shapes.

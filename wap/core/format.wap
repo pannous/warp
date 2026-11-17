@@ -1,0 +1,79 @@
+# Code → canonical warp text, what `wap format` prints (notes/backbone.md "Operators"). Reads notation or operated
+# code: each operator Call in its own notation (`(Call + a b)` is `a + b`), brackets only where precedence needs them,
+# and a reading that spacing decided spelled out: `[a -1]` prints as `[a, -1]`, `print -x` as `print (-x)`.
+
+formatted(n: Node) as text := match n {
+	Call(called, arguments) => call_text(n, called, arguments)
+	List(items, bracket, separator) => list_text(items, bracket, separator)
+	Key(left, Op.Colon, right) => formatted(left) + ": " + formatted(right)
+	Text(value) => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+	Symbol(name) => name
+	_ => "${n}"
+}
+
+# an operator call in its notation; a call of anything else as `f(a, b)`
+call_text(call: Node, called: Node, arguments: list) as text := {
+	spelling = formatted(called)
+	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
+		return operand_text(arguments#1, call, Side.Left) + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
+	}
+	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" {
+		gap = if is_word(spelling) then " " else ""
+		return spelling + gap + operand_text(arguments#1, call, Side.Right)
+	}
+	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + spelling }
+	spelling + "(" + arguments.map(formatted).join(", ") + ")"
+}
+
+enum Side { Left, Right }
+
+# an operand of an operator, in brackets unless it is applied first anyway
+operand_text(operand: Node, call: Node, side: Side) as text :=
+	if needs_brackets(operand, call, side) then "(" + formatted(operand) + ")" else formatted(operand)
+
+needs_brackets(operand: Node, call: Node, side: Side) as bool := {
+	inner = group_written(operand)
+	outer = group_written(call)
+	if inner == "" { return no }
+	if inner == outer {
+		grouping = group_named(outer).grouping
+		return not (grouping == Grouping.Left and side == Side.Left or grouping == Grouping.Right and side == Side.Right)
+	}
+	not binds_tighter(inner, outer)
+}
+
+# the precedence group code is written in at its top, "" for an atom or a bracketed list
+group_written(n: Node) as text := match n {
+	Call(called, arguments) => group_of(formatted(called), fixity_of(formatted(called), #arguments))
+	List(items, Bracket.None, Separator.None) => glue_group
+	List(items, Bracket.None, Separator.Space) => juxtaposition_group
+	_ => ""
+}
+
+fixity_of(spelling: text, count: int) as Fixity :=
+	if count == 2 then Fixity.Infix else if group_of(spelling, Fixity.Prefix) != "" then Fixity.Prefix else Fixity.Postfix
+
+is_word(spelling: text) as bool := is_letter(spelling#1)
+
+# Items of a space list: one after the first that spacing alone made prefix (`[a -1]`, `print -x`) is spelled out,
+# with commas inside brackets, in brackets of its own in a phrase.
+list_text(items: list, bracket: Bracket, separator: Separator) as text := {
+	spaced_sign = separator == Separator.Space and #items[1 ..].filter(led_by_sign) > 0
+	shown = items.map(formatted)
+	if spaced_sign and bracket == Bracket.None { shown = items.map(n => if led_by_sign(n) then "(" + formatted(n) + ")" else formatted(n)) }
+	if spaced_sign and bracket != Bracket.None { separator = Separator.Comma }
+	opening(bracket) + shown.join(separator_text(separator)) + closing(bracket)
+}
+
+# a negative number, or a call of an operator that is prefix and infix alike, applied as prefix
+led_by_sign(n: Node) as bool := match n {
+	Number(value) => value < 0
+	Call(called, arguments) => #arguments == 1 and group_of(formatted(called), Fixity.Infix) != "" and group_of(formatted(called), Fixity.Prefix) != ""
+	_ => no
+}
+
+opening(bracket: Bracket) as text := match bracket { Bracket.Curly => "{"; Bracket.Square => "["; Bracket.Round => "("; Bracket.Less => "<"; _ => "" }
+closing(bracket: Bracket) as text := match bracket { Bracket.Curly => "}"; Bracket.Square => "]"; Bracket.Round => ")"; Bracket.Less => ">"; _ => "" }
+separator_text(separator: Separator) as text := match separator {
+	Separator.Space => " "; Separator.Comma => ", "; Separator.Semicolon => "; "; Separator.Newline => "\n"; Separator.Tab => "\t"; _ => ""
+}
