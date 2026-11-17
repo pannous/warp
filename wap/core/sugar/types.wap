@@ -1,0 +1,2 @@
+# Types written in words, as their bracketed form (wiki/type.md; the wiki's main spelling): `list of int` is list<int>
+rule list of $item => list<$item>
