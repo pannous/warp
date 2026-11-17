@@ -1,14 +1,15 @@
-# Notation → kernel forms, by hand until the rule engine runs (notes/wap.md, notes/kernel.md "How a program reaches
-# the kernel").
+# Operated code → kernel forms, by hand until the rule engine runs (notes/wap.md, notes/kernel.md "How a program
+# reaches the kernel"; the operated shapes it reads: notes/backbone.md "Stage languages").
 #
 # This is where the rule engine will run its three stages (shape, signature, kind). Until it exists, the few
-# spellings milestone 1 needs are lowered here by hand:
-#   print "Hello"            a phrase: a word, then its arguments → Call(print, ["Hello"])
-#   f(1, 2)                  a call → Call(f, [1, 2])
-#   print "a"; print "b"     statements → Block([…, …])
-#   { a; b }                 a block of code → Block([a, b])
-#   x = 1                    a value given to a name → Set(x, 1)
-#   f(x) := body             a function → Define(f, [x], body)
+# spellings the milestones need are lowered here by hand, one arm per form:
+#   print "Hello"            a phrase, a word then its arguments → Call(print, ["Hello"])
+#   f(1, 2)                  a head glued to its arguments, Key(f, Op.None, (1, 2)) → Call(f, [1, 2])
+#   a + b                    an operator call, (Call + a b) → Call(+, [a, b])
+#   x = 1                    (Call = x 1) → Set(x, 1)
+#   f(x) := body             (Call := f(x) body) → Define(f, [x], body); `n := 1` → Define(n, [], 1)
+#   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1)
+#   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
 # the program as one Block of its statements
@@ -24,16 +25,38 @@ lowered_form(n: Node) as Node := match n {
 	False => n
 	Empty => n
 	Symbol(name) => n
+	Call(called, arguments) => operator_lowered(n, text(called), arguments)
+	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	List(items, Bracket.Curly, separator) => Block(statements_of(List(items, Bracket.None, separator)).map(lowered))
-	Key(place, Op.Assign, value) => if place is symbol then Set(place, lowered(value)) else not_lowered(n)
-	Key(List(items, Bracket.Round, separator), Op.Define, body) => if items#1 is symbol then Define(items#1, List(items[1 ..], Bracket.Round, Separator.Comma), lowered(body)) else not_lowered(n)
-	List(items, Bracket.None, Separator.Space) => called_with(items, n)
-	List(items, Bracket.Round, separator) => called_with(items, n)
+	List(items, Bracket.None, Separator.Space) => if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
 	_ => not_lowered(n)
 }
 
-# a word with its arguments, `print "a"` or `f(1, 2)` as the reader gives it, (f 1 2): a call of the word
-called_with(items: list, n: Node) as Node := if items#1 is symbol then Call(items#1, items[1 ..].map(lowered)) else not_lowered(n)
+# an operator call: the defining operators as their kernel forms, any other a call of the operator's function
+operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spelling {
+	"=" => Set(arguments#1, lowered(arguments#2))
+	":=" => defined(n, arguments#1, lowered(arguments#2))
+	"=>" => Fn(parameters_of(arguments#1), lowered(arguments#2))
+	_ => Call(symbol(spelling), arguments.map(lowered))
+}
+
+# `f(x) := body` defines a function, `n := 1` a constant
+defined(n: Node, head: Node, body: Node) as Node := match head {
+	Key(name, Op.None, group) => if name is symbol then Define(name, parameters_of(group), body) else not_lowered(n)
+	Symbol(name) => Define(head, parameters_of(Empty), body)
+	_ => not_lowered(n)
+}
+
+# what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
+arguments_of(group: Node) as list := match group {
+	Empty => []
+	List(items, Bracket.Round, Separator.Comma) => items
+	List(items, Bracket.Round, Separator.None) => items
+	_ => [group]
+}
+
+# the parameters a definition or a function value names, as the one list Define and Fn take
+parameters_of(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
 
 # a sequence of statements gives each, a group of one its item, any other node is the one statement
 statements_of(n: Node) as list := match n {
