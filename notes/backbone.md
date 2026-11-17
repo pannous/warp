@@ -40,6 +40,52 @@ aliases), the language and compiler principles, and how agents work by them. Eve
 kernel, core, preload, library, as wap/ is laid out: notes/first_principles.md "Layers" (user 2026-11-17). Kernel
 forms are named patterns of Node with `$` holes: notes/first_principles.md, wiki/pattern.md.
 
+## Stage languages: the contract between the workers
+
+Each stage reads one language and writes one (nanopass, principle 11), and a worker owns each stage. A stage meeting a
+form outside its input language refuses it, naming the stage that should have removed it. The wap lead owns this
+section, wap/kernel/forms.wap and wap/core/stage.wap; a change to a language or a new kernel form goes through the
+lead first, as a change of this table.
+
+| stage | file | owner | reads | writes |
+|---|---|---|---|---|
+| read | core/parse/reader.wap | wap-reader | text | notation |
+| operators | core/parse/operators.wap, table in the preload | wap-operators | notation | operated |
+| shape rules (stage 1) | core/rules/, core/sugar/ | lead, until the rule engine has an owner | operated | surface |
+| declare | core/analyze/declarations.wap | wap-binding | surface | declared |
+| signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
+| bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
+| type | core/analyze/types.wap | later | bound kernel | typed kernel |
+| kind rules (stage 3) | core/rules/ | as stage 1 | typed kernel | typed kernel |
+| emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
+
+The languages, each a set of Node shapes:
+- **notation:** what the reader makes and nothing else (notes/reader.md §1): `Number`, `Char`, `Text`, `Symbol`,
+  `Key(left, Op.Colon, right)`, `List(items, bracket, separator)`, `Empty`, `Error`, with positions in `Meta`. An
+  operator is still a word inside a phrase: `a + b` is the phrase `[a, +, b]`. No `True`, `False`, `Type` or `Data`.
+- **operated:** notation in which every operator phrase is read by the table: `a + b * c` is
+  `(Call + a (Call * b c))`, every alias replaced by its canonical word (`≤` → `<=`), a prefix or postfix operator
+  a `Call` of one argument, by the one minus rule. A mix of unrelated groups is refused. Juxtaposition that is no
+  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2.
+- **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
+  is either kernel or needs a declaration to decide.
+- **declared:** surface, unchanged, plus facts: each definition's `Meta` names what it declares, and the program's
+  block holds the table of declared names and signatures.
+- **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
+  `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
+- **bound kernel:** kernel, unchanged, plus a fact on each name: what it refers to (a local, parameter, global,
+  function or library word) and where that is defined.
+- **typed kernel:** bound kernel plus each form's type, and on each `Call` the overload chosen.
+
+**Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
+binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
+through core/stage.wap (`with_fact(n, name, value)`, `fact_of(n, name)`), so a kernel form keeps the same holes from
+stage 2 to the emitter and a pattern written for one stage matches in the next. A stage that only learns facts
+(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker.
+
+**Handoffs.** A worker hands a stage over with an outcome test in test/wap/ (a program compiled by wap, run, its output
+checked) and a line here when its language changed. The lead reviews it against this table before it lands.
+
 ## Operators: a core feature done properly
 
 - **One operator table, in lib/.** Each row gives:
