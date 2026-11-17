@@ -25,7 +25,8 @@ INSTRUCTIONS = {
 	"i64_add": I64_ADD, "i64_sub": I64_SUB, "i64_mul": I64_MUL, "i64_eq": I64_EQ, "i64_ne": I64_NE,
 	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
 	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
-	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE
+	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
+	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
 # The operations a helper function of the module performs: operation → the function that builds the helper
 HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function}

@@ -6,6 +6,9 @@
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
 
+# how many items a list holds (lists of other items join once a type may be written with a variable)
+#(xs: list<int>): int := prim array_len(xs)
+
 # arithmetic and comparisons of ints and of floats, each one wasm instruction; a call picks the overload its
 # arguments' types fit
 +(a: int, b: int): int := prim i64_add(a, b)
