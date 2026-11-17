@@ -10,7 +10,16 @@ wap/core/parse/operators.wap, the printer wap/core/format.wap. What the code dec
   wiki/precedence.md's refusal line dropped).
 - **Spacing picks the fixity** (the minus rule, for every operator): attached only to what follows → prefix, with
   juxtaposition before it (`a -b` is `[a, (Call - b)]`); attached only to what precedes → postfix where it has one,
-  else infix (`1- -3`); both or neither → infix. At the start of a phrase or after an operator, prefix.
+  else infix (`1- -3`); both or neither → infix. At the start of a phrase or after an operator, prefix. Glued to a
+  bracket after a blank it is called like any `f(x)`: `⊕(a, b)`.
+- **An operator whose operand cannot follow is a name:** at the end of a phrase or before an infix-only operator
+  (`fold +`, `prefix operator ⁻ := …`). No refusal for a missing operand is left.
+- **A program's own operators** join the table before its phrases are read (a prescan of the whole program):
+  `[infix|prefix|postfix|suffix] operator ⊕ …` in the group its word names (binds like `+`, prefix unary, postfix
+  superscript; rows in the preload), a spelling the table has in that fixity is an overload, and
+  `operator ⊕ has precedence above|below *` gives ⊕ a group of its own related to `*`'s. The declaration lines stay
+  in the program, operated like any phrase, for stage 2 to define.
+- **format drops brackets precedence makes needless** (`1 + (2 * 3)` → `1 + 2 * 3`): what a reading decided shows.
 - **Unrelated on purpose:** shifts and arithmetic (`a << 1 + 2`), bit operators and comparisons (`a & b == c`).
   Comparisons, equality and ranges refuse chaining (`a < b < c`).
 - **An operator's English name is a second name of the same function, joined by the row, never an alias** (lead,
