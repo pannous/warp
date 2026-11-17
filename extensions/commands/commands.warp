@@ -139,17 +139,19 @@ refuse_native(command: text) := {
 }
 
 source_or_code(position: int) as text := if #args > position then source_of(args#(position + 1)) else ""
+# the folder a given file's relative `use` lines start from, as a compile's (build.warp source_folder); "." for code
+given_folder(position: int) as text := if #args > position and source_of(args#(position + 1)) != args#(position + 1) then source_folder(args#(position + 1)) else "."
 show_version() := print version_text(library_folder)
 show_parsed() := print structure(plain_node(parsed(source_or_code(1))))
 show_data() := print plain_node(parsed(source_or_code(1)))
 # written so it parses back to the same node (extensions/serializer.warp): `print(-42)`, `#a + #b`, "b" in quotes
-show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), ".", prelude_text())))
-show_uses() := { for module in implicit_modules_of(source_or_code(1)) { print module } }
+show_lowered() := print serialize(view_of(lowered_program(source_or_code(1), given_folder(1), prelude_text())))
+show_uses() := { for module in implicit_modules_of(source_or_code(1), given_folder(1)) { print module } }
 # `warp readings`: what the compiler chose where the program's own text left it unwritten, `line column fix` a line,
 # the fix to write over the word there (warp format writes them)
 show_readings() := {
 	known = #diagnosed
-	lowered_program(source_or_code(1), ".", prelude_text())
+	lowered_program(source_or_code(1), given_folder(1), prelude_text())
 	for said in diagnosed_since(known).filter(said => said#1 == Level.Reading and said#5 and (#said#5 < 3 or said#5#3 == 0)) { print "${said#5#1} ${said#5#2} ${said#3}" }
 }
 # `warp debug`: the views above, one after the other under their names (card help-menu)
