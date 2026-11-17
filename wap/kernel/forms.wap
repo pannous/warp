@@ -23,7 +23,7 @@ pattern Block = (Block $statements...: Node)
 pattern Define = (Define $name: Node $parameters: List $body: Node)
 
 # a function value without a name: `x => x + 1`, `{ it * 2 }`, `|x| …` are Fn([x], x + 1), (Fn [x] …)
-pattern Fn = (Fn $parameters: List $body: Node)
+pattern Fn = (Fn $parameters: List $body: Node) # todo: rename to Lambda
 
 # a value given to a place, a name, `p.x` or `xs#i`: `x = 1`, `p.x = 2`, `x += 1` are Set(x, 1) …, (Set x 1)
 pattern Set = (Set $place: Node $value: Node)
@@ -31,3 +31,7 @@ pattern Set = (Set $place: Node $value: Node)
 # an operation the emitter performs itself, the leaf where warp ends and wasm or the host begins; only the preload
 # writes one, as a built-in's body: `print(t: text) := prim print_text(t)` is Define(print, [t: text], Prim(print_text, [t]))
 pattern Prim = (Prim $operation: Symbol $arguments...: Node)
+
+# a choice between two forms by a condition, yes or no: `if c then a else b`, `if c { a }` are If(c, a, b), If(c, a, ø),
+# (If c a b); with both parts of one type its value is the chosen part's, else it has none
+pattern If = (If $condition: Node $then_part: Node $else_part: Node)

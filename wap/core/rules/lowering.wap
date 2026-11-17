@@ -15,8 +15,11 @@
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
+#   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
-# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
+#   if c then a else b       a condition, also `if c { a } else { b }`, the else optional → If(c, a, b), If(c, a, ø)
+# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
+# the rule engine: `unless c { a }`, `c ? a : b`, `a if c`.
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
@@ -25,6 +28,10 @@ LITERAL_WORDS = {"yes": True, "no": False, "ø": Empty}
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
 VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
+# the words of a condition: if c then a else b
+IF_WORD = "if"
+THEN_WORD = "then"
+ELSE_WORD = "else"
 
 # the program as one Block of its statements
 lowered_program(program: Node) as Block := staged(program, whole => lowered_block(statements_of(whole)))
@@ -33,7 +40,7 @@ lowered_program(program: Node) as Block := staged(program, whole => lowered_bloc
 # which variable x is in the whole block, the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
 lowered_block(statements: list) as Node := {
 	named = statements.filter(names_a_variable)
-	block = Block(statements.filter(statement => not names_a_variable(statement)).map(lowered))
+	block = Block(statements.filter(statement => not names_a_variable(statement) and not is_use(statement)).map(lowered))
 	if named is empty then block else with_fact(block, VARIABLES, List(named.map(variable_named), Bracket.Square, Separator.Comma))
 }
 names_a_variable(statement: Node) as bool := match statement {
@@ -71,11 +78,37 @@ operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spel
 phrase_lowered(items: list, n: Node) as Node := {
 	if not items#1 is symbol { return not_lowered(n) }
 	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(items#2, n) }
+	if items#1 == symbol(IF_WORD) { return conditional(items[1 ..], n) }
 	Call(items#1, items[1 ..].map(lowered))
 }
 primitive_of(operation: Node, n: Node) as Node := match operation {
 	Key(name, Op.None, group) => if name is symbol then Prim(name, arguments_of(group).map(lowered)) else not_lowered(n)
 	_ => not_lowered(n)
+}
+
+# The parts of `if c then a else b` or `if c { a } else { b }`, the words after `if`: the condition runs up to `then`
+# or to the first block, the else part from the first `else` on (so `else if …` chains), ø when there is none. An
+# unbracketed `if` in the then part before an `else` reads two ways (whose else is it?) and is refused; the rule
+# engine replaces this hand split.
+conditional(words: list, n: Node) as Node := {
+	else_at = index_where(words, word => word == symbol(ELSE_WORD))
+	before_else = if else_at == 0 then words else words[.. else_at - 1]
+	else_part = if else_at == 0 then Empty else phrase_part(words[else_at ..], n)
+	then_at = index_where(before_else, word => word == symbol(THEN_WORD))
+	split_at = if then_at > 0 then then_at else index_where(before_else, is_block)
+	if split_at == 0 { return not_lowered(n) }
+	then_words = before_else[(if then_at > 0 then split_at else split_at - 1) ..]
+	if else_at > 0 and symbol(IF_WORD) in then_words { refused(n, "this else may belong to either if: put the inner if in braces") }
+	If(phrase_part(before_else[.. split_at - 1], n), phrase_part(then_words, n), else_part)
+}
+# some words of a phrase as one form: a word alone, several a phrase of their own
+phrase_part(words: list, n: Node) as Node := {
+	if words is empty { return not_lowered(n) }
+	if #words == 1 then lowered(words#1) else lowered_form(List(words, Bracket.None, Separator.Space))
+}
+is_block(n: Node) as bool := match n {
+	List(items, Bracket.Curly, separator) => yes
+	_ => no
 }
 
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
