@@ -326,9 +326,10 @@ unbound_rules(module_rules: list, program: Node) as list := {
 # a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
 # (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
 spells_definition_in(rule: Rule, parts: list) as bool := defines_last(rule.pattern) and parts.any(part => rule_matches(rule.pattern, part, {}))
-# [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
-# all the sugar steps of a program (card speed-module-cache)
-rule_bindings(program: Node) as list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
+# [the values the program binds outside its functions, its scope outside its type declarations]: the bindings
+# unbound_rules reads, worked out once for all the sugar steps of a program (card speed-module-cache). A function's
+# own local, `push = 3` in f, binds no word of the program: g's `xs.push(2)` keeps the alias
+rule_bindings(program: Node) as list := [scope_with({}, outer_nodes_in(program)), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
 # (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
 rules_unbound_by(module_rules: list, bindings: list) as list := module_rules.filter(rule => is_unbound(rule, bindings))
 is_unbound(rule: Rule, bindings: list) as bool := not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function))
