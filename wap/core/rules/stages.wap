@@ -12,6 +12,8 @@
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"
 RULE_ARROW = "=>"
+# a template that refuses what its pattern matched: `=> refuse "message"`
+REFUSE_WORD = "refuse"
 DEFINITION = "="
 # the head of a pattern that starts with a hole: tried on every node
 NO_HEAD = ""
@@ -57,7 +59,7 @@ phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.S
 rule_added(written: Node, pattern: Node, template: Node) := {
 	normal = normalized(ungrouped(pattern))
 	output = ungrouped(template)
-	for hole in holes_in(output) { if not holes_in(normal).contains(hole) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
+	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	matcher = compiled_pattern(normal)
 	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))
 	rules = if asks_value_type(matcher) then typed_rules else shape_rules
@@ -78,6 +80,13 @@ list_heads(items: list) as list := {
 	first = spelling_written(items#1)
 	if declared_patterns.has(first) and #items > 1 and items#2 is symbol and not is_hole(items#2) { return [first + "/" + spelling_written(items#2), first] }
 	[first]
+}
+
+# A rule may refuse a spelling with a fix-it, `rule … => refuse "put the inner if in braces"`: the message, ø for a
+# template that writes code
+refusal_of(template: Node) as text? := match template {
+	List(items, Bracket.None, Separator.Space) => if #items == 2 and items#1 == symbol(REFUSE_WORD) and items#2 is text then text(items#2) else ø
+	_ => ø
 }
 
 # ---- termination, checked once all rules are loaded
@@ -164,5 +173,6 @@ rule_applied(rules: Rules, n: Node) as Node? := {
 		}
 	}
 	if best == ø { return ø }
+	if refusal_of(best.template) != ø { refused(n, refusal_of(best.template)) }
 	with_fact(built(best.template, with_fresh_names(best_bindings, best.fresh)), RULE, best.written)
 }
