@@ -56,7 +56,7 @@ lead first, as a change of this table.
 | signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-reader | bound kernel | typed kernel |
-| kind rules (stage 3) | core/rules/ | as stage 1 | typed kernel | typed kernel |
+| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader (engine: wap-operators) | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -232,14 +232,18 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
+  and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
+  a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
+  versions typing made before, not a new one.
+- **A typed rule's pattern is written in kernel form** (`rule (Call twice $x: int) => …`), not in the spelling the
+  program uses (`twice $x: int`): stage-3 patterns match the typed kernel as it is. Paid off when patterns are lowered
+  like the code they match.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
-- **A program's `operator` declarations don't extend the table yet** (wap/preload/operators.wap, read by
-  core/parse/operators.wap). Bends "`operator` declarations extend the table". Reason: the operator stage runs before
-  declarations are collected; it needs a prescan of `operator` phrases of its own. Paid off with that prescan.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
   operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
   stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.

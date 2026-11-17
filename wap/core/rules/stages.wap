@@ -1,0 +1,164 @@
+# Shape rules (stage 1): operated → surface (notes/backbone.md "Stage languages"). Rules and patterns are data, read
+# by wap's own reader and operator stage from kernel/forms.wap, core/sugar/ and the program itself, and compiled to
+# matchers when they are loaded:
+#
+#   pattern If = (If $condition: Node $then: Node $else: Node)      a pattern every rule may name
+#   rule unless $c $body => If(not $c, $body, ø)                     a spelling written as other code
+#
+# Rules are indexed by the head of their pattern. A node is rewritten top-down: by the most specific rule that fits,
+# again until none fits, then its parts. Each node a rule builds is placed where the rewritten code was and carries
+# the rule (fact RULE, core/stage.wap). Rules terminate by construction, checked when they are loaded.
+
+RULE_WORD = "rule"
+PATTERN_WORD = "pattern"
+RULE_ARROW = "=>"
+DEFINITION = "="
+# the head of a pattern that starts with a hole: tried on every node
+NO_HEAD = ""
+
+class Rule { head: text, matcher: Matcher, template: Node, fresh: list, written: Node, specificity: int }
+# the rules of one stage, by head
+class Rules { by_head: map }
+# stage 1 asks only shapes; stage 3 asks the types of typed code (a hole of a value type)
+shape_rules = Rules({})
+typed_rules = Rules({})
+# code after a stage's rules, and whether any of them fired
+class Fired { code: Node, fired: bool }
+
+# ---- loading
+
+# the rules and patterns of loaded code taken in, the code without them returned
+rules_loaded(code: Node) as Node := match code {
+	List(items, Bracket.None, Separator.Newline) => List(items.filter(item => not taken_in(item)), Bracket.None, Separator.Newline)
+	_ => if taken_in(code) then Empty else code
+}
+
+# a rule or pattern statement taken in (yes), or any other statement left (no)
+taken_in(statement: Node) as bool := match statement {
+	Call(called, arguments) => declaration_taken(spelling_written(called), arguments)
+	_ => no
+}
+
+declaration_taken(called: text, arguments: list) as bool := {
+	if #arguments != 2 { return no }
+	words = phrase_items(arguments#1)
+	if #words < 2 or not (words#1 is symbol) { return no }
+	keyword = spelling_written(words#1)
+	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { declare_pattern(words#2, arguments#2); return yes }
+	if called == RULE_ARROW and keyword == RULE_WORD { rule_added(arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2); return yes }
+	no
+}
+
+phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
+
+rule_added(written: Node, pattern: Node, template: Node) := {
+	normal = normalized(pattern)
+	output = normalized(template)
+	for hole in holes_in(output) { if not holes_in(normal).contains(hole) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
+	matcher = compiled_pattern(normal)
+	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))
+	rules = if asks_value_type(matcher) then typed_rules else shape_rules
+	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
+	rules.by_head[rule.head].add(rule)
+}
+
+# The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its
+# first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
+heads_of(n: Node) as list := match n {
+	List(items, bracket, separator) => list_heads(items) + [NO_HEAD]
+	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
+	_ => [NO_HEAD]
+}
+
+list_heads(items: list) as list := {
+	if #items == 0 or is_hole(items#1) or not (items#1 is symbol) { return [] }
+	first = spelling_written(items#1)
+	if declared_patterns.has(first) and #items > 1 and items#2 is symbol and not is_hole(items#2) { return [first + "/" + spelling_written(items#2), first] }
+	[first]
+}
+
+# ---- termination, checked once all rules are loaded
+
+# Every rule's template names heads that may fire again where it built. Following those from head to head must
+# never come back, unless each rule on the way writes less code than it matched (each hole counted once).
+terminating(rules: Rules) := {
+	for head in rules.by_head.keys { cycle_refused(rules, head, []) }
+}
+
+cycle_refused(rules: Rules, head: text, path: list) := {
+	if path.contains(head) {
+		closing = path[path.index_of(head) ..] + [head]
+		growing = rules_on(rules, closing).filter(rule => not shrinking(rule))
+		if #growing > 0 { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
+		return
+	}
+	if not rules.by_head.has(head) { return }
+	for rule in rules.by_head[head] { for next in template_heads(rule.template) { cycle_refused(rules, next, path + [head]) } }
+}
+
+rules_on(rules: Rules, heads: list) as list := heads.filter(head => rules.by_head.has(head)).map(head => rules.by_head[head]).fold([], (a, b) -> a + b)
+
+# the heads of every node a template spells (not the code its holes bring)
+template_heads(n: Node) as list := match n {
+	List(items, bracket, separator) => heads_of(n) + items.map(template_heads).fold([], (a, b) -> a + b)
+	Key(left, op, right) => heads_of(n) + template_heads(left) + template_heads(right)
+	_ => []
+}
+
+shrinking(rule: Rule) as bool := size_of(rule.template) < matcher_size(rule.matcher) and #holes_in(rule.template) == #holes_in(rule.template).unique
+matcher_size(m: Matcher) as int := 1 + m.parts.map(matcher_size).fold(0, (a, b) -> a + b)
+size_of(n: Node) as int := match n {
+	List(items, bracket, separator) => 1 + items.map(size_of).fold(0, (a, b) -> a + b)
+	Key(left, op, right) => 1 + size_of(left) + size_of(right)
+	_ => 1
+}
+
+# ---- the stage
+
+# a program's own rules and patterns taken in, then the program shaped by every shape rule loaded
+shaped_program(program: Node) as Node := {
+	rest = rules_loaded(program)
+	terminating(shape_rules)
+	terminating(typed_rules)
+	rewritten_by(shape_rules, rest).code
+}
+
+# Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none
+# does, then its parts. Says whether any rule fired, so typing can run again after stage 3.
+rewritten_by(rules: Rules, code: Node) as Fired := {
+	fired = [no]
+	result = rules_applied(rules, code, fired)
+	Fired(result, fired[0])
+}
+
+rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, n, fired), whole => with_parts(whole, part => rules_applied(rules, part, fired)))
+
+rewritten(rules: Rules, n: Node, fired: list) as Node := {
+	current = n
+	step = rule_applied(rules, current)
+	while step != ø {
+		fired[0] = yes
+		current = staged(current, code => step)
+		step = rule_applied(rules, current)
+	}
+	current
+}
+
+# the code the most specific fitting rule builds from it, ø when none fits; two equally specific ones are refused
+rule_applied(rules: Rules, n: Node) as Node? := {
+	best: Rule? = ø
+	best_bindings = {}
+	for head in heads_of(n) {
+		if rules.by_head.has(head) {
+			for rule in rules.by_head[head] {
+				bindings = {}
+				if matches(rule.matcher, n, bindings) {
+					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: " + best.written + " and " + rule.written) }
+					if best == ø or rule.specificity > best.specificity { best = rule; best_bindings = bindings }
+				}
+			}
+		}
+	}
+	if best == ø { return ø }
+	with_fact(built(best.template, with_fresh_names(best_bindings, best.fresh)), RULE, best.written)
+}

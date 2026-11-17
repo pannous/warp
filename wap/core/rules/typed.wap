@@ -1,0 +1,28 @@
+# Typed rules (stage 3): typed kernel → typed kernel (notes/backbone.md "Stage languages", decision hole-types).
+#
+# A rule with a hole of a value type, `$xs: list<int>` or `$f: (float) -> float`, fires on code whose type is settled
+# (core/analyze/types.wap fits_type); what it wrote is bound and typed again, so its output is checked like any code,
+# and the rules run again until none fires.
+#
+#   rule twice $x: int => $x + $x      a rule only ints take
+#   twice 3                            3 + 3, typed again
+
+# how often the typed rules may fire again on their own output before the program is refused
+ROUNDS_LIMIT = 100
+
+# the typed program with the typed rules applied until none fires, bound inside the library and typed after each
+# round; the preload's functions come anew from the preload
+typed_by_rules(typed: Block, library: list, preload: Block) as Block := {
+	code = typed
+	for round in 1 to ROUNDS_LIMIT {
+		after = rewritten_by(typed_rules, code)
+		if not after.fired { return code }
+		code = typed_program(bound_program(own_statements(after.code, preload), library), preload)
+	}
+	refused(code, "the typed rules still fire after ${ROUNDS_LIMIT} rounds: a rule writes code it fires on again")
+}
+# the program without the preload's functions typing put before it
+own_statements(program: Block, preload: Block) as Block := {
+	library_file = file_of(statements_in(preload)#1)
+	refitted(Block(statements_in(program).filter(statement => not (statement is Define and file_of(statement) == library_file))), program)
+}
