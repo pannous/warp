@@ -104,8 +104,6 @@ memory_i64(address: int): int from runtime
 memory_f64(address: int): float from runtime
 memory_f32(address: int): float from runtime
 memory_set_f32(address: int, value: float) from runtime
-f32_of_bits(bits: int): float from runtime
-bits_of_f32(x: float): int from runtime
 memory_i32(address: int): int from runtime
 memory_u32(address: int): int from runtime
 memory_set_i32(address: int, value: int) from runtime

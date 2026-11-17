@@ -74,6 +74,21 @@ cells_staged(n: Node, copied: bool) as int := {
 	}
 	shifted_left(room, 32) + gpu_list_count(n)
 }
+# an f32 cell's bits (0 to 2^32 - 1) as its float, and a float as those bits, rounded to nearest: through a word of
+# linear memory of its own, the one wasm reinterpretation the language has no word for
+f32_of_bits(bits: int) as float := {
+	memory_set_i32(f32_word(), bits)
+	memory_f32(f32_word())
+}
+bits_of_f32(x: float) as int := {
+	memory_set_f32(f32_word(), x)
+	memory_u32(f32_word())
+}
+global f32_word_held = []
+f32_word() as int := {
+	if #f32_word_held == 0 { f32_word_held = [pages_grown(1)] }
+	f32_word_held#1
+}
 # the staging room [address, bytes]: one region every list a host reads or writes passes through in turn, grown to
 # at least twice its size when a larger list comes (the old one is left: grown pages are never freed). Kept in a
 # list, as depth_held
