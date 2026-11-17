@@ -28,7 +28,10 @@ INSTRUCTIONS = {
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
 	name = text(operation)
 	if INSTRUCTIONS.has(name) { return instruction_code(form, arguments, INSTRUCTIONS[name]) }
-	if operation == symbol("print_text") { return helper_call(form, arguments, [nullable(text_type(p.m))], helper(p, "print_text", printing_function)) }
+	a_text = nullable(text_type(p.m))
+	if name == "print_text" { return helper_call(form, arguments, [a_text], [], helper(p, name, printing_function)) }
+	if name == "text_equal" { return helper_call(form, arguments, [a_text, a_text], I32, helper(p, name, text_equality_function)) }
+	if name == "text_joined" { return helper_call(form, arguments, [a_text, a_text], a_text, helper(p, name, joining_function)) }
 	refused(form, "no primitive of this name")
 }
 
@@ -39,10 +42,10 @@ instruction_code(form: Node, arguments: list, row: list) as Code := {
 }
 checked_arguments(form: Node, arguments: list, takes: list) := if arguments.map(argument => argument.type) != takes { refused(form, "the primitive's arguments are not of its types") }
 
-# a call of a helper that takes these types and leaves no value
-helper_call(form: Node, arguments: list, takes: list, index: int) as Code := {
+# a call of a helper that takes these types and gives a value of that type ([] for none)
+helper_call(form: Node, arguments: list, takes: list, gives: list, index: int) as Code := {
 	checked_arguments(form, arguments, takes)
-	Code([], arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
+	Code(gives, arguments.flat_map(argument => argument.instructions) + instruction(CALL, [index]))
 }
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
@@ -63,9 +66,37 @@ printing_function(p: Program) as int := {
 	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
 	# pages short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
 	grown = i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [2]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + count + instruction(MEMORY_GROW, [0]) + DROP + END
-	copied = i32_const(0) + instruction(LOCAL_SET, [2]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + length + I32_GE_U + instruction(BRANCH_IF, [1]) + byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]) + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [2]) + instruction(BRANCH, [0]) + END + END
+	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
 	written = i32_const(STDOUT) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
 	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written)
+}
+
+# the body run for each count from 0 while it stays below the limit, the count in that local
+counted(local: int, limit: list, body: list) as list := {
+	count = instruction(LOCAL_GET, [local])
+	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
+}
+
+# The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
+# count.
+text_equality_function(p: Program) as int := {
+	type = text_type(p.m)
+	no_unless_equal = I32_NE + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+	byte = local => instruction(LOCAL_GET, [local]) + instruction(LOCAL_GET, [3]) + instruction(ARRAY_GET_U, [type])
+	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
+	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
+	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
+}
+
+# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
+# new one.
+joining_function(p: Program) as int := {
+	type = text_type(p.m)
+	bytes_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
+	joined = instruction(LOCAL_GET, [2])
+	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
 }

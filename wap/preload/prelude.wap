@@ -27,3 +27,8 @@ print(t: text) := prim print_text(t)
 >(a: float, b: float): bool := prim f64_gt(a, b)
 <=(a: float, b: float): bool := prim f64_le(a, b)
 >=(a: float, b: float): bool := prim f64_ge(a, b)
+
+# texts: equal when their bytes are, joined by +
+==(a: text, b: text): bool := prim text_equal(a, b)
+!=(a: text, b: text): bool := if a == b then no else yes
++(a: text, b: text): text := prim text_joined(a, b)
