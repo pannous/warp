@@ -69,6 +69,10 @@ BOUND_CAPTURE = "capture"
 BOUND_GLOBAL = "global"
 BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
+# on an assignment, which variable it means: LOCAL a new one in its block (`let x = 1`), GLOBAL the program's
+# (`global x = 1`); without either, the variable the function sees, or a new one when it sees none
+LOCAL = "local"
+GLOBAL = "global"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
 
