@@ -273,3 +273,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   (core/analyze/declarations.wap modules_used): of two modules that use each other, the one reached first runs last,
   so a statement of the other reading its variable sees it unset. Should be refused at that read, like the late-read
   rule for globals; functions are unaffected. Reason: the late-read check sees one program, not the module order.
+- **A bare `break`, `continue` or `return` is lowering's word form, not a rule** (wap/core/rules/lowering.wap
+  `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
+  pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
+  anywhere and refuses it. Paid off when a lone word is its own head.

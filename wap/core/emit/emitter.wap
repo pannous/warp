@@ -24,6 +24,12 @@ use "../../kernel/forms.wap"
 
 # the types of the values the host shows when main gives them back
 SHOWN_BY_HOST = [I64]
+# the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
+NEVER = ["never"]
+# the labels wasm's structured instructions open, so a jump can count how far out its target is
+EXIT_LABEL = "exit"
+NEXT_LABEL = "next"
+OTHER_LABEL = "other"
 # the bindings whose variables live in the function's frame
 FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 
@@ -58,6 +64,11 @@ class Program {
 class Frame {
 	slots: list = []
 	parameter_count: int = 0
+	# a function's frame takes returns, the program's does not; the types of the values returned so far
+	function: bool = no
+	returns: list = []
+	# the labels open around the code being emitted, the innermost last
+	labels: list = []
 }
 # A definition where wasm keeps it: its index, the type of its value (a function's result) and, for a function,
 # its parameters' types. Its key is where it was defined: file, line and column.
@@ -76,7 +87,11 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => postponed(form, p, f)
 	Set(place, value) => set_code(form, declared_name(place), code(value, p, f), p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
-	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), code(then_part, p, f), code(else_part, p, f))
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
+	While(condition, body) => while_code(form, condition, body, p, f)
+	Return(value) => return_code(form, value, p, f)
+	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
+	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
@@ -93,16 +108,55 @@ block_code(statements: list, p: Program, f: Frame) as Code := {
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }
 
-# A choice by a condition, yes or no (an i32). With both parts of one type it has the chosen part's value, otherwise
-# none: each part's value is dropped, as a missing else part's ø is.
+# A choice by a condition, yes or no (an i32). With both parts of one type (a part that never finishes fits any) it has
+# the chosen part's value, otherwise none: each part's value is dropped, as a missing else part's ø is.
 if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code := {
-	if condition.type != I32 { refused(form, "a condition is yes or no") }
-	if then_part.type == else_part.type and not then_part.type is empty { return Code(then_part.type, condition.instructions + IF + then_part.type + then_part.instructions + ELSE + else_part.instructions + END) }
-	Code([], condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
+	checked_condition(form, condition)
+	type = joined(then_part.type, else_part.type)
+	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
+	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
+}
+# the type of either of two values: the one that finishes, or the common one; none when they differ
+joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
+valued(type: list) as bool := not type is empty and type != NEVER
+checked_condition(form: Node, condition: Code) := if condition.type != I32 { refused(form, "a condition is yes or no") }
+
+# A loop: its condition tested before each run of its body, the loop left when it is no. It has no value.
+#   block (exit)  loop (next)  condition, not, br_if exit; body; br next  end  end
+while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Code := {
+	inner = labelled(f, [EXIT_LABEL, NEXT_LABEL], () => {
+		test = code(condition, p, f)
+		checked_condition(form, test)
+		Code([], test.instructions + I32_EQZ + instruction(BRANCH_IF, [jump(form, f, EXIT_LABEL)]) + dropped(code(body, p, f)) + instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
+	})
+	Code([], BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + inner.instructions + END + END)
+}
+
+# The function left with a value, or with none for a bare return; the code after it never runs
+return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
+	if not f.function { refused(form, "a return leaves a function; the program has none to leave") }
+	given = if value is Empty then Code() else code(value, p, f)
+	f.returns += [given.type]
+	Code(NEVER, given.instructions + RETURN)
+}
+
+# code emitted inside wasm's structured instructions, which open these labels
+labelled(f: Frame, labels: list, emit: function) as Code := {
+	f.labels += labels
+	emitted_code = emit()
+	f.labels = f.labels[.. #f.labels - #labels]
+	emitted_code
+}
+# how many labels out the innermost label of that kind is, as br counts
+jump(form: Node, f: Frame, label: text) as int := {
+	innermost = 0
+	for at in 1 to #f.labels { if f.labels#at == label { innermost = at } }
+	if innermost == 0 { refused(form, "this jumps out of a loop, and no loop is around it") }
+	#f.labels - innermost
 }
 
 # the instructions of code whose value nobody takes
-dropped(c: Code) as list := c.instructions + (if c.type is empty then [] else DROP)
+dropped(c: Code) as list := c.instructions + (if valued(c.type) then DROP else [])
 
 # a function defined, its body emitted later; the definition leaves no value
 postponed(form: Node, p: Program, f: Frame) as Code := {
@@ -125,18 +179,25 @@ emitted_function(waiting: Define, p: Program) as Placed := {
 	function_placed(waiting, p)
 }
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
-	f = Frame()
+	f = Frame(function: yes)
 	for parameter in parameters_of(parameters) { f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, parameter_type(parameter, p), [], yes)] }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
 	value = code(body, p, f)
-	p.functions += [Placed(place_key(declared_name(name)), function_of(p.m, types, value, f), value.type, types)]
+	result = result_type(name, value, f)
+	p.functions += [Placed(place_key(declared_name(name)), function_of(p.m, types, Code(result, value.instructions), f), result, types)]
 	p.functions.last
 } }
 parameters_of(parameters: List) as list := match parameters { List(items, bracket, separator) => items }
+# The type a function gives back: its body's value and every return's, all of one type
+result_type(name: Node, body: Code, f: Frame) as list := {
+	result = if body.type == NEVER then (if f.returns is empty then [] else f.returns#1) else body.type
+	for returned in f.returns { if returned != result { refused(name, "this function gives back values of different types") } }
+	result
+}
 # the wasm function of a frame and its body, its value the result: its index
 function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
-	results = if body.type is empty then [] else [body.type]
+	results = if valued(body.type) then [body.type] else []
 	added_function(m, parameters, results, f.slots[f.parameter_count ..].map(slot => slot.type), body.instructions)
 }
 
@@ -148,7 +209,7 @@ parameter_type(parameter: Node, p: Program) as list := {
 
 # A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
 set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
-	if value.type is empty { refused(form, "this gives no value to set") }
+	if not valued(value.type) { refused(form, "this gives no value to set") }
 	held = variable_of(place, p, f) ?? added_variable(place, value.type, p, f)
 	if held.type != value.type { refused(form, "this name held another kind of value before") }
 	Code(value.type, value.instructions + kept(held))
