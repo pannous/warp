@@ -38,8 +38,6 @@ pattern If = (If $condition: Node $then_part: Node $else_part: Node)
 
 # one arm of a Case: a pattern and the result when it fits the subject: `1 => "one"` is Arm(1, "one"), (Arm 1 "one")
 pattern Arm = (Arm $pattern: Node $result: Node)
-# the pattern that fits any value and names none
-WILDCARD = "_"
 
 # the result of the first arm whose pattern fits the subject: `match x { 1 => "one"; n => "other" }` is
 # Case(x, Arm(1, "one"), Arm(n, "other")), (Case x (Arm 1 "one") …). A literal fits the value equal to it, a name fits
