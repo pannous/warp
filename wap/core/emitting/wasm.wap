@@ -1,0 +1,117 @@
+# The wasm binary format: the lower half of wap's emitter (notes/backbone.md, milestone 0).
+#
+# It knows modules, sections, types and instructions, and nothing of warp: no Node, no kernel form. The emitter
+# above it decides what to emit; this file only spells it as bytes. A module is built up by adding its parts
+# (`imported`, `added_function`, `added_data`, `exported`) and turned into bytes once, by `module_bytes`.
+# Format reference: https://webassembly.github.io/spec/core/binary/
+
+MAGIC = [0x00, 0x61, 0x73, 0x6D]
+VERSION = [0x01, 0x00, 0x00, 0x00]
+
+# section ids
+TYPE_SECTION = 1
+IMPORT_SECTION = 2
+FUNCTION_SECTION = 3
+MEMORY_SECTION = 5
+EXPORT_SECTION = 7
+CODE_SECTION = 10
+DATA_SECTION = 11
+
+# value types and what an import or export is
+I32 = 0x7F
+FUNCTION_TYPE = 0x60
+FUNCTION_KIND = 0x00
+MEMORY_KIND = 0x02
+
+# instructions
+CALL = 0x10
+DROP = 0x1A
+I32_CONST = 0x41
+END = 0x0B
+
+# A module in the making. Imports come first among the functions, so a function's index is counted after them.
+class Module {
+	types: list = []
+	imports: list = []
+	functions: list = []
+	exports: list = []
+	data: list = []
+	# the first free byte of the memory; below it lie the data segments
+	memory_end: int = 16
+}
+
+# An unsigned number as LEB128, 7 bits a byte, the low bits first, each byte but the last with its high bit set:
+# 624485 → [0xE5, 0x8E, 0x26]
+unsigned(n: int) as list := {
+	bytes = []
+	rest = n
+	while rest >= 0x80 {
+		bytes += [rest % 0x80 + 0x80]
+		rest = rest ÷ 0x80
+	}
+	bytes + [rest]
+}
+# A signed number as LEB128, as `i32.const` takes it: -1 → [0x7F]
+signed(n: int) as list := {
+	bytes = []
+	rest = n
+	while rest < -0x40 or rest >= 0x40 {
+		bytes += [rest % 0x80 + 0x80]
+		rest = (rest - rest % 0x80) ÷ 0x80
+	}
+	bytes + [rest % 0x80]
+}
+# a 32-bit number as four bytes, the lowest first, as memory holds it
+little_endian(n: int) as list := [n % 0x100, n ÷ 0x100 % 0x100, n ÷ 0x10000 % 0x100, n ÷ 0x1000000 % 0x100]
+
+# The format's lists: their length, then the items. `vector` takes items already in bytes, `vector_of` encodes each.
+vector(items: list) as list := unsigned(#items) + items.flat_map(item => item)
+named(name: text) as list := unsigned(#name.bytes) + name.bytes
+section(id: int, items: list) as list := {
+	content = vector(items)
+	[id] + unsigned(#content) + content
+}
+
+# The index of the function type (params) → (results), added once.
+type_index(m: Module, params: list, results: list) as int := {
+	signature = [FUNCTION_TYPE] + vector(params.map(kind => [kind])) + vector(results.map(kind => [kind]))
+	for at in 1 to #m.types { if m.types#at == signature { return at - 1 } }
+	m.types += [signature]
+	#m.types - 1
+}
+
+# An imported function, `wasi_snapshot_preview1.fd_write`: its index among the functions.
+imported(m: Module, module: text, name: text, params: list, results: list) as int := {
+	m.imports += [named(module) + named(name) + [FUNCTION_KIND] + unsigned(type_index(m, params, results))]
+	#m.imports - 1
+}
+
+# A function of the module with its body (instructions, without the final `end`): its index among the functions.
+added_function(m: Module, params: list, results: list, body: list) as int := {
+	m.functions += [[type_index(m, params, results), body]]
+	#m.imports + #m.functions - 1
+}
+
+exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
+
+# Bytes placed in the memory: their address.
+added_data(m: Module, bytes: list) as int := {
+	address = m.memory_end
+	m.data += [[address, bytes]]
+	m.memory_end += #bytes
+	address
+}
+
+# The whole module, its sections in the order the format requires.
+module_bytes(m: Module) as list := {
+	declarations = m.functions.map(function => unsigned(function#1))
+	codes = m.functions.map(function => code_entry(function#2))
+	segments = m.data.map(segment => [0x00, I32_CONST] + signed(segment#1) + [END] + vector(segment#2.map(byte => [byte])))
+	memory_pages = [[0x00] + unsigned(1)]
+	MAGIC + VERSION + section(TYPE_SECTION, m.types) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(EXPORT_SECTION, m.exports) + section(CODE_SECTION, codes) + section(DATA_SECTION, segments)
+}
+# a function's code: its size, no locals yet, its instructions and `end`
+code_entry(body: list) as list := {
+	content = vector([]) + body + [END]
+	unsigned(#content) + content
+}

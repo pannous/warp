@@ -1,0 +1,7 @@
+# Text → notation: a program's text read as Node, data and code alike (notes/wap.md "The pipeline").
+#
+# Milestone 1 reuses warp's reader, `parse`, as notes/backbone.md decides. Before milestone 2 this file becomes the
+# pure notation reader: atoms, keys, lists and phrases, with no keyword branches, the operators from
+# core/reading/operators.wap.
+
+notation(source: text) as Node := parse(source)
