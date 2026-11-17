@@ -1,0 +1,4 @@
+# Types declared other ways, as Record (notes/kernel.md "Record"; wiki/class.md): the spellings wap's own source uses.
+
+# a class, its fields typed names; the rule writes its constructor too, the instance as data
+rule class $name { ($field: $type)... } => (Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...})

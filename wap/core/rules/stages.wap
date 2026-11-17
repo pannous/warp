@@ -56,9 +56,16 @@ declaration_taken(called: text, arguments: list) as bool := {
 
 phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
 
+# What a template writes: its form, out of the parentheses around it; `(a; b)` writes the two statements a and b where
+# the matched one stood
+written_by(template: Node) as Node := match ungrouped(template) {
+	List(items, Bracket.Round, Separator.Semicolon) => List(items, Bracket.None, Separator.Semicolon)
+	_ => ungrouped(template)
+}
+
 rule_added(written: Node, pattern: Node, template: Node) := {
 	normal = normalized(ungrouped(pattern))
-	output = ungrouped(template)
+	output = written_by(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	typed = asks_value_type(compiled_pattern(normal))
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
