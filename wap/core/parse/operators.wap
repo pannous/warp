@@ -8,7 +8,7 @@
 #
 # Reads: notation, whose phrases are space lists and glued runs (separator None) with operators as Symbols. Writes:
 # the same notation with each operator application a Call of its canonical spelling. An unrelated mix, a chain of a
-# group that refuses chaining, an operator missing an operand, or a fold of the old reader is refused.
+# group that refuses chaining, or an operator key the table lacks is refused.
 
 # ---- the table, checked when it is read
 
@@ -27,15 +27,93 @@ looser_groups(name: text, path: list) as list := {
 	found
 }
 
-# group name → every group it binds tighter than: the topological order of the relations, read once
-looser_than = precedence_order()
-precedence_order() as map := {
-	order = {}
-	for group in precedence_groups { order[group.name] = looser_groups(group.name, []) }
-	order
-}
+# group name → every group it binds tighter than: the topological order of the relations, read again whenever a
+# program adds to them
+looser_than = {}
+related_groups() := { for group in precedence_groups { looser_than[group.name] = looser_groups(group.name, []) } }
+related_groups()
 
 binds_tighter(group: text, other: text) as bool := looser_than[group].contains(other)
+
+# ---- a program's own operators
+
+# the program with its operator phrases read, after its own declarations joined the table, wherever they stand
+operated_program(program: Node) as Node := {
+	placements = []
+	operators_declared(program, placements)
+	for placement in placements { placed(placement) }
+	related_groups()
+	operated(program)
+}
+
+# every operator the code declares added to the table; its precedence declarations kept for after, when all exist
+operators_declared(n: Node, placements: list) := match n {
+	List(items, Bracket.None, Separator.Space) => {
+		declaration_read(n, tokens_of(items).map(token => declared_word(token.item)), placements)
+		for item in items { operators_declared(item, placements) }
+	}
+	List(items, bracket, separator) => for item in items { operators_declared(item, placements) }
+	Key(left, op, right) => { operators_declared(left, placements); operators_declared(right, placements) }
+	_ => ø
+}
+
+# the word an item spells, a call's head for `⊕(a, b)`, "" for anything else
+declared_word(item: Node) as text := match item {
+	Symbol(name) => name
+	Key(head, Op.None, group) => declared_word(head)
+	_ => ""
+}
+
+# a precedence declaration: the operator's spelling, the operator it is placed against, above or below it
+class Placement { spelling: text, other: text, above: bool, written: Node }
+
+# `[fixity] operator ⊕ …` declares ⊕; `operator ⊕ has precedence above|below *` places it
+declaration_read(n: Node, words: list, placements: list) := {
+	start = if words#1 == operator_word then 1 else if #words > 1 and words#2 == operator_word then 2 else 0
+	if start == 0 or #words <= start { return }
+	declaring = declaring_words.filter(row => row.word == words#1)
+	if #declaring == 0 { return }
+	spelling = words#(start + 1)
+	rest = words[start + 1 ..]
+	if #rest > 3 and rest[0 .. 3] == precedence_above { placements.add(Placement(spelling, words.last, yes, n)); return }
+	if #rest > 3 and rest[0 .. 3] == precedence_below { placements.add(Placement(spelling, words.last, no, n)); return }
+	declared(spelling, declaring#1)
+}
+
+# the operator joins the table in the declaring word's fixity and group; one the table has there is an overload
+declared(spelling: text, declaring: Declaring) := {
+	if group_of(spelling, declaring.fixity) != "" { return }
+	if operator_spelled(spelling) == ø { operators.add(Operator(spelling, spelling)) }
+	grouped(operator_spelled(spelling), declaring.fixity, declaring.group)
+}
+
+grouped(operator: Operator, fixity: Fixity, group: text) := match fixity {
+	Fixity.Infix => operator.infix = group
+	Fixity.Prefix => operator.prefix = group
+	_ => operator.postfix = group
+}
+
+# a declared operator in a group of its own, related to the group of the operator it is placed against
+placed(placement: Placement) := {
+	operator = operator_spelled(placement.spelling)
+	if operator == ø { refused(placement.written, "declare operator " + placement.spelling + " before placing it") }
+	fixity = declared_fixity(operator)
+	other = group_of_any(canonical(placement.other, Fixity.Anywhere))
+	if other == "" { refused(placement.written, "no operator " + placement.other + " to place " + placement.spelling + " against") }
+	own = Group(placement.spelling, if placement.above then [other] else [])
+	if not placement.above { group_named(other).tighter_than.add(placement.spelling) }
+	precedence_groups.add(own)
+	grouped(operator, fixity, placement.spelling)
+}
+
+declared_fixity(operator: Operator) as Fixity :=
+	if operator.infix != "" then Fixity.Infix else if operator.prefix != "" then Fixity.Prefix else Fixity.Postfix
+
+# the group of an operator in its first fixity: infix, then prefix, then postfix
+group_of_any(spelling: text) as text := {
+	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] { if group_of(spelling, fixity) != "" { return group_of(spelling, fixity) } }
+	""
+}
 
 # ---- spellings
 
@@ -182,54 +260,79 @@ known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #ali
 
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
-# spaced, a group like any other.
-phrase_read(tokens: list) as Node := {
+# spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
+phrase_read(written: list) as Node := {
+	tokens = operators_called(written)
 	operands = []
 	pending = []
 	expecting_operand = yes
-	for i in 1 to #tokens {
+	i = 1
+	while i <= #tokens {
 		token = tokens#i
-		last = i == #tokens
+		next = if i < #tokens then tokens#(i + 1) else ø
 		if expecting_operand {
-			prefix = reading_as(token.item, Fixity.Prefix)
-			if prefix != ø and not last {
-				note_discouraged(token.item, spelling_written(token.item))
-				pending.add(prefix)
-			} else {
+			prefix = if operand_follows(next) then reading_as(token.item, Fixity.Prefix) else ø
+			if prefix == ø {
 				operands.add(operated(token.item))
 				expecting_operand = no
+			} else {
+				note_discouraged(token.item, spelling_written(token.item))
+				pending.add(prefix)
 			}
+			i = i + 1
 		} else {
-			use = operator_after_operand(token, last)
+			use = operator_after_operand(token, next)
 			if use == ø {
 				juxtaposition = juxtaposition_before(token)
 				arrive(juxtaposition, operands, pending)
 				pending.add(juxtaposition)
-				operand_or_prefix(token, operands, pending)
-				expecting_operand = operands_waiting(token)
+				expecting_operand = yes
 			} else {
 				note_discouraged(token.item, spelling_written(token.item))
 				arrive(use, operands, pending)
-				if use.fixity == Fixity.Postfix { applied(use, operands) } else { pending.add(use) ; expecting_operand = yes }
+				if use.fixity == Fixity.Postfix { applied(use, operands) } else { pending.add(use); expecting_operand = yes }
+				i = i + 1
 			}
 		}
 	}
-	if expecting_operand and #pending > 0 { refused(pending.last.written, "the operator " + pending.last.spelling + " has no operand after it") }
 	while #pending > 0 { applied(pending.pop(), operands) }
 	operands#1
 }
 
+# An operator glued to the bracket group after it, with nothing glued before it, is called like any `f(x)`:
+# `+(a, b)` is the glued head Key(+, None, (a, b)), whatever fixities + has; `a-(b)` stays a subtraction
+operators_called(tokens: list) as list := {
+	called = []
+	i = 1
+	while i <= #tokens {
+		token = tokens#i
+		if i < #tokens and is_operator_word(token.item) and token.glued_after and not token.glued_before and is_bracketed(tokens#(i + 1).item) {
+			called.add(Spaced(Key(token.item, Op.None, tokens#(i + 1).item), no, tokens#(i + 1).glued_after))
+			i = i + 2
+		} else {
+			called.add(token)
+			i = i + 1
+		}
+	}
+	called
+}
+
+# a symbol the table reads as an operator in any fixity
+is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø
+
+# whether the token can start an operand: a word, a literal, a group, or a prefix operator; ø ends the phrase
+operand_follows(next: Spaced?) as bool := next != ø and (reading_as(next.item, Fixity.Prefix) != ø or reading_as(next.item, Fixity.Infix) == ø and reading_as(next.item, Fixity.Postfix) == ø)
+
 # after an operand, the token as an infix or postfix operator, by the minus rule (notes/backbone.md "Minus"): spaced
 # on both sides or on neither it is infix; attached only to what follows it is prefix, so juxtaposition comes first
-# (ø here); attached only to what precedes it is postfix where it has a postfix, else infix
-operator_after_operand(token: Spaced, last: bool) as Use? := {
-	infix = if last then ø else reading_as(token.item, Fixity.Infix)
+# (ø here), and so is one glued to brackets, a call of it like any `f(x)` (`⊕(a, b)`); attached only to what
+# precedes it is postfix where it has a postfix, else infix. Infix and prefix need an operand after them.
+operator_after_operand(token: Spaced, next: Spaced?) as Use? := {
+	followed = operand_follows(next)
+	infix = if followed then reading_as(token.item, Fixity.Infix) else ø
 	postfix = reading_as(token.item, Fixity.Postfix)
-	prefix = reading_as(token.item, Fixity.Prefix)
-	attached_after_only = token.glued_after and not token.glued_before
-	attached_before_only = token.glued_before and not token.glued_after
-	if attached_after_only and prefix != ø { return ø }
-	if attached_before_only and postfix != ø { return postfix }
+	if token.glued_after and not token.glued_before and followed and (reading_as(token.item, Fixity.Prefix) != ø or is_bracketed(next.item)) { return ø }
+	if token.glued_before and not token.glued_after and postfix != ø { return postfix }
 	if infix != ø { return infix }
 	postfix
 }
@@ -247,12 +350,7 @@ in_brackets(read: Node, bracket: Bracket) as Node := {
 juxtaposition_before(token: Spaced) as Use :=
 	if token.glued_before then Use("", Fixity.Infix, glue_group, token.item) else Use("", Fixity.Infix, juxtaposition_group, token.item)
 
-# after juxtaposition, the token starts the next operand: a prefix operator or the operand itself
-operand_or_prefix(token: Spaced, operands: list, pending: list) := {
-	prefix = reading_as(token.item, Fixity.Prefix)
-	if prefix != ø { pending.add(prefix) } else { operands.add(operated(token.item)) }
-}
-operands_waiting(token: Spaced) as bool := reading_as(token.item, Fixity.Prefix) != ø
+is_bracketed(n: Node) as bool := match n { List(items, bracket, separator) => bracket != Bracket.None; _ => no }
 
 spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => "" }
 

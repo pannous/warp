@@ -33,6 +33,10 @@ LATER_ESCAPES = «$({:»
 OTHER_GLYPHS = "¬±×÷·‖…′″"
 # operator glyph ranges beyond ASCII: superscripts and subscripts, arrows, math operators, technical
 GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], ['∟', '⌙'], ['¹', '¹'], ['²', '³']]
+# what starts a hole, `$c`
+HOLE_SIGN = "$"
+# what ends a rest hole, `$items...` (first_principles.md "Holes")
+REST_MARK = "..."
 # what ends a URL: a blank, a bracket, a separator or a quote
 URL_ENDS = " \t\n\r()[]{},;\"'`"
 # a line comment starts with `//`, or with `#` before a blank, `!` or `#`
@@ -300,11 +304,12 @@ dedent(r: Reader) := {
 
 # ── atoms ──
 
-# a run of name characters: a word, `$hole` and `π` included
+# a run of name characters: a word, `$hole` and `π` included; a rest hole `$items...` is one word, its dots no glyphs
 name_read(r: Reader) := {
 	end = r.at
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
 	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
+	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
 	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 }
 
@@ -526,7 +531,8 @@ runs_of(parts: list<Lexeme>) as list := {
 }
 
 # A phrase's items. `:` or `=` with blanks around takes all before it as key and all after it as value (`a b : c`,
-# `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as value (`a: b c`)
+# `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as value (`a: b c`), except after
+# a hole: `$c: Node $then: Node` are two typed holes, each taking one type (notes/first_principles.md "Holes")
 spaced(runs: list) as list := {
 	items = []
 	for i in 0 ..< runs.length {
@@ -535,6 +541,10 @@ spaced(runs: list) as list := {
 		if run.length == 1 and token_at(run, 0).kind == LexemeKind.Key and i > 0 {
 			return [keyed(phrase_of(items), token_at(run, 0).op, phrase_of(spaced(rest)))]
 		}
+		if run.length == 2 and last_of(run).kind == LexemeKind.Key and last_of(run).op == Op.Colon and is_hole_word(token_at(run, 0).node) and rest.length > 0 {
+			items += [keyed(token_at(run, 0).node, Op.Colon, glued_run(rest[0]))]
+			return items + spaced(rest[1 .. rest.length])
+		}
 		if run.length > 1 and last_of(run).kind == LexemeKind.Key {
 			return items + [keyed(glued_run(run[0 .. run.length - 1]), last_of(run).op, phrase_of(spaced(rest)))]
 		}
@@ -542,6 +552,8 @@ spaced(runs: list) as list := {
 	}
 	items
 }
+
+is_hole_word(n: Node) as bool := match n { Symbol(name) => name.starts_with(HOLE_SIGN) and #name > 1; _ => no }
 
 # the items as one node: Empty for none, the item for one, else a phrase
 phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)

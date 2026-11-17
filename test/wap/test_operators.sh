@@ -23,4 +23,12 @@ format_check 'print 1 + 2' 'print 1 + 2'
 # a spaced call takes the whole expression after it (decision spaced-call-precedence): brackets keep the other reading
 format_check '(square 3) * 3' '(square 3) * 3'
 format_check 'square(3) * 3' 'square(3) * 3'
+# brackets that precedence makes needless are dropped, the others kept
+format_check '1 + (2 * 3)' '1 + 2 * 3'
+# a program's own operators (wiki/operator.md): a declared infix binds like +, a placed one by its relation
+format_check $'infix operator ⊕(a, b) := a * b\n1 ⊕ (2 * 3)\n(1 ⊕ 2) * 3' $'infix operator ⊕(a, b) := a * b\n1 ⊕ 2 * 3\n(1 ⊕ 2) * 3'
+format_check $'infix operator ⊗ := left * right\noperator ⊗ has precedence above *\n2 * (3 ⊗ 4)' $'infix operator ⊗ := left * right\noperator ⊗ has precedence above *\n2 * 3 ⊗ 4'
+format_check $'infix operator divides(d, n) := n % d == 0\n3 divides (2 * 6)' $'infix operator divides(d, n) := n % d == 0\n3 divides 2 * 6'
+# an operator with no operand after it is a name
+format_check 'total := fold +' 'total := fold +'
 exit $((failures > 0))
