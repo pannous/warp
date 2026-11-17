@@ -8,4 +8,6 @@ check "float division" "$(ran float_division 'if 7.0 / 2.0 == 3.5 then print "ha
 check "a call picks the overload of its operands' types" "$(ran overloads 'if 2 * 3 == 6 then print "int" else print "other"
 if 2.0 * 3.0 != 6.5 then print "float" else print "other"')" "int
 float"
+# parentheses group: the form inside is computed first
+check "a group is computed first" "$(ran group '(1 + 2) * 3')" "9"
 exit $((failures > 0))
