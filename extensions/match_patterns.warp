@@ -257,7 +257,7 @@ built_value(pattern: Node) as Node := match pattern {
 }
 # each name's parameter, typed as the pattern types it: `a: int`
 hole_parameters(pattern: Node, holes: list) as list := holes.map(hole => typed_hole(pattern, hole) ?? symbol(hole))
-typed_hole(pattern: Node, hole: text) as Node? := {
+hole_typed(pattern: Node, hole: text) as Node? := {
 	for n in nodes_in(pattern) {
 		if is_key(n, Op.Colon) and key_of(n) is symbol and name_of(key_of(n)) in [hole, "$" + hole] and value_of(n) is symbol { return Key(symbol(hole), Op.Colon, value_of(n)) }
 	}
