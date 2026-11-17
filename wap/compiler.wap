@@ -3,21 +3,26 @@
 #
 #   warp wap/compiler.wap hello.wap hello.wasm      compile
 #   warp hello.wasm                                  run it
+#   warp wap/compiler.wap format hello.wap           print it in canonical warp spelling
 #
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
-#   lower     notation → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
+#   lower     operated → kernel     core/rules/lowering.wap, by hand until the rule engine runs
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
 use "kernel/forms.wap"
 use "core/stage.wap"
 use "core/errors.wap"
+use "preload/operators.wap"
 use "core/parse/reader.wap"
+use "core/parse/operators.wap"
+use "core/format.wap"
 use "core/rules/lowering.wap"
 use "core/emit/wasm.wap"
 use "core/emit/emitter.wap"
 
-compiled(source: text) as list := module_bytes(emitted(lowered_program(notation(source))))
+compiled(source: text) as list := module_bytes(emitted(lowered_program(operated(notation(source)))))
 
-if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>" }
-write_bytes(args#2, compiled(read(args#1)))
+if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
+if args#1 == "format" { print formatted(operated(notation(read(args#2)))) } else { write_bytes(args#2, compiled(read(args#1))) }

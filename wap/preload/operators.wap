@@ -1,0 +1,133 @@
+# The operator table every program gets (notes/backbone.md "Operators"): the precedence groups and how they relate,
+# the operators with their fixities, and the aliases that spell them or any other word. Data only: the mechanism
+# that reads it is core/parse/operators.wap.
+#
+# Precedence is no number. Each group names the groups it binds tighter than; the order of all groups follows from
+# those relations (a topological sort). Two groups with no relation between them, mixed without brackets, are
+# refused, never guessed; a cycle is refused when the table is read.
+#
+# An operator is a function with a spelling: `a + b` is a call of `+`, whose English name is add. The row gives the
+# group of each fixity the operator has: `-` is infix in additive and prefix in unary.
+
+# how a run of one group's operators groups: from the left (8 - 4 - 2), from the right (2^3^2), or refused (a < b < c)
+enum Grouping { Left, Right, Refused }
+
+# a precedence group: the groups it binds tighter than, and how a run of its own operators groups
+class Group { name: text, tighter_than: list, grouping: Grouping = Grouping.Left }
+
+# an operator: its canonical spelling, its English name, and its group in each fixity it has ("" when it has none)
+class Operator { spelling: text, name: text, infix: text = "", prefix: text = "", postfix: text = "" }
+
+# where an alias applies: written as an infix, prefix or postfix operator, or wherever its word stands
+enum Fixity { Infix, Prefix, Postfix, Anywhere }
+
+# another spelling of a canonical word; a discouraged one works with a note naming the canonical word
+class Alias { spelling: text, canonical: text, fixity: Fixity = Fixity.Anywhere, discouraged: bool = no }
+
+# Groups left unrelated on purpose, so a mix needs brackets: shifts and arithmetic (`a << 1 + 2`), bit operators and
+# comparisons (`a & b == c`).
+#
+# Juxtaposition is a group too: `3ms`, `f(x)` and `a.b(c)` glue tightest, `print 1 + 2` is print(1 + 2) (wiki/operator.md
+# "Functions group externally"). It joins its operands into a phrase; the stages after decide what the phrase means.
+glue_group = "access"
+juxtaposition_group = "juxtaposition"
+
+precedence_groups = [
+	Group("access", ["superscript"]),
+	Group("superscript", ["count"]),
+	Group("count", ["power"]),
+	Group("power", ["unary"], Grouping.Right),
+	Group("unary", ["multiplicative", "shift"]),
+	Group("multiplicative", ["additive"]),
+	Group("additive", ["range"]),
+	Group("shift", ["range"]),
+	Group("range", ["casting"], Grouping.Refused),
+	Group("casting", ["coalescing", "bit_and"]),
+	Group("bit_and", ["bit_or"]),
+	Group("bit_or", ["conjunction"]),
+	Group("coalescing", ["comparison"], Grouping.Right),
+	Group("comparison", ["equality"], Grouping.Refused),
+	Group("equality", ["negation"], Grouping.Refused),
+	Group("negation", ["conjunction"]),
+	Group("conjunction", ["exclusion"]),
+	Group("exclusion", ["disjunction"]),
+	Group("disjunction", ["juxtaposition"]),
+	Group("juxtaposition", ["piping"]),
+	Group("piping", ["arrow"]),
+	Group("arrow", ["assignment"], Grouping.Right),
+	Group("assignment", [], Grouping.Right),
+]
+
+operators = [
+	Operator(".", "dot", infix: "access"),
+	Operator("?.", "safe_dot", infix: "access"),
+	Operator("::", "scope", infix: "access"),
+	Operator("²", "square", postfix: "superscript"),
+	Operator("³", "cube", postfix: "superscript"),
+	Operator("#", "count", prefix: "count", infix: "access"),
+	Operator("^", "power", infix: "power"),
+	Operator("↑", "arrow_up", infix: "power"),
+	Operator("↓", "arrow_down", infix: "power"),
+	Operator("√", "square_root", prefix: "unary"),
+	Operator("∛", "cube_root", prefix: "unary"),
+	Operator("*", "multiply", infix: "multiplicative"),
+	Operator("/", "divide", infix: "multiplicative"),
+	Operator("÷", "div", infix: "multiplicative"),
+	Operator("%", "modulo", infix: "multiplicative"),
+	Operator("rem", "remainder", infix: "multiplicative"),
+	Operator("+", "add", infix: "additive", prefix: "unary"),
+	Operator("-", "subtract", infix: "additive", prefix: "unary"),
+	Operator("<<", "shift_left", infix: "shift"),
+	Operator(">>", "shift_right", infix: "shift"),
+	Operator("to", "to", infix: "range"),
+	Operator("..", "upto", infix: "range"),
+	Operator("as", "as", infix: "casting"),
+	Operator("??", "coalesce", infix: "coalescing"),
+	Operator("<", "less", infix: "comparison"),
+	Operator(">", "greater", infix: "comparison"),
+	Operator("<=", "less_or_equal", infix: "comparison"),
+	Operator(">=", "greater_or_equal", infix: "comparison"),
+	Operator("in", "in", infix: "comparison"),
+	Operator("==", "equal", infix: "equality"),
+	Operator("!=", "not_equal", infix: "equality"),
+	Operator("is", "is", infix: "equality"),
+	Operator("===", "identical", infix: "equality"),
+	Operator("!==", "not_identical", infix: "equality"),
+	Operator("≈", "approximately", infix: "equality"),
+	Operator("~", "similar", infix: "equality"),
+	Operator("not", "not", prefix: "negation"),
+	Operator("and", "and", infix: "conjunction"),
+	Operator("&", "bit_and", infix: "bit_and"),
+	Operator("xor", "xor", infix: "exclusion"),
+	Operator("or", "or", infix: "disjunction"),
+	Operator("|", "bit_or", infix: "bit_or"),
+	Operator("|>", "pipe", infix: "piping"),
+	Operator("->", "maps_to", infix: "arrow"),
+	Operator("=>", "rule", infix: "arrow"),
+	Operator("=", "assign", infix: "assignment"),
+	Operator(":=", "define", infix: "assignment"),
+]
+
+# `x ⊛= y` is `x = x ⊛ y` for every infix operator ⊛ (wiki/operator.md): spelled ⊛ then `=`, in this group
+compound_assignment_group = "assignment"
+
+aliases = [
+	# symbols
+	Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
+	Alias("‐", "-"), Alias("‑", "-"), Alias("‒", "-"), Alias("–", "-"), Alias("—", "-"), Alias("―", "-"),
+	Alias("≤", "<="), Alias("≥", ">="), Alias("≠", "!="),
+	Alias("...", "to"), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),
+	Alias("~~", "~"), Alias("^^", "xor"), Alias("!", "not", Fixity.Prefix), Alias("¬", "not"),
+	Alias("&&", "and", discouraged: yes), Alias("||", "or", discouraged: yes),
+	# words written between operands
+	Alias("plus", "+", Fixity.Infix), Alias("minus", "-", Fixity.Infix), Alias("mod", "%", Fixity.Infix),
+	Alias("equals", "==", Fixity.Infix), Alias("through", "to", Fixity.Infix), Alias("be", ":=", Fixity.Infix),
+	Alias("circa", "≈", Fixity.Infix),
+	# names
+	Alias("size", "count"), Alias("length", "count"),
+	# constants
+	Alias("true", "yes"), Alias("false", "no"),
+	Alias("null", "ø"), Alias("nil", "ø"), Alias("none", "ø"), Alias("nothing", "ø"), Alias("void", "ø"),
+	# types
+	Alias("string", "text"), Alias("str", "text"), Alias("integer", "int"), Alias("boolean", "bool"),
+]
