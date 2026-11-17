@@ -260,3 +260,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   go first in the program's Block), while the preload's uncalled definitions are left out. Bends "smaller and faster".
   Reason: a module is code whose statements must run, so it joins the program whole. Paid off when typing leaves out
   the module definitions nothing calls, as it does the preload's.
+- **In a cycle of modules, a top-level statement may read the other module's value before it is set**
+  (core/analyze/declarations.wap modules_used): of two modules that use each other, the one reached first runs last,
+  so a statement of the other reading its variable sees it unset. Should be refused at that read, like the late-read
+  rule for globals; functions are unaffected. Reason: the late-read check sees one program, not the module order.
