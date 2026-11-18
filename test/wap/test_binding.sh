@@ -35,4 +35,13 @@ f()')" "5"
 check "a variable that never changes needs no global" "$(ran unchanged 'x = 1
 f() := x
 f()')" "1"
+check "a variable defined only after a function value is no variable yet in it" "$(ran later_outer 'f(xs: list<int>) := {
+  doubled = xs.map(x => {
+    taken = x * 2
+    taken
+  })
+  taken = doubled#1 + doubled#2
+  taken
+}
+print text(f([1, 2]))')" "6"
 exit $((failures > 0))

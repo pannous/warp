@@ -33,4 +33,14 @@ ships comparing unicode 'print "\0303\0251" == "e\0314\0201"'
 ships sounding native_host 'use sound\nif no 1 { play A4 }'
 # a library's own calls take its words, never a program's definition of their name (card self-calling-function)
 built own_word_beside_library no 'bracket_of(c: text) := "{"\nprint is_block_value("x")'
+# keeps <file> <executable> <printed>: building a program file of any ending leaves the file as written, and the
+# executable named without its ending, if any, prints this (card build-file-ending)
+keeps() {
+	printf 'print "hi"\n' >"$stage/$1"
+	(cd "$stage" && "$warp" build "$1" >"$stage/build.log" 2>&1)
+	got=$([ "$2" != "$1" ] && [ -x "$stage/$2" ] && "$stage/$2")
+	if grep -q '^print' "$stage/$1" && [ "$got" = "$3" ]; then echo "✓ $1 kept"; else echo "✗ $1: got '$got', expected '$3', or the build wrote over it"; failures=$((failures + 1)); fi
+}
+keeps other.wap other hi
+keeps bare bare ''
 exit $((failures > 0))

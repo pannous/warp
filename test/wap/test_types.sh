@@ -103,4 +103,6 @@ print text(xs.contains("a"))
 has_key(m: map<K, V>, key: K): bool := yes
 print text({a: 1}.has_key("c"))')" "yes
 yes"
+check "a type's word after is tests the type, even beside a function of that name" "$(ran is_type_first 'int(t: text): int := 7
+print text(3 is int)')" "yes"
 exit $((failures > 0))

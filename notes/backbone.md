@@ -326,3 +326,5 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   Nothing pins the float digits.
 - **A one-letter literal key on a map read fails** (wap/core/analyze/data.wap): `m#"b"` gives the key as a char, so
   the wasm does not validate; `m#"bb"`, `m["b"]` and `m#k` work. Edge case, no wap source writes it.
+- **any compares other references by identity:** inside an `any`, refs other than boxes and texts compare by
+  identity (a record compared directly compares by fields); by type via dispatch, as show does, when code needs it.
