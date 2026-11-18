@@ -33,7 +33,17 @@ literal(n: Node, m: Module) as Code? := match n {
 # records (core/stage.wap record_named)
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
 	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
-	_ => if list_index(type_name, m, records) == ø then ø else nullable(list_index(type_name, m, records))
+	_ => {
+		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records)
+		if index == ø then ø else nullable(index)
+	}
+}
+
+# The GC type of a function value: a struct of what it captures, in the order its type writes them; ø for a type that
+# is none. Its function is the one its type names, called directly.
+function_value_index(type: Node, m: Module, records: list) as int? := {
+	parts = function_value_parts(type)
+	if parts == ø then ø else added_type(m, struct_type(parts[1 ..].map(capture => field_type(layout_of(capture, m, records) ?? refused(capture, "the emitter has no value layout for this capture's type yet"), IMMUTABLE))))
 }
 
 # the GC type of a list, `list<int>`: an array of its items' layout; ø for a type that is no list
