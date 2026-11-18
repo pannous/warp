@@ -308,3 +308,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Protocols are declared, not yet used** (`trait`): a place typed by a trait is refused by the emitter (no layout
   for a function-typed field) and a class given to it is refused by typing (no structural fit yet). Paid off by the
   owners of core/emit/ and core/analyze/ (asked 2026-11-18); `map default ListMap` waits for maps and class methods.
+- **A method's bare field names come from the classes of its Block only** (wap/core/analyze/scope.wap
+  `receiver_fields`): a method of a preload or used module's class still writes `self.c`, and a function value inside
+  a method that reads a bare field is not given self as a capture. Paid off when the binding sees the library's
+  Records beside its declarations, and a field's capture captures its receiver.

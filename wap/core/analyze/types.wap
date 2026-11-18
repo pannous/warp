@@ -230,8 +230,8 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 }
 # a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
 receiver_field(name: Node) as Node := {
-	receiver = with_fact(with_fact(positioned(symbol(SELF_WORD), line_of(name), column_of(name)), BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, fact_of(name, DEFINED_AT))
-	positioned(Get(receiver, Text(text(name))), line_of(name), column_of(name))
+	receiver = with_fact(with_fact(symbol(SELF_WORD), BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, fact_of(name, DEFINED_AT))
+	placed_like(Get(receiver, Text(text(name))), name)
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
