@@ -2,3 +2,6 @@
 # includes b, `a .. b` (`upto` its alias) stops before it. A for loop over `a to b` counts without one (core/sugar/loops.wap).
 rule $from to $last => Range($from, $last)
 rule $from .. $end => Range($from, $end - 1)
+# a range left open: `2 ..` every int from 2 on, `.. 3` the ints before 3 from 0, as slices take them, `xs[2 ..]`
+rule $from .. => Range($from, LAST_INT)
+rule .. $end => Range(0, $end - 1)

@@ -87,7 +87,7 @@ operators = [
 	Operator("<<", "shift_left", infix: "shift"),
 	Operator(">>", "shift_right", infix: "shift"),
 	Operator("to", "to", infix: "range"),
-	Operator("..", "upto", infix: "range"),
+	Operator("..", "upto", infix: "range", prefix: "range", postfix: "range"),
 	Operator("as", "as", infix: "casting"),
 	Operator("??", "coalesce", infix: "coalescing"),
 	Operator("<", "less", infix: "comparison"),
