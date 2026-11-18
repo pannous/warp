@@ -143,10 +143,14 @@ read_file(path: Node) as Node := {
 	fd_close(fd)
 	answer
 }
+# the scratch I/O vector: the scratch bytes, count of them
+scratch_vector(count: int) := {
+	store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
+	store_scratch_word(scratch_iovec() + 4, count)
+}
 # the next chunk of the file read into the scratch bytes: how many bytes, 0 at its end, minus the WASI error
 chunk_read(fd: int) as int := {
-	store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
-	store_scratch_word(scratch_iovec() + 4, wasi_chunk())
+	scratch_vector(wasi_chunk())
 	error = fd_read(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 	if error != 0 then 0 - error else scratch_word(scratch_count())
 }
@@ -266,8 +270,7 @@ std_os_input(prompt: Node = ø) as Node := {
 	if prompt is text { print_text(prompt) }
 	line = ""
 	while yes {
-		store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
-		store_scratch_word(scratch_iovec() + 4, 1)
+		scratch_vector(1)
 		fd_read(wasi_stdin(), output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 		if scratch_word(scratch_count()) == 0 { return if line then line else ø }
 		if memory_byte(output_address() + scratch_bytes()) == Ascii.Newline { return line }
@@ -277,8 +280,7 @@ std_os_input(prompt: Node = ø) as Node := {
 
 # the first count scratch bytes, written to the open file
 written_bytes(fd: int, count: int) := {
-	store_scratch_word(scratch_iovec(), output_address() + scratch_bytes())
-	store_scratch_word(scratch_iovec() + 4, count)
+	scratch_vector(count)
 	fd_write(fd, output_address() + scratch_iovec(), 1, output_address() + scratch_count())
 }
 # `warn "careful"`: "warning: careful" on stderr
