@@ -115,8 +115,8 @@ LIST_COUNT_AT = 0
 LIST_ITEMS_AT = 1
 # the GC array of a list's items, ø for a type that is no list
 items_index(type: Node, m: Module, records: list) as int? := {
-	item = if item_type(type) == ø then ø else layout_of(item_type(type), m, records)
-	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
+	item = layout_of(item_type(type) ?? return ø, m, records) ?? return ø
+	added_type(m, array_type(field_type(item, MUTABLE)))
 }
 # The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
 # its cases, its tag first; a case with fields extends it with them.
