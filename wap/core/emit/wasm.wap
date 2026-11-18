@@ -9,8 +9,8 @@
 use "opcodes.wap"
 
 # A module in the making. Imports come first among the functions, so a function's index is counted after them. Each
-# entry is in bytes, as its section writes it, but a function, a recursion group and a memory segment, whose parts the
-# module reads again.
+# entry is in bytes, as its section writes it, except a function, a recursion group and a memory segment, whose parts
+# the module reads again.
 class Module {
 	types: list<list<int>> = []
 	# the types declared together in one recursion group
