@@ -30,9 +30,11 @@ dispatching(called: Node, candidates: list, types: list, s: TypingState) as Node
 	if known != ø { return known }
 	reads = parameters_of(name, types)
 	order = ranked(counted, s.records)
-	untested = order.filter(definition => tested_places(definition, types, s) == [] and takes(definition, reads, s, (argument, wanted) -> fits(argument, wanted, s)))
+	# the definitions that take the arguments once their tests pass
+	taking = order.filter(definition => takes(definition, tested_reads(definition, reads, types, s), s, (argument, wanted) -> fits(argument, wanted, s)))
+	untested = taking.filter(definition => tested_places(definition, types, s) == [])
 	last = if untested is empty then raised("${called}: no definition takes these values' types", name, s) else named_call(text(called), untested, reads, name)
-	tried = order.filter(definition => tested_places(definition, types, s) != [] and takes(definition, tested_reads(definition, reads, types, s), s, (argument, wanted) -> fits(argument, wanted, s))).map(definition => [tests_of(definition, reads, types, s, name), named_call(text(declared_name(written_name(definition))), [definition], reads, name)])
+	tried = taking.filter(definition => tested_places(definition, types, s) != []).map(definition => [tests_of(definition, reads, types, s, name), named_call(text(declared_name(written_name(definition))), [definition], reads, name)])
 	dispatcher_made(name, reads, chained(tried, last, name), order.map(definition => declared_type(written_name(definition))), s)
 }
 # The dispatching function a read of this field on an any means, `.name(any)`; ø when no record has the field
