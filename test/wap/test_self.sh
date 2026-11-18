@@ -12,7 +12,7 @@ loaded() {
 	$warp "$compiler" "$root/$1" "$module" 2>&1 && $warp "$module" >/dev/null 2>&1 && echo loads
 }
 
-for file in wap/core/emit/opcodes.wap wap/kernel/forms.wap wap/core/emit/wasm.wap; do
+for file in wap/core/emit/opcodes.wap wap/kernel/forms.wap wap/core/emit/wasm.wap wap/core/stage.wap wap/core/errors.wap wap/core/parse/lexemes.wap; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
 done
 exit $((failures > 0))
