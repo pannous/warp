@@ -5,3 +5,4 @@
 'use "../fixtures/window_view.warp"; released() := { view = 3; 0 }; released(); view'	error
 'use "../fixtures/window_view.warp"; released() := { global view; view = 3; 0 }; released(); view'	3
 'use "../fixtures/window_view.warp"; released() := { let view = 3; view }; released() + view'	10
+'use os; f(n: int) as text := { arguments = [n]; inner = if n > 0 then f(n - 1) else ""; text(arguments) + inner }; f(1)'	'[1][0]'

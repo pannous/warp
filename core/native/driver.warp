@@ -1264,7 +1264,8 @@ raised_message(caller: handle, context: handle, instance: pointer, failed: point
 }
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile, then the module runs with the arguments
-compiled_and_run(compiler: text, given: text, first: int) as nothing := {
+compiled_and_run(compiler: text, written: text, first: int) as nothing := {
+	given = downloaded(written)
 	file = reachable_path(given)
 	library = library_folder()
 	output = compiled_path()
@@ -1276,6 +1277,45 @@ compiled_and_run(compiler: text, given: text, first: int) as nothing := {
 	added(compiling, joined(library, "/runtime.wasm"))
 	file_ran(compiler, compiling)
 	written_run(output, given, first)
+}
+# a program given as a URL (`warp https://host/a.warp`): fetched by curl, run by its argument vector, into the cache
+# folder under the whole URL, and run from there; any other word as it is. A fetch that fails stops with curl's reason
+downloaded(word: text) as text := {
+	if not is_url(word) { return word }
+	file = joined(cache_folder(), flattened(word))
+	words = arguments()
+	added(words, "curl")
+	added(words, "-sSfL")
+	added(words, "-o")
+	added(words, file)
+	added(words, word)
+	if spawned_status("curl", words) != 0 {
+		complain(joined("cannot download ", word))
+		exit(1)
+	}
+	file
+}
+is_url(word: text) as bool := starts_with(word, "https://") or starts_with(word, "http://")
+# a command run by its argument vector, without a shell, waited for: its exit status, 127 when it can't start
+spawned_status(command: text, words: Arguments) as i32 := {
+	actions = allocate(SPAWN_ACTIONS_BYTES)
+	posix_spawn_file_actions_init(actions)
+	child = started(command, words, actions)
+	if child < 0 then 127 else exit_status(child)
+}
+# a command started by its argument vector with these file actions (then destroyed), by posix_spawnp, which Windows
+# answers too (lib/native/windows.c): its process id, -1 when it can't start
+started(command: text, words: Arguments, actions: pointer) as i32 := {
+	child_at = allocate(4)
+	failed = posix_spawnp(child_at, c_string(command), actions, 0, words.pointers, process_environment())
+	posix_spawn_file_actions_destroy(actions)
+	if failed != 0 then -1 else word_at(child_at).value as i32
+}
+# a started child waited for: its exit status
+exit_status(child: i32) as i32 := {
+	status = allocate(4)
+	waitpid(child, status, 0)
+	(word_at(status).value as i32) / 256
 }
 # the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
 # above the current folder (`../a.warp`) is one the module reaches through the preopened root
@@ -1680,12 +1720,10 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 	posix_spawn_file_actions_adddup2(actions, writing, 1)
 	posix_spawn_file_actions_adddup2(actions, fileno(errors), 2)
 	posix_spawn_file_actions_addclose(actions, reading)
-	child_at = allocate(4)
-	failed = posix_spawnp(child_at, c_string(command), actions, 0, words.pointers, process_environment())
-	posix_spawn_file_actions_destroy(actions)
+	child = started(command, words, actions)
 	close(writing)
 	fclose(errors)
-	if failed != 0 {
+	if child < 0 {
 		close(reading)
 		unlink(said)
 		return guest_error(caller, context, joined(joined("cannot run ", command), ": not found on PATH"), result)
@@ -1693,9 +1731,7 @@ words_run(caller: handle, context: handle, command: text, words: Arguments, resu
 	stream = fdopen(reading, c_string("r"))
 	printed = piped(stream)
 	fclose(stream)
-	status = allocate(4)
-	waitpid(word_at(child_at).value as i32, status, 0)
-	answered(caller, context, command, printed, (word_at(status).value as i32) / 256, said, result)
+	answered(caller, context, command, printed, exit_status(child), said, result)
 }
 line_run(caller: handle, context: handle, line: text, result: pointer) as nothing := line_ran(caller, context, line, false, result)
 # the sh line run, what it said on stderr kept in a file: recorded its {status, out, err}, else what it printed
