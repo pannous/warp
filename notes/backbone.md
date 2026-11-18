@@ -291,6 +291,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
   operator stage decides the glued run first, before declarations say whether `a-b` is a name. Paid off when the
   stage leaves a glued run of declared-name candidates for stage 2, or the user drops kebab names.
+- **A program-level call through a function value can read a global before its statement** (wap/core/analyze/types.wap
+  called_reads): `H = {"a": f}; H["a"](2); X = 1` reads X's default, since a value's possible functions' late reads are
+  not known at the call. Paid off by refusing a program-level call through a value whose functions read late, or a
+  run-time check, when code meets it.
 - **`format` prints no comments yet** (wap/core/format.wap). Comments ride in Meta; the printer reads only shapes.
 - **A program's value is shown only when it is an int** (wap/core/emit/emitter.wap). Bends "refuse, never guess"
   mildly: any other value is dropped, not shown. Reason: an int is the one value the host shows as warp does (main's

@@ -38,6 +38,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	meant = chosen_definition(n, called, scopes, given, expected, s)
 	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	called_reads(chosen, n, s, f)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
@@ -87,6 +88,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
+	called_reads(chosen, n, s, f)
 	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
@@ -286,6 +288,7 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
 	typed.signed = with_signature(name, types, typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
+	typed.late = frame.late
 	typed.done = yes
 	typed
 } }

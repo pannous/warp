@@ -169,4 +169,8 @@ X = 1
 f(n: int) as int := X + n
 g = H["a"]
 print(text(g(2)))')" "3"
+check "a function reading a global set before the program calls it" "$(ran global_set_first 'f() as int := h() + 1
+h() as int := g
+g = 3
+print(text(f()))')" "4"
 exit $((failures > 0))
