@@ -175,10 +175,23 @@ rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(ru
 # A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
 # is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
+	List(items, Bracket.None, Separator.Space) => with_parts(inner_rewritten(rules, items, whole), part => rules_applied(rules, part, fired))
 	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], bracket, Separator.None) else with_parts(whole, part => rules_applied(rules, part, fired))
 	List(items, bracket, separator) => if separator == Separator.Newline or separator == Separator.Semicolon then List(spliced(items.map(part => rules_applied(rules, part, fired))), bracket, separator) else with_parts(whole, part => rules_applied(rules, part, fired))
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
+# A phrase no rule fits whole, whose later word heads a rule that fits from there on, `print match x {…}`: that part
+# is the earlier words' last argument, as in `print -x`, so it groups and is rewritten as one
+inner_rewritten(rules: Rules, items: list, whole: Node) as Node := {
+	for at in 2 to #items {
+		tail = with_facts_of(List(items[at - 1 ..], Bracket.None, Separator.Space), whole)
+		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, tail) != ø {
+			return List(items[.. at - 1] + [tail], Bracket.None, Separator.Space)
+		}
+	}
+	whole
+}
+
 # statements with each statement sequence among them, one a rule wrote, `A; B`, joined in its place
 spliced(statements: list) as list := statements.map(statement => match statement { List(items, Bracket.None, Separator.Semicolon) => items; List(items, Bracket.None, Separator.Newline) => items; _ => [statement] }).fold([], (a, b) -> a + b)
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø

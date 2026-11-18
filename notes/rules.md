@@ -19,6 +19,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   Braces keep meaning a Block. A repeated key `($field: $type)...` is a key of two holes, not a typed hole.
 - **Heads of glued calls:** `f(x)` is indexed under `f Round`, then `glued Round`; a template's glued call of a kernel
   form, `Get($xs, $i)`, counts under the form's name, as `(Get …)` does.
+- **Rule heads inside a phrase:** a phrase no rule fits whole, whose later word heads a rule fitting from there on,
+  groups that part as the earlier words' last argument, as `print -x` does: `print if c then a else b`.
 - **Refusals are rules too:** `rule P => refuse "fix-it"` refuses what P matches, by the usual specificity: the
   dangling else `if a then if b then x else y` (core/sugar/conditions.wap).
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
@@ -46,5 +48,3 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   before its modules are read.
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
-- A rule head in the middle of a phrase is not reached: `print match x { … }` and `print if c then a else b` need the
-  phrase reading to group `match …` as print's argument (`y = match …` and a function body work).
