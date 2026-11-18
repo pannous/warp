@@ -64,4 +64,10 @@ ks.add("zz")
 print show(ks)
 print text(#keys(m))')" "[\"a\", \"b\", \"zz\"]
 2"
+check "a map's entry removed, the others kept in their order" "$(ran map_remove 'remove(m: map<text, int>, key: text) := prim map_remove(m, key)
+m = {aa: 1, bb: 2, cc: 3}
+m.remove("bb")
+m.remove("zz")
+m.dd = 4
+print text(m.aa + m.cc + m.dd)')" "8"
 exit $((failures > 0))
