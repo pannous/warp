@@ -61,16 +61,28 @@ optional_layout(type: Node, m: Module, records: list) as list? := {
 	base = base_of_optional(type)
 	if base == ø { return ø }
 	held = layout_of(base, m, records) ?? refused(base, "the emitter has no value layout for this type yet")
-	if held in PLAIN_VALUES then nullable(box_index(m, held)) else held
+	if held in PLAIN_VALUES then nullable(box_index(m, text(base))) else held
 }
 PLAIN_VALUES = [I32, I64, F64]
-box_index(m: Module, held: list) as int := added_type(m, struct_type([field_type(held, IMMUTABLE)]))
+# The box of a plain value of a type, `int`: a struct of the value, one type for each type word, so a value in an `any`
+# is told apart by its box at run time. A yes/no and a character are both an i32; a character's box holds it as a
+# mutable field, which makes the two box types differ.
+box_index(m: Module, word: text) as int := added_type(m, struct_type([field_type(WORD_LAYOUTS[word], if word == CHAR_WORD then MUTABLE else IMMUTABLE)]))
+CHAR_WORD = "char"
+# the type word of a plain value, from the type the typing stage gave its form
+plain_word(form: Node) as text := {
+	type = fact_of(form, TYPE)
+	if type is symbol and WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES then text(type) else refused(form, "this plain value reached the emitter without its type")
+}
 # A value given where a type is wanted, made to fit it: a plain value boxed for its optional or for `any`, any
 # reference taken as itself where `any` is wanted, ø a null of the wanted reference type; any other value as it is,
-# for its taker to check
-fitted(given: Code, wanted: list, m: Module) as Code := {
+# for its taker to check. `form` is the value's code, whose type picks a plain value's box.
+fitted(given: Code, wanted: list, form: Node, m: Module) as Code := {
 	if given.type == wanted { return given }
-	if given.type in PLAIN_VALUES and wanted in [nullable(box_index(m, given.type)), ANYREF] { return Code(wanted, given.instructions + instruction(STRUCT_NEW, [box_index(m, given.type)])) }
+	if given.type in PLAIN_VALUES and is_reference(wanted) {
+		box = box_index(m, plain_word(form))
+		if wanted in [nullable(box), ANYREF] { return Code(wanted, given.instructions + instruction(STRUCT_NEW, [box])) }
+	}
 	if wanted == ANYREF and is_reference(given.type) { return Code(wanted, given.instructions) }
 	if given.type == ANYREF and is_reference(wanted) { return Code(wanted, given.instructions + DROP + null_of(heap_of(wanted))) }
 	given

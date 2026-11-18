@@ -86,7 +86,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(given_layout(form, p), p)) }
+	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
 	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
 	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
@@ -105,7 +105,7 @@ is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIS
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
 # missing one traps
 OPTIONAL_VALUE = "optional_value"
-optional_value(held: list, p: Program) as list := if held in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, held), 0]) else REF_AS_NON_NULL
+optional_value(form: Node, p: Program) as list := if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
 # the array type of a primitive's first operand
 array_operand(form: Node, arguments: list) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
 # a packed array's item at a place counted from 0, an unsigned byte as an int

@@ -83,7 +83,7 @@ call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Co
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
-	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, p.m))
+	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p.m))
 	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at, p.m)) { refused(form, "the arguments are not of the parameters' types") }
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
 }
