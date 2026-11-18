@@ -20,7 +20,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 - **Heads of glued calls:** `f(x)` is indexed under `f Round`, then `glued Round`; a template's glued call of a kernel
   form, `Get($xs, $i)`, counts under the form's name, as `(Get …)` does.
 - **Rule heads inside a phrase:** a phrase no rule fits whole, whose later word heads a rule fitting from there on,
-  groups that part as the earlier words' last argument, as `print -x` does: `print if c then a else b`.
+  groups that part in round brackets as the earlier words' last argument, as `print -x` does: `print if c then a else
+  b` is `print (if c then a else b)`, which `wap format` prints (stages.wap groupings_written).
 - **The rest of the If row:** `c ? a : b` (the operator table's choice: the colon closes `?`, below every operator,
   above a spaced call, so `print c ? a : b` is print(c ? a : b)) and
   `print "a" if c` (core/sugar/conditions.wap).
