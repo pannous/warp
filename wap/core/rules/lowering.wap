@@ -73,6 +73,8 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
+	# a type written with its parts, `list<Node>`, stays as written: a named argument's or a case's field's type
+	Key(head, Op.None, List(items, Bracket.Less, separator)) => n
 	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(argument_lowered))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
