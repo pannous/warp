@@ -6,6 +6,7 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
 use "tokens.wap"
+use "../language.wap"
 
 # the assignment a compound one means, `+=` is `=` of `+`
 ASSIGNMENT = "="
@@ -13,38 +14,36 @@ ASSIGNMENT = "="
 # ---- the table, checked when it is read
 
 # the group of that name; an unknown name in the table is refused
-group_named(name: text) as Group := {
-	found = precedence_groups.filter(group => group.name == name)
+group_named(language: Language, name: text) as Group := {
+	found = language.groups.filter(group => group.name == name)
 	if #found == 0 { raise "operator table: no precedence group " + name }
 	found#1
 }
 
 # every group the named one binds tighter than, directly or through others; `path` names a cycle when it closes
-looser_groups(name: text, path: list<text>) as list<text> := {
+looser_groups(language: Language, name: text, path: list<text>) as list<text> := {
 	if path.contains(name) { raise "operator table: the precedence groups form a cycle: " + (path + [name]).join(" > ") }
 	found = []
-	for looser in group_named(name).tighter_than { found = found + [looser] + looser_groups(looser, path + [name]) }
+	for looser in group_named(language, name).tighter_than { found = found + [looser] + looser_groups(language, looser, path + [name]) }
 	found
 }
 
 # group name → every group it binds tighter than: the topological order of the relations, read again whenever a
 # program adds to them
-looser_than = {}
-related_groups() := { for group in precedence_groups { looser_than[group.name] = looser_groups(group.name, []) } }
-related_groups()
+related_groups(language: Language) := { for group in language.groups { language.looser_than[group.name] = looser_groups(language, group.name, []) } }
 
-binds_tighter(group: text, other: text) as bool := looser_than[group].contains(other)
+binds_tighter(language: Language, group: text, other: text) as bool := language.looser_than[group].contains(other)
 
 # ---- a program's own operators
 
 # every operator the code declares added to the table; its precedence declarations kept for after, when all exist
-operators_declared(n: Node, placements: list) := match n {
+operators_declared(language: Language, n: Node, placements: list) := match n {
 	List(items, Bracket.None, Separator.Space) => {
-		declaration_read(n, tokens_of(items).map(token => declared_word(token.item)), placements)
-		for item in items { operators_declared(item, placements) }
+		declaration_read(language, n, tokens_of(language, items).map(token => declared_word(token.item)), placements)
+		for item in items { operators_declared(language, item, placements) }
 	}
-	List(items, bracket, separator) => for item in items { operators_declared(item, placements) }
-	Key(left, op, right) => { operators_declared(left, placements); operators_declared(right, placements) }
+	List(items, bracket, separator) => for item in items { operators_declared(language, item, placements) }
+	Key(left, op, right) => { operators_declared(language, left, placements); operators_declared(language, right, placements) }
 	_ => ø
 }
 
@@ -59,7 +58,7 @@ declared_word(item: Node) as text := match item {
 class Placement { spelling: text, other: text, above: bool, written: Node }
 
 # `[fixity] operator ⊕ …` declares ⊕; `operator ⊕ has precedence above|below *` places it
-declaration_read(n: Node, words: list, placements: list) := {
+declaration_read(language: Language, n: Node, words: list, placements: list) := {
 	start = if words#1 == operator_word then 1 else if #words > 1 and words#2 == operator_word then 2 else 0
 	if start == 0 or #words <= start { return }
 	declaring = declaring_words.filter(row => row.word == words#1)
@@ -68,14 +67,14 @@ declaration_read(n: Node, words: list, placements: list) := {
 	rest = words[start + 1 ..]
 	if #rest > 3 and rest[0 .. 3] == precedence_above { placements.add(Placement(spelling, words.last, yes, n)); return }
 	if #rest > 3 and rest[0 .. 3] == precedence_below { placements.add(Placement(spelling, words.last, no, n)); return }
-	declared(spelling, declaring#1)
+	declared(language, spelling, declaring#1)
 }
 
 # the operator joins the table in the declaring word's fixity and group; one the table has there is an overload
-declared(spelling: text, declaring: Declaring) := {
-	if group_of(spelling, declaring.fixity) != "" { return }
-	if operator_spelled(spelling) == ø { operators.add(Operator(spelling, spelling)) }
-	grouped(operator_spelled(spelling), declaring.fixity, declaring.group)
+declared(language: Language, spelling: text, declaring: Declaring) := {
+	if group_of(language, spelling, declaring.fixity) != "" { return }
+	if operator_spelled(language, spelling) == ø { language.operators.add(Operator(spelling, spelling)) }
+	grouped(operator_spelled(language, spelling), declaring.fixity, declaring.group)
 }
 
 grouped(operator: Operator, fixity: Fixity, group: text) := match fixity {
@@ -85,15 +84,15 @@ grouped(operator: Operator, fixity: Fixity, group: text) := match fixity {
 }
 
 # a declared operator in a group of its own, related to the group of the operator it is placed against
-placed(placement: Placement) := {
-	operator = operator_spelled(placement.spelling)
+placed(language: Language, placement: Placement) := {
+	operator = operator_spelled(language, placement.spelling)
 	if operator == ø { refused(placement.written, "declare operator " + placement.spelling + " before placing it") }
 	fixity = declared_fixity(operator)
-	other = group_of_any(canonical(placement.other, Fixity.Anywhere))
+	other = group_of_any(language, canonical(language, placement.other, Fixity.Anywhere))
 	if other == "" { refused(placement.written, "no operator " + placement.other + " to place " + placement.spelling + " against") }
 	own = Group(placement.spelling, if placement.above then [other] else [])
-	if not placement.above { group_named(other).tighter_than.add(placement.spelling) }
-	precedence_groups.add(own)
+	if not placement.above { group_named(language, other).tighter_than.add(placement.spelling) }
+	language.groups.add(own)
 	grouped(operator, fixity, placement.spelling)
 }
 
@@ -101,20 +100,25 @@ declared_fixity(operator: Operator) as Fixity :=
 	if operator.infix != "" then Fixity.Infix else if operator.prefix != "" then Fixity.Prefix else Fixity.Postfix
 
 # the group of an operator in its first fixity: infix, then prefix, then postfix
-group_of_any(spelling: text) as text := {
-	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] { if group_of(spelling, fixity) != "" { return group_of(spelling, fixity) } }
+group_of_any(language: Language, spelling: text) as text := {
+	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] { if group_of(language, spelling, fixity) != "" { return group_of(language, spelling, fixity) } }
 	""
 }
 
 # ---- spellings
 
 # the canonical word of a spelling written in that fixity: the spelling itself when no alias applies
-canonical(spelling: text, fixity: Fixity) as text := {
+canonical(language: Language, spelling: text, fixity: Fixity) as text := {
+	if aliased(spelling, fixity) != spelling { return aliased(spelling, fixity) }
+	compound = compound_assignment(language, spelling)
+	if compound != "" { return compound }
+	spelling
+}
+# the canonical word the preload's aliases give a spelling, the spelling itself when none does
+aliased(spelling: text, fixity: Fixity) as text := {
 	for alias in aliases {
 		if alias.spelling == spelling and (alias.fixity == fixity or alias.fixity == Fixity.Anywhere) { return alias.canonical }
 	}
-	compound = compound_assignment(spelling)
-	if compound != "" { return compound }
 	spelling
 }
 
@@ -125,24 +129,24 @@ discouraged_alias(spelling: text) as Alias? := {
 }
 
 # `+=` of the infix `+`: an infix operator's spelling followed by `=`, unless the table knows the spelling itself
-compound_assignment(spelling: text) as text := {
-	if not spelling.ends_with(ASSIGNMENT) or #spelling < 2 or operator_spelled(spelling) != ø { return "" }
-	inner = canonical(spelling[0 .. #spelling - 1], Fixity.Infix)
-	operator = operator_spelled(inner)
+compound_assignment(language: Language, spelling: text) as text := {
+	if not spelling.ends_with(ASSIGNMENT) or #spelling < 2 or operator_spelled(language, spelling) != ø { return "" }
+	inner = canonical(language, spelling[0 .. #spelling - 1], Fixity.Infix)
+	operator = operator_spelled(language, inner)
 	if operator == ø or operator.infix == "" { return "" }
 	inner + ASSIGNMENT
 }
 
 # the operator of that canonical spelling, ø when there is none
-operator_spelled(spelling: text) as Operator? := {
-	for operator in operators { if operator.spelling == spelling { return operator } }
+operator_spelled(language: Language, spelling: text) as Operator? := {
+	for operator in language.operators { if operator.spelling == spelling { return operator } }
 	ø
 }
 
 # the group an operator spelled so has in that fixity, "" when it has no such fixity
-group_of(spelling: text, fixity: Fixity) as text := {
-	if fixity == Fixity.Infix and compound_assignment(spelling) == spelling { return compound_assignment_group }
-	operator = operator_spelled(spelling)
+group_of(language: Language, spelling: text, fixity: Fixity) as text := {
+	if fixity == Fixity.Infix and compound_assignment(language, spelling) == spelling { return compound_assignment_group }
+	operator = operator_spelled(language, spelling)
 	if operator == ø { return "" }
 	match fixity { Fixity.Infix => operator.infix; Fixity.Prefix => operator.prefix; Fixity.Postfix => operator.postfix; _ => "" }
 }
@@ -150,10 +154,10 @@ group_of(spelling: text, fixity: Fixity) as text := {
 # an operator as it is applied: its canonical spelling, fixity and group, and the item that wrote it (for its place)
 class Use { spelling: text, fixity: Fixity, group: text, written: Node }
 # a word or glyph the table reads in that fixity, ø when it is no operator there
-reading_as(item: Node, fixity: Fixity) as Use? := match item {
+reading_as(language: Language, item: Node, fixity: Fixity) as Use? := match item {
 	Symbol(spelling) => {
-		word = canonical(spelling, fixity)
-		group = group_of(word, fixity)
+		word = canonical(language, spelling, fixity)
+		group = group_of(language, word, fixity)
 		if group == "" { ø } else { Use(word, fixity, group, item) }
 	}
 	_ => ø
