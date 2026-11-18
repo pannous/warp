@@ -259,6 +259,8 @@ map_part(type: Node?, at: int) as Node? := {
 	parts = parts_of_type(MAP_TYPE, type)
 	if parts == ø then ø else parts#at
 }
+# the bare type of an enum's values, which every enum fits
+ENUM_TYPE = "enum"
 # A function value's TYPE, its own for each `x => …` the program writes: the word fn glued to the key of the function
 # it calls and the types of what it captures, `fn<"f.wap:3:5 λ", int>` (core/analyze/types.wap); its parts, the key and
 # then the captures' types

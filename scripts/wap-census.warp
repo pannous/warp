@@ -42,20 +42,25 @@ probe(file: text) as Tally := {
 	for statement in lowered_ok {
 		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
 	}
-	# typing and emitting run on the whole file, as the compiler runs them: the first refusal stops them
+	# typing and emitting run on the whole file, as the compiler runs them: the first refusal stops them; a preload
+	# file is no program of its own but every program's library, typed function by function below
 	typed = no
 	emitted_ok = no
-	try {
-		code = typed_file(language, file, preload)
-		typed = yes
-		emitted(code)
-		emitted_ok = yes
-	} catch e { report(if typed then "emit" else "type", e.message) }
+	if not in_preload(file) {
+		try {
+			code = typed_file(language, file, preload)
+			typed = yes
+			emitted(code)
+			emitted_ok = yes
+		} catch e { report(if typed then "emit" else "type", e.message) }
+	}
 	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, typed: ${typed}, emitted: ${emitted_ok}"
 	counted = functions_probe(file)
 	Tally(1, if typed then 1 else 0, counted.functions, counted.typed, counted.anys)
 }
 
+# whether a file is one of the preload's, the library every program is compiled with
+in_preload(file: text) as bool := file.contains("/preload/") or file.starts_with("preload/")
 # the files probed, those typed whole, the functions found, those typed alone, and the places in them typed any
 class Tally { files: int = 0, whole: int = 0, functions: int = 0, typed: int = 0, anys: int = 0 }
 added(a: Tally, b: Tally) as Tally := Tally(a.files + b.files, a.whole + b.whole, a.functions + b.functions, a.typed + b.typed, a.anys + b.anys)
@@ -74,11 +79,12 @@ functions_probe(file: text) as Tally := {
 	prepared_modules = []
 	try prepared_modules = modules.map(module => statements_in(prepared(language, module, modules, preload))) catch e { report("bind", e.message); return Tally() }
 	program = prepared_modules.flat_map(statements => statements)
-	own = prepared_modules.last.filter(statement => statement is Define)
+	own = if in_preload(file) then library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":")) else prepared_modules.last.filter(statement => statement is Define)
 	typed_alone = 0
 	by_calls = 0
 	anys = 0
-	base = typing_state(library, program)
+	# a preload file's functions are the library's already: typed with it alone, so none has a second copy
+	base = typing_state(library, if in_preload(file) then [] else program)
 	for definition in own {
 		s = copied(base)
 		if not all_typed(definition, s.records) { by_calls += 1 } else {
