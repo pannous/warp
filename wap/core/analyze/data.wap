@@ -20,9 +20,17 @@ SLICE = "slice"
 # type is the record's name
 instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
 	record = record_named(s.records, head) ?? refused(head, "no class has this name")
-	given = items.map(item => field_typed(item, record, s, f))
-	for field in fields_of(record) { if not items.any(item => text(declared_name(item)) == text(declared_name(field))) { refused(n, "this ${head} gives no value to its field ${declared_name(field)}") } }
+	written = items.map(item => field_typed(item, record, s, f))
+	# a field left out is given the default its constructor's parameter gives it, `indented: bool = no` (notes/kernel.md
+	# "Record": the constructor is a Define); one without is refused
+	left = fields_of(record).filter(field => not items.any(item => text(declared_name(item)) == text(declared_name(field))))
+	defaults = left.map(field => field_typed(placed_like(Key(declared_name(field), Op.Colon, field_default(record, field, s) ?? refused(n, "this ${head} gives no value to its field ${declared_name(field)}")), n), record, s, f))
+	given = written + defaults
 	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
+}
+field_default(record: Node, field: Node, s: TypingState) as Node? := {
+	named = definitions_named(record_name(record), s).flat_map(definition => parameters_in(definition)).filter(parameter => text(declared_name(parameter)) == text(declared_name(field)) and fact_of(parameter, DEFAULT) != ø)
+	if named is empty then ø else fact_of(named#1, DEFAULT)
 }
 field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
 	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
