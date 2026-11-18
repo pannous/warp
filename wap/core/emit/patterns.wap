@@ -1,0 +1,84 @@
+# Matching: a Case's arms tested in order against its subject, the parts of a case
+# pattern taken out of the value, and a case's own value, its tag and fields.
+
+use "emitter.wap"
+use "primitives.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# A choice by patterns: the subject kept in a slot of its own, then each arm tested in order, an If each, until one
+# fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.
+#   subject, local.set held;  held == p1, if  r1  else  held == p2, if  r2  else …  end  end
+case_code(form: Node, subject: Code, arms: list, p: Program, f: Frame) as Code := {
+	f.slots += [Placed("subject of ${place_key(form)}", #f.slots, subject.type, [], yes)]
+	held = f.slots.last
+	chosen = arms_code(form, arms, held, p, f)
+	Code(chosen.type, subject.instructions + instruction(LOCAL_SET, [held.index]) + chosen.instructions)
+}
+arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code := {
+	if arms is empty { return if fact_of(form, TYPE) == ø then Code() else Code(NEVER, UNREACHABLE) }
+	match arms#1 {
+		Arm(pattern, result) => {
+			if names_any(pattern) or #arms == 1 and fact_of(form, TYPE) != ø and only_names(pattern, p) { return arm_taken(pattern, result, held, p, f) }
+			test = Code(I32, pattern_test(pattern, fetched(held), held.type, p))
+			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+		}
+	}
+}
+# an arm's result, after the names of its pattern are given their parts of the subject. The last arm of a Case that
+# names every case always fits when its fields are only names, untested
+arm_taken(pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Code := {
+	named = names_held(pattern, fetched(held), held.type, p, f)
+	given = code(result, p, f)
+	Code(given.type, named + given.instructions)
+}
+# a pattern that fits any value: a name, or _
+names_any(pattern: Node) as bool := pattern is symbol and not is_case(pattern)
+only_names(pattern: Node, p: Program) as bool := field_parts(pattern, [], p).all(part => names_any(part.pattern))
+
+# A part of a value a pattern takes apart: the field's pattern, the code that gives the field's value, its layout
+class Part {
+	pattern: Node
+	value: list
+	type: list
+}
+# the parts of a case pattern, `Circle(r)`: each field of the value, cast to the case; none for any other pattern
+field_parts(pattern: Node, value: list, p: Program) as list := match pattern {
+	Call(called, patterns) => {
+		record = enum_of(p.records, called)
+		cast = case_struct_of(record, case_named(record, called), p.m, p.records)
+		types = case_fields(case_named(record, called)).map(field => layout_of(declared_type(field), p.m, p.records))
+		(1 to #patterns).map(at => Part(patterns#at, value + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
+	}
+	_ => []
+}
+# Whether the value fits a pattern, yes or no: a case by its tag, then each field by its own pattern, tested only once
+# the tag fits; a literal by equality. `value` is the code that gives the value, of the layout `type`.
+pattern_test(pattern: Node, value: list, type: list, p: Program) as list := {
+	if is_case(case_name(pattern)) {
+		tag = value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ
+		tested = field_parts(pattern, value, p).filter(part => not names_any(part.pattern))
+		return tested.fold(tag, (fits, part) => fits + IF + I32 + pattern_test(part.pattern, part.value, part.type, p) + ELSE + i32_const(0) + END)
+	}
+	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names, cases and _ so far")
+	value + given.instructions + equality(type, p)
+}
+# the names of a pattern given their parts of the value, after every test fit; code that leaves nothing. _ gives none.
+names_held(pattern: Node, value: list, type: list, p: Program, f: Frame) as list := {
+	if text(pattern) == WILDCARD { return [] }
+	if names_any(pattern) { return value + kept(added_variable(pattern, type, p, f)) + DROP }
+	field_parts(pattern, value, p).flat_map(part => names_held(part.pattern, part.value, part.type, p, f))
+}
+# A case's value, `Dime` or `Circle(3)`: its tag and its fields' values in a new struct of its case, of its enum's type
+case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+	record = enum_of(p.records, called)
+	named = case_named(record, called)
+	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
+	Code(layout(form, p), i32_const(tag_of(called, p)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
+}
+# a case's tag, its place among the cases of every enum the program declares, so cases of two enums never share one
+tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => text(case_name(each)) == text(case)) - 1
+is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
