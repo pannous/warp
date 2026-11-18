@@ -17,6 +17,7 @@
 # values live places.wap's.
 
 use "functions.wap"
+use "lists.wap"
 use "patterns.wap"
 use "places.wap"
 use "primitives.wap"
@@ -59,8 +60,8 @@ host_calls(program: Node) as list := {
 	names
 }
 primitives_in(n: Node) as list := match n {
-	Prim(operation, arguments) => [text(operation)] + arguments.flat_map(primitives_in)
-	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) == ø then [] else [MAP_GET]) + primitives_in(subject) + primitives_in(key)
+	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
+	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) != ø then [MAP_GET] else if item_type(fact_of(subject, TYPE)) != ø then [LIST_ITEM] else []) + primitives_in(subject) + primitives_in(key)
 	List(items, bracket, separator) => items.flat_map(primitives_in)
 	Key(left, op, right) => primitives_in(left) + primitives_in(right)
 	_ => []
@@ -115,7 +116,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), items.flat_map(item => code(item, p, f).instructions) + instruction(ARRAY_NEW_FIXED, [list_of(form, p), #items]))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items.map(item => code(item, p, f)), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)

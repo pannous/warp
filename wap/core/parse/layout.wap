@@ -122,9 +122,16 @@ indentation(r: Reader) := {
 	depth = written.length - r.margin
 	if depth < 0 { return failed(r, "this line is indented less than the first line") }
 	outer = indent_level(r)
+	# an operator ending its line continues its phrase onto a line indented deeper: `total = 1 +⏎\t2` (as warp's
+	# trailing-operator-indent)
+	if depth > outer and ends_in_operator(r) {
+		r.blank = yes
+		return ø
+	}
 	if depth > outer {
 		r.indents += [depth]
-		r.blank = no
+		# glued to the line before, but a key's value after `:=`, `:` or `=` at the line's end, as if written after a blank
+		r.blank = last_token(r) != ø and last_token(r).kind == LexemeKind.Key
 		bracket_opened(r, "{", 0)
 		last_of(r.tokens).indented = yes
 		return ø
@@ -136,6 +143,9 @@ indentation(r: Reader) := {
 	if depth != outer { return failed(r, "this line's indentation matches no line above it") }
 	separated_line(r)
 }
+
+# the last token so far is an operator glyph, `+` or `->`
+ends_in_operator(r: Reader) as bool := last_token(r) != ø and last_token(r).kind == LexemeKind.Atom and is_operator(last_token(r).node)
 
 # the depth of the innermost indented block, 0 outside all
 indent_level(r: Reader) as int := if r.indents.length > 0 then r.indents.last else 0

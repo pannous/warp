@@ -1021,7 +1021,7 @@ rule_of(statement: Node, module: text, source: text) as Rule? := {
 	template = with_called_holes(template, lines)
 	if where_at == #after { return rule_made(pattern, template, ø, ø, [], Place.Anywhere, module, whole, no, pattern_head(pattern)) }
 	conditions = []
-	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)) }
+	for run in split_at_word(after[where_at + 1 ..], and_word) { conditions += conjuncts(continued_key(run)).map(spelled_test) }
 	aliased = conditions.any(condition => condition == symbol(alias_mark))
 	conditions = conditions.filter(condition => condition != symbol(alias_mark))
 	places = conditions.filter(is_place_word)
@@ -1117,6 +1117,12 @@ conjuncts(condition: Node) as list := match condition {
 and_parts(n: Node) as list := if is_key(n, Op.And) then and_parts(key_of(n)) + and_parts(value_of(n)) else [n]
 and_joined(parts: list) as Node := if #parts == 1 then parts#1 else Key(and_joined(parts[0 ..< #parts - 1]), Op.And, parts.last())
 
+# `$b is missing`, `$b is not missing`, which the parser keeps as the test word's phrase (wiki/null.md): the `is`
+# condition it spells, negated
+spelled_test(condition: Node) as Node := {
+	if is_negation(condition) { return Key(ø, Op.Not, spelled_test(value_of(condition))) }
+	if is_phrase(condition) and #condition == 3 and condition#2 == symbol("is") then Key(condition#1, Op.Is, condition#3) else condition
+}
 # `$c = shape`, `$t is type`, `not $t is type` (also written `$t is not type`), `$n < 0`, `$f takes value`, a rule
 # word's call or the hole it binds
 is_condition(condition: Node) as bool := {
