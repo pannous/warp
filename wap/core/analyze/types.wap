@@ -74,6 +74,8 @@ class TypeFrame {
 	letters: list = []
 	# the keys of the optional variables a condition around found present, read as their values (if_typed)
 	present: list = []
+	# the name of the function typed, ø for the program
+	function: Node? = ø
 }
 
 # the program typed, after the preload's functions it calls
@@ -370,7 +372,23 @@ case_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as N
 } }
 
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
-prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
+prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+	typed = with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
+	if text(operation) != DISPATCHED { return typed }
+	function = f.function ?? refused(n, "a dispatch is the body of a function of an any, `f(x: any) := prim dispatched(x)`")
+	with_fact(typed, OVERLOADS, List(dispatched_overloads(function, s), Bracket.Square, Separator.Comma))
+}
+# the overloads of a function a dispatch may call, typed, records first: those of one parameter of a written type
+# other than any, one a concrete type has: no generic letters, no bare list or enum
+dispatched_overloads(function: Node, s: TypingState) as list := {
+	overloads = definitions_named(text(function), s).filter(definition => #parameters_in(definition) == 1 and dispatchable(taken_type(definition), s.records))
+	records_first = overloads.filter(definition => takes_record(definition, s)) + overloads.filter(definition => not takes_record(definition, s))
+	records_first.map(definition => declared_name(function_typed(definition, [taken_type(definition)], s, definition).signed))
+}
+# the written type of a function's one parameter, and whether it is a record's
+taken_type(definition: Node) as Node? := type_given(parameters_in(definition)#1)
+takes_record(definition: Node, s: TypingState) as bool := record_named(s.records, taken_type(definition)) != ø
+dispatchable(type: Node?, records: list) as bool := type != ø and type != symbol(ANY_TYPE) and not has_letters(type, records) and not takes_own_type(type, records)
 
 # Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
 # `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.

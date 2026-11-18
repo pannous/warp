@@ -56,4 +56,6 @@ print y')" "b"
 check "an if after ?? takes its blocks" "$(ran default_if 'f(n: int) as int? := if n > 0 then n else ø
 z = f(0) ?? if 2 > 1 {7} else {8}
 print text(z)')" "7"
+format_check 'x = if c then 1
+	else 2' 'x = if c then 1 else 2'
 exit $((failures > 0))
