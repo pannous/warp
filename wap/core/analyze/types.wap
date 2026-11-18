@@ -99,7 +99,7 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 		typed = with_type_of(typed, value_type(statements.last))
 	}
 	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements), typed)
-	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
+	if s.unknowns > 0 then all_settled(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
 gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and value_type(n) != symbol(NEVER_TYPE) and value_type(n) != symbol(EMPTY_TYPE)

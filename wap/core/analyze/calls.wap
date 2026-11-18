@@ -167,7 +167,7 @@ LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 is_letter(type: Node?, records: list) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type)) and record_named(records, type) == ø
 has_letters(type: Node?, records: list) as bool := is_letter(type, records) or (type_parts(type) ?? []).any(part => has_letters(part, records))
 # An empty list's item type before a use settles it, α1, α2 … (data.wap list_typed): bound like a letter by the calls
-# that use the list, `xs + [1]` settles it to int; settled everywhere once the program is typed
+# that use the list, `xs + [1]` settles it to int; settled everywhere once the program is typed, any where none did
 UNKNOWN_MARK = "α"
 UNSETTLED = "an empty list nothing adds to here: write its type, `xs: list<int> = []`"
 unknown_type(s: TypingState) as Node := {
@@ -176,6 +176,9 @@ unknown_type(s: TypingState) as Node := {
 }
 is_unknown(type: Node?) as bool := type is symbol and text(type).starts_with(UNKNOWN_MARK)
 has_unknowns(type: Node?) as bool := is_unknown(type) or (type_parts(type) ?? []).any(has_unknowns)
+# a parameter of a bare `list` or `enum` takes any list or enum alike, so an unknown item type it is given forces no
+# instance of its own: `#[]` is 0 (a typed instance found again once its unknowns settle)
+takes_any_item(written: Node?) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE)
 # whether a given type fits a wanted one by settling unknowns, settling them
 settles(given: Node, wanted: Node, s: TypingState) as bool := {
 	if not has_unknowns(given) and not has_unknowns(wanted) { return no }
@@ -187,18 +190,24 @@ settles(given: Node, wanted: Node, s: TypingState) as bool := {
 settled_by(bound: list, s: TypingState) := {
 	for entry in bound { if is_unknown(symbol(entry#1)) and type_keyed(entry#1, s.settled) == ø { s.settled += [[entry#1, substituted(entry#2, bound)]] } }
 }
-# typed code with every unknown settled, refused where one stays unknown
+# the typed program with every unknown settled; one nothing settled held no item that mattered, so it is any
+all_settled(program: Node, s: TypingState) as Node := {
+	for at in 1 to s.unknowns { settled_by([[UNKNOWN_MARK + text(at), symbol(ANY_TYPE)]], s) }
+	settled_everywhere(program, s)
+}
+# typed code with every unknown settled, the names its calls name too
 settled_everywhere(n: Node, s: TypingState) as Node := {
-	whole = refitted(with_parts(n, part => settled_everywhere(part, s)), n)
+	whole = facts_settled(refitted(with_parts(n, part => settled_everywhere(part, s)), n), s)
+	definer = fact_of(whole, DEFINED_AT)
+	if definer == ø then whole else with_fact(whole, DEFINED_AT, facts_settled(definer, s))
+}
+# a node whose type and signature hold no unknown
+facts_settled(n: Node, s: TypingState) as Node := {
 	for fact in [TYPE, SIGNATURE] {
-		type = fact_of(whole, fact)
-		if has_unknowns(type) {
-			type = substituted(type, s.settled)
-			if has_unknowns(type) { refused(n, UNSETTLED) }
-			whole = with_fact(whole, fact, type)
-		}
+		type = fact_of(n, fact)
+		if has_unknowns(type) { n = with_fact(n, fact, substituted(type, s.settled)) }
 	}
-	whole
+	n
 }
 
 # The letters a definition's parameters bind for these argument types, each [letter, type]; ø when the arguments don't
@@ -291,9 +300,9 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
 	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), substituted(argument_types#place, letters), letters, s.records))
-	if types.any(has_unknowns) { refused(at, UNSETTLED) }
+	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(type_given(parameters_in(definition)#place))) { refused(at, UNSETTLED) }
 	for typed in s.functions {
-		if typed.key == key and same_types(typed.arguments, types) {
+		if typed.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
 			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }
 			return typed
 		}
