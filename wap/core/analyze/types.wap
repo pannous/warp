@@ -38,6 +38,9 @@ TEXT_FUNCTION = "text"
 EMPTY_TYPE = "ø"
 # the type of code that never finishes, a return, break or continue: it fits wherever any type is expected
 NEVER_TYPE = "never"
+# any holds every value, number an int or a float, each boxed as a T? holds its value (core/emit/values.wap)
+ANY_TYPE = "any"
+NUMBER_TYPE = "number"
 # the operator a signature is written with: `(int, text) -> int`
 ARROW = "->"
 
@@ -293,7 +296,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
 	given = typed_form(value, s, f, wanted)
-	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
+	if not gives_fitting(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
 }
 
@@ -342,7 +345,7 @@ case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeF
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
-	for at in 1 to #given { if not fits_type(given#at, declared_type(fields#at)) { refused(arguments#at, "this gives ${value_type(given#at) ?? "no value"}, the field holds a ${declared_type(fields#at)}") } }
+	for at in 1 to #given { field_checked(given#at, fields#at, arguments#at) }
 	case_typed_as(n, called, given, s)
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
@@ -379,8 +382,15 @@ fits_type(n: Node, wanted: Node) as bool := {
 fit_each(items: list, wanted: Node) as bool := items.all(item => fits_type(item, wanted))
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
 same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
-# whether a value of the given type may stand where the wanted one is: the same type, or a T or ø where T? is
-type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+# a value given to a field, refused unless it fits the field's type; value is the code that gave it
+field_checked(given: Node, field: Node, value: Node) := if not gives_fitting(given, declared_type(field)) { refused(value, "this gives ${value_type(given) ?? "no value"}, the field holds a ${declared_type(field)}") }
+# whether typed code gives a value that may stand where the wanted type is
+gives_fitting(n: Node, wanted: Node) as bool := value_type(n) != ø and type_fits(value_type(n), wanted)
+# whether a value of the given type may stand where the wanted one is: the same type, code that never finishes, a value
+# boxed where any or a number is, or a T or ø where T? is
+type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or given == symbol(NEVER_TYPE) or boxed_fit(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+# any value where any is wanted, an int or a float where a number is
+boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name

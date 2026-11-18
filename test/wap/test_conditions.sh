@@ -40,4 +40,12 @@ if c {
 }
 else if not c { print "d" }
 else { print "e" }')" "d"
+check "an else indented below continues the if" "$(ran else_indented 'c = no
+x = if c then 1
+	else 2
+print text(x)
+if c then print "a"
+	else if c then print "b"
+	else print "c"')" "2
+c"
 exit $((failures > 0))
