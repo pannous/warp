@@ -93,4 +93,4 @@ missing(x: T?): bool := prim ref_is_null(x)
 !(x: T?): T := prim optional_value(x)
 ==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and a! == b!
 !=(a: T?, b: T?): bool := not(a == b)
-??(a: T?, b: T): T := if missing(a) then b else a!
+# `a ?? b` is a rule (core/sugar/conditions.wap): b runs only when a is missing
