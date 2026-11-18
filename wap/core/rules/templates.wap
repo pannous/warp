@@ -3,6 +3,12 @@
 # splices its items, a declared pattern called by name builds its node (`If(not $c, $body, ø)` is (If (Call not …) …)),
 # a hole inside a text, "$f" or "get_$f", is the spelling of what it took, and every node the template itself spells is
 # new, so the stage walker places it where the rewritten code was.
+use "patterns.wap"
+use "../parse/reader.wap"
+use "../parse/operators.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
 
 FRESH_MARK = "·"
 
