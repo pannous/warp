@@ -169,7 +169,7 @@ has_letters(type: Node?, records: list) as bool := is_letter(type, records) or (
 # An empty list's item type before a use settles it, α1, α2 … (data.wap list_typed): bound like a letter by the calls
 # that use the list, `xs + [1]` settles it to int; settled everywhere once the program is typed, any where none did
 UNKNOWN_MARK = "α"
-UNSETTLED = "an empty list nothing adds to here: write its type, `xs: list<int> = []`"
+UNSETTLED = "this value's type is not settled yet where a function without a written result type takes it: write its type, `xs: list<int> = []`"
 unknown_type(s: TypingState) as Node := {
 	s.unknowns += 1
 	symbol(UNKNOWN_MARK + text(s.unknowns))
@@ -190,10 +190,24 @@ settles(given: Node, wanted: Node, s: TypingState) as bool := {
 settled_by(bound: list, s: TypingState) := {
 	for entry in bound { if is_unknown(symbol(entry#1)) and type_keyed(entry#1, s.settled) == ø { s.settled += [[entry#1, substituted(entry#2, bound)]] } }
 }
-# the typed program with every unknown settled; one nothing settled held no item that mattered, so it is any
-all_settled(program: Node, s: TypingState) as Node := {
-	for at in 1 to s.unknowns { settled_by([[UNKNOWN_MARK + text(at), symbol(ANY_TYPE)]], s) }
-	settled_everywhere(program, s)
+# A call of a function for types an unknown still holds: typed once the unknowns settle, so no instance is made for a
+# guess; meanwhile of its written result type, which a function typed later must write
+deferred_typed(definition: Node, types: list, letters: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+	typed = TypedFunction(place_key(declared_name(name)), types)
+	typed.result = substituted(declared_type(name) ?? refused(at, UNSETTLED), letters)
+	typed.signed = with_signature(name, types, typed.result)
+	s.deferred += [[definition, types, at]]
+	typed
+} }
+# every unknown settled, one nothing settled as any (it held no item that mattered), then the deferred calls' functions
+# typed for the settled types; a function's own deferred calls are typed in turn
+all_settled(s: TypingState) := {
+	while s.deferred or #s.settled < s.unknowns {
+		for at in 1 to s.unknowns { settled_by([[UNKNOWN_MARK + text(at), symbol(ANY_TYPE)]], s) }
+		waiting = s.deferred
+		s.deferred = []
+		for call in waiting { function_typed(call#1, call#2.map(type => substituted(type, s.settled)), s, call#3) }
+	}
 }
 # typed code with every unknown settled, the names its calls name too
 settled_everywhere(n: Node, s: TypingState) as Node := {
@@ -300,7 +314,7 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
 	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), substituted(argument_types#place, letters), letters, s.records))
-	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(type_given(parameters_in(definition)#place))) { refused(at, UNSETTLED) }
+	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(type_given(parameters_in(definition)#place))) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
 		if typed.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
 			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }

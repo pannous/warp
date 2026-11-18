@@ -56,6 +56,8 @@ class TypingState {
 	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
 	unknowns: int = 0
 	settled: list = []
+	# the calls of functions typed only once their unknowns settle, each [definition, argument types, call]
+	deferred: list = []
 }
 # A function typed for one tuple of argument types: the definition's key, its argument types, its result's type,
 # its name with its signature and the Define it became
@@ -98,8 +100,13 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
 		typed = with_type_of(typed, value_type(statements.last))
 	}
-	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements), typed)
-	if s.unknowns > 0 then all_settled(whole, s) else whole
+	typed_before = #s.functions
+	if s.unknowns > 0 { all_settled(s) }
+	library_keys = (defines + s.lambdas).map(function_key_of)
+	# the program's functions first typed once the unknowns settled, which no block placed
+	late = s.functions.drop(typed_before).filter(each => not (each.key in library_keys)).map(each => each.define)
+	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + late + statements), typed)
+	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
 gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and value_type(n) != symbol(NEVER_TYPE) and value_type(n) != symbol(EMPTY_TYPE)
@@ -166,7 +173,7 @@ if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingSt
 	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, if present != ø and present#2 == at then present#1 else ø, s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
 	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s, f) else typed#at)
-	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_type(value_type(chosen#1), value_type(chosen#2)))
+	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_settling(value_type(chosen#1), value_type(chosen#2), s))
 }
 # an arm typed with the variable of this key present in it, ø for none
 present_typed(part: Node, key: text?, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
@@ -258,6 +265,11 @@ pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
 
 # the type of either of two values: the one that finishes, or the common one; ø when they differ
 # the type that holds both: either when they are one, `T?` for a T and ø (or a T?), ø when none does
+# the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
+joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
+	if a != ø and b != ø and a != symbol(NEVER_TYPE) and b != symbol(NEVER_TYPE) and a != symbol(EMPTY_TYPE) and b != symbol(EMPTY_TYPE) { settles(a, b, s) }
+	joined_type(substituted(a, s.settled), substituted(b, s.settled))
+}
 joined_type(a: Node?, b: Node?) as Node? := {
 	if a == symbol(NEVER_TYPE) { return b }
 	if b == symbol(NEVER_TYPE) or a == ø or b == ø { return if b == symbol(NEVER_TYPE) then a else ø }
@@ -290,6 +302,8 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
+	# a name given only ø so far holds an optional of a type its uses settle
+	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
 	if wanted != ø and not type_fits(type, wanted) and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	remembered(name, type, s, f)
