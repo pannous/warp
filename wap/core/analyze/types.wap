@@ -200,7 +200,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	# a name given only ø so far holds an optional of a type its uses settle
 	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
-	if wanted != ø and not type_fits(type, wanted) and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
+	if wanted != ø and conversion(type, wanted, s.records) == ø and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	# the name keeps the type it holds, `found: Node? = ø` a Node? whatever it is given
 	held = wanted ?? type
@@ -212,7 +212,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
 	given = typed_form(value, s, f, wanted)
-	if not gives_fitting(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
+	if not gives_fitting(given, wanted, s.records) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
 }
 
@@ -252,7 +252,7 @@ case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeF
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
-	for at in 1 to #given { field_checked(given#at, fields#at, arguments#at) }
+	for at in 1 to #given { field_checked(given#at, fields#at, arguments#at, s.records) }
 	case_typed_as(n, called, given, s)
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
