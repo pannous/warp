@@ -45,11 +45,18 @@ global asking_recorded = ø
 asked_host(question: text, argument: any) := {
 	global questions_asked
 	global asking_recorded
-	answer = host_answer(question, argument)
 	if asking_recorded == ø { asking_recorded = (std_io("warp", "option", ["cache"]) ?? "") != "" }
-	if asking_recorded { questions_asked += [[text(answer_fingerprint(answer)), question, text(argument)]] }
+	if not asking_recorded { return host_answer(question, argument) }
+	# (a file known by its fingerprint before it is read: one changed in between makes the next run compile anew)
+	known = if question in FILE_QUESTIONS then known_answer(question, argument) else ø
+	answer = host_answer(question, argument)
+	questions_asked += [[known ?? text(answer_fingerprint(answer)), question, text(argument)]]
 	answer
 }
+# the questions whose answer is a file's content, known by the fingerprint of its bytes, never by the answer held
+FILE_QUESTIONS = ["read", "read_bytes"]
+# what the answer to a question is known by now: a file's fingerprint, any other answer's
+known_answer(question: text, argument: any) as text := text(if question in FILE_QUESTIONS then std_io("file", "fingerprint", [argument]) else answer_fingerprint(host_answer(question, argument)))
 # the questions the host answers: a file's text and bytes, whether it is there, a folder's names, an environment
 # variable, a run option, a URL's text and bytes
 host_answer(question: text, argument: any) := match question {
@@ -63,8 +70,8 @@ host_answer(question: text, argument: any) := match question {
 	"get_bytes": std_io("net", "get", [argument, AS_BYTES])
 	_: raise "the host answers no question " + question
 }
-# a fingerprint of an answer: a file's bytes folded as they are, any other answer as warp writes it
-answer_fingerprint(answer: any) as int := folded_bytes(if answer is list and #answer > 0 and answer#1 is int then answer else "${answer}".bytes)
+# a fingerprint of an answer, as warp writes it
+answer_fingerprint(answer: any) as int := folded_bytes("${answer}".bytes)
 def folded_bytes(bytes: list) as int {
 	folded = 0
 	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
