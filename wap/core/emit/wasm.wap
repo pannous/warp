@@ -196,6 +196,8 @@ default_of(value_type: list) as list := {
 
 # a reference to the declared type of that index, or null
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
+# the type index a reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref
+referenced(reference: list) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
 
 # The format's lists: their length, then the items. `counted` takes items already in bytes, `bytes_vector` raw bytes.
 counted(items: list) as list := unsigned(#items) + items.flat_map(item => item)
