@@ -5,6 +5,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
+use "tokens.wap"
 
 # the assignment a compound one means, `+=` is `=` of `+`
 ASSIGNMENT = "="
