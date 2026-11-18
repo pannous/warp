@@ -91,6 +91,13 @@ bound_shape(taken: Node, enum: Node, s: TypingState) as Node := {
 	}
 }
 case_bound(name: Node, enum: Node, s: TypingState) as Node := with_fact(in_enum(name, enum, s), BINDING, symbol(BOUND_CASE))
+# A kind word after `is` on a value of an enum, `n is symbol` on a Node: the enum's case of that name in lower case,
+# as a shape (wiki/Footguns.md "Tiny surprises"); ø where the value is of no enum or no case is named so
+kind_named(word: Node, type: Node?, s: TypingState) as Node? := {
+	enum = record_named(s.records, base_or_self(type)) ?? return ø
+	named = cases_of(enum).filter(case => lower(text(case_name(case))) == text(word))
+	if named is empty then ø else with_fact(symbol(text(case_name(named#1))), NARROWS, symbol(record_name(enum)))
+}
 # whether a value is of a shape, as code: `match x { List(_, _, _) => yes; _ => no }`
 shape_test(read: Node, type: Node, at: Node, s: TypingState) as Node := with_fact(placed_like(Case(read, [Arm(shape_pattern(type, s), True), Arm(symbol(WILDCARD), False)]), at), TESTED, type)
 # the raise where a value is not of the shape wanted, naming the place that wanted it
