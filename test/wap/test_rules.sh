@@ -51,4 +51,7 @@ klass Q { x: int; g := "q" }
 print g()')" "fields
 fields
 q"
+check "a template that is a repetition, with and without the rest it repeats" "$(ran repeated_template 'rule methods { ($method($parameters...) := $body)... } => ($method(self: int, $parameters...) := $body)...
+methods { twice(k: int) := self * k; ten() := self * 10 }
+print text(twice(3, 4) + ten(2))')" "32"
 exit $((failures > 0))
