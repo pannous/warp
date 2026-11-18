@@ -54,6 +54,6 @@ g(g(5))')" "3
 7"
 check "the list words take a function's name" "$(ran named_words 'is_small(x) := x < 3
 print text([1, 2].all(is_small))
-print text([1, 5].any(is_small))')" "yes
+print text([4, 5].any(is_small))')" "yes
 no"
 exit $((failures > 0))
