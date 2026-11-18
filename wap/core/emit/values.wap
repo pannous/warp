@@ -44,7 +44,8 @@ literal(n: Node, m: Module) as Code? := match n {
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
 	Symbol(name) => {
 		narrowed = fact_of(type_name, NARROWS)
-		if narrowed != ø then layout_of(narrowed, m, records) else if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
+		record = record_named(records, type_name)
+		if narrowed != ø then layout_of(narrowed, m, records) else if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record == ø then ø else nullable(struct_of(record, m, records))
 	}
 	_ => {
 		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? signature_value_index(type_name, m, records) ?? map_index(type_name, m, records)
