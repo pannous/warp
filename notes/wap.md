@@ -193,3 +193,49 @@ does: 705 statements lower, 359 bind, no program file types yet.
 | 4 files' typing | lowering | the range `0 upto width` (wasm.wap) |
 
 Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done`.
+
+## Size
+
+wap's size is the number of nodes its own reader makes of every wap/*.wap file, Meta excluded
+(scripts/wap-size.warp): comments, blank lines, line breaks and the length of names count nothing, so only a real
+simplification makes it smaller. warp-simplifier lowers it; each landing's commit says the count before → after.
+`warp --no-window scripts/wap-size.warp $(git ls-files "wap/*.wap")`
+
+Baseline, origin/main 499e1d6abe (2026-11-18): **82145 nodes**.
+
+| folder | nodes |
+|---|---|
+| . | 113 |
+| core/analyze | 25641 |
+| core/emit | 18791 |
+| core | 5339 |
+| core/parse | 12266 |
+| core/rules | 10114 |
+| kernel | 189 |
+| preload | 8814 |
+| preload/sugar | 878 |
+
+The 20 largest top-level statements:
+
+| file and name | nodes |
+|---|---|
+| wap/core/analyze/scope.wap bound | 717 |
+| wap/preload/nodes.wap text | 625 |
+| wap/core/analyze/calls.wap call_typed | 584 |
+| wap/core/analyze/calls.wap function_typed | 560 |
+| wap/core/rules/lowering.wap lowered_form | 534 |
+| wap/core/analyze/types.wap typed_form | 509 |
+| wap/core/emit/host.wap arguments_function | 478 |
+| wap/core/emit/emitter.wap code | 464 |
+| wap/preload/floats.wap float_digits | 438 |
+| wap/preload/operators.wap operators | 410 |
+| wap/core/parse/atoms.wap quoted | 406 |
+| wap/core/parse/atoms.wap number_read | 390 |
+| wap/core/parse/reader.wap read_token | 390 |
+| wap/core/emit/primitives.wap primitive_code | 359 |
+| wap/core/parse/operators.wap tokens_read | 354 |
+| wap/core/format.wap call_text | 337 |
+| wap/core/emit/primitives.wap int_text_function | 324 |
+| wap/core/analyze/calls.wap chosen_definition | 308 |
+| wap/core/parse/layout.wap indentation | 308 |
+| wap/core/emit/host.wap path_opened | 307 |
