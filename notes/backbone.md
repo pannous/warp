@@ -287,3 +287,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Ints have no `÷` or `%` yet** (wap/preload/floats.wap holds only the truncated quotient and rem, which programs do
   not see): warp's `÷` and its floored `%` (`-7 % 2` is 1) are to be defined on top of them, and `quotient` is warp's
   exact division (3.5), so the truncated one keeps that name hidden. Paid off when the preload defines `÷` and `%`.
+- **A module's rules reach files that don't `use` it** (wap/core/rules/stages.wap `shape_rules`). All loaded rules go
+  into one table, so once a module is shaped its rules also apply to every file shaped after it, the preload's and
+  the census's included. Bends "use builds the language the program is written in": the scope should follow `use`.
+  Paid off by a rule table per program, the language's rules plus those of the modules it uses.

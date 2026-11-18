@@ -20,13 +20,19 @@ PRELUDE_FILE = "preload/prelude.wap"
 # is bound in
 language_loaded(wap_folder: text) as Node := {
 	for file in RULE_FILES { rules_loaded(operated_program(read_notation(wap_folder + "/" + file))) }
-	declared(wap_folder + "/" + PRELUDE_FILE)
+	declared_operated(operated_file(wap_folder + "/" + PRELUDE_FILE))
 }
 read_notation(file: text) as Node := notation(read(file), file)
 
 # read code with its operators read, its spellings rewritten by the shape rules, then declared
-declared_code(code: Node) as Node := declared_program(shaped_program(operated_program(code)))
-declared(file: text) as Node := declared_code(read_notation(file))
+declared_code(code: Node) as Node := declared_operated(operated_program(code))
+declared_operated(code: Node) as Node := declared_program(shaped_program(code))
+operated_file(file: text) as Node := operated_program(read_notation(file))
+# a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
+declared_modules(file: text) as list := {
+	code = operated_file(file)
+	(modules_used(code, operated_file) + [code]).map(declared_operated)
+}
 # the names the modules a declared program uses define
 used_declarations(code: Node, modules: list) as list := uses_of(code).flat_map(file => declarations_of(module_of(file, modules)))
 # declared code lowered and bound inside the preload's declarations and those of the modules it uses
@@ -41,8 +47,7 @@ library_code_of(preload: Node) as Block := {
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
 # functions are there for any caller; typed, then rewritten by the typed rules
 typed_file(file: text, preload: Node) as Block := {
-	code = declared(file)
-	modules = modules_used(code, declared) + [code]
+	modules = declared_modules(file)
 	whole = Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
 	library_code = library_code_of(preload)
 	typed_by_rules(typed_program(whole, library_code), declarations_of(preload), library_code)

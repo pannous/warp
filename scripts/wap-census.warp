@@ -12,8 +12,8 @@ report(stage: text, message: text) := print "${stage}\t" + message.replace("\n",
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
-		code = declared(file)
-		return used_declarations(code, modules_used(code, declared)).map(library_word)
+		modules = declared_modules(file)
+		return used_declarations(modules#(#modules), modules).map(library_word)
 	} catch e { report("declare", e.message) }
 	[]
 }
@@ -21,11 +21,12 @@ used_scope(file: text) as list := {
 probe(file: text) := {
 	statements = []
 	try statements = top_level_statements(read_notation(file)).filter(statement => not is_use(operated_program(statement))) catch e { report("read", e.message) }
+	used = used_scope(file)
 	lowered_ok = []
 	for statement in statements {
 		try { lowered_ok = lowered_ok + [lowered(declared_code(statement))] } catch e { report("lower", e.message) }
 	}
-	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used_scope(file) + library_scope
+	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used + library_scope
 	bound_ok = []
 	for statement in lowered_ok {
 		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
