@@ -72,17 +72,6 @@ float(n: int): float := prim f64_convert_i64_s(n)
 # a float's text: its shortest digits that read back (preload/floats.wap)
 text(x: float): text := float_text(x)
 
-# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
-all(xs, fits) := {
-	for x in xs { if not fits(x) { return no } }
-	yes
-}
-any(xs, fits) := {
-	for x in xs { if fits(x) { return yes } }
-	no
-}
-contains(xs, item) := xs.any(x => x == item)
-
 # bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
 # (`===` compares the type too)
 ==(a: bool, b: bool): bool := if a then b else not(b)
