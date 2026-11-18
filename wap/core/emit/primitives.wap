@@ -81,7 +81,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](array_operand(form, arguments))) }
+	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
 	if ARRAY_HELPERS.has(name) {
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
@@ -90,8 +90,11 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 }
 # the array type of a primitive's first operand
 array_operand(form: Node, arguments: list) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
-# an array's item at a place counted from 0, an unsigned byte or char as an int
-unsigned_item(array: int) as list := I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
+# a packed array's item at a place counted from 0, an unsigned byte as an int
+unsigned_item(form: Node, array: int, p: Program) as list := {
+	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
+	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
+}
 # the code of a primitive its helper function performs
 helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the instructions that compare two values of one type on the stack, giving yes or no

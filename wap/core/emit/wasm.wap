@@ -196,7 +196,10 @@ default_of(value_type: list) as list := {
 
 # a reference to the declared type of that index, or null
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
-# the type index a reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref
+# whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
+packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
+# the type index a nullable reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref.
+# Every reference wap makes is nullable, so a non-null one (0x64) is not read yet.
 referenced(reference: list) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
 
 # The format's lists: their length, then the items. `counted` takes items already in bytes, `bytes_vector` raw bytes.
