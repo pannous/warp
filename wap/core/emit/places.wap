@@ -34,7 +34,7 @@ written_code(place: Place, value: Code) as Code := Code([], place.reached + valu
 # new struct of the map's type
 map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
 	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => if key is symbol then text_literal(text(key), p.m) else code(key, p, f) })
-	Code(layout(form, p), map_made(fact_of(form, TYPE), keys, entries.map(entry => code(given_value(entry), p, f)), p))
+	Code(layout(form, p), map_made(fact_of(form, TYPE), keys, items_fitted(held_type(fact_of(form, TYPE)), entries.map(given_value), p, f), p))
 }
 
 # An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct

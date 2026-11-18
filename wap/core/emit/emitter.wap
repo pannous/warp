@@ -118,7 +118,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items.map(item => code(item, p, f)), p))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items_fitted(item_type(fact_of(form, TYPE)), items, p, f), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
@@ -179,6 +179,8 @@ return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	Code(NEVER, given.instructions + RETURN)
 }
 
+# the code of items made to fit the type a list or a map holds: `[1, "a"]` as a list<any> boxes the 1
+items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p.m))
 # a function's value made to fit its signed result, a frame without one leaving it as it is
 signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p.m) else given
 # code emitted inside wasm's structured instructions, which open these labels

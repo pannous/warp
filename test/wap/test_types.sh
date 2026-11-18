@@ -82,6 +82,11 @@ xs += [5]
 print text(n + #xs)')" "yes
 3
 1"
+check "a list of any holds values of several types" "$(ran any_list 'xs: list<any> = [1, 2.5, "a b", yes]
+for x in xs { print show(x) }')" "1
+2.5
+\"a b\"
+yes"
 # `x is w`: a type's word tests the type, a predicate's word calls it (wiki keyword.md: `x = []; x is empty` is yes)
 check "is with a predicate word calls it" "$(ran is_predicate 'x = []
 print text(x is empty)
