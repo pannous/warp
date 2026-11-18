@@ -37,7 +37,7 @@ written_code(place: Place, value: Code) as Code := Code([], place.reached + valu
 # A map, `{yes: 1, no: 0}`: its keys, a word's spelling as a text, in a new list, its values in another, both in a
 # new struct of the map's type
 map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
-	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => if key is symbol then text_literal(text(key), p.m) else code(key, p, f) })
+	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => if key is symbol then text_literal(text(key), p.m) else code(key, p, f); _ => refused(entry, NOT_AN_ENTRY) })
 	Code(layout(form, p), map_made(fact_of(form, TYPE), keys, items_fitted(held_type(fact_of(form, TYPE)), entries.map(given_value), p, f), p))
 }
 
@@ -51,7 +51,7 @@ field_filled(field: Node, value: Node, p: Program, f: Frame) as list := {
 	given = code(value, p, f)
 	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p).instructions
 }
-given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
+given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value; _ => refused(field, NOT_A_FIELD) }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
 item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
 

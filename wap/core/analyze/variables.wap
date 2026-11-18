@@ -15,6 +15,7 @@ named_variables(block: Node, scope: list, depth: int) as list := match fact_of(b
 }
 named_variable(naming: Node, scope: list, depth: int) as Definition := match naming {
 	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then Definition(text(name), BOUND_GLOBAL, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
+	_ => refused(naming, "a variable is named name: kind")
 }
 program_variable(name: Node, scope: list) as Definition := {
 	for definition in program_scope(scope) { if definition.name == text(name) and definition.kind == BOUND_GLOBAL { return definition } }
