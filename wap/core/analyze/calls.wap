@@ -337,7 +337,8 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	frame.variables += captured_by(definition, types)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(typed_body, frame, name, s)
-	typed.jumps = typed.jumps or jumps(typed_body) and frame.returns is empty
+	# a written result stays the result, `show(x: any): text := raise(…)`; one that writes none and never returns jumps
+	typed.jumps = typed.jumps or written == ø and jumps(typed_body) and frame.returns is empty
 	if written != ø and not typed.jumps { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
 	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
