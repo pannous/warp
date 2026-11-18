@@ -13,14 +13,17 @@ use "rules/typed.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
 RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/calls.wap"]
-# the standard language every program gets, as definitions
-PRELUDE_FILE = "preload/prelude.wap"
+# the standard language every program gets, as definitions: the prelude and the word files beside it
+PRELOAD_FILES = ["preload/prelude.wap", "preload/lists.wap"]
 
 # the rules loaded from the wap folder, then the preload declared once: what it declares is the library every program
 # is bound in
 language_loaded(wap_folder: text) as Node := {
 	for file in RULE_FILES { rules_loaded(operated_program(read_notation(wap_folder + "/" + file))) }
-	declared_operated(operated_file(wap_folder + "/" + PRELUDE_FILE))
+	files = PRELOAD_FILES.map(file => wap_folder + "/" + file)
+	statements = files.flat_map(file => top_level_statements(operated_file(file)))
+	# one program, its uses found beside the prelude
+	declared_operated(with_fact(List(statements, Bracket.None, Separator.Newline), SOURCE_FILE, Text(files#1)))
 }
 read_notation(file: text) as Node := notation(read(file), file)
 
