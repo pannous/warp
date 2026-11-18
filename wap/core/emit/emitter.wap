@@ -119,7 +119,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
-	Fn(parameters, body) => Code(layout(form, p), captures_of(form).flat_map(definer => fetched(placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value"))) + instruction(STRUCT_NEW, [closure_of(form, p)]))
+	Fn(parameters, body) => Code(layout(form, p), captures_code(form, f) + instruction(STRUCT_NEW, [closure_of(form, p)]))
 	Symbol(name) => name_code(form, p, f)
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
 }
@@ -260,6 +260,13 @@ captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list :=
 		loads += instruction(LOCAL_GET, [0]) + instruction(STRUCT_GET, [closure, at - 1]) + instruction(LOCAL_SET, [f.slots.last.index])
 	}
 	loads
+}
+# the values a function value captures, read from the variables they are where it is made
+captures_code(form: Node, f: Frame) as list := {
+	captures_of(form).flat_map(definer => fetched(captured_variable(definer, f)))
+}
+captured_variable(definer: Node, f: Frame) as Placed := {
+	placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value")
 }
 # the GC struct of a typed function value
 closure_of(n: Node, p: Program) as int := function_value_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no function value")

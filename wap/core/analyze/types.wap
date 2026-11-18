@@ -145,7 +145,9 @@ function_value_typed(n: Node, parameters: Node, body: Node, s: TypingState, f: T
 # the function of a function value, made once: named and placed where the value is written
 lambda_of(n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
 	name = placed_like(symbol(LAMBDA_NAME), n)
-	for lambda in s.lambdas { if function_key_of(lambda) == place_key(name) { return lambda } }
+	definition_keyed(place_key(name), s) ?? lambda_made(name, n, parameters, body, s)
+}
+lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
 	lambda = refitted(Define(name, with_items(parameters, [placed_like(symbol(CLOSURE_NAME), n)] + items_of(parameters)), body), n)
 	s.lambdas += [lambda]
 	s.definitions += [lambda]
@@ -226,7 +228,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
-	if place_key(defined_at(name)) in s.captured and (line_of(name) != line_of(defined_at(name)) or column_of(name) != column_of(defined_at(name))) { refused(n, "a function value made before reads ${name}, which this changes; a function value's captures don't change yet") }
+	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	remembered(name, type, s, f)
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
 }
@@ -293,6 +295,12 @@ type_keyed(key: text, variables: list) as Node? := {
 	ø
 }
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
+# whether a name is the one that defines its variable, its first value rather than a change
+is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
+# whether a value given to a name changes a variable a function value has captured
+changes_capture(name: Node, s: TypingState) as bool := {
+	place_key(defined_at(name)) in s.captured and not is_definer(name)
+}
 
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
