@@ -117,7 +117,8 @@ not(x): bool := if x then no else yes
 # their own words (preload/texts.wap, lists.wap)
 empty(n: int): bool := n == 0
 empty(x: float): bool := x == 0.0
-empty(x: T?): bool := missing(x)
+# an optional is empty when it is missing or its value is: `count: int? = 0` is falsy (wiki/truthiness.md)
+empty(x: T?): bool := missing(x) or empty(x!)
 truthy(x: T): bool := not empty(x)
 # a value as a bool: `bool("no")` and `bool("0")` are no, as a text written for a yes or no reads; any other value is
 # its truth (wiki/conversion.md)

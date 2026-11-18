@@ -86,4 +86,6 @@ check "0, 0.0, an empty text or list and a missing value are empty, and falsy" "
 print text(0 is empty) + " " + text(0.0 is empty) + " " + text("" is empty) + " " + text([] is empty) + " " + text(x is empty) + " " + text(3 is empty)
 print (if 0 then "t" else "f") + (if [1] then "t" else "f") + (if "" then "t" else "f")')" "yes yes yes yes yes no
 ftf"
+check "an optional holding 0 is falsy" "$(ran optional_zero 'count: int? = 0
+print if count then "truthy" else "falsy"')" "falsy"
 exit $((failures > 0))
