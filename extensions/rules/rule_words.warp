@@ -1182,7 +1182,7 @@ class_methods_listed(name: Node, program: Node, source: text) as any := {
 # `function f`, as its bare name calls it
 program_functions(program: Node, source: text) as any := {
 	if owns_word("functions", program) { return ø }
-	statements = level_statements(plain_node(parsed(source)))
+	statements = level_statements(source_parsed(source))
 	names = distinct(statements.map(defined_function).filter(name => name != ø))
 	taking_nothing = statements.filter(statement => defined_function(statement) != ø and #listed_function_head(statement) == 1).map(defined_function)
 	if #names == 0 { return List([], Bracket.Square, Separator.Comma) }
@@ -1197,7 +1197,18 @@ defined_function(statement: Node) as text? := {
 listed_function_head(definition: Node) as Node := if is_key(key_of(definition), Op.Colon) then key_of(key_of(definition)) else key_of(definition)
 # the class of that name and the classes it extends, nearest first; [] when the program (as written: the class methods
 # pass may have lifted its classes by now) declares none
-written_lineage(name: Node, source: text) as list := class_lineage(spelled(name), plain_node(parsed(source)))
+written_lineage(name: Node, source: text) as list := class_lineage(spelled(name), source_parsed(source))
+# the source as written, parsed once for all the rule words that read it (each `x.fields`, `x.methods` or `dir(x)` a
+# rule tried parsed the whole program anew: a tenth of the compiler compiling itself)
+global source_kept = ""
+global source_tree_kept = ø
+source_parsed(source: text) as Node := {
+	if source_tree_kept == ø or source != source_kept {
+		source_tree_kept = plain_node(parsed(source))
+		source_kept = source
+	}
+	source_tree_kept
+}
 class_lineage(name: text, program: Node) as list := {
 	statement = declared_class(name, program)
 	if statement == ø { return [] }
@@ -1235,7 +1246,7 @@ class_made_as(variable: text, source: text) as any := {
 class_setter(variable: Node, word: Node, source: text) as any := {
 	made = class_made_as(spelled(variable), source)
 	if made == ø { return ø }
-	lineage = class_lineage(made, plain_node(parsed(source)))
+	lineage = class_lineage(made, source_parsed(source))
 	if spelled(word) in lineage_fields(lineage, source) { return ø }
 	if lineage.contains(first_parameter_types.get(spelled(word))) then yes else ø
 }
@@ -1368,7 +1379,7 @@ type_alternatives(written: text) as list := written.split(" or ").map(part => pa
 is_listed_word(word: text) as bool := not is_capitalized(word) and word.chars().all(c => is_name_char(c))
 
 # the source parsed, its methods declared outside their types moved in (extensions/class_extensions.warp)
-written_program(source: text) as Node := class_extensions(plain_node(parsed(source)))
+written_program(source: text) as Node := class_extensions(source_parsed(source))
 # `text.methods`, `Name.methods` (decision methods-declared, both ways; `functions` a synonym): the words of a type
 # word's module, as text.functions lists them, and the program's functions taking the type first, `shout(self: text)`
 # of `text.shout() := …`, `greet(n: Name)` of an alias; ø where the program has its own word or nothing names the type
