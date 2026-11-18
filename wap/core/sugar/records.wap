@@ -1,9 +1,24 @@
 # Types declared other ways, as Record (notes/kernel.md "Record"; wiki/class.md): the spellings wap's own source uses.
 
-# a class, its fields typed names, then its methods; the rule writes its constructor, the instance as data, and each
-# method as a function whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too; and
-# show, the instance in its constructor form, `P{x: 3}`, each field shown by its own type's show
-rule class $name { ($field: $type)... ($method($parameters...) := $body)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}; ($method(self: $name, $parameters...) := $body)...; show(self: $name): text := "$name{" + join([("$field: " + show(self.$field))...], ", ") + "}"
+# a class, its fields typed names, a field's default after `=` (wiki/class.md), then its methods; the rule writes its
+# constructor, a field with a default left out of a call taking it, the instance as data, and each method as a function
+# whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too; and show, the instance in
+# its constructor form, `P{x: 3}`, each field shown by its own type's show
+rule class $name { $members... } => Record($name, [(member_as "field" ($members))...], []); $name((member_as "parameter" ($members))...) := $name{(member_as "given" ($members))...}; (member_as ("method" $name) ($members))...; show(self: $name): text := "$name{" + join([(member_as "shown" ($members))...], ", ") + "}"
+# What a class's member writes in each part of the class rule: a method its function, a field with a default its
+# parameter as written, any other field what member_of writes for that part; a member a part does not take writes
+# nothing
+rule member_as ("method" $name) ($method($parameters...) := $body) => $method(self: $name, $parameters...) := $body
+rule member_as "parameter" ($field: $type = $default) => $field: $type = $default
+rule member_as $part ($field: $type = $default) => member_of $part ($field: $type)
+rule member_as $part ($field: $type) => member_of $part ($field: $type)
+rule member_as $part $member => ()
+# a field, its default left out, as its declaration, its constructor parameter, its value given to the instance, its show
+rule member_of "field" ($field: $type) => $field: $type
+rule member_of "parameter" ($field: $type) => $field: $type
+rule member_of "given" ($field: $type) => $field: $field
+rule member_of "shown" ($field: $type) => "$field: " + show(self.$field)
+rule member_of $part $field => ()
 
 # an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's
 # type; and its show by match over the cases
