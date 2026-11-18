@@ -160,20 +160,50 @@ arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code :=
 	if arms is empty { return Code() }
 	match arms#1 {
 		Arm(pattern, result) => {
-			if pattern is symbol {
+			if pattern is symbol and not is_case(pattern) {
 				named = held_by(pattern, held, p, f)
 				given = code(result, p, f)
 				return Code(given.type, named + given.instructions)
 			}
-			if_code(form, pattern_test(pattern, held, p), labelled(f, [OTHER_LABEL], () => code(result, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+			if #arms == 1 and fact_of(form, TYPE) != ø { return arm_taken(pattern, result, held, p, f) }
+			if_code(form, pattern_test(pattern, held, p), labelled(f, [OTHER_LABEL], () => arm_taken(pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
 		}
 	}
 }
-# whether the held subject equals a literal pattern: yes or no
+# an arm's result, after the names of a case pattern are given its fields; the last arm of a Case that names every case
+# always fits, untested
+arm_taken(pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Code := {
+	named = fields_held(pattern, held, p, f)
+	given = code(result, p, f)
+	Code(given.type, named + given.instructions)
+}
+# whether the held subject fits a pattern: a case by its tag, a literal by equality; yes or no
 pattern_test(pattern: Node, held: Placed, p: Program) as Code := {
-	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names and _ so far")
+	if is_case(case_name(pattern)) { return Code(I32, fetched(held) + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ) }
+	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names, cases and _ so far")
 	Code(I32, fetched(held) + given.instructions + equality(held.type, p))
 }
+# the names of a case pattern, `Circle(r)`, given the held subject's fields, cast to the case; code that leaves nothing
+fields_held(pattern: Node, held: Placed, p: Program, f: Frame) as list := match pattern {
+	Call(called, names) => {
+		record = enum_of(p.records, called)
+		cast = case_struct_of(record, case_named(record, called), p.m, p.records)
+		types = case_fields(case_named(record, called)).map(field => layout_of(declared_type(field), p.m, p.records))
+		(1 to #names).filter(at => text(names#at) != WILDCARD).flat_map(at => fetched(held) + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]) + kept(added_variable(names#at, types#at, p, f)) + DROP)
+	}
+	_ => []
+}
+# A case's value, `Dime` or `Circle(3)`: its tag and its fields' values in a new struct of its case, of its enum's type
+case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+	record = enum_of(p.records, called)
+	named = case_named(record, called)
+	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
+	Code(layout(form, p), i32_const(tag_of(called, p)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
+}
+# a case's tag, its place among the cases of every enum the program declares, so cases of two enums never share one
+tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => text(case_name(each)) == text(case)) - 1
+is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
+
 # a name pattern given the held subject, code that leaves nothing; _ gives it to none
 held_by(pattern: Node, held: Placed, p: Program, f: Frame) as list := if text(pattern) == WILDCARD then [] else fetched(held) + kept(added_variable(pattern, held.type, p, f)) + DROP
 
@@ -331,6 +361,7 @@ set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := 
 
 # a name's value: a parameter, local, capture or global, or a function's name as a value (an empty struct)
 name_code(name: Node, p: Program, f: Frame) as Code := {
+	if is_case(name) { return case_value_code(name, name, [], p, f) }
 	if binding_of(name) in [BOUND_FUNCTION, BOUND_LIBRARY] { return function_value_code(name, p, f) }
 	held = variable_of(name, p, f) ?? refused(name, "this name is read before any value is given to it; a global is read only after the statement that sets it, until the typing stage")
 	Code(held.type, fetched(held))
@@ -360,6 +391,7 @@ kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.in
 finished(c: Code) as Code := if c.type == NEVER then Code(NEVER, c.instructions + UNREACHABLE) else c
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = arguments.map(argument => code(argument, p, f))
