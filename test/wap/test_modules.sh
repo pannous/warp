@@ -57,4 +57,10 @@ print text(match n { Pair(Text(t), right) => t; _ => "no" })')" "a"
 check "a pattern's rest hole takes the rest of its shape in an arm" "$(ran pattern_rest_arm 'pattern Run = (Run $first: Node $rest...: Node)
 n = Run(Text("a"), [Text("b"), Text("c")])
 print text(match n { Run(first, rest) => #rest; _ => 0 })')" "2"
+mkdir -p "$stage/inner"
+printf '%s\n' 'use "../speak.wap"' 'shout() := say("HEY")' >"$stage/inner/loud.wap"
+check "a module in a folder uses one beside its folder, loaded once" "$(ran use_up 'use "inner/loud.wap"
+use "speak.wap"
+shout()')" "loaded
+HEY"
 exit $((failures > 0))
