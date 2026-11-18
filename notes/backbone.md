@@ -275,6 +275,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   word in the reader; paid off when a program meets one.
 - **`for` is two rules, a `to` range and a list walked by index** (wap/preload/sugar/loops.wap), not the iterator of
   notes/kernel.md:82: wap's own source walks only these two; paid off by the first third kind of thing to walk.
+- **A list's brackets and separator are spelled twice**, in wap/preload/nodes.wap (opening, closing, separator_text) and
+  wap/core/format.wap: warp, which compiles the compiler, refuses the preload's own Node enum, so format.wap cannot use
+  nodes.wap. Paid off when wap compiles itself and the compiler sees the preload: format.wap's three go.
 - **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
   char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
   a typed rule sees only its hole's type.
