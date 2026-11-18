@@ -9,6 +9,9 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 use "data.wap"
 use "letters.wap"
+use "fits.wap"
+use "conditions.wap"
+use "scope.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"

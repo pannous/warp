@@ -6,6 +6,8 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "calls.wap"
+use "fits.wap"
+use "letters.wap"
 
 # the counting from 0 that `x[k]` writes, as the place k + 1
 PLUS = "+"
