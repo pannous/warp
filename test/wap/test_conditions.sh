@@ -82,4 +82,8 @@ check "an optional tested bare is its value where present" "$(ran bare_present '
 print text(f(2))
 print text(f(ø))')" "3
 0"
+check "0, 0.0, an empty text or list and a missing value are empty, and falsy" "$(ran empty_falsy 'x: int? = ø
+print text(0 is empty) + " " + text(0.0 is empty) + " " + text("" is empty) + " " + text([] is empty) + " " + text(x is empty) + " " + text(3 is empty)
+print (if 0 then "t" else "f") + (if [1] then "t" else "f") + (if "" then "t" else "f")')" "yes yes yes yes yes no
+ftf"
 exit $((failures > 0))
