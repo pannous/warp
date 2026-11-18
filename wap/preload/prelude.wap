@@ -48,6 +48,22 @@ raise(message: text): never := prim raise_text(message)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
+# the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
+int(t: text): int := {
+	negative = byte_count(t) > 1 and byte_at(t, 0) == MINUS_BYTE
+	if byte_count(t) == 0 { raise("int: an empty text writes no int") }
+	value = 0
+	for at in (if negative then 1 else 0) .. byte_count(t) {
+		digit = byte_at(t, at) - ZERO_BYTE
+		if digit < 0 or digit > 9 { raise("int: " + t + " is no decimal int") }
+		value = value * 10 + digit
+	}
+	if negative then 0 - value else value
+}
+# the bytes of the characters - and 0
+MINUS_BYTE := 45
+ZERO_BYTE := 48
+
 # a value's text, as a text's holes show it: `"n is ${n}"`
 text(t: text): text := t
 text(n: int): text := prim int_text(n)
