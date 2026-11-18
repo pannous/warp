@@ -187,7 +187,7 @@ rewritten_by(rules: Rules, code: Node) as Fired := {
 	Fired(result, fired[0])
 }
 
-rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, n, fired), whole => parts_applied(rules, whole, fired))
+rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, unglued(rules, n), fired), whole => parts_applied(rules, whole, fired))
 
 # A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
 # is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
@@ -216,8 +216,11 @@ phrase_placed(words: list, bracket: Bracket, origin: Node) as Node := with_facts
 # code with every grouping a rule head inside a phrase makes written out, nothing rewritten: what `wap format` prints;
 # a rule or pattern line is printed as written
 groupings_written(n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.Space) => if declares(items) then n else with_facts_of(with_parts(inner_rewritten(shape_rules, items, n), groupings_written), n)
+	List(items, Bracket.None, Separator.Space) => if declares(items) then n else phrase_written(unglued(shape_rules, n))
 	_ => with_facts_of(with_parts(n, groupings_written), n)
+}
+phrase_written(phrase: Node) as Node := match phrase {
+	List(items, Bracket.None, Separator.Space) => with_facts_of(with_parts(inner_rewritten(shape_rules, items, phrase), groupings_written), phrase)
 }
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
@@ -232,6 +235,18 @@ lines_continued(rules: Rules, statements: list) as list := {
 		if #joined > 0 and continues(rules, statement) { joined[#joined - 1] = with_facts_of(List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space), joined.last) } else { joined.add(statement) }
 	}
 	joined
+}
+# The lines indented below a phrase, which the reader glues to its last word as a block, continue the phrase when they
+# start with such a word: `x = if c then 1⏎	else 2` is `x = if c then 1 else 2`
+unglued(rules: Rules, n: Node) as Node := match n {
+	List(items, Bracket.None, Separator.Space) => match items.last {
+		Key(word, Op.None, List(lines, Bracket.Curly, separator)) => {
+			continued = lines_continued(rules, if STATEMENT_SEPARATORS.contains(separator) then lines else [List(lines, Bracket.None, separator)])
+			if #continued == 1 and continues(rules, continued#1) then with_facts_of(List(items[.. #items - 1] + [word] + phrase_items(continued#1), Bracket.None, Separator.Space), n) else n
+		}
+		_ => n
+	}
+	_ => n
 }
 continues(rules: Rules, statement: Node) as bool := {
 	first = phrase_items(statement)#1

@@ -20,7 +20,7 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
 	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
 	typed = typed_form(value, s, f, declared_type(field))
-	if not fits_type(typed, declared_type(field)) { refused(value, "this gives ${value_type(typed) ?? "no value"}, the field holds a ${declared_type(field)}") }
+	field_checked(typed, field, value)
 	refitted(Key(name, Op.Colon, typed), item)
 } }
 
