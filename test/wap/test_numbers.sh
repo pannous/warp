@@ -13,4 +13,6 @@ check "compound assignments" "$(ran compound 'x = 2
 x += 1
 x *= 3
 x')" "9"
+# an int is any whole number up to the largest of 64 bits (wiki/int.md); a larger one is a float
+check "the largest int is an int" "$(ran largest 'print "${9223372036854775807} ${9223372036854775807 - 1}"')" "9223372036854775807 9223372036854775806"
 exit $((failures > 0))
