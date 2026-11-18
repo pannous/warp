@@ -16,6 +16,9 @@ use "../format.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/atoms.wap"
+use "../parse/cascade.wap"
+use "../parse/operator_table.wap"
 
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns

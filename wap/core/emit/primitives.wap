@@ -12,6 +12,7 @@ use "values.wap"
 use "wasm.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "places.wap"
 
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
 # answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.

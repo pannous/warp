@@ -15,6 +15,7 @@ use "operator_table.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../../preload/operators.wap"
 
 # the fact keeping a compound assignment's written spelling
 COMPOUND = "compound"

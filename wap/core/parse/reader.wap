@@ -19,6 +19,7 @@ use "lexemes.wap"
 use "layout.wap"
 use "atoms.wap"
 use "cascade.wap"
+use "../stage.wap"
 
 # a line comment starts with `//`, or with `#` before a blank, `!` or `#`
 HASH_COMMENT_FOLLOWERS = " \t\n!#"
