@@ -90,7 +90,6 @@ letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 # gives a value, `return 0`, binds none
 unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if given == ø { return ø }
-	if given == symbol(NEVER_TYPE) { return bound }
 	records = s.records
 	if is_letter(wanted, records) or is_unknown(wanted) { return bound_as(wanted, given, bound, s) }
 	if is_unknown(given) { return bound_as(given, wanted, bound, s) }

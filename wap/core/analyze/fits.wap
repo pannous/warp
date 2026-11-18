@@ -11,18 +11,24 @@ use "dispatch.wap"
 use "../errors.wap"
 
 # DONE (1c61026ce9): Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
-# TODO: what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
+# DONE (68479de8ad): what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
 # DONE (bd6311b8df): link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if valued_type(a) and valued_type(b) { settles(a, b, s) }
 	joined_type(substituted(a, s.settled), substituted(b, s.settled), s)
 }
-# the type that holds both: the one that finishes, either when they are one, `T?` for a T and ø (or a T?), the wider
+# Code of which one part runs, an if's or a match's arms: of the type joining those that finish, jumping when all jump
+joined_of(n: Node, parts: list, s: TypingState) as Node := {
+	finishing = parts.filter(part => not jumps(part))
+	if finishing is empty then jumping(n) else with_type_of(n, joined_all(finishing.map(value_type), s))
+}
+# the type that holds all of these, ø for none
+joined_all(types: list, s: TypingState) as Node? := if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_settling(a, b, s))
+# the type that holds both: either when they are one, `T?` for a T and ø (or a T?), the wider
 # where one fits the other, else any, the dynamic type: `["a", 1]` is a list<any>; ø when either has none
 joined_type(a: Node?, b: Node?, s: TypingState) as Node? := {
-	if a == symbol(NEVER_TYPE) { return b }
-	if b == symbol(NEVER_TYPE) or a == ø or b == ø { return if b == symbol(NEVER_TYPE) then a else ø }
+	if a == ø or b == ø { return ø }
 	if same_type(a, b) { return a }
 	if a == symbol(EMPTY_TYPE) { return optional_type(b) }
 	if b == symbol(EMPTY_TYPE) { return optional_type(a) }
@@ -54,7 +60,7 @@ enum Conversion { Same, Boxed, Read, Wrapped, Narrowed, Settled, Checked }
 STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Read, Conversion.Wrapped]
 conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
-	if same_type(given, wanted) or given == symbol(NEVER_TYPE) or bare_fit(given, wanted, s.records) { return Conversion.Same }
+	if same_type(given, wanted) or bare_fit(given, wanted, s.records) { return Conversion.Same }
 	# a shape's value is a value of the type it narrows: a Record where a Node is
 	if narrowed_type(given) != ø and conversion(narrowed_type(given), wanted, s) == Conversion.Same { return Conversion.Same }
 	if narrowed_type(wanted) != ø and same_type(given, narrowed_type(wanted)) { return Conversion.Narrowed }
@@ -71,6 +77,8 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 # text, an any's value checked by `prim cast`, typed the wanted type, at the code's place; refused at `at` when it
 # cannot get there, naming the place that wants it, `the field holds a`
 converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node := {
+	# code that never finishes gives nothing to convert
+	if jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
 	if way == Conversion.Read { return as_text(n, s) }

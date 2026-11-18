@@ -61,7 +61,7 @@ parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
 # The dispatching function, kept with the typing stage's definitions and placed with the program's functions; its
 # result written when every choice writes its own, so a choice calling back through the dispatch finds it
 dispatcher_made(name: Node, reads: list, body: Node, results: list, s: TypingState) as Node := {
-	written = if results.all(result => result != ø) then Key(name, Op.Colon, results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))) else name
+	written = if results.all(result => result != ø) then Key(name, Op.Colon, results.drop(1).fold(results#1, (a, b) -> joined_type(a, b, s))) else name
 	dispatcher = placed_like(Define(written, List(reads.map(read => Key(read, Op.Colon, value_type(read))), Bracket.Round, Separator.Comma), body), name)
 	s.definitions += [dispatcher]
 	s.dispatchers += [dispatcher]
