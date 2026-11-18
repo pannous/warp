@@ -42,7 +42,7 @@ bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	if opener.bracket == Bracket.Curly then with_duplicates_warned(written, items) else written
 }
 
-listed(items: list, bracket: Bracket, separator: Separator) as Node := placed(List(items, bracket, separator), line_of(items#1), column_of(items#1))
+listed(items: list, bracket: Bracket, separator: Separator) as Node := positioned_like(List(items, bracket, separator), items#1)
 
 # the loosest separator among the parts, Space between two unglued atoms, None for a glued run
 loosest_separator(parts: list<Lexeme>) as Separator := {
@@ -158,7 +158,7 @@ glued_run(run: list) as Node := {
 # an operator written as glyphs, `+` `..` `#`: no head a bracket can glue to
 is_operator(n: Node) as bool := match n { Symbol(name) => is_glyph(name#1); _ => no }
 
-keyed(key: Node, op: Op, value: Node) as Node := placed(Key(key, op, value), line_of(key), column_of(key))
+keyed(key: Node, op: Op, value: Node) as Node := positioned_like(Key(key, op, value), key)
 
 # ── annotations: `@name` and `@name(args)` belong to the item after them ──
 

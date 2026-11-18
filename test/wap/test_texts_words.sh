@@ -20,4 +20,6 @@ check "a text's characters from one place to another, counted from 0" "$(ran tex
 check "a text's characters as codes, decoded from UTF-8" "$(ran codepoints 's = "aé€x"
 print text(#s.codepoints) + " " + text(ord(s.codepoints#3)) + " " + text(s.codepoints#2)')" "4 8364 é"
 check "a text's UTF-8 bytes" "$(ran text_bytes 'print text("aé".bytes) + " " + text(#"".bytes)')" "[97, 195, 169] 0"
+check "a text repeated" "$(ran text_times 'print "[" + "ab" * 3 + "][" + "xy" * 0 + "]"')" "[ababab][]"
+check "a text's count, also written length or size, counts its characters" "$(ran text_count 'print text("abé".length) + " " + text("".count) + " " + text((1 to 4).size)')" "3 0 4"
 exit $((failures > 0))
