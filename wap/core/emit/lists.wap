@@ -1,0 +1,117 @@
+# Growable lists and the maps built on them. A list<T> is a struct of its count and an array of its items
+# (values.wap list_index); the array's places past the count are spare, so add puts an item in place and only a full
+# array is copied into a larger one, and every name holding the list sees it grow. A map<K, V> is a struct of two such
+# lists, its keys and its values, an entry the same place in both.
+
+use "emitter.wap"
+use "primitives.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+
+# a full list's array grows to twice its places and this many more
+GROWTH = 4
+NO_SUCH_ITEM = "this list has no item at this place"
+POPPED_EMPTY = "pop of an empty list"
+NO_SUCH_KEY = "this map has no such key"
+LIST_ITEM = "list_item"
+LIST_SET = "list_set"
+LIST_ADD = "list_add"
+LIST_COUNT = "list_count"
+MAP_GET = "map_get"
+MAP_SET = "map_set"
+# The operations on a list or a map, one helper for each type of their first operand: operation → its builder
+TYPED_HELPERS = {
+	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
+	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function,
+	"map_get": map_reading_function, "map_set": map_setting_function
+}
+# a call of the helper of an operation on a value of this type
+typed_helper_called(operation: text, type: Node, p: Program) as list := instruction(CALL, [helper(p, "${operation} ${type}", q => TYPED_HELPERS[operation](q, type))])
+# the count of any list, read from the list base every list's type extends
+counted_items(p: Program) as list := instruction(STRUCT_GET, [list_base(p.m), LIST_COUNT_AT]) + I64_EXTEND_I32_U
+
+# a new list of these items' code, of a list type
+list_made(type: Node, items: list, p: Program) as list := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
+
+# The helpers of list_item and list_set, an item at a place counted from 0: locals 0 the list, 1 the place, for
+# list_set 2 the value. A place at or past the count raises.
+item_reading_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32], [item_layout(type, p)], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + instruction(ARRAY_GET, [items_array(type, p)]))
+item_setting_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32, item_layout(type, p)], [], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + local_get(2) + instruction(ARRAY_SET, [items_array(type, p)]))
+place_checked(type: Node, p: Program) as list := local_get(1) + count_in(type, 0, p) + I32_GE_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
+
+# The helper of list_add: the item put at the count, the array first copied into a larger one when full. Its locals:
+# 0 the list, 1 the item, 2 the larger array.
+adding_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	full = count_in(type, 0, p) + items_in(type, 0, p) + ARRAY_LEN + I32_EQ
+	grown = items_in(type, 0, p) + ARRAY_LEN + i32_const(2) + I32_MUL + i32_const(GROWTH) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [2]) + local_get(2) + i32_const(0) + items_in(type, 0, p) + i32_const(0) + count_in(type, 0, p) + instruction(ARRAY_COPY, [array, array]) + local_get(0) + local_get(2) + instruction(STRUCT_SET, [list_struct(type, p), LIST_ITEMS_AT])
+	put = items_in(type, 0, p) + count_in(type, 0, p) + local_get(1) + instruction(ARRAY_SET, [array])
+	added_function(p.m, [list_layout(type, p), item_layout(type, p)], [], [nullable(array)], full + IF + VOID_BLOCK + grown + END + put + counted_by(type, 1, p))
+}
+# The helper of list_pop: the last item taken off; an empty list raises. Its local: 0 the list.
+popping_function(p: Program, type: Node) as int := {
+	none_left = count_in(type, 0, p) + I32_EQZ + IF + VOID_BLOCK + raised(POPPED_EMPTY, p) + END
+	last = items_in(type, 0, p) + count_in(type, 0, p) + instruction(ARRAY_GET, [items_array(type, p)])
+	added_function(p.m, [list_layout(type, p)], [item_layout(type, p)], [], none_left + counted_by(type, -1, p) + last)
+}
+# The helper of array_slice given a list: a new list of `count` items from the place `from`, counted from 0. Its
+# locals: 0 the list, 1 from, 2 count, 3 the new array. A slice past the count raises.
+list_slicing_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	place = slot => local_get(slot) + I32_WRAP_I64
+	checked = count_in(type, 0, p) + place(1) + place(2) + I32_ADD + I32_LT_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
+	copied = place(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [3]) + local_get(3) + i32_const(0) + items_in(type, 0, p) + place(1) + place(2) + instruction(ARRAY_COPY, [array, array])
+	added_function(p.m, [list_layout(type, p), I64, I64], [list_layout(type, p)], [nullable(array)], checked + copied + place(2) + local_get(3) + instruction(STRUCT_NEW, [list_struct(type, p)]))
+}
+# The helper of list_joined: a new list of the first's items, then the second's. Its locals: 0 and 1 the lists, 2 the
+# new array.
+lists_joining_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	total = count_in(type, 0, p) + count_in(type, 1, p) + I32_ADD
+	copied = (at, local) => local_get(2) + at + items_in(type, local, p) + i32_const(0) + count_in(type, local, p) + instruction(ARRAY_COPY, [array, array])
+	made = total + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [2]) + copied(i32_const(0), 0) + copied(count_in(type, 0, p), 1)
+	added_function(p.m, [list_layout(type, p), list_layout(type, p)], [list_layout(type, p)], [nullable(array)], made + total + local_get(2) + instruction(STRUCT_NEW, [list_struct(type, p)]))
+}
+
+# The helpers of map_get and map_set. Their locals: 0 the map, 1 the key, then for map_set 2 the value; the count
+# after them. A map's keys are searched in order, by their type's equality; map_set sets the value of a key it finds,
+# and adds the key and value at the end otherwise.
+map_reading_function(p: Program, map: Node) as int := {
+	found = map_part(MAP_VALUES, map, p) + items_in(values_of(map), ø, p) + local_get(2) + instruction(ARRAY_GET, [items_array(values_of(map), p)]) + RETURN
+	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p)], [item_layout(values_of(map), p)], [I32], key_searched(2, found, map, p) + raised(NO_SUCH_KEY, p))
+}
+map_setting_function(p: Program, map: Node) as int := {
+	found = map_part(MAP_VALUES, map, p) + local_get(3) + local_get(2) + typed_helper_called(LIST_SET, values_of(map), p) + RETURN
+	added = map_part(MAP_KEYS, map, p) + local_get(1) + typed_helper_called(LIST_ADD, keys_of(map), p) + map_part(MAP_VALUES, map, p) + local_get(2) + typed_helper_called(LIST_ADD, values_of(map), p)
+	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p), item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
+}
+# the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
+key_searched(count: int, found: list, map: Node, p: Program) as list := {
+	keys = map_part(MAP_KEYS, map, p)
+	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + equality(item_layout(keys_of(map), p), p)
+	counted(count, keys + count_in(keys_of(map), ø, p), equal + IF + VOID_BLOCK + found + END)
+}
+# a new map of these keys' and values' code
+map_made(map: Node, keys: list, values: list, p: Program) as list := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
+
+# the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
+list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+list_layout(type: Node, p: Program) as list := nullable(list_struct(type, p))
+items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+item_layout(type: Node, p: Program) as list := layout_of(item_type(type), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+# the count or the items array of the list in a local, or of the one on the stack for ø
+count_in(type: Node, local: int?, p: Program) as list := held_list(local) + instruction(STRUCT_GET, [list_struct(type, p), LIST_COUNT_AT])
+items_in(type: Node, local: int?, p: Program) as list := held_list(local) + instruction(STRUCT_GET, [list_struct(type, p), LIST_ITEMS_AT])
+held_list(local: int?) as list := if local == ø then [] else local_get(local)
+# the list in local 0 counted up or down by one
+counted_by(type: Node, step: int, p: Program) as list := local_get(0) + count_in(type, 0, p) + i32_const(step) + I32_ADD + instruction(STRUCT_SET, [list_struct(type, p), LIST_COUNT_AT])
+# a map's struct, a reference to it, the types of its lists of keys and of values, and one of them in the map in local 0
+map_struct(map: Node, p: Program) as int := map_index(map, p.m, p.records) ?? refused(map, "this is no map")
+map_layout(map: Node, p: Program) as list := nullable(map_struct(map, p))
+keys_of(map: Node) as Node := list_type(key_type(map))
+values_of(map: Node) as Node := list_type(held_type(map))
+map_part(at: int, map: Node, p: Program) as list := local_get(0) + instruction(STRUCT_GET, [map_struct(map, p), at])
+# a raise of a message from inside a helper
+raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
