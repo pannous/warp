@@ -236,7 +236,7 @@ get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as No
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
 	binding = text(fact_of(n, BINDING))
-	if binding == BOUND_CASE { return case_typed_as(n, n, [], s) }
+	if binding == BOUND_CASE { return case_call_typed(n, n, [], s, f) }
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY or binding == BOUND_CAPTURE { refused(n, "a function value or a capture comes with closures, not yet") }
 	with_fact(n, TYPE, variable_type(n, s, f) ?? refused(n, "this name is read before any value is given to it"))
 }
@@ -256,7 +256,7 @@ defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "th
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
 case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_named(enum_of(s.records, called), called))
-	if #arguments != #fields { refused(n, "${called} takes ${#fields} values, its fields") }
+	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
 	for at in 1 to #given { if not fits_type(given#at, declared_type(fields#at)) { refused(arguments#at, "this gives ${value_type(given#at) ?? "no value"}, the field holds a ${declared_type(fields#at)}") } }
 	case_typed_as(n, called, given, s)
@@ -265,10 +265,12 @@ case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 	typed = if given is empty and n === called then n else refitted(Call(called, given), n)
 	with_type_of(typed, symbol(record_name(enum_of(s.records, called))))
 }
+field_names(fields: list) as text := fields.map(field => text(declared_name(field))).join(", ")
 # A case pattern with the names its fields fill, `Circle(r)`: each name a variable of its field's type
 case_pattern_typed(pattern: Node, s: TypingState, f: TypeFrame) as Node := match pattern { Call(called, names) => {
 	fields = case_fields(case_named(enum_of(s.records, called), called))
-	if #names != #fields { refused(pattern, "${called} has ${#fields} fields to name") }
+	if #names != #fields { refused(pattern, "${called} names each of its fields: ${field_names(fields)}") }
+	for name in names { match name { Symbol(word) => ø; _ => refused(name, "a case pattern names its fields; matching a field's value comes later") } }
 	for at in 1 to #names { if text(names#at) != WILDCARD { remembered(names#at, declared_type(fields#at), s, f) } }
 	case_typed_as(pattern, called, names, s)
 } }

@@ -236,6 +236,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   of two cases (their tags), `as index` and `as position`, cases with spellings (`Error = "error"`), `2 as Coin`;
   and the union of classes `type Shape = Circle | Square` (Record(Shape, [], [Circle, Square])). Built so far:
   `enum Coin { Penny, Dime }`, cases with fields `Circle(r: int)`, and `match` by case.
+- **Nested case patterns** (card match-field-case): a field pattern that is itself a pattern, `Key(Symbol(n), Op.Colon,
+  v)`, tested by recursing on the field before any name is bound; a case pattern names only its fields so far.
 
 ## Debts
 
