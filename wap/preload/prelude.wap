@@ -80,3 +80,4 @@ text(x: float): text := float_text(x)
 # identical: equal and of one type, so `0 === no` is no where `0 == no` is yes (wiki/Footguns.md)
 ===(a: T, b: T): bool := a == b
 ===(a, b): bool := no
+!==(a, b): bool := not(a === b)

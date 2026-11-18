@@ -45,7 +45,9 @@ f(p: P) := p.x
 print text(f(P(4)) + 1)')" "5"
 check "=== is equal and of one type" "$(ran identical 'print text(1 === 1)
 print text(0 === no)
-print text("ab" === "ab")')" "yes
+print text("ab" === "ab")
+print text(1 !== 2)')" "yes
 no
+yes
 yes"
 exit $((failures > 0))
