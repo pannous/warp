@@ -179,7 +179,7 @@ arm_taken(pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Co
 }
 # whether the held subject fits a pattern: a case by its tag, a literal by equality; yes or no
 pattern_test(pattern: Node, held: Placed, p: Program) as Code := {
-	if is_case(case_name(pattern)) { return Code(I32, fetched(held) + instruction(STRUCT_GET, [struct_of(enum_of(p.records, case_name(pattern)), p.m, p.records), 0]) + i32_const(case_tag(enum_of(p.records, case_name(pattern)), case_name(pattern))) + I32_EQ) }
+	if is_case(case_name(pattern)) { return Code(I32, fetched(held) + tagged(p.m) + i32_const(case_tag(enum_of(p.records, case_name(pattern)), case_name(pattern))) + I32_EQ) }
 	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names, cases and _ so far")
 	Code(I32, fetched(held) + given.instructions + equality(held.type, p))
 }
