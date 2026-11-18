@@ -40,8 +40,9 @@ literal(n: Node, m: Module) as Code? := match n {
 
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
+# a shape, `Record`, laid out as the type it narrows (core/analyze/shapes.wap)
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
-	Symbol(name) => if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
+	Symbol(name) => if fact_of(type_name, NARROWS) != ø then layout_of(fact_of(type_name, NARROWS), m, records) else if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
 	_ => {
 		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? signature_value_index(type_name, m, records) ?? map_index(type_name, m, records)
 		if index == ø then optional_layout(type_name, m, records) else nullable(index)
@@ -115,8 +116,8 @@ LIST_COUNT_AT = 0
 LIST_ITEMS_AT = 1
 # the GC array of a list's items, ø for a type that is no list
 items_index(type: Node, m: Module, records: list) as int? := {
-	item = if item_type(type) == ø then ø else layout_of(item_type(type), m, records)
-	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
+	item = layout_of(item_type(type) ?? return ø, m, records) ?? return ø
+	added_type(m, array_type(field_type(item, MUTABLE)))
 }
 # The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
 # its cases, its tag first; a case with fields extends it with them.

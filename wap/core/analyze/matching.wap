@@ -7,6 +7,9 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "fits.wap"
+use "shapes.wap"
+use "conditions.wap"
+use "dispatch.wap"
 
 # A choice by patterns: each arm's pattern of the subject's type, a name holding the subject; each result expected the
 # Case's type. When the arms fit every value of the subject's type, the Case has the results' joined type; a match on
@@ -14,18 +17,24 @@ use "fits.wap"
 # value is wanted.
 case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	type = value_type(subject) ?? refused(subject, "this gives no value to match")
-	typed = arms.map(arm => arm_typed(arm, type, s, f, expected))
-	results = typed.map(arm => value_type(arm))
+	typed = arms.map(arm => arm_typed(arm, subject, type, s, f, expected))
 	witness = missing(arms.map(arm => [pattern_of(arm)]), [type], s)
+	# a shape's value of another shape, which only a narrowing gone wrong gives, raises naming the match
+	if narrowed_type(type) != ø and witness == ø and not arms.any(arm => fits_any(pattern_of(arm))) { typed = typed + [arm_typed(placed_like(Arm(symbol(WILDCARD), raised(other_shape(type, n), n, s)), n), subject, type, s, f, expected)] }
+	results = typed.map(arm => value_type(arm))
 	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
 	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`") }
 	given = if witness == ø then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_settling(a, b, s)) else ø
 	with_type_of(refitted(Case(subject, typed), n), given)
 }
-arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
+# an arm's result, its variable subject known of the shape a declared pattern's pattern names: `n` a Record in
+# `Record(name, fields, variants) => n`
+arm_typed(arm: Node, subject: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
 	Arm(pattern, result) => {
 		tested = pattern_typed(pattern, type, s, f)
-		given = typed_form(result, s, f, expected)
+		shape = if fact_of(pattern, SHAPE_OF) == ø then ø else shaped(symbol(text(fact_of(pattern, SHAPE_OF))), s)
+		known = if shape != ø and is_variable(subject) and narrowed_type(shape) != ø then [[place_key(defined_at(subject)), shape]] else []
+		given = present_typed(result, known, s, f, expected)
 		with_type_of(refitted(Arm(tested, given), arm), value_type(given))
 	}
 }
@@ -36,12 +45,25 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 		if pattern != symbol(WILDCARD) { remembered(pattern, type, s, f) }
 		return pattern
 	}
+	if narrowed_type(type) != ø { return shape_pattern_typed(pattern, type, s, f) }
 	if list_pattern_items(pattern) != ø { return list_pattern_typed(pattern, type, s, f) }
 	# a case of an optional's value: `Text(name)` fits a Node? holding a text node, never ø
 	if base_of_optional(type) != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base_of_optional(type), s, f) }
 	tested = if pattern is Call then case_pattern_typed(pattern, type, s, f) else if is_case_name(pattern) then case_in_enum_typed(in_enum(pattern, type, s), s) else typed_form(pattern, s, f, type)
 	if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit a value of type ${type}") }
 	tested
+}
+# A pattern of a shape's value, `Record(name, fields, variants)` of a Record, as one of the type the shape narrows; a
+# declared pattern's holes named in it hold their holes' types, `fields` a List
+shape_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
+	form = form_named(type, s)
+	if form != ø {
+		parts = form_parts(form_taken(form), pattern) ?? []
+		holes = hole_types(form, s)
+		# known before the pattern binds them as the narrowed type's parts: a variable's first type is its type
+		for at in 1 to #parts { if fits_any(parts#at) and parts#at != symbol(WILDCARD) { remembered(parts#at, holes#at, s, f) } }
+	}
+	with_type_of(pattern_typed(pattern, narrowed_type(type), s, f), type)
 }
 # A list pattern of a list's type: each item's pattern of its item type, a last `...name` holding the items after them
 list_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
@@ -59,18 +81,34 @@ rest_typed(rest: Node, last: bool, type: Node, s: TypingState, f: TypeFrame) as 
 # other column keeps only the rows whose pattern there fits any value.
 missing(rows: list, types: list, s: TypingState) as list? := {
 	if types is empty { return if rows is empty then [] else ø }
+	if narrowed_type(types#1) != ø { return shape_missing(rows, types, s) }
 	if item_type(types#1) != ø and rows.any(row => list_pattern_items(row#1) != ø) { return list_missing(rows, types, s) }
 	record = record_named(s.records, types#1)
 	if record == ø or cases_of(record) is empty or rows.all(row => fits_any(row#1)) {
 		rest = missing(rows.filter(row => fits_any(row#1)).map(row => row[1 ..]), types[1 ..], s)
 		return if rest == ø then ø else [symbol(WILDCARD)] + rest
 	}
-	for case in cases_of(record) {
+	cases_missing(rows, types, cases_of(record), s)
+}
+# the values of these cases no row fits, split by case, each case's fields joining the patterns
+cases_missing(rows: list, types: list, cases: list, s: TypingState) as list? := {
+	for case in cases {
 		fields = case_fields(case)
 		inner = missing(rows.filter(row => fits_any(row#1) or text(case_name(row#1)) == text(case_name(case))).map(row => opened(row, #fields)), fields.map(declared_type) + types[1 ..], s)
 		if inner != ø { return [if fields is empty then case_name(case) else Call(case_name(case), inner[.. #fields])] + inner[#fields ..] }
 	}
 	ø
+}
+# The values of a shape no row fits: a case's, as its one case; a declared pattern's, by the patterns at its holes, of
+# its holes' types (a row of another shape is left out)
+shape_missing(rows: list, types: list, s: TypingState) as list? := {
+	form = form_named(types#1, s)
+	if form == ø { return cases_missing(rows, types, cases_of(record_named(s.records, narrowed_type(types#1))).filter(case => text(case_name(case)) == text(types#1)), s) }
+	holes = hole_types(form, s)
+	taken = form_taken(form)
+	kept = rows.filter(row => fits_any(row#1) or form_parts(taken, row#1) != ø)
+	inner = missing(kept.map(row => (if fits_any(row#1) then wildcards(#holes) else form_parts(taken, row#1) ?? []) + row[1 ..]), holes + types[1 ..], s)
+	if inner == ø then ø else [Call(symbol(text(types#1)), inner[.. #holes])] + inner[#holes ..]
 }
 # a row with its first pattern opened into patterns of the case's fields: a name, `_` or a bare case fits each
 opened(row: list, count: int) as list := (if row#1 is symbol then wildcards(count) else pattern_parts(row#1)) + row[1 ..]
