@@ -113,7 +113,8 @@ names_case(name: Node, scope: list) as bool := {
 # whether a name means functions and no type: a type's word is a type test even beside a function of that name,
 # `3 is int` beside int(t: text)
 names_predicate(name: Node, scope: list) as bool := {
-	if TYPE_WORDS.contains(text(name)) { return no }
+	# a type's or a declared pattern's name after `is` is its test, never a call of its builder: `n is Record`
+	if TYPE_WORDS.contains(text(name)) or shape_called(name, scope) { return no }
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
 }
