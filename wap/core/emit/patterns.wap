@@ -23,17 +23,17 @@ arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code :=
 	if arms is empty { return if fact_of(form, TYPE) == ø then Code() else Code(NEVER, UNREACHABLE) }
 	match arms#1 {
 		Arm(pattern, result) => {
-			if names_any(pattern) or #arms == 1 and fact_of(form, TYPE) != ø and only_names(pattern, p) { return arm_taken(pattern, result, held, p, f) }
+			if names_any(pattern) or #arms == 1 and fact_of(form, TYPE) != ø and only_names(pattern, p) { return arm_taken(form, pattern, result, held, p, f) }
 			test = Code(I32, pattern_test(pattern, fetched(held), held.type, p))
-			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(form, pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
 		}
 	}
 }
-# an arm's result, after the names of its pattern are given their parts of the subject. The last arm of a Case that
+# an arm's result, after the names of its pattern are given their parts of the subject, made to fit the Case's type. The last arm of a Case that
 # names every case always fits when its fields are only names, untested
-arm_taken(pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Code := {
+arm_taken(form: Node, pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Code := {
 	named = names_held(pattern, fetched(held), held.type, p, f)
-	given = code(result, p, f)
+	given = choice_fitted(form, code(result, p, f), result, p)
 	Code(given.type, named + given.instructions)
 }
 # a pattern that fits any value: a name, or _

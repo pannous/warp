@@ -328,3 +328,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   the wasm does not validate; `m#"bb"`, `m["b"]` and `m#k` work. Edge case, no wap source writes it.
 - **any compares other references by identity:** inside an `any`, refs other than boxes and texts compare by
   identity (a record compared directly compares by fields); by type via dispatch, as show does, when code needs it.
+- **The preload copies core/node.warp's enums instead of reading the file** (wap/preload/nodes.wap). wap reads
+  core/node.warp whole, but its `List(items: list, …)` gives an untyped list whose items wap can't read (`data#1` is
+  refused: no # takes (list, int)). Reading it needs a bare `list` to mean list<any> and an `any` read back as a Node by
+  a match. Until then nodes.wap types the items list<Node>, and the two copies must change together.

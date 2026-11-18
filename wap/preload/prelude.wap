@@ -81,6 +81,8 @@ text(t: text): text := t
 text(n: int): text := prim int_text(n)
 text(c: char): text := prim char_text(c)
 text(b: bool): text := if b then "yes" else "no"
+# an optional's text: its value's, or ø when it is missing
+text(x: T?): text := if missing(x) then "ø" else text(x!)
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes

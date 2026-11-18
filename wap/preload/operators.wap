@@ -153,5 +153,5 @@ aliases = [
 	Alias("true", "yes"), Alias("false", "no"),
 	Alias("null", "ø"), Alias("nil", "ø"), Alias("none", "ø"), Alias("nothing", "ø"), Alias("void", "ø"),
 	# types
-	Alias("string", "text"), Alias("str", "text"), Alias("integer", "int"), Alias("boolean", "bool"),
+	Alias("string", "text"), Alias("str", "text"), Alias("integer", "int"), Alias("boolean", "bool"), Alias("codepoint", "char"),
 ]
