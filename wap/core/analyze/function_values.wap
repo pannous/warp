@@ -1,0 +1,67 @@
+# Function values in the typing stage (core/analyze/types.wap): `x => x + 1` and a function's name as values. Each
+# has a type of its own, fn<key, capture types…> (core/stage.wap function_value_type), naming the function a call of
+# the value calls, so that call is a direct call, typed for its arguments like any other (core/analyze/calls.wap).
+# A function value's own function, its λ, takes the value as its first parameter, a struct of what it captures.
+
+use "types.wap"
+use "calls.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the names of a function value's own function and of its first parameter, the value itself
+LAMBDA_NAME = "λ"
+CLOSURE_NAME = "closure"
+
+# A function value, `x => x + 1`: a function of its own, typed when a call of the value reaches it, whose first
+# parameter is the value itself, holding the captures: the variables of the functions around it that it reads. Its
+# type is its own, naming that function and the captures' types here, so a call of the value is a call of it.
+function_value_typed(n: Node, parameters: Node, body: Node, s: TypingState, f: TypeFrame) as Node := {
+	lambda = lambda_of(n, parameters, body, s)
+	captures = captures_of(n).map(definer => type_keyed(place_key(definer), f.variables) ?? refused(definer, "a function value reads this before any value is given to it"))
+	s.captured += captures_of(n).map(place_key)
+	with_type_of(n, function_value_type(function_key_of(lambda), captures))
+}
+# the function of a function value, made once: named and placed where the value is written
+lambda_of(n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
+	name = placed_like(symbol(LAMBDA_NAME), n)
+	definition_keyed(place_key(name), s) ?? lambda_made(name, n, parameters, body, s)
+}
+lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
+	lambda = refitted(Define(name, with_items(parameters, [placed_like(symbol(CLOSURE_NAME), n)] + items_of(parameters)), body), n)
+	s.lambdas += [lambda]
+	s.definitions += [lambda]
+	lambda
+}
+# The captures a function value's function reads, each [key, type], from its first parameter, the value; none for a
+# function of no function value
+captured_by(definition: Node, types: list) as list := {
+	parts = if types is empty then ø else function_value_parts(types#1)
+	captures = captures_of(definition)
+	if parts == ø or text(parts#1) != function_key_of(definition) or captures is empty { return [] }
+	(1 to #captures).map(at => [place_key(captures#at), parts#(at + 1)])
+}
+# A call of a function value, `f(x)` where f holds `y => y + 1` or a function's name: a call of the value's function,
+# a function value's own one taking the value as its first argument
+value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	type = value_type(typed_form(called, s, f, ø))
+	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
+	key = text(parts#1)
+	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
+	name = declared_name(written_name(definition))
+	given = if s.lambdas.any(lambda => function_key_of(lambda) == key) then [called] + arguments else arguments
+	call_typed(n, with_fact(with_fact(name, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, name), given, s, f, expected)
+}
+# A function's name as a value, `apply(inc, 2)`: of a type of its own like a function value's, capturing nothing, so a
+# call of the value is a call of that function; a name of several functions is one only for a written function type
+function_named_typed(n: Node) as Node := {
+	if fact_of(n, CANDIDATES) != ø { refused(n, "several functions have this name; a value of one of them comes with written function types, not yet") }
+	with_type_of(n, function_value_type(place_key(defined_at(n)), []))
+}
+# whether what a call calls is a value, a name holding one or any other code giving one, `make(1)(2)`, rather than a
+# function's name
+holds_value(called: Node) as bool := not called is symbol or fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
+# whether a value given to a name changes a variable a function value has captured
+changes_capture(name: Node, s: TypingState) as bool := {
+	place_key(defined_at(name)) in s.captured and not is_definer(name)
+}

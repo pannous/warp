@@ -229,13 +229,25 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open, not built yet
 
+- **Methods, the rest of wiki/class.md:** bare field names inside a method reading and writing the receiver
+  (`inc() := { c = c + 1 }`; scope's, binding a bare name to `self.c`), a getter without parentheses
+  (`double := v * 2`), defaults (`n: int = 1`), `init`, and `extends`. Built: methods written after a class's fields,
+  each a function taking `self` first, so `b.area()` and `b.area` both call it.
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
 - **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
+- **Enums, the rest of wiki/enum.md:** `as index` and `as position`, cases with spellings (`Error = "error"`),
+  `2 as Coin`, and `==` of cases with fields (by their fields). Built so far: `enum Coin { Penny, Dime }`, cases with
+  fields `Circle(r: int)`, a case named by its enum (`Coin.Dime`, and `Coin::Dime` its alias), `match` by case with
+  patterns in the fields (`Two(Circle(r), 0)`), `x is Circle`, `Dime is Coin`, and `==` of a plain enum's cases.
 
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)
+
+- **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
+  program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
+  example the preload's `slice` taking a Range and raising when it does not fit.
 
 - **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
@@ -262,10 +274,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
-- **`wap format` does not spell out a rule head's grouping inside a phrase**: `print if c then a else b` is read as
-  `print (if c then a else b)` by the shape stage (core/rules/stages.wap inner_rewritten), but format prints it as
-  written. Bends "a reading decided by spacing or position is printed explicitly", as `print -x` is. Reason: format
-  runs before the shape rules. Paid off when format reads the rules' groupings.
 - **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
   gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
   wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.
@@ -284,14 +292,19 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
-- **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
-  the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
+- **Ints have no `÷` or `%` yet** (wap/preload/floats.wap holds only the truncated quotient and rem, which programs do
+  not see): warp's `÷` and its floored `%` (`-7 % 2` is 1) are to be defined on top of them, and `quotient` is warp's
+  exact division (3.5), so the truncated one keeps that name hidden. Paid off when the preload defines `÷` and `%`.
 - **A module's rules reach files that don't `use` it** (wap/core/rules/stages.wap `shape_rules`). All loaded rules go
   into one table, so once a module is shaped its rules also apply to every file shaped after it, the preload's and
   the census's included. Bends "use builds the language the program is written in": the scope should follow `use`.
   Paid off by a rule table per program, the language's rules plus those of the modules it uses.
 - **Each function value is a type of its own** (wap/core/analyze/types.wap `function_value_typed`): a call of a value
   calls its one function directly, typed for that call's arguments, so a variable or a parameter holds one `x => …`
-  only, and an `if` choosing between two function values gives none; a function's name is no value yet. Its captures
+  only, and an `if` choosing between two function values gives none; a function's name is a value the same way, one
+  of several overloads not yet. Its captures
   are copied when it is made, so a change of one afterwards is refused. Paid off by function references (a funcref
   beside the captures, call_ref), for values chosen at run time.
+- **Protocols are declared, not yet used** (`trait`): a place typed by a trait is refused by the emitter (no layout
+  for a function-typed field) and a class given to it is refused by typing (no structural fit yet). Paid off by the
+  owners of core/emit/ and core/analyze/ (asked 2026-11-18); `map default ListMap` waits for maps and class methods.

@@ -1,2 +1,5 @@
 # Types written in words, as their bracketed form (wiki/type.md; the wiki's main spelling): `list of int` is list<int>
 rule list of $item => list<$item>
+# a trait (wiki/trait.md), a Record of function-typed fields and no values: `trait shape { area(); scaled(by) }` is
+# Record(shape, [area: () -> any, scaled: (by) -> any], []); a class fits it by having each word (structurally)
+rule trait $name { ($word($parameters...))... } => Record($name, [($word: (($parameters...) -> any))...], [])

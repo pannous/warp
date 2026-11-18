@@ -26,7 +26,8 @@ PROGRAM_DEPTH = 0
 LIBRARY_DEPTH = -1
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
-class Definition { name: text; kind: text; definer: Node; depth: int }
+# (owner: a case's enum)
+class Definition { name: text; kind: text; definer: Node; depth: int; owner: text = "" }
 
 # the program bound inside the library, whose declarations (`name: signature`) it may use
 bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.map(library_word), PROGRAM_DEPTH))
@@ -40,7 +41,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
-	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Call(called, arguments) => if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
@@ -48,7 +49,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
 	Continue() => n
-	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
@@ -64,13 +65,33 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 # An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
 arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
 	Arm(pattern, result) => {
-		inner = pattern_variables(pattern, depth) + scope
-		refitted(Arm(if pattern is symbol and text(pattern) != WILDCARD then resolved(pattern, inner, depth) else pattern, bound(result, inner, depth)), arm)
+		inner = pattern_variables(pattern, scope, depth) + scope
+		refitted(Arm(pattern_bound(pattern, inner, depth), bound(result, inner, depth)), arm)
 	}
 }
+# a pattern's names bound: a case, `Dot`, or a case with the variables its fields fill, `Circle(r)`; `_` names none
+pattern_bound(pattern: Node, scope: list, depth: int) as Node := match pattern {
+	Symbol(name) => if name == WILDCARD then pattern else pattern_name_bound(pattern, scope, depth)
+	Call(called, fields) => refitted(Call(pattern_name_bound(called, scope, depth), fields.map(field => pattern_bound(field, scope, depth))), pattern)
+	Get(subject, key) => bound(pattern, scope, depth)
+	_ => pattern
+}
+# A name in a pattern: a case binds as one even when two enums have a case of that name, as the subject's enum picks
+# among them (core/analyze/types.wap pattern_typed); any other name as anywhere
+pattern_name_bound(name: Node, scope: list, depth: int) as Node := {
+	if not names_case(name, scope) { return resolved(name, scope, depth) }
+	with_fact(with_fact(name, BINDING, symbol(BOUND_CASE)), DEFINED_AT, definitions_meant(text(name), scope)#1.definer)
+}
+# whether a name means a case of an enum where it stands
+names_case(name: Node, scope: list) as bool := {
+	meant = definitions_meant(text(name), scope)
+	not meant is empty and meant#1.kind == BOUND_CASE
+}
 arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
-pattern_variables(pattern: Node, depth: int) as list := match pattern {
-	Symbol(name) => if name == WILDCARD then [] else [Definition(name, local_kind(depth), pattern, depth)]
+pattern_variables(pattern: Node, scope: list, depth: int) as list := match pattern {
+	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
+	Call(called, fields) => fields.flat_map(field => pattern_variables(field, scope, depth))
+	Get(subject, key) => []
 	Number(value) => []
 	Text(value) => []
 	Char(value) => []
@@ -80,6 +101,14 @@ pattern_variables(pattern: Node, depth: int) as list := match pattern {
 	_ => refused(pattern, "wap matches literals, names and _ so far")
 }
 
+# A type test, `x is T`: its value bound, its type a case, which binds as one, or a type's name, which stays a name as
+# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap)
+is_type_test(called: Node, scope: list) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
+type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node := {
+	tested = arguments#2
+	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
+	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
+}
 # an instance's field, `x: 1`: its value bound, its name the record's field, no variable
 field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
@@ -151,6 +180,7 @@ defined_in(statements: list, scope: list, depth: int) as list := {
 }
 definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
+	Record(name, fields, variants) => cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth, text(name)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
@@ -198,9 +228,32 @@ resolved(name: Node, scope: list, depth: int) as Node := {
 	meant = definitions_meant(text(name), scope)
 	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
 	innermost = meant#1
+	if innermost.kind == BOUND_CASE { unambiguous_case(name, innermost, scope) }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
 	bound = with_fact(name, BINDING, symbol(kind))
-	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(meant.map(definition => definition.definer), Bracket.Square, Separator.Comma))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
+}
+# the depths of these definitions, each once, innermost first as they come
+depths_of(definitions: list) as list := {
+	depths = []
+	for definition in definitions { if not depths.contains(definition.depth) { depths = depths + [definition.depth] } }
+	depths
+}
+# A case named by its enum, `Side.Right`: that enum's case, bound as the bare name `Right` would be; ø for any other
+# part of a value
+qualified_case(n: Node, subject: Node, key: Node, scope: list) as Node? := {
+	if not subject is symbol or not key is text or not definitions_meant(text(subject), scope) is empty { return ø }
+	for definition in scope {
+		if definition.kind == BOUND_CASE and definition.name == text(key) and definition.owner == text(subject) {
+			return with_fact(with_fact(placed_like(symbol(text(key)), n), BINDING, symbol(BOUND_CASE)), DEFINED_AT, definition.definer)
+		}
+	}
+	ø
+}
+# a bare case name two enums share reads two ways: refused naming both
+unambiguous_case(name: Node, meant: Definition, scope: list) := {
+	owners = scope.filter(definition => definition.kind == BOUND_CASE and definition.name == text(name)).map(definition => definition.owner)
+	if #owners > 1 { refused(name, "${name} is a case of each of ${owners.join(", ")}: write ${owners.map(owner => owner + "." + text(name)).join(" or ")}") }
 }
 # The definitions a name may mean, innermost first: the one it finds, or, when that is a function, every function of
 # that name around it, its overloads, up to a variable of that name, which hides the rest. The typing stage picks

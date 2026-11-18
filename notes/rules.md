@@ -20,7 +20,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 - **Heads of glued calls:** `f(x)` is indexed under `f Round`, then `glued Round`; a template's glued call of a kernel
   form, `Get($xs, $i)`, counts under the form's name, as `(Get …)` does.
 - **Rule heads inside a phrase:** a phrase no rule fits whole, whose later word heads a rule fitting from there on,
-  groups that part as the earlier words' last argument, as `print -x` does: `print if c then a else b`.
+  groups that part in round brackets as the earlier words' last argument, as `print -x` does: `print if c then a else
+  b` is `print (if c then a else b)`, which `wap format` prints (stages.wap groupings_written).
 - **The rest of the If row:** `c ? a : b` (the operator table's choice: the colon closes `?`, below every operator,
   above a spaced call, so `print c ? a : b` is print(c ? a : b)) and
   `print "a" if c` (core/sugar/conditions.wap).
@@ -50,5 +51,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
+- A for loop over a Range held in a name, `r = 1 to 3; for i in r {…}`: the list for rule takes it first; needs a
+  rule chosen by the value's type (stage 3) or Range read by position. Slices (`xs#(2 to 3)`, `xs[1 ..]`) wait for a
+  primitive that makes a list (asked of warp-wap-emitter).
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.

@@ -16,6 +16,7 @@ format_check 'f = x => x' 'f = x => x'
 format_check 'f: (int)->int' 'f: (int) -> int'
 format_check 'x  +=1' 'x += 1'
 format_check 'x = c?1 : 2' 'x = c ? 1 : 2'
+format_check 'print if c then 1 else 2' 'print (if c then 1 else 2)'
 format_check 'not a and b' 'not a and b'
 # the minus rule: spacing decides prefix or infix, and format spells the reading out
 format_check '[a -1]' '[a, -1]'
@@ -37,4 +38,9 @@ format_check 'total := fold +' 'total := fold +'
 # a function's result type prints after `as`, the canonical word (wiki/function.md); a typed name keeps its `:`
 format_check 'twice(x): int := x * 2' 'twice(x) as int := x * 2'
 format_check 'x: int := 3' 'x: int := 3'
+format_check 'x: int = 3' 'x: int = 3'
+# a case named by its enum, either way (wiki/enum.md)
+format_check 'Coin::Dime' 'Coin.Dime'
+format_check 'x = p . x+1' 'x = p.x + 1'
+format_check 'rule show { ($k: $v)... } => 1' 'rule show {($k: $v)...} => 1'
 exit $((failures > 0))

@@ -50,7 +50,10 @@ INSTRUCTIONS = {
 	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
 	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
 	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
-	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
+	"i64_div_s": I64_DIV_S, "i64_rem_s": I64_REM_S, "f64_neg": F64_NEG, "f64_floor": F64_FLOOR, "f64_ceil": F64_CEIL,
+	"i64_trunc_f64_s": I64_TRUNC_F64_S, "f64_convert_i64_s": F64_CONVERT_I64_S,
+	"i64_reinterpret_f64": I64_REINTERPRET_F64, "f64_reinterpret_i64": F64_REINTERPRET_I64,
+	"array_len": ARRAY_LEN + I64_EXTEND_I32_U, "i64_extend_i32_u": I64_EXTEND_I32_U, "i32_wrap_i64": I32_WRAP_I64
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
 # primitives call, before any function of its own.
@@ -65,7 +68,11 @@ HOST_FUNCTIONS = {
 host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function, "tag_equal": tag_equality_function}
+# The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
+# instructions after the operands, and the helpers they call, one for each array type
+ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
+ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -73,9 +80,23 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	name = text(operation)
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
-	if HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])]))) }
+	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
+	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
+	if ARRAY_HELPERS.has(name) {
+		array = array_operand(form, arguments)
+		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
+	}
 	refused(form, "no primitive of this name")
 }
+# the array type of a primitive's first operand
+array_operand(form: Node, arguments: list) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
+# a packed array's item at a place counted from 0, an unsigned byte as an int
+unsigned_item(form: Node, array: int, p: Program) as list := {
+	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
+	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
+}
+# the code of a primitive its helper function performs
+helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the instructions that compare two values of one type on the stack, giving yes or no
 equality(type: list, p: Program) as list := {
 	if type == I64 { return I64_EQ }
@@ -159,15 +180,33 @@ text_equality_function(p: Program) as int := {
 	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
 }
 
-# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
-# new one.
-joining_function(p: Program) as int := {
-	type = text_type(p.m)
-	bytes_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
+# The helper of tag_equal: yes when two cases of an enum have one tag
+tag_equality_function(p: Program) as int := {
+	base = nullable(enum_base(p.m))
+	added_function(p.m, [base, base], [I32], [], instruction(LOCAL_GET, [0]) + tagged(p.m) + instruction(LOCAL_GET, [1]) + tagged(p.m) + I32_EQ)
+}
+
+# The helper of text_joined: a new text of the first's bytes, then the second's
+joining_function(p: Program) as int := arrays_joining_function(p, text_type(p.m))
+# The helper of array_joined and text_joined: a new array of the first's items, then the second's. Its locals: 0 and
+# 1 the arrays, 2 the new one.
+arrays_joining_function(p: Program, type: int) as int := {
+	items_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
 	joined = instruction(LOCAL_GET, [2])
-	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
-	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
-	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
+	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + items_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = items_in(0) + items_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(items_in(0), 1) + joined)
+}
+
+# The helper of array_slice(xs, from, count): a new list of count items of xs, from the place `from` counting from 0.
+# Its locals: 0 the list, 1 from, 2 count, 3 the new list. A slice past the end traps.
+slicing_function(p: Program, type: int) as int := {
+	given = nullable(type)
+	place = local => instruction(LOCAL_GET, [local]) + I32_WRAP_I64
+	sliced = instruction(LOCAL_GET, [3])
+	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [3])
+	copied = sliced + i32_const(0) + instruction(LOCAL_GET, [0]) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
+	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
 }
 
 # The helper of int_text: an int's digits, written from the last into a buffer, then copied into a text of their

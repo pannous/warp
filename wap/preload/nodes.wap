@@ -1,0 +1,61 @@
+# The preload's node (notes/wap.md "Layers"): warp's Node, declared case for case as core/node.warp declares it, so
+# wap's own source reads the same under both compilers, and the words over it in plain warp: a node's position and
+# facts, a symbol by its name. A Meta node's data is the list [line, column, facts…] (warp's runtime keeps the same
+# three in its own Meta layout).
+
+enum Node {
+	True
+	False
+	Empty
+	Number(value: number)
+	Char(value: codepoint)
+	Text(value: text)
+	Symbol(name: text)
+	Error(node: Node)
+	Key(left: Node, op: Op, right: Node)
+	List(items: list, bracket: Bracket, separator: Separator)
+	Data(value: any)
+	Meta(node: Node, data: Node)
+	Type(name: Node, body: Node)
+}
+
+# the place of a Meta node's line and column in its data, the facts after them
+META_LINE = 1
+META_COLUMN = 2
+META_FACTS = 3
+# a node marked with facts but written nowhere has line 0, so no position
+NO_LINE = 0
+
+# the symbol of a name: `symbol("x")` is the word x
+symbol(name: text): Node := Symbol(name)
+
+# where n was written, ø for a node without a position
+line_of(n: Node) := written_part(n, META_LINE)
+column_of(n: Node) := written_part(n, META_COLUMN)
+written_part(n: Node, place: int) := match n {
+	Meta(node, List(data, bracket, separator)) => if number_in(data#META_LINE) == NO_LINE then ø else number_in(data#place)
+	_ => ø
+}
+number_in(n: Node) := match n {
+	Number(value) => value
+	_ => ø
+}
+# n where it was written, its facts kept
+positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
+
+# the facts a stage marked n with, and n with one more
+attributes_of(n: Node): list := match n {
+	Meta(node, List(data, bracket, separator)) => data[META_FACTS - 1 ..]
+	_ => []
+}
+with_attribute(n: Node, fact: Node): Node := match n {
+	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
+	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
+}
+
+# the node a Meta wraps, any other node itself
+unwrapped(n: Node): Node := match n {
+	Meta(node, data) => node
+	_ => n
+}
+meta_data(line: int, column: int, facts: list): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
