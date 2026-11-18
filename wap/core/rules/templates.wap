@@ -12,8 +12,10 @@ use "../../kernel/forms.wap"
 
 FRESH_MARK = "·"
 
-# the template with each hole replaced by its binding
-built(template: Node, bindings: map) as Node := match template {
+# the template with each hole replaced by its binding; a template that is a repetition, `($m := $b)...`, the statements
+# it writes, spliced where it stands
+built(template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(template, bindings)
+filled(template: Node, bindings: map) as Node := match template {
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
 		pattern = pattern_called(head)
@@ -42,7 +44,7 @@ built_items(items: list, bindings: map) as list := {
 	all = []
 	for item in items {
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
-			match bindings[hole_key(item)] { List(taken, bracket, separator) => all = all + taken; _ => all.add(bindings[hole_key(item)]) }
+			all = all + items_taken(bindings[hole_key(item)])
 		} else if repeated_part(item) != ø {
 			all = all + repeated(repeated_part(item), bindings)
 		} else {
