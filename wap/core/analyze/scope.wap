@@ -52,6 +52,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Break() => n
 	Continue() => n
 	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	Item(subject, key) => refitted(Item(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)

@@ -211,7 +211,9 @@ groupings_written(n: Node) as Node := match n {
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
 # statements with each statement sequence among them, one a rule wrote, `A; B`, joined in its place
-spliced(statements: list) as list := statements.map(statement => match statement { List(items, Bracket.None, Separator.Semicolon) => items; List(items, Bracket.None, Separator.Newline) => items; _ => [statement] }).fold([], (a, b) -> a + b)
+spliced(statements: list) as list := statements.flat_map(statement => match statement { List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) then items.map(item => with_rule_of(item, statement)) else [statement]; _ => [statement] })
+# a spliced statement keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
+with_rule_of(item: Node, sequence: Node) as Node := if fact_of(sequence, RULE) == ø then item else with_fact(item, RULE, fact_of(sequence, RULE))
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
 
 rewritten(rules: Rules, n: Node, fired: list) as Node := {

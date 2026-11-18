@@ -151,8 +151,17 @@ parts_of_type(word: text, type: Node?) as list? := match type {
 	_ => ø
 }
 # any type's word and parts, `list` and `int` of `list<int>`; ø for a type without parts
-type_parts(type: Node?) as list? := match type {
+type_parts(type: Node?) as list? := if base_of_optional(type) != ø then [symbol(OPTIONAL_MARK), base_of_optional(type)] else match type {
 	Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
+	_ => ø
+}
+# a type built back from its word and parts, as type_parts gives them
+type_built(word: text, parts: list) as Node := if word == OPTIONAL_MARK then optional_type(parts#1) else generic_type(word, parts)
+# An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
+OPTIONAL_MARK = "?"
+optional_type(base: Node) as Node := if base_of_optional(base) != ø then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
+base_of_optional(type: Node?) as Node? := match type {
+	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
 	_ => ø
 }
 # a list's TYPE, `list<int>`, and its item type, ø for any other type

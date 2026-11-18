@@ -50,4 +50,8 @@ print text(1 !== 2)')" "yes
 no
 yes
 yes"
+check "an optional int takes an int or ø, its value read where a condition found it present, ?? giving a default" "$(ran optional 'f(x: int?) := if x != ø then x + 1 else 0
+print text(f(4) + f(ø))
+print text(ø ?? 3)')" "5
+3"
 exit $((failures > 0))
