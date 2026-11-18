@@ -73,7 +73,8 @@ repeated(part: Node, bindings: map) as list := {
 	for hole in sequences { bindings.remove(hole) }
 	written
 }
-items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; _ => [taken] }
+# what a rest or repetition took; none taken is Empty, as the host gives an empty list
+items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; Empty => []; _ => [taken] }
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.
