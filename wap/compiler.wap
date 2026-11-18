@@ -52,7 +52,9 @@ preload_modules = modules_used(preload, declared) + [preload]
 # a file's text read, its operators read, its spellings rewritten by the shape rules, then declared
 declared(file: text) as Node := declared_program(shaped_program(operated_program(notation(read(file), file))))
 # declared code lowered and bound inside the preload's declarations and those of the modules it uses
-prepared(code: Node, modules: list) as Block := bound_program(lowered_program(code), library + uses_of(code).flat_map(file => declarations_of(module_of(file, modules))))
+prepared(code: Node, modules: list) as Block := bound_program(lowered_program(code), library_around(code) + uses_of(code).flat_map(file => declarations_of(module_of(file, modules))))
+# the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
+library_around(code: Node) as list := if code == preload then [] else library
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
 # functions are there for any caller; typed, then rewritten by the typed rules
 compiled(file: text) as list := {
