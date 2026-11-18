@@ -1,0 +1,62 @@
+# The reader's state and its tokens (core/parse/reader.wap): text → tokens, the place reading is at, each token
+# made where it was written with the comments waiting for it, and the first thing that cannot be read.
+
+use "../stage.wap"
+
+# a token: an atom (its node; a bracket's list has its bracket), an opening or closing bracket, a separator or a key's
+# `:` or `=` (its op), with the blank before it
+enum LexemeKind { Atom, Open, Close, Separator, Key }
+class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon; written: text = "" }
+
+class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty; angle_closers: list<int> = [] }
+
+# the character `ahead` of the reader's place, a newline past the end
+peek(r: Reader, ahead: int) as text := peek_at(r, r.at + ahead)
+peek_at(r: Reader, at: int) as text := if at < r.n then r.code[at] else "\n"
+
+# the token of a list at `i` (from 0), the last one
+token_at(tokens: list, i: int) as Lexeme := tokens[i]
+last_of(tokens: list) as Lexeme := tokens.last
+
+# the text from `start` to `end` (code points, from 0)
+slice_of(r: Reader, start: int, end: int) as text := r.code[start .. end].join("")
+
+column(r: Reader) as int := r.at - r.line_start + 1
+
+# a token of `width` characters at the reader's place
+token(r: Reader, kind: LexemeKind, node: Node, width: int) := added(r, kind, node, r.line, column(r), r.at + width)
+
+# a token written at line:column, the reader going on at `end`; an atom takes the comments waiting before it
+added(r: Reader, kind: LexemeKind, node: Node, line: int, column: int, end: int) := {
+	t = Lexeme{kind: kind, node: node, bracket: Bracket.None, separator: Separator.None, glued: not r.blank, line: line, column: column}
+	if kind == LexemeKind.Atom {
+		t.node = commented(positioned(node, line, column), r.comments)
+		r.comments = []
+		r.line_atom = t
+	}
+	r.tokens += [t]
+	r.at = end
+	r.blank = no
+}
+
+# the last token so far, ø before the first
+last_token(r: Reader) as Lexeme? := if r.tokens.length > 0 then last_of(r.tokens) else ø
+
+# the first thing the reader cannot read, kept with what was written there
+failed(r: Reader, why: text) := failed_at(r, why, r.line, column(r))
+failed_at(r: Reader, why: text, line: int, column: int) := {
+	if r.error != "" { return ø }
+	r.error = why
+	r.failure = positioned(Text(slice_of(r, r.at, min(r.at + 10, r.n))), line, column)
+}
+
+commented(n: Node, comments: list) as Node := {
+	if comments.length == 0 { return n }
+	earlier = fact_of(n, "comment")
+	all = if earlier == ø then comments else [text(earlier)] + comments
+	with_fact(n, "comment", Text(all.join("\n")))
+}
+
+# a node placed where it was written, when that is known; an empty `{}` or `()` is Empty in warp's Node and carries
+# no metadata
+placed(n: Node, line: int?, column: int?) as Node := if n == ø or line == ø then n else positioned(n, line, column)

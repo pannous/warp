@@ -57,7 +57,8 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 	spelling = formatted(called)
 	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
 		left = if spelling == DEFINE_SPELLING then definition_head_text(arguments#1) else operand_text(arguments#1, call, Side.Left)
-		return left + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
+		gap = if group_of(spelling, Fixity.Infix) == glue_group then "" else " "
+		return left + gap + spelling + gap + operand_text(arguments#2, call, Side.Right)
 	}
 	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" {
 		gap = if is_word(spelling) then " " else ""

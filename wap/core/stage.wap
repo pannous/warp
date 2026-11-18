@@ -136,23 +136,28 @@ captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
 TYPE = "type"
 SIGNATURE = "signature"
-# a list's TYPE as the reader reads `list<int>`: the word list glued to its item type in angle brackets
+# A type with parts, as the reader reads `list<int>` or `map<text, int>`: its word glued to the parts' types in angle
+# brackets; parts_of_type gives the parts back, ø for a type of another word
+generic_type(word: text, parts: list) as Node := Key(symbol(word), Op.None, List(parts, Bracket.Less, if #parts > 1 then Separator.Comma else Separator.None))
+parts_of_type(word: text, type: Node?) as list? := match type {
+	Key(name, Op.None, List(items, Bracket.Less, separator)) => if name == symbol(word) then items else ø
+	_ => ø
+}
+# a list's TYPE, `list<int>`, and its item type, ø for any other type
 LIST_TYPE = "list"
-list_type(item: Node) as Node := Key(symbol(LIST_TYPE), Op.None, List([item], Bracket.Less, Separator.None))
+list_type(item: Node) as Node := generic_type(LIST_TYPE, [item])
+item_type(type: Node?) as Node? := only(parts_of_type(LIST_TYPE, type))
+# a map's TYPE, `map<text, int>`, and its keys' and values' types, ø for any other type
+MAP_TYPE = "map"
+map_type(key: Node, value: Node) as Node := generic_type(MAP_TYPE, [key, value])
+key_type(type: Node?) as Node? := (parts_of_type(MAP_TYPE, type) ?? [ø, ø])#1
+held_type(type: Node?) as Node? := (parts_of_type(MAP_TYPE, type) ?? [ø, ø])#2
 # A function value's TYPE, its own for each `x => …` the program writes: the word fn glued to the key of the function
-# it calls and the types of what it captures, in angle brackets: `fn<"f.wap:3:5 λ", int>` (core/analyze/types.wap)
+# it calls and the types of what it captures, `fn<"f.wap:3:5 λ", int>` (core/analyze/types.wap); its parts, the key and
+# then the captures' types
 FUNCTION_VALUE_TYPE = "fn"
-function_value_type(key: text, captures: list) as Node := Key(symbol(FUNCTION_VALUE_TYPE), Op.None, List([Text(key)] + captures, Bracket.Less, Separator.Comma))
-# a function value type's parts, the key of its function and then its captures' types; ø for any other type
-function_value_parts(type: Node?) as list? := match type {
-	Key(name, Op.None, List(items, Bracket.Less, separator)) => if name == symbol(FUNCTION_VALUE_TYPE) then items else ø
-	_ => ø
-}
-# the item type of a list's type, ø for any other type
-item_type(type: Node?) as Node? := match type {
-	Key(name, Op.None, group) => if name == symbol(LIST_TYPE) then only_item(group) else ø
-	_ => ø
-}
+function_value_type(key: text, captures: list) as Node := generic_type(FUNCTION_VALUE_TYPE, [Text(key)] + captures)
+function_value_parts(type: Node?) as list? := parts_of_type(FUNCTION_VALUE_TYPE, type)
 # A record's TYPE is its name, `Point`; these find a record among the Records a program declares, and its fields,
 # each a typed name `x: int` (declared_name, declared_type)
 record_named(records: list, type: Node?) as Node? := {
@@ -171,6 +176,15 @@ enum_of(records: list, name: Node) as Node? := {
 	for record in records { if cases_of(record).any(case => text(case_name(case)) == text(name)) { return record } }
 	ø
 }
+# the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
+# declaring it: two enums may each have a case of one spelling
+case_declaring(records: list, name: Node) as Node := declaring(records, name)#2
+enum_declaring(records: list, name: Node) as Node := declaring(records, name)#1
+declaring(records: list, name: Node) as list := {
+	key = place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this case name reached here unbound"))
+	for record in records { for case in cases_of(record) { if place_key(case_name(case)) == key { return [record, case] } } }
+	refused(name, "no enum the program declares has this case")
+}
 # a case's place among its enum's cases, from 0: its tag
 case_tag(record: Node, name: Node) as int := index_where(cases_of(record), case => text(case_name(case)) == text(name)) - 1
 case_named(record: Node, name: Node) as Node := cases_of(record)#(case_tag(record, name) + 1)
@@ -180,10 +194,8 @@ field_named(record: Node, key: Node) as Node? := {
 	for field in fields_of(record) { if text(declared_name(field)) == text(key) { return field } }
 	ø
 }
-only_item(group: Node) as Node? := match group {
-	List(items, Bracket.Less, separator) => if #items == 1 then items#1 else ø
-	_ => ø
-}
+# the one item of a list, ø for none, several or no list
+only(items: list?) as Node? := if items != ø and #items == 1 then items#1 else ø
 
 # The facts of the declaration prescan, core/analyze/declarations.wap: DECLARES on a top-level definition,
 # `name: signature`; DECLARATIONS on the program, the list of them
