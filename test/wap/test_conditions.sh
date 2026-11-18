@@ -68,4 +68,18 @@ print text(xs[0])')" "2
 5"
 check "an if as a list's one item" "$(ran list_if 'xs = [1] + [if no then 2 else 3]
 print(text(xs#2))')" "3"
+check "a list, a text and an optional are conditions by their truthiness" "$(ran truthiness 'xs = [1]
+t = ""
+o: int? = ø
+if xs { print "list" }
+if not t { print "empty text" }
+if xs and not o { print "both" }
+if o or xs { print "either" }')" "list
+empty text
+both
+either"
+check "an optional tested bare is its value where present" "$(ran bare_present 'f(o: int?) := if o then o + 1 else 0
+print text(f(2))
+print text(f(ø))')" "3
+0"
 exit $((failures > 0))

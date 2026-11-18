@@ -29,9 +29,10 @@ present_typed(part: Node, known: list?, s: TypingState, f: TypeFrame, expected: 
 	f.present = before
 	typed
 }
-# the variable a condition finds present, [its key, the arm: 1 then, 2 else, its value's type]: `x != ø` in the
-# then-arm, `x == ø` in the else-arm; ø for any other condition
+# the variable a condition finds present, [its key, the arm: 1 then, 2 else, its value's type]: `x != ø` and `if x`
+# in the then-arm, `x == ø` in the else-arm; ø for any other condition
 present_tested(condition: Node, s: TypingState, f: TypeFrame) as list? := match condition {
+	Symbol(name) => if is_variable(condition) and base_of_optional(variable_type(condition, s, f)) != ø then [place_key(defined_at(condition)), 1, base_of_optional(variable_type(condition, s, f))] else ø
 	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then [place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))] else ø
 	_ => ø
 }
@@ -44,9 +45,19 @@ is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø
 EQUAL_WORD = "=="
 UNEQUAL_WORD = "!="
 condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
-	tested = typed_form(condition, s, f, symbol(BOOL_TYPE))
+	tested = truth_of(typed_form(condition, s, f, symbol(BOOL_TYPE)), s)
 	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
 	tested
+}
+# A value as a condition reads it (wiki/truthiness.md): a bool as it is, a choice by its parts' truth, `xs and o` is
+# If(xs, o, no), any other value by the preload's truthy, an empty list, text, 0 or ø no
+TRUTHY = "truthy"
+truth_of(typed: Node, s: TypingState) as Node := {
+	if value_type(typed) != ø and same_type(value_type(typed), symbol(BOOL_TYPE)) { return typed }
+	match typed {
+		If(condition, then_part, else_part) => with_type(refitted(If(condition, truth_of(then_part, s), truth_of(else_part, s)), typed), BOOL_TYPE)
+		_ => if value_type(typed) == ø then typed else word_called(typed, TRUTHY, [typed], ø, s)
+	}
 }
 # A type test, `x is T`, left unbound by the binding analysis (core/analyze/scope.wap type_test_bound), a bool: for a
 # case, whether x is that case, the Case `match x { T => yes; _ => no }`; for a type's name, whether x is of that type,
