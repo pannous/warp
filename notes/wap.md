@@ -115,9 +115,26 @@ What each file may know:
 Which of the two a rule file belongs in is measured, not argued: wap compiles itself with extensions/ switched off.
 A rule file is in core/sugar/ exactly when wap's own source uses its spelling; when that changes, the file moves.
 
+## Owners
+
+Every wap file has one owner. Only the owner edits it; anyone else sends the owner the change they need (the lines,
+or the behavior with a run test) and keeps working. A new file belongs to whoever makes it, listed here in the same
+commit. Tests (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that
+blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile.
+
+| owner | files (under wap/) |
+|---|---|
+| warp-wap-lead | compiler.wap, kernel/forms.wap, core/stage.wap, core/pipeline.wap, core/errors.wap, core/rules/lowering.wap, preload/prelude.wap |
+| warp-wap-reader | core/parse/reader.wap, core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap |
+| warp-wap-operators | core/parse/operators.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
+| warp-wap-emitter | core/emit/ (emitter, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
+| warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values) |
+
 ## Rules for every file
 
 - One job, said in its first comment line; a second job is a second file in its folder.
+- About 300 lines at most: a file past that is split by its owner at the next quiet point, along a real seam (one
+  concern per file, never a mechanical cut), in a commit of its own that also updates the Owners table.
 - Its input and output language named in that comment.
 - Total over its input: every case handled or refused loudly, never skipped.
 - No surface spelling outside parse/ and extensions/; no name of a domain (units, colors, keys) in core/.
