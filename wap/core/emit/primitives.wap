@@ -21,6 +21,17 @@ NEWLINE = 10
 IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
 BYTES_ADDRESS = 16
+# read_text's memory: the file's size from fd_seek at 0, the opened file and the count read at 8
+SIZE_ADDRESS = 0
+OPENED_ADDRESS = 8
+# WASI: the folders the host opens for a program, the current one and the root (core/native/driver.warp), so a path
+# starting with / opens in the second; links followed; the rights to read and seek; seek from the start or the end
+CURRENT_FOLDER = 3
+FOLLOW_LINKS = 1
+READ_AND_SEEK = 6
+FROM_START = 0
+FROM_END = 2
+SLASH = 47
 
 # The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
 # its built-in's definition writes (wap/preload/prelude.wap).
@@ -31,8 +42,20 @@ INSTRUCTIONS = {
 	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
 	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
+# The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
+# primitives call, before any function of its own.
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+# each host function's parameter and result types
+HOST_FUNCTIONS = {
+	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
+	"fd_seek": [[I32, I64, I32, I32], [I32]], "fd_close": [[I32], [I32]],
+	"path_open": [[I32, I32, I32, I32, I32, I64, I64, I32, I32], [I32]]
+}
+# the index of a host function the module imported
+host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
+
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -66,7 +89,7 @@ helper(p: Program, operation: text, build: function) as int := {
 }
 
 printing_function(p: Program) as int := writing_function(p, STDOUT, [])
-raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [p.exit]))
+raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
 # The helper of print_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
 writing_function(p: Program, file: int, after: list) as int := {
@@ -76,13 +99,40 @@ writing_function(p: Program, file: int, after: list) as int := {
 	count = instruction(LOCAL_GET, [2])
 	byte_at_count = i32_const(BYTES_ADDRESS) + count + I32_ADD
 	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
-	# pages short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
-	grown = i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [2]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + count + instruction(MEMORY_GROW, [0]) + DROP + END
+	grown = memory_grown(length, 2)
 	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
-	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
+	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")]) + DROP
 	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written + after)
+}
+
+# the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
+# short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
+memory_grown(length: list, scratch: int) as list := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + instruction(LOCAL_GET, [scratch]) + instruction(MEMORY_GROW, [0]) + DROP + END
+
+# The helper of read_text: the file at a path, its bytes as a text; a path it cannot open raises "cannot read …".
+# Its locals: 0 the path, 1 whether it starts with / (1 or 0), 2 the path's length after that, 3 a count, 4 the
+# opened file, 5 its size, 6 the text made, 7 the bytes read so far.
+reading_function(p: Program) as int := {
+	type = text_type(p.m)
+	value_of = local => instruction(LOCAL_GET, [local])
+	kept_in = local => instruction(LOCAL_SET, [local])
+	path = value_of(0)
+	rooted = path + ARRAY_LEN + I32_EQZ + IF + I32 + i32_const(0) + ELSE + path + i32_const(0) + instruction(ARRAY_GET_U, [type]) + i32_const(SLASH) + I32_EQ + END + kept_in(1)
+	length = path + ARRAY_LEN + value_of(1) + I32_SUB + kept_in(2)
+	copied = memory_grown(value_of(2), 3) + counted(3, value_of(2), i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + path + value_of(3) + value_of(1) + I32_ADD + instruction(ARRAY_GET_U, [type]) + instruction(I32_STORE8, [0, 0]))
+	refusal = text_literal("cannot read ", p.m).instructions + path + instruction(CALL, [helper(p, "text_joined", joining_function)]) + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+	opened = i32_const(CURRENT_FOLDER) + value_of(1) + I32_ADD + i32_const(FOLLOW_LINKS) + i32_const(BYTES_ADDRESS) + value_of(2) + i32_const(0) + i64_const(READ_AND_SEEK) + i64_const(0) + i32_const(0) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "path_open")]) + IF + VOID_BLOCK + refusal + END + i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0]) + kept_in(4)
+	seek = (whence) => value_of(4) + i64_const(0) + i32_const(whence) + i32_const(SIZE_ADDRESS) + instruction(CALL, [host(p, "fd_seek")]) + DROP
+	sized = seek(FROM_END) + i32_const(SIZE_ADDRESS) + instruction(I64_LOAD, [3, 0]) + I32_WRAP_I64 + kept_in(5) + seek(FROM_START) + memory_grown(value_of(5), 3)
+	# read until the size is reached or the file ends: iovec [bytes + read, size - read], then read += the count
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + value_of(7) + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + value_of(5) + value_of(7) + I32_SUB + instruction(I32_STORE, [2, 0])
+	count_read = i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0])
+	read = i32_const(0) + kept_in(7) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + value_of(7) + value_of(5) + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + value_of(4) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "fd_read")]) + DROP + count_read + I32_EQZ + instruction(BRANCH_IF, [1]) + value_of(7) + count_read + I32_ADD + kept_in(7) + instruction(BRANCH, [0]) + END + END
+	closed = value_of(4) + instruction(CALL, [host(p, "fd_close")]) + DROP
+	made = value_of(7) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(3, value_of(7), value_of(6) + value_of(3) + i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + instruction(I32_LOAD8_U, [0, 0]) + instruction(ARRAY_SET, [type]))
+	added_function(p.m, [nullable(type)], [nullable(type)], [I32, I32, I32, I32, I32, nullable(type), I32], rooted + length + copied + opened + sized + read + closed + made + value_of(6))
 }
 
 # the body run for each count from 0 while it stays below the limit, the count in that local
