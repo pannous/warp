@@ -67,7 +67,7 @@ host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the 
 # The operations a helper function of the module performs: operation → the function that builds the helper
 HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function, "tag_equal": tag_equality_function}
 # the operations giving a list whose helper works on that list's type: one helper for each list type
-LIST_HELPERS = {"array_slice": slicing_function}
+LIST_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -173,15 +173,16 @@ tag_equality_function(p: Program) as int := {
 	added_function(p.m, [base, base], [I32], [], instruction(LOCAL_GET, [0]) + tagged(p.m) + instruction(LOCAL_GET, [1]) + tagged(p.m) + I32_EQ)
 }
 
-# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
-# new one.
-joining_function(p: Program) as int := {
-	type = text_type(p.m)
-	bytes_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
+# The helper of text_joined: a new text of the first's bytes, then the second's
+joining_function(p: Program) as int := arrays_joining_function(p, text_type(p.m))
+# The helper of array_joined and text_joined: a new array of the first's items, then the second's. Its locals: 0 and
+# 1 the arrays, 2 the new one.
+arrays_joining_function(p: Program, type: int) as int := {
+	items_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
 	joined = instruction(LOCAL_GET, [2])
-	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
-	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
-	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
+	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + items_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = items_in(0) + items_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(items_in(0), 1) + joined)
 }
 
 # The helper of array_slice(xs, from, count): a new list of count items of xs, from the place `from` counting from 0.
