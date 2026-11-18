@@ -65,4 +65,16 @@ h(x: int?) := 1
 print text(missing(f(1)))
 print text(h(f(1)))')" "yes
 1"
+# a name given only ø holds an optional whose type its uses settle; a generic function given a type not settled yet is
+# typed once it is
+check "a name given only ø is an optional of the type its uses give" "$(ran missing_name 'held = ø
+print text(missing(held))
+print text(if missing(held) then 3 else held!)
+g(xs: list<T>): int := #xs
+xs = []
+n = g(xs)
+xs += [5]
+print text(n + #xs)')" "yes
+3
+1"
 exit $((failures > 0))
