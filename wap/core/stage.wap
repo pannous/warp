@@ -112,6 +112,10 @@ BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
 # a case of an enum, `Dime`, `Circle` (its Record defines it)
 BOUND_CASE = "case"
+# a field of a method's receiver named bare, `c` for `self.c` inside `inc(self: Counter)` (core/analyze/scope.wap);
+# DEFINED_AT is the self parameter
+BOUND_FIELD = "field"
+SELF_WORD = "self"
 # the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it (core/analyze/scope.wap)
 TYPE_TEST_WORD = "is"
 # the pattern of a Case's arm that fits any value and names none

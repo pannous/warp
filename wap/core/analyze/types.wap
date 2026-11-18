@@ -226,7 +226,12 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
 set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
 	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
-	_ => name_set_typed(n, place, value, s, f)
+	_ => if fact_of(place, BINDING) == symbol(BOUND_FIELD) then item_set_typed(n, typed_form(receiver_field(place), s, f, ø), value, s, f) else name_set_typed(n, place, value, s, f)
+}
+# a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
+receiver_field(name: Node) as Node := {
+	receiver = with_fact(with_fact(symbol(SELF_WORD), BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, fact_of(name, DEFINED_AT))
+	placed_like(Get(receiver, Text(text(name))), name)
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
@@ -286,6 +291,7 @@ get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as No
 name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
 	binding = text(fact_of(n, BINDING))
 	if binding == BOUND_CASE { return case_call_typed(n, n, [], s, f) }
+	if binding == BOUND_FIELD { return typed_form(receiver_field(n), s, f, ø) }
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return function_named_typed(n) }
 	type = variable_type(n, s, f)
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
