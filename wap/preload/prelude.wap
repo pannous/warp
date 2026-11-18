@@ -52,3 +52,14 @@ not(b: bool): bool := if b then no else yes
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
 # (core/sugar/ranges.wap)
 class Range { from: int; last: int }
+
+# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
+all(xs, fits) := {
+	for x in xs { if not fits(x) { return no } }
+	yes
+}
+any(xs, fits) := {
+	for x in xs { if fits(x) { return yes } }
+	no
+}
+contains(xs, item) := xs.any(x => x == item)

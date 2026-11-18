@@ -286,3 +286,12 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   anywhere and refuses it. Paid off when a lone word is its own head.
 - **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
   the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
+- **A module's rules reach files that don't `use` it** (wap/core/rules/stages.wap `shape_rules`). All loaded rules go
+  into one table, so once a module is shaped its rules also apply to every file shaped after it, the preload's and
+  the census's included. Bends "use builds the language the program is written in": the scope should follow `use`.
+  Paid off by a rule table per program, the language's rules plus those of the modules it uses.
+- **Each function value is a type of its own** (wap/core/analyze/types.wap `function_value_typed`): a call of a value
+  calls its one function directly, typed for that call's arguments, so a variable or a parameter holds one `x => …`
+  only, and an `if` choosing between two function values gives none; a function's name is no value yet. Its captures
+  are copied when it is made, so a change of one afterwards is refused. Paid off by function references (a funcref
+  beside the captures, call_ref), for values chosen at run time.
