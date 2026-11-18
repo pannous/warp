@@ -10,6 +10,9 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../parse/operator_table.wap"
+use "../parse/atoms.wap"
+use "../parse/cascade.wap"
+use "../../preload/operators.wap"
 
 FRESH_MARK = "·"
 
