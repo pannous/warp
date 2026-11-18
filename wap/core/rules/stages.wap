@@ -94,6 +94,7 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 heads_of(n: Node) as list := match n {
 	List(items, bracket, separator) => list_heads(items) + shape_heads(items, bracket, separator) + [NO_HEAD]
 	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
+	Key(left, Op.None, Empty) => EMPTY_GROUPS.flat_map(bracket => glued_heads(left, bracket)) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
 	_ => [NO_HEAD]
 }

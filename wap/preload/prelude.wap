@@ -40,6 +40,9 @@ raise(message: text): never := prim raise_text(message)
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
 !=(a: text, b: text): bool := not(a == b)
+# two cases of a plain enum, one whose cases carry no fields, are equal by their tags
+==(a: enum, b: enum): bool := prim tag_equal(a, b)
+!=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
 # a value's text, as a text's holes show it: `"n is ${n}"`

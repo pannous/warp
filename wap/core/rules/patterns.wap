@@ -20,6 +20,9 @@ use "../../kernel/forms.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
+# the groups that are Empty when they hold nothing, `()` and `{}` (wiki/Footguns.md: `()` stays ø, which doubles as
+# the empty list): a rule's group of no items fits either
+EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 class Declared { name: text, shape: Node, holes: list, matcher: Matcher }
@@ -140,6 +143,7 @@ canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
 	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separator == m.separator) and parts_match(m.parts, items, bindings)
+	Empty => EMPTY_GROUPS.contains(m.bracket) and parts_match(m.parts, [], bindings)
 	_ => no
 }
 
