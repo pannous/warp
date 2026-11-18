@@ -54,6 +54,10 @@ text(b: bool): text := if b then "yes" else "no"
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes
 
+# the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
+# (core/sugar/ranges.wap)
+class Range { from: int; last: int }
+
 # a float's sign turned, its whole parts, an int as a float
 -(x: float): float := prim f64_neg(x)
 floor(x: float): float := prim f64_floor(x)

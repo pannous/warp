@@ -141,7 +141,7 @@ aliases = [
 	Alias("&&", "and", discouraged: yes), Alias("||", "or", discouraged: yes),
 	# words written between operands
 	Alias("plus", "+", Fixity.Infix), Alias("minus", "-", Fixity.Infix), Alias("mod", "%", Fixity.Infix),
-	Alias("equals", "==", Fixity.Infix), Alias("through", "to", Fixity.Infix), Alias("be", ":=", Fixity.Infix),
+	Alias("equals", "==", Fixity.Infix), Alias("through", "to", Fixity.Infix), Alias("upto", "..", Fixity.Infix), Alias("be", ":=", Fixity.Infix),
 	Alias("circa", "≈", Fixity.Infix),
 	# names
 	Alias("size", "count"), Alias("length", "count"),
