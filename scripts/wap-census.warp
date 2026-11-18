@@ -9,14 +9,68 @@ use "../wap/core/language.wap"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
 library_scope = declarations_of(preload).flat_map(library_words)
-library = statements_in(library_code_of(language, preload))
+library_code = library_code_of(language, preload)
+library = statements_in(library_code)
+
+# Each module read, declared and prepared once a run, shared by every file and function probe that uses it: a file's
+# modules are the same values whichever file reaches them, as the compiler makes them (core/pipeline.wap
+# declared_modules, prepared, typed_file)
+class Shared { operated: map = {}, declared: map = {}, prepared: map = {} }
+shared = Shared()
+operated_once(file: text) as Node := {
+	global shared
+	if not shared.operated.has(file) { shared.operated[file] = operated_file(language, file) }
+	shared.operated[file]
+}
+declared_once(module: Node) as Node := {
+	global shared
+	key = file_of(module) ?? ""
+	if not shared.declared.has(key) { shared.declared[key] = declared_operated(language, module) }
+	shared.declared[key]
+}
+# a file with the modules it uses, theirs first, as declared_modules gives them
+modules_of(file: text) as list := {
+	code = operated_once(file)
+	(modules_used(code, operated_once) + [code]).map(declared_once)
+}
+prepared_once(module: Node, modules: list) as list := {
+	global shared
+	key = file_of(module) ?? ""
+	if not shared.prepared.has(key) { shared.prepared[key] = statements_in(prepared(language, module, modules, preload)) }
+	shared.prepared[key]
+}
+# One typing state for the run, as the compiler types a program: the library's definitions and records, each module's
+# joined once, its top-level values typed, so a function is typed once and its callees' types are there for the next
+class Run { state: TypingState, frame: TypeFrame, modules: list<text> = [] }
+run = Run(typing_state(library, []), TypeFrame())
+typing_joined(modules: list) := {
+	global run
+	for module in modules {
+		key = file_of(module) ?? ""
+		if not (key in run.modules) {
+			run.modules += [key]
+			statements = prepared_once(module, modules)
+			run.state.definitions += statements.filter(statement => statement is Define)
+			run.state.records += statements.filter(statement => statement is Record)
+			for statement in statements.filter(statement => not (statement is Define) and not (statement is Record)) {
+				try typed_form(statement, run.state, run.frame, ø) catch e { }
+			}
+		}
+	}
+}
+# the file typed whole with the modules it uses, as typed_file types it
+typed_whole(file: text) as Block := {
+	modules = modules_of(file)
+	whole = Block(modules.flat_map(module => prepared_once(module, modules)))
+	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
+}
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
-		modules = declared_modules(language, file)
+		modules = modules_of(file)
 		return used_declarations(modules#(#modules), modules).flat_map(library_words)
 	} catch e { report("declare", e.message) }
 	[]
@@ -48,7 +102,7 @@ probe(file: text) as Tally := {
 	emitted_ok = no
 	if not in_preload(file) {
 		try {
-			code = typed_file(language, file, preload)
+			code = typed_whole(file)
 			typed = yes
 			emitted(code)
 			emitted_ok = yes
@@ -76,19 +130,21 @@ parts_of(n: Node) as list := match n { Key(left, op, right) => [left, right]; Li
 # refusal names its function and hides no other; a function of letters or untyped parameters is typed by its calls
 functions_probe(file: text) as Tally := {
 	modules = []
-	try modules = declared_modules(language, file) catch e { report("declare", e.message); return Tally() }
+	try modules = modules_of(file) catch e { report("declare", e.message); return Tally() }
 	prepared_modules = []
-	try prepared_modules = modules.map(module => statements_in(prepared(language, module, modules, preload))) catch e { report("bind", e.message); return Tally() }
+	try prepared_modules = modules.map(module => prepared_once(module, modules)) catch e { report("bind", e.message); return Tally() }
 	program = prepared_modules.flat_map(statements => statements)
 	own = if in_preload(file) then library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":")) else prepared_modules.last.filter(statement => statement is Define)
 	typed_alone = 0
 	by_calls = 0
 	anys = 0
-	# a preload file's functions are the library's already: typed with it alone, so none has a second copy
-	base = typing_state(library, if in_preload(file) then [] else program)
+	# a preload file's functions are the library's already, in the run's state from its start: none has a second copy
+	if not in_preload(file) { typing_joined(modules) }
 	for definition in own {
-		s = copied(base)
+		s = run.state
 		if not all_typed(definition, s.records) { by_calls += 1 } else {
+			# a refusal leaves the state as it was before the function, so it changes how no other function types
+			before = copied(s)
 			try {
 				typed = function_typed(definition, written_types(definition), s, definition)
 				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
@@ -98,7 +154,10 @@ functions_probe(file: text) as Tally := {
 				typed_alone += 1
 				if found > 0 { report("any", "${declared_name(written_name(definition))}: ${found} places typed any") }
 				anys += found
-			} catch e { report("type", "${declared_name(written_name(definition))}: " + e.message) }
+			} catch e {
+				run.state = before
+				report("type", "${declared_name(written_name(definition))}: " + e.message)
+			}
 		}
 	}
 	print "functions\ttyped ${typed_alone} of ${#own - by_calls} functions (${by_calls} typed by their calls), ${anys} places typed any"
