@@ -66,6 +66,8 @@ class TypeFrame {
 	result: Node? = ø
 	# the types its returns give, ø for a bare return
 	returns: list = []
+	# the generic letters its parameters bound, each [letter, type] (core/analyze/calls.wap)
+	letters: list = []
 }
 
 # the program typed, after the preload's functions it calls
@@ -228,7 +230,7 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
-	wanted = declared_type(place) ?? variable_type(name, s, f)
+	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
