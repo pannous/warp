@@ -48,7 +48,7 @@ instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Co
 # the instructions of a value given to a field, made to fit the field's type
 field_filled(field: Node, value: Node, p: Program, f: Frame) as list := {
 	given = code(value, p, f)
-	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p.m).instructions
+	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p).instructions
 }
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
@@ -64,7 +64,7 @@ assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Cod
 set_code(form: Node, place: Node, given: Node, p: Program, f: Frame) as Code := {
 	value = code(given, p, f)
 	held = variable_of(place, p, f) ?? added_variable(place, typed_layout(place, p) ?? value.type, p, f)
-	value = fitted(value, held.type, given, p.m)
+	value = fitted(value, held.type, given, p)
 	if not valued(value.type) { refused(form, "this gives no value to set") }
 	if held.type != value.type { refused(form, "this name held another kind of value before") }
 	Code(value.type, value.instructions + kept(held))

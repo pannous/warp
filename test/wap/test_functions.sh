@@ -129,4 +129,11 @@ check "a map of functions by name" "$(ran signature_map 'inc(x: int): int := x +
 twice(x: int): int := x * 2
 ops: map<text, (int) -> int> = {"inc": inc, "twice": twice}
 print text((ops["twice"])(21))')" "42"
+check "an early return of an int in a function giving int?" "$(ran early_optional_return 'first_big(xs: list<int>) as int? := {
+	for x in xs { if x > 1 { return x } }
+	ø
+}
+print(text(first_big([1, 5, 2])))
+print(text(first_big([1])))')" "5
+ø"
 exit $((failures > 0))
