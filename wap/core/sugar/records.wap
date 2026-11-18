@@ -4,11 +4,12 @@
 # constructor, a field with a default left out of a call taking it, the instance as data, and each method as a function
 # whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too; and show, the instance in
 # its constructor form, `P{x: 3}`, each field shown by its own type's show
-rule class $name { $members... } => Record($name, [(member_as "field" ($members))...], []); $name((member_as "parameter" ($members))...) := $name{(member_as "given" ($members))...}; (member_as ("method" $name) ($members))...; show(self: $name): text := "$name{" + join([(member_as "shown" ($members))...], ", ") + "}"
+rule class $name { $members... } => Record($name, [(member_as "field" ($members))...], []); $name((member_as "parameter" ($members))...) := $name{(member_as "given" ($members))...}; (member_as "method" $name ($members))...; show(self: $name): text := "$name{" + join([(member_as "shown" ($members))...], ", ") + "}"
 # What a class's member writes in each part of the class rule: a method its function, a field with a default its
 # parameter as written, any other field what member_of writes for that part; a member a part does not take writes
 # nothing
-rule member_as ("method" $name) ($method($parameters...) := $body) => $method(self: $name, $parameters...) := $body
+rule member_as "method" $name ($method($parameters...) := $body) => ($method(self: $name, $parameters...) := $body)
+rule member_as "method" $name $member => ()
 rule member_as "parameter" ($field: $type = $default) => $field: $type = $default
 rule member_as $part ($field: $type = $default) => member_of $part ($field: $type)
 rule member_as $part ($field: $type) => member_of $part ($field: $type)
