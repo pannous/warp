@@ -1,0 +1,42 @@
+# The stages in order (the table in compiler.wap), one function per step from source to typed program, shared by the
+# compiler and the census (scripts/wap-census.warp), so neither can skip a stage.
+use "../kernel/forms.wap"
+use "stage.wap"
+use "parse/reader.wap"
+use "parse/operators.wap"
+use "analyze/declarations.wap"
+use "rules/stages.wap"
+use "rules/lowering.wap"
+use "analyze/scope.wap"
+use "analyze/types.wap"
+use "rules/typed.wap"
+
+# the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/ranges.wap", "core/sugar/calls.wap"]
+# the standard language every program gets, as definitions
+PRELUDE_FILE = "preload/prelude.wap"
+
+# the rules loaded from the wap folder, then the preload declared once: what it declares is the library every program
+# is bound in
+language_loaded(wap_folder: text) as Node := {
+	for file in RULE_FILES { rules_loaded(operated_program(read_notation(wap_folder + "/" + file))) }
+	declared(wap_folder + "/" + PRELUDE_FILE)
+}
+read_notation(file: text) as Node := notation(read(file), file)
+
+# read code with its operators read, its spellings rewritten by the shape rules, then declared
+declared_code(code: Node) as Node := declared_program(shaped_program(operated_program(code)))
+declared(file: text) as Node := declared_code(read_notation(file))
+# the names the modules a declared program uses define
+used_declarations(code: Node, modules: list) as list := uses_of(code).flat_map(file => declarations_of(module_of(file, modules)))
+# declared code lowered and bound inside the preload's declarations and those of the modules it uses
+prepared(code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(code), declarations_of(preload) + used_declarations(code, modules))
+# the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
+# functions are there for any caller; typed, then rewritten by the typed rules
+typed_file(file: text, preload: Node) as Block := {
+	code = declared(file)
+	modules = modules_used(code, declared) + [code]
+	whole = Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
+	library_code = bound_program(lowered_program(preload), [])
+	typed_by_rules(typed_program(whole, library_code), declarations_of(preload), library_code)
+}

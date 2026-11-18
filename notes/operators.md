@@ -30,6 +30,8 @@ wap/core/parse/operators.wap, the printer wap/core/format.wap. What the code dec
 - **Glyph runs join in the stage:** the reader splits `=>` into `=` `>`; a glued run of symbols joins to the longest
   spelling the table knows. `x ⊛= y` of any infix ⊛ is a compound assignment without a row of its own, read as the assignment it
   means, `x = x ⊛ y` (`xs#2 *= 3` likewise through Get and Set), its spelling a fact so format prints it as written.
+- **The choice `c ? a : b`** is the lowest expression group, closed by the colon: the reader keys `c ? a` with b,
+  and the stage turns a key whose left ends in an open `?` into (Call ? c a b).
 - **Spelled out by format:** a later item of a space list led by a sign spacing decided prints `[a, -1]` in brackets
   and `print (-x)` in a phrase.
 

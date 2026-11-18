@@ -23,4 +23,8 @@ printf '%s\n' 'use "ping.wap"' 'pong() := print("pong")' 'rally() := {' '	ping()
 check "modules may use each other" "$(ran use_each_other 'use "ping.wap"
 serve()')" "ping
 pong"
+# a module may hold only rules
+printf '%s\n' 'rule twice $x => $x + $x' >"$stage/doubling.wap"
+check "a module of rules only" "$(ran use_rules 'use "doubling.wap"
+print "used"')" "used"
 exit $((failures > 0))

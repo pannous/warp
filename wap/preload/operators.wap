@@ -53,7 +53,9 @@ precedence_groups = [
 	Group("negation", ["conjunction"]),
 	Group("conjunction", ["exclusion"]),
 	Group("exclusion", ["disjunction"]),
-	Group("disjunction", ["juxtaposition"]),
+	Group("disjunction", ["choice"]),
+	# `c ? a : b`, closed by the colon (core/parse/operators.wap chosen); below every operator, above a spaced call
+	Group("choice", ["juxtaposition"], Grouping.Right),
 	Group("juxtaposition", ["piping"]),
 	Group("piping", ["arrow"]),
 	Group("arrow", ["assignment"], Grouping.Right),
@@ -102,6 +104,7 @@ operators = [
 	Operator("&", "bit_and", infix: "bit_and"),
 	Operator("xor", "xor", infix: "exclusion"),
 	Operator("or", "or", infix: "disjunction"),
+	Operator("?", "choose", infix: "choice"),
 	Operator("|", "bit_or", infix: "bit_or"),
 	Operator("|>", "pipe", infix: "piping"),
 	Operator("->", "maps_to", infix: "arrow"),
