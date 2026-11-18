@@ -29,12 +29,26 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 	for parameter in listed(parameters) { f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, parameter_type(parameter, p), [], yes)] }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
+	signed = signed_result(declared_name(name), p)
+	results = if valued(signed) then [signed] else []
+	placed = Placed(place_key(declared_name(name)), reserved_function(p.m, types, results), signed, types)
+	f.signed = signed
+	p.functions += [placed]
 	loaded = captures_loaded(form, listed(parameters), p, f)
-	value = code(body, p, f)
-	result = result_type(name, value, f)
-	p.functions += [Placed(place_key(declared_name(name)), function_of(p.m, types, Code(result, loaded + value.instructions), f), result, types)]
-	p.functions.last
+	value = signed_fit(code(body, p, f), body, f, p)
+	given = result_type(name, value, f)
+	if valued(signed) and given != signed and given != NEVER { refused(name, "this function's body gives another type than its signature says") }
+	finished_body = if valued(signed) or given == NEVER then value.instructions else dropped(value)
+	bodied(p.m, placed.index, f.slots[f.parameter_count ..].map(slot => slot.type), loaded + finished_body)
+	placed
 } }
+# The layout of a function's result as its signature, which the typing stage writes on its name, says: none for ø
+SIGNATURE_LESS = "this function reached the emitter without its signature"
+signed_result(name: Node, p: Program) as list := {
+	result = (function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS))#2
+	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
+}
+EMPTY_TYPE_WORD = "ø"
 # the items of a list node: a definition's parameters, a fact's list
 listed(n: Node) as list := match n { List(items, bracket, separator) => items }
 # A function value's function starts by taking its captures out of its first parameter, the value, into variables of
@@ -97,25 +111,24 @@ called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 }
 
-# `prim dispatched(x)` in f(x: any): a call of whichever of f's other overloads, which the typing stage lists in the
-# Prim's fact OVERLOADS, takes x's type at run time, tried in that order; a value none takes, ø included, traps
+# `prim dispatched(x)` in f(x: any): a call of whichever of f's other overloads takes x's type at run time, tried in
+# the order of the Prim's fact OVERLOADS, each a function's name as a call names it, its SIGNATURE on it; a value
+# none takes, ø included, traps
 DISPATCHED = "dispatched"
 dispatched_code(form: Node, p: Program) as list := {
 	overloads = listed(fact_of(form, OVERLOADS) ?? refused(form, "the typing stage gave this dispatch no overloads"))
-	instruction(CALL, [helper(p, "${DISPATCHED} ${overloads.map(function_key).join(" ")}", q => dispatching_function(q, form, overloads))])
+	instruction(CALL, [helper(p, "${DISPATCHED} ${overloads.map(place_key).join(" ")}", q => dispatching_function(q, form, overloads))])
 }
 # The helper of a dispatch: for each overload, a test of its parameter's type on the value in local 0, then the value
 # cast, a plain one taken out of its box, and the overload called
 dispatching_function(p: Program, form: Node, overloads: list) as int := {
 	tried = overloads.flat_map(overload => {
-		taken = only_parameter(overload)
-		word = text(declared_type(taken))
-		boxed = WORD_LAYOUTS.has(word) and WORD_LAYOUTS[word] in PLAIN_VALUES
-		type = if boxed then box_index(p.m, word) else referenced(parameter_type(taken, p)) ?? refused(taken, "a dispatch tests references and boxed values, not this type")
+		taken = function_type_parts(fact_of(overload, SIGNATURE))#1#1
+		boxed = WORD_LAYOUTS.has(text(taken)) and WORD_LAYOUTS[text(taken)] in PLAIN_VALUES
+		type = if boxed then box_index(p.m, text(taken)) else referenced(layout_of(taken, p.m, p.records) ?? []) ?? refused(overload, "a dispatch tests references and boxed values, not this type")
 		unboxed = if boxed then instruction(STRUCT_GET, [type, 0]) else []
-		called = placed_by_key(p.functions, function_key(overload)) ?? waiting_function(p, function_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
+		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
 		local_get(0) + instruction(REF_TEST, [type]) + IF + VOID_BLOCK + local_get(0) + instruction(REF_CAST, [type]) + unboxed + instruction(CALL, [called.index]) + RETURN + END
 	})
 	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + UNREACHABLE)
 }
-only_parameter(overload: Define) as Node := match overload { Define(name, parameters, body) => listed(parameters)#1 }

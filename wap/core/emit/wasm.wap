@@ -242,9 +242,17 @@ imported(m: Module, module: text, name: text, parameters: list, results: list) a
 # A function of the module, its locals after its parameters, its body without the final `end`: its index among
 # the functions.
 added_function(m: Module, parameters: list, results: list, locals: list, body: list) as int := {
-	m.functions += [[added_type(m, function_type(parameters, results)), code_entry(locals, body)]]
+	index = reserved_function(m, parameters, results)
+	bodied(m, index, locals, body)
+	index
+}
+# A function's place in the module, taken before its code is known, so its own body can call it: its index
+reserved_function(m: Module, parameters: list, results: list) as int := {
+	m.functions += [[added_type(m, function_type(parameters, results)), []]]
 	#m.imports + #m.functions - 1
 }
+# the code of a function whose place was reserved
+bodied(m: Module, index: int, locals: list, body: list) := { m.functions[index - #m.imports] = [m.functions[index - #m.imports]#1, code_entry(locals, body)] }
 # a function's code: its size, its locals one entry each, its instructions and `end`
 code_entry(locals: list, body: list) as list := {
 	content = counted(locals.map(local => unsigned(1) + local)) + body + END

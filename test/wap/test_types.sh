@@ -65,4 +65,9 @@ h(x: int?) := 1
 print text(missing(f(1)))
 print text(h(f(1)))')" "yes
 1"
+check "a value in an any shows itself by its own type's show" "$(ran shown_any 's(x: any): text := show(x)
+class Box { n: int }
+print s(1) + " " + s(2.5) + " " + s("ab") + " " + s(yes) + " " + s(Box(3))')" "1 2.5 \"ab\" yes Box{n: 3}"
+check "a case with an any field shows it" "$(ran held_any 'enum Holder { Held(value: any) }
+print show(Held(3))')" "Held(3)"
 exit $((failures > 0))

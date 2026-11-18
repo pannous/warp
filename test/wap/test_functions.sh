@@ -82,4 +82,6 @@ print text(g(1, 2))')" "3"
 check "a return given as an argument" "$(ran never_fits 'pick(a: int, b: int) as int := a
 g(a: int) as int := pick(a, return 7)
 print text(g(1))')" "7"
+check "a function calls itself" "$(ran recursive 'f(n: int): int := if n < 1 then 0 else n + f(n - 1)
+print text(f(3))')" "6"
 exit $((failures > 0))

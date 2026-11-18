@@ -89,6 +89,8 @@ class Frame {
 	# a function's frame takes returns, the program's does not; the types of the values returned so far
 	function: bool = no
 	returns: list = []
+	# the layout of the function's result as its signature says, which a returned value is made to fit
+	signed: list = []
 	# the labels open around the code being emitted, the innermost last
 	labels: list = []
 }
@@ -172,11 +174,13 @@ while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Cod
 # The function left with a value, or with none for a bare return; the code after it never runs
 return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	if not f.function { refused(form, "a return leaves a function; the program has none to leave") }
-	given = if value is Empty then Code() else code(value, p, f)
+	given = if value is Empty then Code() else signed_fit(code(value, p, f), value, f, p)
 	f.returns += [given.type]
 	Code(NEVER, given.instructions + RETURN)
 }
 
+# a function's value made to fit its signed result, a frame without one leaving it as it is
+signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p.m) else given
 # code emitted inside wasm's structured instructions, which open these labels
 labelled(f: Frame, labels: list, emit: function) as Code := {
 	f.labels += labels

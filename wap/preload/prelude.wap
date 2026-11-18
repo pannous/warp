@@ -94,3 +94,6 @@ missing(x: T?): bool := prim ref_is_null(x)
 ==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and a! == b!
 !=(a: T?, b: T?): bool := not(a == b)
 ??(a: T?, b: T): T := if missing(a) then b else a!
+
+# a value of any type shown by the show of the type it has at run time
+show(x: any): text := prim dispatched(x)
