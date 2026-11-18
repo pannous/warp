@@ -39,10 +39,18 @@ literal(n: Node, m: Module) as Code? := match n {
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
 	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
 	_ => {
-		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records)
+		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? map_index(type_name, m, records)
 		if index == ø then ø else nullable(index)
 	}
 }
+
+# The GC type of a map, `map<text, int>`: a struct of two arrays of one length, its keys and its values, as a list map
+# keeps them; ø for a type that is no map
+map_index(type: Node, m: Module, records: list) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
+# a map type's key type and value type: its keys' array is field 0, its values' field 1
+map_parts(type: Node) as list := [key_type(type), held_type(type)]
+MAP_KEYS = 0
+MAP_VALUES = 1
 
 # The GC type of a function value: a struct of what it captures, in the order its type writes them; ø for a type that
 # is none. Its function is the one its type names, called directly.

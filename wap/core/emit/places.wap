@@ -17,6 +17,8 @@ list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m, p.recor
 # reads it and the one that writes it
 class Place { reached: list; read: list; written: list }
 place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
+	map = fact_of(subject, TYPE)
+	if key_type(map) != ø { return Place(code(subject, p, f).instructions + code(key, p, f).instructions, map_helper_called(MAP_GET, map, p), map_helper_called(MAP_SET, map, p)) }
 	record = record_named(p.records, fact_of(subject, TYPE))
 	if record != ø {
 		at = [struct_of(record, p.m, p.records), index_where(fields_of(record), field => text(declared_name(field)) == text(key)) - 1]
@@ -26,6 +28,17 @@ place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
 }
 read_code(type: list, place: Place) as Code := Code(type, place.reached + place.read)
 written_code(place: Place, value: Code) as Code := Code([], place.reached + value.instructions + place.written)
+
+# A map, `{yes: 1, no: 0}`: its keys, a word's spelling as a text, in a new array, its values in another, both in a
+# new struct of the map's type
+map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
+	type = fact_of(form, TYPE)
+	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => key })
+	array = (part, items) => items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [list_index(list_type(part), p.m, p.records), #items])
+	keys_made = array(key_type(type), keys.map(key => if key is symbol then text_literal(text(key), p.m) else code(key, p, f)))
+	values_made = array(held_type(type), entries.map(entry => code(given_value(entry), p, f)))
+	Code(layout(form, p), keys_made + values_made + instruction(STRUCT_NEW, [map_index(type, p.m, p.records)]))
+}
 
 # An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
 instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Code := {

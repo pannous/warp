@@ -41,4 +41,8 @@ item(2 to 5, 3)')" "5
 5"
 check "a map written as data, read by its key" "$(ran map_read 'NAMES = {yes: 1, no: 0}
 print text(NAMES.yes)')" "1"
+check "a map's value set by its key, a new key added" "$(ran map_set 'm = {a: 1}
+m.a = 5
+m.b = 7
+print text(m.a + m.b)')" "12"
 exit $((failures > 0))
