@@ -51,4 +51,10 @@ print text(match n { List(items, bracket, separator) => #items; _ => 0 })')" "3"
 check "a pattern builds its shape, a rest hole taking a list" "$(ran pattern_rest 'pattern Run = (Run $first: Node $rest...: Node)
 n = Run(Text("a"), [Text("b"), Text("c")])
 print text(match n { List(items, bracket, separator) => #items; _ => 0 })')" "4"
+check "a used module's pattern takes its shape apart in an arm" "$(ran use_pattern_arm 'use "pairs.wap"
+n = Pair(Text("a"), Number(1))
+print text(match n { Pair(Text(t), right) => t; _ => "no" })')" "a"
+check "a pattern's rest hole takes the rest of its shape in an arm" "$(ran pattern_rest_arm 'pattern Run = (Run $first: Node $rest...: Node)
+n = Run(Text("a"), [Text("b"), Text("c")])
+print text(match n { Run(first, rest) => #rest; _ => 0 })')" "2"
 exit $((failures > 0))

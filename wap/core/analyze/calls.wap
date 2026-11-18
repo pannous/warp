@@ -22,6 +22,7 @@ REQUIRED_WORD = "!"
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if fact_of(called, BINDING) == symbol(BOUND_CASE) { return case_call_typed(n, called, arguments, s, f) }
 	if called is symbol and text(called) == TYPE_TEST_WORD and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
+	if rest_named(n) != ø { refused(n, "a list's items spread, `...xs`, stand only in a list, `[...xs, 4]`") }
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
 	scopes = candidate_scopes(called).map(scope => scope.map(definer => definition_at(definer, s)))
 	candidates = scopes.flat_map(scope => scope)
