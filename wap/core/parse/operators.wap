@@ -20,6 +20,8 @@ use "../../kernel/forms.wap"
 COMPOUND = "compound"
 # the operator a colon closes: c ? a : b
 CHOICE = "?"
+# the word an operator read on one side of its operand writes on the other, `2 ..` is (Call .. 2 ø)
+OPEN_SIDE = "ø"
 
 # the program with its operator phrases read, after its own declarations joined the table (core/parse/operator_table.wap),
 # wherever they stand
@@ -285,10 +287,17 @@ applies_first(waiting: Use, incoming: Use) as bool := {
 
 shown(use: Use) as text := if use.spelling == "" then "juxtaposition" else use.spelling
 
+# A spelling read both before and after one operand, `.. 3` and `2 ..`, tells the two by its position only: the absent
+# side is written ø, (Call .. ø 3) and (Call .. 2 ø); one reading alone, `-x`, `x!`, keeps its one operand
+one_sided(use: Use, operand: Node) as list := {
+	if group_of(use.spelling, Fixity.Prefix) == "" or group_of(use.spelling, Fixity.Postfix) == "" { return [operand] }
+	if use.fixity == Fixity.Prefix then [symbol(OPEN_SIDE), operand] else [operand, symbol(OPEN_SIDE)]
+}
+
 # the operator applied to its operands on the stack: a Call of its canonical spelling, or a phrase for juxtaposition
 applied(use: Use, operands: list) := {
 	right = operands.pop()
-	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), [right]), use.written)); return }
+	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), one_sided(use, right)), use.written)); return }
 	left = operands.pop()
 	if use.spelling == "" { operands.add(juxtaposed(left, right, separator_of(use))); return }
 	operands.add(placed_like(infix_call(use.spelling, left, right), use.written))

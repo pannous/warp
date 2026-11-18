@@ -11,4 +11,10 @@ check "a range's ends in its other spelling" "$(ran dots 'r = 3…7
 r.last - r.from')" "4"
 check "upto in words stops before its end" "$(ran upto_word 'r = 1 upto 4
 r.last')" "3"
+check "a range as an item key slices, open on either side" "$(ran slices 'xs = [1, 2, 3, 4]
+print show(xs[2 ..])
+print show(xs[.. 2])
+print show(xs[1 .. 3])')" "[3, 4]
+[1, 2]
+[2, 3]"
 exit $((failures > 0))
