@@ -266,6 +266,13 @@ prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFra
 	function = f.function ?? refused(n, "a dispatch is the body of a function of an any, `f(x: any) := prim dispatched(x)`")
 	with_fact(typed, OVERLOADS, List(dispatched_overloads(function, s), Bracket.Square, Separator.Comma))
 }
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this is the seed of calls on dynamic values, but written
+# by hand per word (`show(x: any) := prim dispatched(x)`), for one parameter, with its own fact and emitter code.
+# General form: when a call's arguments hold an any and no overload takes any there, typing itself writes the
+# instance `f(any)` once, as plain kernel: `if x is int then f(x as int) else if x is text … else raise "no f takes
+# a …"`, the overloads in the order the static choice ranks them (one ordering function for both). `is` tests and
+# checked conversions exist already, so the emitter needs nothing; `dispatched`, OVERLOADS and the hand-assembled
+# any_equality_function (core/emit/equality.wap) then fall out of the general rule.
 # the overloads of a function a dispatch may call, typed, records first: those of one parameter of a written type
 # other than any, one a concrete type has: no generic letters, no bare list or enum
 dispatched_overloads(function: Node, s: TypingState) as list := {
