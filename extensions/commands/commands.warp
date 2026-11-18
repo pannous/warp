@@ -42,6 +42,7 @@ option_help = [
 	["--no-window", "No window: a painting is written as a PNG (or WARP_WINDOW=0; tests, agents, a CI machine)"],
 	["--mute", "No sound (or WARP_SOUND=0)"],
 	["--no-hints", "Warnings from weak up, no hints"],
+	["--no-cache", "Compile the program anew and keep no compiled module of it"],
 	["--lib <folder>", "Compile with this lib/ (a worktree's)"],
 	["--slots <n>", "warp test runs at most n cases at once"],
 	["--strict", "A library's slow fallback (slow(reason, fix) in lib/os.warp) is an error, not a note on standard error"],

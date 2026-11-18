@@ -8,28 +8,36 @@
 
 use "opcodes.wap"
 
-# A module in the making. Imports come first among the functions, so a function's index is counted after them.
+# A module in the making. Imports come first among the functions, so a function's index is counted after them. Each
+# entry is in bytes, as its section writes it, except a function, a recursion group and a memory segment, whose parts
+# the module reads again.
 class Module {
-	types: list = []
-	# the types declared together in one recursion group, each [its first index, how many]
-	groups: list = []
-	imports: list = []
-	functions: list = []
-	globals: list = []
-	exports: list = []
+	types: list<list<int>> = []
+	# the types declared together in one recursion group
+	groups: list<RecursionGroup> = []
+	imports: list<list<int>> = []
+	functions: list<DefinedFunction> = []
+	globals: list<list<int>> = []
+	exports: list<list<int>> = []
 	# passive segments, each its bytes, for `array.new_data`; numbered first, so an index is final when added
-	texts: list = []
-	# memory segments: [address, bytes]
-	data: list = []
+	texts: list<list<int>> = []
+	# memory segments
+	data: list<Segment> = []
 	# the functions `ref.func` refers to, declared once each
-	referenced: list = []
+	referenced: list<int> = []
 	# the first free byte of the memory; below it lie the memory segments
 	memory_end: int = 16
 }
+# a recursion group: the index of its first type, and how many it holds
+class RecursionGroup { first: int, count: int }
+# a function of the module: its type's index, and its code, empty while only its place is reserved
+class DefinedFunction { type_index: int, code: list<int> }
+# a memory segment: the address its bytes are placed at
+class Segment { address: int, bytes: list<int> }
 
 # An unsigned number as LEB128, 7 bits a byte, the low bits first, each byte but the last with its high bit set:
 # 624485 → [0xE5, 0x8E, 0x26]
-unsigned(n: int) as list := {
+unsigned(n: int) as list<int> := {
 	bytes = []
 	rest = n
 	while rest >= 0x80 {
@@ -39,7 +47,7 @@ unsigned(n: int) as list := {
 	bytes + [rest]
 }
 # A signed number as LEB128, as `i64.const` takes it: -1 → [0x7F]
-signed(n: int) as list := {
+signed(n: int) as list<int> := {
 	bytes = []
 	rest = n
 	while rest < -0x40 or rest >= 0x40 {
@@ -49,22 +57,22 @@ signed(n: int) as list := {
 	bytes + [rest % 0x80]
 }
 # a number as `width` bytes, the lowest first, as memory holds it
-little_endian(n: int, width: int) as list := (0 upto width).map(at => n ÷ 0x100 ^ at % 0x100)
+little_endian(n: int, width: int) as list<int> := (0 upto width).map(at => n ÷ 0x100 ^ at % 0x100)
 
 # an instruction with its unsigned immediates: instruction(CALL, [3])
-instruction(opcode: list, indices: list) as list := opcode + indices.flat_map(unsigned)
+instruction(opcode: list<int>, indices: list<int>) as list<int> := opcode + indices.flat_map(unsigned)
 # an instruction on a heap type, which the format writes signed, a declared type's index among them: ref.test 64 is
 # [0xFB, 0x14, 0xC0, 0x00]
-heap_instruction(opcode: list, type_index: int) as list := opcode + signed(type_index)
-i32_const(n: int) as list := I32_CONST + signed(n)
-i64_const(n: int) as list := I64_CONST + signed(n)
-f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
-local_get(local: int) as list := instruction(LOCAL_GET, [local])
+heap_instruction(opcode: list<int>, type_index: int) as list<int> := opcode + signed(type_index)
+i32_const(n: int) as list<int> := I32_CONST + signed(n)
+i64_const(n: int) as list<int> := I64_CONST + signed(n)
+f64_const(x: float) as list<int> := F64_CONST + little_endian(float_bits(x), 8)
+local_get(local: int) as list<int> := instruction(LOCAL_GET, [local])
 # the null reference of a heap type, `ref.null any`
-null_of(heap_type: list) as list := REF_NULL + heap_type
+null_of(heap_type: list<int>) as list<int> := REF_NULL + heap_type
 
 # the value a variable of that type starts with: zero, or the null reference
-default_of(value_type: list) as list := {
+default_of(value_type: list<int>) as list<int> := {
 	if value_type == I64 { return i64_const(0) }
 	if value_type == F64 { return f64_const(0.0) }
 	if value_type == I32 { return i32_const(0) }
@@ -73,90 +81,90 @@ default_of(value_type: list) as list := {
 }
 
 # whether a value type is a nullable reference, and the heap type it refers to
-is_reference(type: list) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
-heap_of(reference: list) as list := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
+is_reference(type: list<int>) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
+heap_of(reference: list<int>) as list<int> := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 # a nullable reference to the declared type of that index
-nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
+nullable(type_index: int) as list<int> := [NULLABLE_REFERENCE] + signed(type_index)
 # whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
 packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
 # the type index a nullable reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref.
 # Every reference wap makes is nullable, so a non-null one (0x64) is not read yet.
-referenced(reference: list) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
+referenced(reference: list<int>) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
 
 # The format's lists: their length, then the items. `counted` takes items already in bytes, `bytes_vector` raw bytes.
-counted(items: list) as list := unsigned(#items) + items.flat_map(item => item)
-bytes_vector(bytes: list) as list := unsigned(#bytes) + bytes
-named(name: text) as list := bytes_vector(name.bytes)
-section(id: int, items: list) as list := {
+counted(items: list<list<int>>) as list<int> := unsigned(#items) + items.flat_map(item => item)
+bytes_vector(bytes: list<int>) as list<int> := unsigned(#bytes) + bytes
+named(name: text) as list<int> := bytes_vector(name.bytes)
+section(id: int, items: list<list<int>>) as list<int> := {
 	content = counted(items)
 	[id] + unsigned(#content) + content
 }
 
 # Types: a function's, a struct's, an array's. A field is its storage type and whether it is mutable.
-function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + counted(parameters) + counted(results)
+function_type(parameters: list<list<int>>, results: list<list<int>>) as list<int> := [FUNCTION_TYPE] + counted(parameters) + counted(results)
 field_type(storage: list<int>, mutability: int) as list<int> := storage + [mutability]
-struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
-array_type(item: list) as list := [ARRAY_TYPE] + item
+struct_type(fields: list<list<int>>) as list<int> := [STRUCT_TYPE] + counted(fields)
+array_type(item: list<int>) as list<int> := [ARRAY_TYPE] + item
 # a type open to subtypes, extending these type indices
-open_type(supertypes: list, type: list) as list := [SUBTYPE] + unsigned(#supertypes) + supertypes.flat_map(unsigned) + type
+open_type(supertypes: list<int>, type: list<int>) as list<int> := [SUBTYPE] + unsigned(#supertypes) + supertypes.flat_map(unsigned) + type
 
 # The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
-added_type(m: Module, type: list) as int := {
-	for at in 1 to #m.types { if m.types#at == type and grouped(m, at - 1) == ø { return at - 1 } }
+added_type(m: Module, type: list<int>) as int := {
+	for at in 1 to #m.types { if m.types#at == type and grouped(m, at - 1).count == 1 { return at - 1 } }
 	m.types += [type]
 	#m.types - 1
 }
 # Types declared together in one recursion group: types of one group are distinct by their place in it, even when
 # their shapes match, so a reference tells at run time which of them it is. The index of the first.
-added_group(m: Module, types: list) as int := {
-	for group in m.groups { if m.types[group#1 .. group#1 + group#2] == types { return group#1 } }
-	m.groups += [[#m.types, #types]]
+added_group(m: Module, types: list<list<int>>) as int := {
+	for group in m.groups { if m.types[group.first .. group.first + group.count] == types { return group.first } }
+	m.groups += [RecursionGroup(#m.types, #types)]
 	m.types += types
-	m.groups.last#1
+	m.groups.last.first
 }
-# the group a type's index lies in, ø for one declared alone
-grouped(m: Module, index: int) as list? := {
-	for group in m.groups { if index >= group#1 and index < group#1 + group#2 { return group } }
-	ø
+# the group a type's index lies in; a type declared alone is a group of one, as the format reads it
+grouped(m: Module, index: int) as RecursionGroup := {
+	for group in m.groups { if index >= group.first and index < group.first + group.count { return group } }
+	RecursionGroup(index, 1)
 }
-# the type section's entries: a type declared alone as itself, a group as one entry of its types
-type_entries(m: Module) as list := {
+# the type section's entries: a group of one as its type, a larger group as one entry of its types
+type_entries(m: Module) as list<list<int>> := {
 	entries = []
 	for at in 0 to #m.types - 1 {
 		group = grouped(m, at)
-		if group == ø { entries += [m.types#(at + 1)] } else if group#1 == at { entries += [[REC_GROUP] + counted(m.types[at .. at + group#2])] }
+		if group.count == 1 { entries += [m.types#(at + 1)] } else if group.first == at { entries += [[REC_GROUP] + counted(m.types[at .. at + group.count])] }
 	}
 	entries
 }
 
 # An imported function, `wasi_snapshot_preview1.fd_write`: its index among the functions.
-imported(m: Module, module: text, name: text, parameters: list, results: list) as int := {
+imported(m: Module, module: text, name: text, parameters: list<list<int>>, results: list<list<int>>) as int := {
 	m.imports += [named(module) + named(name) + [FUNCTION_KIND] + unsigned(added_type(m, function_type(parameters, results)))]
 	#m.imports - 1
 }
 
 # A function of the module, its locals after its parameters, its body without the final `end`: its index among
 # the functions.
-added_function(m: Module, parameters: list, results: list, locals: list, body: list) as int := {
+added_function(m: Module, parameters: list<list<int>>, results: list<list<int>>, locals: list<list<int>>, body: list<int>) as int := {
 	index = reserved_function(m, parameters, results)
 	bodied(m, index, locals, body)
 	index
 }
 # A function's place in the module, taken before its code is known, so its own body can call it: its index
-reserved_function(m: Module, parameters: list, results: list) as int := {
-	m.functions += [[added_type(m, function_type(parameters, results)), []]]
+reserved_function(m: Module, parameters: list<list<int>>, results: list<list<int>>) as int := {
+	m.functions += [DefinedFunction(added_type(m, function_type(parameters, results)), [])]
 	#m.imports + #m.functions - 1
 }
 # the code of a function whose place was reserved
-bodied(m: Module, index: int, locals: list, body: list) := { m.functions[index - #m.imports] = [m.functions[index - #m.imports]#1, code_entry(locals, body)] }
+bodied(m: Module, index: int, locals: list<list<int>>, body: list<int>) := { m.functions[index - #m.imports].code = code_entry(locals, body) }
 # a function's code: its size, its locals one entry each, its instructions and `end`
-code_entry(locals: list, body: list) as list := {
+code_entry(locals: list<list<int>>, body: list<int>) as list<int> := {
 	content = counted(locals.map(local => unsigned(1) + local)) + body + END
 	unsigned(#content) + content
 }
 
 # A global of that type, mutable or not, set at start by the constant instructions `initial`: its index.
-added_global(m: Module, type: list, mutability: int, initial: list) as int := {
+added_global(m: Module, type: list<int>, mutability: int, initial: list<int>) as int := {
 	m.globals += [type + [mutability] + initial + END]
 	#m.globals - 1
 }
@@ -164,30 +172,30 @@ added_global(m: Module, type: list, mutability: int, initial: list) as int := {
 exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
 
 # Bytes placed in the memory, aligned: their address.
-added_data(m: Module, bytes: list) as int := {
+added_data(m: Module, bytes: list<int>) as int := {
 	address = (m.memory_end + DATA_ALIGNMENT - 1) ÷ DATA_ALIGNMENT * DATA_ALIGNMENT
-	m.data += [[address, bytes]]
+	m.data += [Segment(address, bytes)]
 	m.memory_end = address + #bytes
 	address
 }
 # Bytes kept passive, for `array.new_data`: their segment index.
-added_text(m: Module, bytes: list) as int := {
+added_text(m: Module, bytes: list<int>) as int := {
 	m.texts += [bytes]
 	#m.texts - 1
 }
 
 # A reference to a function of the module, `ref.func`, its index declared for the element section
-function_reference(m: Module, index: int) as list := {
+function_reference(m: Module, index: int) as list<int> := {
 	if not (index in m.referenced) { m.referenced += [index] }
 	instruction(REF_FUNC, [index])
 }
 # the element section, one declarative segment of the functions referred to; none when no function is
-declared_references(m: Module) as list := if m.referenced is empty then [] else section(ELEMENT_SECTION, [DECLARED_FUNCTIONS + unsigned(#m.referenced) + m.referenced.flat_map(unsigned)])
+declared_references(m: Module) as list<int> := if m.referenced is empty then [] else section(ELEMENT_SECTION, [DECLARED_FUNCTIONS + unsigned(#m.referenced) + m.referenced.flat_map(unsigned)])
 # The whole module, its sections in the order the format requires.
-module_bytes(m: Module) as list := {
-	declarations = m.functions.map(function => unsigned(function#1))
-	codes = m.functions.map(function => function#2)
-	placed = m.data.map(segment => [ACTIVE_SEGMENT] + i32_const(segment#1) + END + bytes_vector(segment#2))
+module_bytes(m: Module) as list<int> := {
+	declarations = m.functions.map(function => unsigned(function.type_index))
+	codes = m.functions.map(function => function.code)
+	placed = m.data.map(segment => [ACTIVE_SEGMENT] + i32_const(segment.address) + END + bytes_vector(segment.bytes))
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
 	memory_pages = [[0x00] + unsigned(1)]
 	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#placed + #passive)) + unsigned(#placed + #passive)

@@ -51,7 +51,7 @@ lead first, as a change of this table.
 |---|---|---|---|---|
 | read | core/parse/reader.wap | wap-reader | text | notation |
 | operators | core/parse/operators.wap, table in the preload | wap-operators | notation | operated |
-| shape rules (stage 1) | core/rules/, core/sugar/ | lead, until the rule engine has an owner | operated | surface |
+| shape rules (stage 1) | core/rules/, preload/sugar/ | lead, until the rule engine has an owner | operated | surface |
 | declare | core/analyze/declarations.wap | wap-binding | surface | declared |
 | signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
@@ -270,6 +270,17 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
   versions typing made before, not a new one.
+- **The class rule's helper words are ordinary words** (wap/preload/sugar/records.wap `member_as "field"`,
+  `member_of`, `shown_case`): a program writing them is rewritten too. Words only rule files may write need a private
+  word in the reader; paid off when a program meets one.
+- **`for` is two rules, a `to` range and a list walked by index** (wap/preload/sugar/loops.wap), not the iterator of
+  notes/kernel.md:82: wap's own source walks only these two; paid off by the first third kind of thing to walk.
+- **A list's brackets and separator are spelled twice**, in wap/preload/nodes.wap (opening, closing, separator_text) and
+  wap/core/format.wap: warp, which compiles the compiler, refuses the preload's own Node enum, so format.wap cannot use
+  nodes.wap. Paid off when wap compiles itself and the compiler sees the preload: format.wap's three go.
+- **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
+  char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
+  a typed rule sees only its hole's type.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
@@ -306,7 +317,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   text, so typing looks f up among the definitions it holds, and a library word declared by signature (`print`) is
   not one of them; `x.f(y)` is a plain call and finds both. Paid off when host words are definitions typing holds.
 - **A bare `break`, `continue` or `return` is lowering's word form, not a rule** (wap/core/rules/lowering.wap
-  `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
+  `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/preload/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
 - **Ints have no `÷` or `%` yet** (wap/preload/floats.wap holds only the truncated quotient and rem, which programs do

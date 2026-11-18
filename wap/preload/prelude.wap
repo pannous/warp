@@ -117,7 +117,7 @@ truthy(xs: list): bool := #xs > 0
 truthy(x: T?): bool := not missing(x)
 
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
-# (core/sugar/ranges.wap)
+# (preload/sugar/ranges.wap)
 class Range { from: int; last: int }
 # how many ints a range holds, and its int at a place counting from 1, so `for i in r` walks a range a name holds as
 # it walks a list
@@ -161,7 +161,9 @@ missing(x: T?): bool := prim ref_is_null(x)
 !(x: T?): T := prim optional_value(x)
 ==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and a! == b!
 !=(a: T?, b: T?): bool := not(a == b)
-# `a ?? b` is a rule (core/sugar/conditions.wap): b runs only when a is missing
+# `a ?? b` is a rule (preload/sugar/conditions.wap): b runs only when a is missing
 
-# a value of any type shown by the show of the type it has at run time
-show(x: any): text := prim dispatched(x)
+
+# a value no show takes by its type, an any whose value none takes at run time (a call of show on an any tests each
+# show first, core/analyze/dispatch.wap) or a map: raised, naming the word
+show(x: any): text := raise("show: no show takes this value's type")

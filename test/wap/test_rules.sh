@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # wap's shape rules (notes/first_principles.md "Holes"; notes/kernel.md: `unless c { b }` is a rule writing If): a
-# spelling written as other code by a rule, from core/sugar or from the program itself, compiled and run.
+# spelling written as other code by a rule, from preload/sugar or from the program itself, compiled and run.
 # Run it with bash test/wap/test_rules.sh
 source "$(dirname "$0")/compile.sh"
 

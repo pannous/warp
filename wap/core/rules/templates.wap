@@ -19,15 +19,15 @@ FRESH_MARK = "·"
 
 # the template with each hole replaced by its binding; a template that is a repetition, `($m := $b)...`, the statements
 # it writes, spliced where it stands
-built(template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(template, bindings)
-filled(template: Node, bindings: map) as Node := match template {
+built(language: Language, template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(language, repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(language, template, bindings)
+filled(language: Language, template: Node, bindings: map) as Node := match template {
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
-		pattern = pattern_called(head)
-		if pattern == ø { Key(built(head, bindings), Op.None, grown(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
+		pattern = pattern_called(language, head)
+		if pattern == ø { Key(built(language, head, bindings), Op.None, grown(built_items(language, arguments, bindings), Bracket.Round, separator)) } else { instance(language, pattern, built_items(language, arguments, bindings)) }
 	}
-	Key(left, op, right) => Key(built(left, bindings), op, built(right, bindings))
-	List(items, bracket, separator) => grown(built_items(items, bindings), bracket, separator)
+	Key(left, op, right) => Key(built(language, left, bindings), op, built(language, right, bindings))
+	List(items, bracket, separator) => grown(built_items(language, items, bindings), bracket, separator)
 	Text(value) => Text(interpolated(value, bindings))
 	Number(value) => Number(value)
 	_ => template
@@ -45,15 +45,15 @@ interpolated(value: text, bindings: map) as text := {
 taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items); _ => taken }
 
 # items of a template, a rest hole replaced by the items it took
-built_items(items: list, bindings: map) as list := {
+built_items(language: Language, items: list, bindings: map) as list := {
 	all = []
 	for item in items {
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
 			all = all + items_taken(bindings[hole_key(item)])
 		} else if repeated_part(item) != ø {
-			all = all + repeated(repeated_part(item), bindings)
+			all = all + repeated(language, repeated_part(item), bindings)
 		} else {
-			all.add(built(item, bindings))
+			all.add(built(language, item, bindings))
 		}
 	}
 	all
@@ -68,14 +68,14 @@ grown(items: list, bracket: Bracket, separator: Separator) as Node := {
 
 # `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn; a part
 # in parentheses, `($f: $f)...`, is written without them, as a pattern reads it
-repeated(part: Node, bindings: map) as list := {
+repeated(language: Language, part: Node, bindings: map) as list := {
 	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
 	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
 	times = #items_taken(bindings[sequences#1 + REST_MARK])
 	written = []
 	for i in 1 to times {
 		for hole in sequences { bindings[hole] = items_taken(bindings[hole + REST_MARK])#i }
-		written.add(built(ungrouped(part), bindings))
+		written.add(built(language, ungrouped(part), bindings))
 	}
 	for hole in sequences { bindings.remove(hole) }
 	written
