@@ -65,7 +65,7 @@ HOST_FUNCTIONS = {
 host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function, "tag_equal": tag_equality_function}
 # the operations giving a list whose helper works on that list's type: one helper for each list type
 LIST_HELPERS = {"array_slice": slicing_function}
 
@@ -165,6 +165,12 @@ text_equality_function(p: Program) as int := {
 	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
 	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
 	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
+}
+
+# The helper of tag_equal: yes when two cases of an enum have one tag
+tag_equality_function(p: Program) as int := {
+	base = nullable(enum_base(p.m))
+	added_function(p.m, [base, base], [I32], [], instruction(LOCAL_GET, [0]) + tagged(p.m) + instruction(LOCAL_GET, [1]) + tagged(p.m) + I32_EQ)
 }
 
 # The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
