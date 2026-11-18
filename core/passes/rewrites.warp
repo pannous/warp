@@ -293,9 +293,11 @@ own_rules_applied(program: Node, source: text) as Node := {
 
 # the statement rewritten by the rules none of whose words it binds itself: a function's loop variable `val` keeps
 # its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
-# (the rules a name the statement binds spells, looked up by that name: most statements bind none, and keep them all)
+# (the rules a name the statement binds spells, looked up by that name; a statement mentioning no rule's word, most,
+# binds none and keeps them all, its scope never read)
 statement_rewritten(statement: Node, rules: list, origins: list, maps: map, by_word: map) as Node := {
-	scope = statement_bindings(if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement)#1
+	written = if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement
+	scope = if symbol_words(written).any(word => by_word.has(word)) then statement_bindings(written)#1 else {}
 	bound = scope.keys.filter(name => by_word.has(name) and binds_value(scope, name)).flat_map(name => by_word[name])
 	kept = if #bound == 0 then ø else (0 ..< #rules).filter(at => at not in bound)
 	kept_rules = if kept == ø then rules else kept.map(at => rules[at])
