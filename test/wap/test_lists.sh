@@ -29,4 +29,18 @@ check "a slice takes the items at a range's places, counting from 0, up to the l
 print text(#s)
 print text(s#1)')" "3
 2"
+# an empty list's item type is settled by the first use that adds to it
+check "an empty list takes its item type from what is added" "$(ran empty_list 'xs = []
+for i in 1 to 3 { xs = xs + [i * 2] }
+print text(xs#3)
+squares(n: int) := {
+	found = []
+	for i in 1 to n { found += [i * i] }
+	found
+}
+print text(#squares(4))
+f(ys: list<int>) := #ys
+print text(f([]))')" "6
+4
+0"
 exit $((failures > 0))

@@ -101,7 +101,12 @@ takes(definition: Node, given: list, s: TypingState, fit: function) as bool := {
 	parameters = parameters_in(definition)
 	if #parameters != #given { return no }
 	letters = letters_bound(definition, given.map(value_type), s)
-	letters != ø and (1 to #given).all(at => function_type_parts(type_given(parameters#at)) != ø or conforms(value_type(given#at), type_given(parameters#at), s) or fit(given#at, substituted(type_given(parameters#at), letters)))
+	letters != ø and (1 to #given).all(at => function_type_parts(type_given(parameters#at)) != ø or conforms(value_type(given#at), type_given(parameters#at), s) or fit(with_letters(given#at, letters), substituted(type_given(parameters#at), letters)))
+}
+# an argument of the type its letters' binding gives it, `xs` of a list<α1> the call settles as a list<int>
+with_letters(argument: Node, letters: list) as Node := {
+	type = substituted(value_type(argument), letters)
+	if type == value_type(argument) then argument else with_type_of(argument, type)
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
@@ -161,6 +166,41 @@ does_as(definition: Node, given: Node, arity: int) as bool := {
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 is_letter(type: Node?, records: list) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type)) and record_named(records, type) == ø
 has_letters(type: Node?, records: list) as bool := is_letter(type, records) or (type_parts(type) ?? []).any(part => has_letters(part, records))
+# An empty list's item type before a use settles it, α1, α2 … (data.wap list_typed): bound like a letter by the calls
+# that use the list, `xs + [1]` settles it to int; settled everywhere once the program is typed
+UNKNOWN_MARK = "α"
+UNSETTLED = "an empty list nothing adds to here: write its type, `xs: list<int> = []`"
+unknown_type(s: TypingState) as Node := {
+	s.unknowns += 1
+	symbol(UNKNOWN_MARK + text(s.unknowns))
+}
+is_unknown(type: Node?) as bool := type is symbol and text(type).starts_with(UNKNOWN_MARK)
+has_unknowns(type: Node?) as bool := is_unknown(type) or (type_parts(type) ?? []).any(has_unknowns)
+# whether a given type fits a wanted one by settling unknowns, settling them
+settles(given: Node, wanted: Node, s: TypingState) as bool := {
+	if not has_unknowns(given) and not has_unknowns(wanted) { return no }
+	bound = unified(wanted, given, [], s) ?? return no
+	settled_by(bound, s)
+	yes
+}
+# the unknowns a call's binding settled, remembered for every later use
+settled_by(bound: list, s: TypingState) := {
+	for entry in bound { if is_unknown(symbol(entry#1)) and type_keyed(entry#1, s.settled) == ø { s.settled += [[entry#1, substituted(entry#2, bound)]] } }
+}
+# typed code with every unknown settled, refused where one stays unknown
+settled_everywhere(n: Node, s: TypingState) as Node := {
+	whole = refitted(with_parts(n, part => settled_everywhere(part, s)), n)
+	for fact in [TYPE, SIGNATURE] {
+		type = fact_of(whole, fact)
+		if has_unknowns(type) {
+			type = substituted(type, s.settled)
+			if has_unknowns(type) { refused(n, UNSETTLED) }
+			whole = with_fact(whole, fact, type)
+		}
+	}
+	whole
+}
+
 # The letters a definition's parameters bind for these argument types, each [letter, type]; ø when the arguments don't
 # fit them (a T bound to two types)
 # fit them (a T bound to two types). Function types come last: a function value's function is typed for parameter
@@ -171,7 +211,7 @@ letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 	in_order = (1 to #parameters).filter(at => function_type_parts(type_given(parameters#at)) == ø) + (1 to #parameters).filter(at => function_type_parts(type_given(parameters#at)) != ø)
 	for at in in_order {
 		wanted = type_given(parameters#at)
-		if wanted != ø and (has_letters(wanted, s.records) or function_type_parts(wanted) != ø) { bound = unified(wanted, types#at, bound, s) ?? return ø }
+		if wanted != ø and (has_letters(wanted, s.records) or function_type_parts(wanted) != ø or has_unknowns(types#at) and not takes_own_type(wanted, s.records)) { bound = unified(wanted, types#at, bound, s) ?? return ø }
 	}
 	bound
 }
@@ -181,10 +221,8 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if given == ø { return ø }
 	if given == symbol(NEVER_TYPE) { return bound }
 	records = s.records
-	if is_letter(wanted, records) {
-		held = type_keyed(text(wanted), bound)
-		return if held == ø then bound + [[text(wanted), given]] else if same_type(held, given) then bound else ø
-	}
+	if is_letter(wanted, records) or is_unknown(wanted) { return bound_as(wanted, given, bound, s) }
+	if is_unknown(given) { return bound_as(given, wanted, bound, s) }
 	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, s) }
 	if function_type_parts(wanted) != ø and function_value_parts(given) != ø { return function_value_bound(function_type_parts(wanted), given, bound, s) }
 	wanted_parts = type_parts(wanted)
@@ -192,6 +230,13 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if wanted_parts == ø or given_parts == ø or #wanted_parts != #given_parts { return if same_type(given, wanted) then bound else ø }
 	for at in 1 to #wanted_parts { bound = unified(wanted_parts#at, given_parts#at, bound, s) ?? return ø }
 	bound
+}
+# the letters bound with a letter or an unknown bound to a type: as it is bound already, or bound now
+bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
+	held = type_keyed(text(letter), bound)
+	if held == ø { return if type == letter then bound else bound + [[text(letter), type]] }
+	if same_type(held, type) { return bound }
+	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
 }
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
@@ -208,7 +253,10 @@ function_value_bound(wanted: list, value: Node, bound: list, s: TypingState) as 
 # a type with its letters replaced by the types they are bound to
 substituted(type: Node?, bound: list) as Node? := {
 	if type == ø or bound is empty { return type }
-	if type is symbol { return type_keyed(text(type), bound) ?? type }
+	if type is symbol {
+		held = type_keyed(text(type), bound)
+		return if held == ø or held == type then type else substituted(held, bound)
+	}
 	parts = type_parts(type)
 	if parts == ø { return type }
 	type_built(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
@@ -241,7 +289,9 @@ result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 function_typed(definition: Node, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	key = place_key(declared_name(name))
 	letters = letters_bound(definition, argument_types, s) ?? []
-	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), argument_types#place, letters, s.records))
+	settled_by(letters, s)
+	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), substituted(argument_types#place, letters), letters, s.records))
+	if types.any(has_unknowns) { refused(at, UNSETTLED) }
 	for typed in s.functions {
 		if typed.key == key and same_types(typed.arguments, types) {
 			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }

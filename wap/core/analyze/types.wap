@@ -53,6 +53,9 @@ class TypingState {
 	# the functions of the function values met, and the keys of the variables they capture
 	lambdas: list = []
 	captured: list = []
+	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
+	unknowns: int = 0
+	settled: list = []
 }
 # A function typed for one tuple of argument types: the definition's key, its argument types, its result's type,
 # its name with its signature and the Define it became
@@ -95,7 +98,8 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
 		typed = with_type_of(typed, value_type(statements.last))
 	}
-	refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements), typed)
+	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements), typed)
+	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
 gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and value_type(n) != symbol(NEVER_TYPE) and value_type(n) != symbol(EMPTY_TYPE)
@@ -286,7 +290,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
-	if wanted != ø and not type_fits(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
+	if wanted != ø and not type_fits(type, wanted) and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	remembered(name, type, s, f)
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
@@ -320,7 +324,7 @@ remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
 	f.present = f.present.filter(key => key != variable#1)
 	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
 }
-variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := type_keyed(place_key(defined_at(name)), variables_of(name, s, f))
+variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := substituted(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s.settled)
 # the type of the variable of this key among these, each [key, type]
 type_keyed(key: text, variables: list) as Node? := {
 	for variable in variables { if variable#1 == key { return variable#2 } }

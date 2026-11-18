@@ -25,10 +25,10 @@ field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := m
 } }
 
 # A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
-# list takes the type its place wants.
+# list takes the type its place wants, else an unknown item type the first use that adds to it settles.
 list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
-	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
+	item = if items is empty then item_type(expected) ?? unknown_type(s) else value_type(typed#1)
 	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
 	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
 }
