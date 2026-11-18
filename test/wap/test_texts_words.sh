@@ -16,4 +16,7 @@ check "a text trimmed of blanks at both ends" "$(ran trim 'print "[" + "  a b\t\
 check "a text in lower case" "$(ran lower 'print "Hé ABC".lower()')" "hé abc"
 check "a text split at each separator" "$(ran split 'print show("a/bb//c".split("/")) + " " + show("abc".split(", "))')" "[\"a\", \"bb\", \"\", \"c\"] [\"abc\"]"
 check "is_letter is another name of is_alpha" "$(ran is_letter 'print text(is_letter("q") and not is_letter("1"))')" "yes"
+check "a text's characters from one place to another, counted from 0" "$(ran text_slice 'print "warp"[1 .. 3] + " " + "warp"[1 ..] + " " + "aé€x"[1 to 2]')" "ar arp é€"
+check "a text's characters as codes, decoded from UTF-8" "$(ran codepoints 's = "aé€x"
+print text(#s.codepoints) + " " + text(ord(s.codepoints#3)) + " " + text(s.codepoints#2)')" "4 8364 é"
 exit $((failures > 0))

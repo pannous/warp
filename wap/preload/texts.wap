@@ -13,6 +13,10 @@ BLANK_BYTES := [32, 9, 10, 13]
 UPPER_A_BYTE := 65
 UPPER_Z_BYTE := 90
 CASE_DISTANCE := 32
+# what a character's lead byte keeps of its code, by the character's byte count: all of 0xxxxxxx, five bits of
+# 110xxxxx, four of 1110xxxx, three of 11110xxx; each continuation byte keeps six
+LEAD_BITS := [128, 32, 16, 8]
+CONTINUATION_BITS := 64
 
 byte_count(t: text): int := prim array_len(t)
 byte_at(t: text, at: int): int := prim array_get_u(t, at)
@@ -34,6 +38,26 @@ character_offset(t: text, index: int): int := {
 		counted += 1
 	}
 	at
+}
+
+# the characters from one place to another, counted from 0 as a list's: `"warp"[1 .. 3]` is "ar"
+slice(t: text, r: Range): text := bytes_between(t, character_offset(t, r.from + 1), character_offset(t, min(r.last, byte_count(t)) + 2))
+# a text's characters, decoded from its UTF-8 bytes: `"aé".codepoints` is ['a', 'é']
+codepoints(t: text): list<char> := {
+	out: list<char> = []
+	at = 0
+	while at < byte_count(t) {
+		end = character_end(t, at)
+		out.add(char(decoded(t, at, end)))
+		at = end
+	}
+	out
+}
+# the code of the character whose bytes lie between two offsets
+decoded(t: text, start: int, end: int): int := {
+	code = byte_at(t, start) % LEAD_BITS#(end - start)
+	for at in start + 1 ..< end { code = code * CONTINUATION_BITS + byte_at(t, at) % CONTINUATION_BITS }
+	code
 }
 
 # whether a text has no characters: `t is empty`
