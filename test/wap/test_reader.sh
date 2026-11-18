@@ -64,4 +64,6 @@ format_check 'f(x):int:=x' 'f(x) as int := x'
 format_check 'sample: int := 7' 'sample: int := 7'
 # comments are no code
 format_check $'blah a b c # note\ny/* c */=0 // c' $'blah a b c\ny = 0'
+# a glyph run takes the `=`s glued after it: `!==` is one operator, not `!=` then a key
+format_check '1 !== 2' '1 !== 2'
 exit $((failures > 0))

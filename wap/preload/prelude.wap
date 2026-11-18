@@ -57,6 +57,10 @@ not(b: bool): bool := if b then no else yes
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
 # (core/sugar/ranges.wap)
 class Range { from: int; last: int }
+# how many ints a range holds, and its int at a place counting from 1, so `for i in r` walks a range a name holds as
+# it walks a list
+#(r: Range): int := r.last - r.from + 1
+#(r: Range, at: int): int := r.from + at - 1
 
 # a float's sign turned, its whole parts, an int as a float
 -(x: float): float := prim f64_neg(x)
@@ -67,17 +71,6 @@ float(n: int): float := prim f64_convert_i64_s(n)
 
 # a float's text: its shortest digits that read back (preload/floats.wap)
 text(x: float): text := float_text(x)
-
-# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
-all(xs, fits) := {
-	for x in xs { if not fits(x) { return no } }
-	yes
-}
-any(xs, fits) := {
-	for x in xs { if fits(x) { return yes } }
-	no
-}
-contains(xs, item) := xs.any(x => x == item)
 
 # bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
 # (`===` compares the type too)

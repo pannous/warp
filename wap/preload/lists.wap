@@ -1,0 +1,39 @@
+# The preload's list words (notes/wap.md "Layers"): plain warp over lists and function values, a list in, a value or a
+# new list out. `xs.map(f)` is map(xs, f) by the dot rule (core/sugar/calls.wap). A letter in a signature is a type
+# variable, bound by the call: map's U is f's result for an item.
+
+# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
+all(xs: list, fits) := {
+	for x in xs { if not fits(x) { return no } }
+	yes
+}
+any(xs: list, fits) := {
+	for x in xs { if fits(x) { return yes } }
+	no
+}
+contains(xs: list, item) := xs.any(x => x == item)
+
+# each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
+map(xs: list<T>, f: (T) -> U): list<U> := {
+	out: list<U> = []
+	for x in xs { out = out + [f(x)] }
+	out
+}
+# the items that fit a test, in order
+filter(xs: list<T>, fits: (T) -> bool): list<T> := {
+	out: list<T> = []
+	for x in xs { if fits(x) { out = out + [x] } }
+	out
+}
+# each item's list of results, joined: `[1, 2].flat_map(x => [x, x])` is [1, 1, 2, 2]
+flat_map(xs: list<T>, f: (T) -> list<U>): list<U> := {
+	out: list<U> = []
+	for x in xs { out = out + f(x) }
+	out
+}
+# texts joined, the separator between each two: `["a", "b"].join(", ")` is "a, b"
+join(texts: list<text>, separator: text): text := {
+	out = ""
+	for at in 1 to #texts { out = out + (if at > 1 then separator else "") + texts#at }
+	out
+}

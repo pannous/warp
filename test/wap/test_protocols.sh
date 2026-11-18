@@ -6,4 +6,6 @@ source "$(dirname "$0")/compile.sh"
 
 check "a trait declared beside a program" "$(ran declared 'trait shape { scaled(by); moved(x: int, y: int) }
 print "ok"')" "ok"
+check "a trait word without parameters" "$(ran no_parameters 'trait shape { area(); scaled(by) }
+print "ok"')" "ok"
 exit $((failures > 0))

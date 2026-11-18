@@ -56,4 +56,6 @@ item"
 check "a for inside a for" "$(ran for_nested 'pairs = 0
 for i in 1 to 3 { for j in 1 to 2 { pairs = pairs + 1 } }
 pairs')" "6"
+check "a range held in a name counts its ints" "$(ran range_count 'r = 2 to 5
+#r')" "4"
 exit $((failures > 0))
