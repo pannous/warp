@@ -60,4 +60,6 @@ format_check 'x = if c then 1
 	else 2' 'x = if c then 1 else 2'
 format_check 'if c
 	print "a"' 'if c {print "a"}'
+format_check 'r = 2..' 'r = 2 ..'
+format_check 'q = ..3' 'q = .. 3'
 exit $((failures > 0))
