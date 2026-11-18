@@ -379,7 +379,7 @@ with_items(n: Node, items: list) as Node := match n {
 }
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
-all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and (not takes_own_type(type_given(parameter), records) or type_given(parameter) == symbol(LIST_TYPE) or type_given(parameter) == symbol(ENUM_TYPE)))
+all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and not takes_own_type(type_given(parameter), records))
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
