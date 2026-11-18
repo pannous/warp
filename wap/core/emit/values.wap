@@ -6,6 +6,7 @@
 # $Node, where a kind is known only at run time, joins with the first form that needs it.
 
 use "wasm.wap"
+use "opcodes.wap"
 use "../stage.wap"
 use "../errors.wap"
 
