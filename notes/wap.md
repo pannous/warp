@@ -133,6 +133,8 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 ## Rules for every file
 
 - One job, said in its first comment line; a second job is a second file in its folder.
+- About 300 lines at most: a file past that is split by its owner at the next quiet point, along a real seam (one
+  concern per file, never a mechanical cut), in a commit of its own that also updates the Owners table.
 - Its input and output language named in that comment.
 - Total over its input: every case handled or refused loudly, never skipped.
 - No surface spelling outside parse/ and extensions/; no name of a domain (units, colors, keys) in core/.
