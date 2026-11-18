@@ -3,13 +3,13 @@
 # Input: what the emitter asks for (types, functions, data, instructions); output: a module's bytes. It knows
 # modules, sections, types and instructions, and nothing of warp: no Node, no kernel form, no value layout (that is
 # the emitter's). A module is built up by adding its parts (`imported`, `added_type`, `added_function`, `added_global`,
-# `added_data`, `added_text`, `exported`) and turned into bytes once, by `module_bytes`.
+# `added_text`, `exported`) and turned into bytes once, by `module_bytes`.
 # Format reference: https://webassembly.github.io/spec/core/binary/
 
 use "opcodes.wap"
 
 # A module in the making. Imports come first among the functions, so a function's index is counted after them. Each
-# entry is in bytes, as its section writes it, except a function, a recursion group and a memory segment, whose parts
+# entry is in bytes, as its section writes it, except a function and a recursion group, whose parts
 # the module reads again.
 class Module {
 	types: list<list<int>> = []
@@ -21,19 +21,13 @@ class Module {
 	exports: list<list<int>> = []
 	# passive segments, each its bytes, for `array.new_data`; numbered first, so an index is final when added
 	texts: list<list<int>> = []
-	# memory segments
-	data: list<Segment> = []
 	# the functions `ref.func` refers to, declared once each
 	referenced: list<int> = []
-	# the first free byte of the memory; below it lie the memory segments
-	memory_end: int = 16
 }
 # a recursion group: the index of its first type, and how many it holds
 class RecursionGroup { first: int, count: int }
 # a function of the module: its type's index, and its code, empty while only its place is reserved
 class DefinedFunction { type_index: int, code: list<int> }
-# a memory segment: the address its bytes are placed at
-class Segment { address: int, bytes: list<int> }
 
 # An unsigned number as LEB128, 7 bits a byte, the low bits first, each byte but the last with its high bit set:
 # 624485 → [0xE5, 0x8E, 0x26]
@@ -171,13 +165,6 @@ added_global(m: Module, type: list<int>, mutability: int, initial: list<int>) as
 
 exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
 
-# Bytes placed in the memory, aligned: their address.
-added_data(m: Module, bytes: list<int>) as int := {
-	address = (m.memory_end + DATA_ALIGNMENT - 1) ÷ DATA_ALIGNMENT * DATA_ALIGNMENT
-	m.data += [Segment(address, bytes)]
-	m.memory_end = address + #bytes
-	address
-}
 # Bytes kept passive, for `array.new_data`: their segment index.
 added_text(m: Module, bytes: list<int>) as int := {
 	m.texts += [bytes]
@@ -195,9 +182,8 @@ declared_references(m: Module) as list<int> := if m.referenced is empty then [] 
 module_bytes(m: Module) as list<int> := {
 	declarations = m.functions.map(function => unsigned(function.type_index))
 	codes = m.functions.map(function => function.code)
-	placed = m.data.map(segment => [ACTIVE_SEGMENT] + i32_const(segment.address) + END + bytes_vector(segment.bytes))
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
 	memory_pages = [[0x00] + unsigned(1)]
-	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#placed + #passive)) + unsigned(#placed + #passive)
-	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + declared_references(m) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
+	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#passive)) + unsigned(#passive)
+	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + declared_references(m) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive)
 }

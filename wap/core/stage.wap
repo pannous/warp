@@ -237,6 +237,7 @@ function_type_parts(type: Node?) as FunctionParts? := match type {
 	List(items, Bracket.Round, separator) => if #items == 1 then function_type_parts(items#1) else ø
 	_ => ø
 }
+# what a rest or repetition took; none taken is Empty, as the host gives an empty list
 items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; Empty => []; _ => [n] }
 # An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
 OPTIONAL_MARK = "?"
@@ -290,6 +291,7 @@ fields_of(record: Record) as list := match record { Record(name, fields, variant
 # An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
 cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
+# the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling

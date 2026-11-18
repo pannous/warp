@@ -31,7 +31,7 @@ emitted_function(waiting: Define, p: Program) as Placed := {
 }
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
 	f = Frame(function: yes)
-	for parameter in listed(parameters) { f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, parameter_type(parameter, p), [], yes)] }
+	for parameter in items_of(parameters) { f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, parameter_type(parameter, p), [], yes)] }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
 	signed = signed_result(declared_name(name), p)
@@ -39,7 +39,7 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 	placed = Placed(place_key(declared_name(name)), reserved_function(p.m, types, results), signed, types)
 	f.signed = signed
 	p.functions += [placed]
-	loaded = captures_loaded(form, listed(parameters), p, f)
+	loaded = captures_loaded(form, items_of(parameters), p, f)
 	value = signed_fit(code(body, p, f), body, f, p)
 	given = result_type(name, value, f)
 	if valued(signed) and given != signed and given != NEVER { refused(name, "this function's body gives another type than its signature says") }
@@ -55,8 +55,6 @@ signed_result(name: Node, p: Program) as list := {
 	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
-# the items of a list node: a definition's parameters, a fact's list
-listed(n: List) as list := match n { List(items, bracket, separator) => items }
 # A value of a type where any holds it: [the GC type it is held as, a plain value's box or its own reference type,
 # the instructions that take the value out once cast]; at is the code that asks
 held_in_any(type: Node, at: Node, p: Program) as list := {
