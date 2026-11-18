@@ -183,11 +183,12 @@ text(n: Node): text := match n {
 	Symbol(name) => name
 	Error(node) => text(node)
 	Key(left, op, right) => key_text(left, op, right)
-	List(items, bracket, separator) => opening(bracket) + items.map(code).join(joiner(separator)) + closing(bracket)
+	List(items, bracket, separator) => opening(bracket) + items.map(code).join(separator_text(separator)) + closing(bracket)
 	Data(value) => DATA_TEXT
 	Meta(node, data) => text(node)
 	Type(name, body) => "type " + text(name) + " " + text(body)
 }
+# the `is` narrows the number to an int or a float, so each arm picks its own text overload
 number_text(value: number): text := if value is int then text(value) else text(value)
 # `a: 1` with a space after the colon, a word operator between spaces, any other written against its operands
 key_text(left: Node, op: Op, right: Node): text := {
@@ -203,6 +204,8 @@ code(n: Node): text := match n {
 	Meta(node, data) => code(node)
 	_ => text(n)
 }
+# a list's brackets and separator as written; core/format.wap keeps its own copy while warp compiles it, which
+# cannot take the preload's Node (notes/backbone.md)
 opening(bracket: Bracket): text := match bracket {
 	Bracket.Curly => "{"
 	Bracket.Square => "["
@@ -217,7 +220,7 @@ closing(bracket: Bracket): text := match bracket {
 	Bracket.Less => ">"
 	Bracket.None => ""
 }
-joiner(separator: Separator): text := match separator {
+separator_text(separator: Separator): text := match separator {
 	Separator.Space => " "
 	Separator.Comma => ", "
 	Separator.Semicolon => "; "
