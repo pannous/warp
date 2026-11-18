@@ -70,4 +70,16 @@ class Box { n: int }
 print s(1) + " " + s(2.5) + " " + s("ab") + " " + s(yes) + " " + s(Box(3))')" "1 2.5 \"ab\" yes Box{n: 3}"
 check "a case with an any field shows it" "$(ran held_any 'enum Holder { Held(value: any) }
 print show(Held(3))')" "Held(3)"
+# a name given only ø holds an optional whose type its uses settle; a generic function given a type not settled yet is
+# typed once it is
+check "a name given only ø is an optional of the type its uses give" "$(ran missing_name 'held = ø
+print text(missing(held))
+print text(if missing(held) then 3 else held!)
+g(xs: list<T>): int := #xs
+xs = []
+n = g(xs)
+xs += [5]
+print text(n + #xs)')" "yes
+3
+1"
 exit $((failures > 0))

@@ -782,7 +782,12 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge) as Node := {
 	call = definition_call(n)
 	if call != ø {
 		head = if name_of(call#1) in overloaded then renamed_target(key_of(n), typed_variant(name_of(call#1), parameter_types(call))) else key_of(n)
-		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n)))
+		inner = within(judge, n)
+		if brought_definition(call) {
+			overloaded = library_overloads
+			inner = ArgumentJudge(inner.variables, inner.own, library_least, inner.program)
+		}
+		return Key(head, Op.Define, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), inner))
 	}
 	if is_key(n, Op.Arrow) { return Key(key_of(n), Op.Arrow, typed_resolved(value_of(n), shadowed(overloaded, bound_at(n)), within(judge, n))) }
 	# a method call `xs.find(f)` is the call find(xs, f), its receiver the first argument; a module's word called through
@@ -802,6 +807,29 @@ typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge) as Node := {
 	children(typed_call(phrase_block(n), overloaded, judge), x => typed_resolved(x, overloaded, judge))
 }
 
+# a library module's calls take the variants it and the modules it uses declare, never the program's, as when it runs
+# linked: a program's `bracket_of(c: text)` leaves the prelude's is_block_value calling the builtin bracket_of
+# (decision by warp-supervisor 2026-11-18, card self-calling-function). The variants of each overloaded name but the
+# program's own definitions (those with_reached brought none of), the library's lines kept; and how many arguments each takes
+global library_overloads = {}
+global library_least = {}
+library_scoped(overloaded: map, least: map, defined: map) := {
+	global library_overloads
+	global library_least
+	library_overloads = {}
+	library_least = {}
+	for name in overloaded.keys {
+		own = defined.get(name) ?? []
+		brought = brought_names.get(name) ?? []
+		kept = (1 to #overloaded[name]).filter(at => at > #own or overloaded[name]#at in brought)
+		if #kept > 0 {
+			library_overloads[name] = kept.map(at => overloaded[name]#at)
+			library_least[name] = kept.map(at => least[name]#at)
+		}
+	}
+}
+# whether the definition is one with_reached brought from a library module
+brought_definition(call: Node) as bool := parameter_types(call) in (brought_names.get(name_of(call#1)) ?? [])
 # inside a definition or a lambda its parameters and variables are its own, never an overloaded function of their name:
 # the prelude's `f(item)` of map(xs, f) calls its f, `find => find(a, b)` its find, `color = …; color .^ 2` its color,
 # not the program's or a library's variants
@@ -809,10 +837,12 @@ shadowed(overloaded: map, parameters: list) as map := if parameters.any(name => 
 typed_overloads(program: Node) as Node := {
 	overloaded = overloaded_types(program)
 	if #overloaded == 0 { return program }
-	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), variant_least(program, overloaded), program))
+	least = variant_least(program, overloaded)
+	defined = defined_types(program)
+	library_scoped(overloaded, least, defined)
+	resolved = typed_resolved(program, overloaded, ArgumentJudge(assigned_kinds(program), own_heads(program), least, program))
 	refused_overload_values(resolved, overloaded, program)
 	# after the resolving, so a library variant's own call stays the library's
-	defined = defined_types(program)
 	variants = overloaded.keys.flat_map(name => library_variants(name, defined[name]).map(types => library_variant(name, types)))
 	if #variants == 0 then resolved else separated(bracketed(statements_in(resolved) + variants, ""), ";")
 }
