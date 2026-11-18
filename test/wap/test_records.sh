@@ -53,4 +53,7 @@ b.scaled(10)')" "5
 30"
 check "a class of one field" "$(ran one_field 'class P { x: int }
 P(3).x')" "3"
+check "an instance shows itself in its constructor form" "$(ran shown 'class P { x: int }
+class Q { p: P; name: text }
+print show(Q(P(1), "a"))')" 'Q{p: P{x: 1}, name: "a"}'
 exit $((failures > 0))

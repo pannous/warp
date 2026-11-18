@@ -245,6 +245,12 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **A decimal literal is a binary float (f64), not exact:** `0.1 + 0.2` is 0.30000000000000004 in wap and 0.3 in warp,
+  whose decimal literals are exact (notes/decisions.md core-round-untyped-half, exact-decimal-big; tests
+  test/numbers/test_number_and_unit_rules:7, test_fraction_written_form:11, test_declared_float_exact_reals:13). The
+  compiler's own source barely uses decimals, so self-build does not wait for it; the exact number kind (the runtime's
+  exact numbers as preload warp) comes after self-build. No test pins the f64 value.
+
 - **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
   program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
   example the preload's `slice` taking a Range and raising when it does not fit.

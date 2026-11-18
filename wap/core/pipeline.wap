@@ -53,5 +53,5 @@ typed_file(file: text, preload: Node) as Block := {
 	modules = declared_modules(file)
 	whole = Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
 	library_code = library_code_of(preload)
-	typed_by_rules(typed_program(whole, library_code), declarations_of(preload), library_code)
+	typed_by_rules(typed_shown(whole, library_code), declarations_of(preload), library_code)
 }

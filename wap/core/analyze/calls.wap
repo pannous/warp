@@ -10,6 +10,9 @@ use "../../kernel/forms.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
+# the word that shows a value in warp notation, the program's last value by it (core/analyze/types.wap typed_shown)
+SHOW_WORD = "show"
+PRINT_WORD = "print"
 # the word of an optional value known present, `x!` (named required): its value, raising when it is missing
 REQUIRED_WORD = "!"
 

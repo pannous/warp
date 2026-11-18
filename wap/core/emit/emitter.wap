@@ -26,8 +26,6 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
-# the types of the values the host shows when main gives them back
-SHOWN_BY_HOST = [I64]
 # the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
 NEVER_WORD = "never"
 NEVER = [NEVER_WORD]
@@ -40,10 +38,8 @@ OTHER_LABEL = "other"
 # the bindings whose variables live in the function's frame
 FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER, BOUND_CAPTURE]
 
-# The module of a program: its statements become the body of `main`, which the host runs. Its value is shown, as
-# warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
-# values show themselves (notes/backbone.md "Debts"); the host's float digits are not warp's (0.1 as
-# 0.10000000000000001).
+# The module of a program: its statements become the body of `main`, which the host runs. The typing stage made the
+# program print its value, `print(show(it))`, so main gives nothing back.
 emitted(program: Block) as Module := {
 	m = Module()
 	p = Program(m)
@@ -51,8 +47,7 @@ emitted(program: Block) as Module := {
 	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
 	f = Frame()
 	body = code(program, p, f)
-	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
-	exported(m, "main", FUNCTION_KIND, function_of(m, [], shown, f))
+	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], dropped(body)), f))
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
