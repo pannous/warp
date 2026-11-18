@@ -5,6 +5,8 @@
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+# the program stopped with a message on the standard error, then a line end; it never finishes
+raise(message: text): never := prim raise_text(message)
 
 # how many items a list holds, a list of any items: a bare `list` fits every list<T>
 #(xs: list): int := prim array_len(xs)
