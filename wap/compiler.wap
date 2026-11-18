@@ -25,4 +25,4 @@ preload = language_loaded(program.folder)
 compiled(file: text) as list := module_bytes(emitted(typed_file(file, preload)))
 
 if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
-if args#1 == "format" { print formatted(operated_program(read_notation(args#2))) } else { write_bytes(args#2, compiled(args#1)) }
+if args#1 == "format" { print formatted(groupings_written(operated_program(read_notation(args#2)))) } else { write_bytes(args#2, compiled(args#1)) }

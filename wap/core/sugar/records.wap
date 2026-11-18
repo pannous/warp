@@ -2,3 +2,6 @@
 
 # a class, its fields typed names; the rule writes its constructor too, the instance as data
 rule class $name { ($field: $type)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}
+
+# an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's type
+rule enum $name { $cases... } => Record($name, [], [$cases...])
