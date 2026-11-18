@@ -13,6 +13,9 @@ any(xs: list, fits) := {
 }
 contains(xs: list, item) := xs.any(x => x == item)
 
+# a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
++(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
+
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
 	out: list<U> = []
