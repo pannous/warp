@@ -8,6 +8,9 @@ use "../../kernel/forms.wap"
 use "letters.wap"
 use "../errors.wap"
 
+# TODO: Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
+# TODO: what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
+# TODO: link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
 # REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this file should hold the one relation between types,
 # `conversion(given, wanted) as Conversion?`, answering how a value gets there: as it is, boxed into any, wrapped
 # into T?, checked out of any (a cast that raises with the place), or not at all. Typing writes that conversion into
