@@ -108,13 +108,19 @@ text(x: T?): text := if missing(x) then "ø" else text(x!)
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(x): bool := if x then no else yes
-# a value as a condition reads it (wiki/truthiness.md): 0, 0.0, an empty text or list and ø are falsy, every other
-# value truthy; `if xs` reads truthy(xs)
-truthy(n: int): bool := n != 0
-truthy(x: float): bool := x != 0.0
-truthy(t: text): bool := #t > 0
-truthy(xs: list): bool := #xs > 0
-truthy(x: T?): bool := not missing(x)
+# A value as a condition reads it (wiki/truthiness.md): truthy when it is not empty, so one word decides both `if x`
+# and `x is empty`, and a class's own empty decides `if b`. 0, 0.0 and ø are empty here, a text and a list beside
+# their own words (preload/texts.wap, lists.wap)
+empty(n: int): bool := n == 0
+empty(x: float): bool := x == 0.0
+empty(x: T?): bool := missing(x)
+truthy(x: T): bool := not empty(x)
+# a value as a bool: `bool("no")` and `bool("0")` are no, as a text written for a yes or no reads; any other value is
+# its truth (wiki/conversion.md)
+FALSE_SPELLINGS: list<text> := ["no", "0"]
+bool(t: text): bool := not FALSE_SPELLINGS.contains(t) and truthy(t)
+bool(c: char): bool := bool(text(c))
+bool(x: T): bool := truthy(x)
 
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
 # (preload/sugar/ranges.wap)
@@ -137,6 +143,8 @@ floor(x: float): float := prim f64_floor(x)
 ceil(x: float): float := prim f64_ceil(x)
 trunc(x: float): int := prim i64_trunc_f64_s(x)
 float(n: int): float := prim f64_convert_i64_s(n)
+# a float's whole part, toward zero: `int(2.7)` and `2.7 as int` are 2, `int(-2.7)` is -2
+int(x: float): int := prim i64_trunc_f64_s(x)
 
 # a float's text: its shortest digits that read back (preload/floats.wap)
 text(x: float): text := float_text(x)
