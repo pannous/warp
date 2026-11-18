@@ -141,4 +141,7 @@ print(g(0) ?? "none")')" "b
 a
 a
 none"
+check "a program's own class shadows the preload's of the same name" "$(ran own_program_class 'class Program { m: int }
+p = Program(3)
+print(text(p.m))')" "3"
 exit $((failures > 0))
