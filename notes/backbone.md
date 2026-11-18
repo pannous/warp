@@ -324,3 +324,5 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
   Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
   Nothing pins the float digits.
+- **any compares other references by identity:** inside an `any`, refs other than boxes and texts compare by
+  identity (a record compared directly compares by fields); by type via dispatch, as show does, when code needs it.

@@ -29,6 +29,8 @@ ANYREF = [0x6E]
 I8 = [0x78]
 # heap types, each its bytes (a declared type's is signed(index)), and type constructors
 ANY_HEAP = [0x6E]
+# the heap type of the references wasm compares by identity, structs and arrays among them
+EQ_HEAP = 0x6D
 NULLABLE_REFERENCE = 0x63
 FUNCTION_TYPE = 0x60
 STRUCT_TYPE = 0x5F
@@ -122,6 +124,7 @@ I64_REINTERPRET_F64 = [0xBD]
 F64_REINTERPRET_I64 = [0xBF]
 REF_NULL = [0xD0]
 REF_IS_NULL = [0xD1]
+REF_EQ = [0xD3]
 REF_AS_NON_NULL = [0xD4]
 END = [0x0B]
 STRUCT_NEW = [0xFB, 0x00]

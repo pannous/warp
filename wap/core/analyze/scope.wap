@@ -18,6 +18,7 @@
 
 use "../errors.wap"
 use "../stage.wap"
+use "types.wap"
 use "../../kernel/forms.wap"
 
 # depth of the program's own statements: names defined there are globals and top-level functions
@@ -95,8 +96,10 @@ names_case(name: Node, scope: list) as bool := {
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant#1.kind == BOUND_CASE
 }
-# whether a name means functions and no type
+# whether a name means functions and no type: a type's word is a type test even beside a function of that name,
+# `3 is int` beside int(t: text)
 names_predicate(name: Node, scope: list) as bool := {
+	if TYPE_WORDS.contains(text(name)) { return no }
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
 }
@@ -223,17 +226,20 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 }
 # The variable an assignment makes: a new one for `let x = …` and for a name its function sees no variable of;
 # none for `global x = …`, the program's, or for a variable its function has. A name that is a variable of the
-# program or of a function around reads two ways, so the assignment is refused naming both.
+# program or of a function around, defined before it, reads two ways, so the assignment is refused naming both; one
+# defined only later is no variable yet, so the assignment makes its own.
 assigned_variables(set: Node, place: Node, scope: list, depth: int) as list := {
 	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
 	name = text(place)
 	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
 		if seen_in_function(name, scope, depth) { return [] }
 		outer = outer_variable(name, scope, depth)
-		if outer != ø { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one" + global_reading(outer, name)) }
+		if outer != ø and written_before(outer.definer, place) { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one" + global_reading(outer, name)) }
 	}
 	[Definition(name, local_kind(depth), place, depth)]
 }
+# whether code was written before other code of its file, ø positions counting as before
+written_before(earlier: Node, later: Node) as bool := line_of(earlier) == ø or line_of(later) == ø or line_of(earlier) < line_of(later) or line_of(earlier) == line_of(later) and column_of(earlier) < column_of(later)
 global_reading(outer: Definition, name: text) as text := if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""
 # the variable of that name the program or a function around the one at depth defines, ø when the name is none
 outer_variable(name: text, scope: list, depth: int) as Definition? := {

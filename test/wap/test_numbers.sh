@@ -33,4 +33,6 @@ print text(1.5 ^ 2)
 print text(2.0 ^ -1)')" "1024
 2.25
 0.5"
+check "an int's sign turned by a leading -" "$(ran int_negated 'x = 5
+print text(-x + 1)')" "-4"
 exit $((failures > 0))

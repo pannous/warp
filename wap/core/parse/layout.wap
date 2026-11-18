@@ -3,6 +3,8 @@
 
 use "lexemes.wap"
 use "atoms.wap"
+use "cascade.wap"
+use "reader.wap"
 
 # Separators, tightest first; glue (no blank) is tighter than all of them
 SEPARATOR_ORDER = [Separator.None, Separator.Space, Separator.Comma, Separator.Semicolon, Separator.Tab, Separator.Newline]

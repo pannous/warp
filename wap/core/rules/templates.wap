@@ -9,6 +9,7 @@ use "../parse/operators.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/operator_table.wap"
 
 FRESH_MARK = "·"
 
@@ -31,7 +32,7 @@ filled(template: Node, bindings: map) as Node := match template {
 # a template text, each hole in it replaced by the spelling of what it took, the longest name first ($fx before $f)
 interpolated(value: text, bindings: map) as text := {
 	filled = value
-	for name in sorted_by_key(bindings.keys, name => -#name) { filled = filled.replace(name, text(bindings[name])) }
+	for name in sorted(bindings.keys, name => -#name) { filled = filled.replace(name, text(bindings[name])) }
 	filled
 }
 
