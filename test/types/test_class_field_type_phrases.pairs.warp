@@ -4,3 +4,7 @@
 'class bag { items: list of text }; b = bag(["hi"]); count(b.items)'	1
 'class bag { items: list of text; n: int }; b = bag(["hi"], 2); b.n'	2
 'class bag { items: list<text> }; count(bag(["hi", "yo"]).items)'	2
+
+# a_map_typed_with_its_keys_and_values_is_a_map (map<text, int> reads as map of text, int)
+'class P { host: map<text, int> = {} }; p = P(); p.host["a"] = 1; p.host["a"] ?? 0'	1
+'m: map<text, int> = {}; m["a"] = 2; m["a"]'	2
