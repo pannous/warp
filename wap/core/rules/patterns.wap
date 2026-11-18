@@ -152,9 +152,7 @@ sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
 }
 
 # In braces the lines' comma rows are their items: `{ A, B⏎ C }` holds three; square brackets keep a row a list
-braced_items(items: list, bracket: Bracket) as list := if bracket != Bracket.Curly then items else items.flat_map(item => match item {
-	List(row, Bracket.None, Separator.Comma) => row
-	_ => [item] })
+braced_items(items: list, bracket: Bracket) as list := if bracket != Bracket.Curly then items else items.flat_map(row_items)
 
 # a group of one item has no separator to compare: `{ x: int }` fits `{ ($f: $t)... ($m := $b)... }`
 separators_fit(wanted: Separator, given: Separator) as bool := wanted == given or STATEMENT_SEPARATORS.contains(given) and (wanted == Separator.Space or STATEMENT_SEPARATORS.contains(wanted))
