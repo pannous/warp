@@ -9,7 +9,7 @@ landing's compiler builds, read from the build records in the store (STORE). All
 (scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
 artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
-import collections, datetime, glob, json, os, re, subprocess, sys
+import collections, concurrent.futures, datetime, glob, json, os, re, shutil, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-10-29"
@@ -51,6 +51,23 @@ HELLO_SNAPSHOTS = os.path.join(REPO, "data/vitals/hello.jsonl")  # one line per 
 # measured by hand before the series began: (label, revision, 10^9 instructions, seconds)
 HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.22), ("1.6.1", "v1.6.1", 6.1, 0.47),
                     ("before hello-takes", "d152612c4d^1", 5.4, 0.53), ("hello-takes", "d152612c4d", 3.1, 0.22)]
+# wap, the new compiler (notes/wap.md): its lines by stage folder, its road to self-build and its tests, as trends
+WAP_STAGES = [("parse", "wap/core/parse/"), ("analyze", "wap/core/analyze/"), ("rules", "wap/core/rules/"),
+              ("emit", "wap/core/emit/"), ("kernel", "wap/kernel/"), ("preload", "wap/preload/")]
+WAP_OTHER = "other"  # compiler.wap, wap/core/*.wap and wap/core/sugar/
+WAP_LINE_LIMIT = 300  # a wap file past it is split (notes/wap.md)
+WARP = os.path.expanduser("~/dev/bin/warp")
+WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (with hello) when wap/ changed, "tests"
+WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree")  # wap/ and the census script of main's tip, extracted to run them
+WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
+WAP_CENSUS_JOBS = 4  # census runs at once, niced: each takes ~25 s
+WAP_BLOCKERS = 8  # most frequent refusals kept per census
+WAP_HELLO_SOURCE = 'print "Hello"\n'
+WAP_HELLO_RUNS = 1  # a compile by wap takes ~20 s
+WAP_TESTS_SUMMARY = os.path.join(REPO, "data/wap-tests/summary.txt")  # written by test/wap/run.sh
+WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
+CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound, typed: (\w+), emitted: (\w+)")
+REFUSAL_POSITION = re.compile(r"^\S+ line \d+:\d+: ")  # the file and place a refusal names, which differ per use
 
 
 def component(path):
@@ -75,9 +92,9 @@ def git(*args):
 TIP = git("rev-parse", "origin/main").strip()
 
 
-def lines_at(commit):
-    totals = collections.Counter()
-    wanted = [f for f in git("ls-tree", "-r", "--name-only", commit).splitlines() if component(f)]
+def file_lines(commit, classify=component):
+    """(path, lines) of each file of <commit> that <classify> names a component of"""
+    wanted = [f for f in git("ls-tree", "-r", "--name-only", commit).splitlines() if classify(f)]
     blob = subprocess.run(["git", "-C", REPO, "cat-file", "--batch"], capture_output=True, check=True,
                           input="".join(f"{commit}:{f}\n" for f in wanted).encode()).stdout
     position = 0
@@ -86,8 +103,14 @@ def lines_at(commit):
         size = int(blob[position:header_end].split()[-1])
         content = blob[header_end + 1:header_end + 1 + size]
         # as git's numstat counts them: a last line without its newline is a line
-        totals[component(f)] += content.count(b"\n") + (not content.endswith(b"\n") and bool(content))
+        yield f, content.count(b"\n") + (not content.endswith(b"\n") and bool(content))
         position = header_end + 2 + size
+
+
+def lines_at(commit, classify=component):
+    totals = collections.Counter()
+    for f, lines in file_lines(commit, classify):
+        totals[classify(f)] += lines
     return totals
 
 
@@ -383,12 +406,22 @@ def recently_done(cards):
             for card, node in zip(done, nodes)]
 
 
+def read_snapshots(path):
+    if not os.path.exists(path):
+        return []
+    with open(path) as kept:
+        return [json.loads(line) for line in kept if line.strip()]
+
+
+def append_snapshot(path, snapshot):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "a") as kept:
+        kept.write(json.dumps(snapshot) + "\n")
+
+
 def card_counts():
     """The board's cards per column, one snapshot an hour kept in CARD_SNAPSHOTS (todo list costs GraphQL quota)."""
-    snapshots = []
-    if os.path.exists(CARD_SNAPSHOTS):
-        with open(CARD_SNAPSHOTS) as kept:
-            snapshots = [json.loads(line) for line in kept if line.strip()]
+    snapshots = read_snapshots(CARD_SNAPSHOTS)
     now = datetime.datetime.now()
     if not snapshots or now - datetime.datetime.fromisoformat(snapshots[-1]["time"]) > datetime.timedelta(hours=1):
         listing = subprocess.run(["todo", "list", "--json"], capture_output=True, text=True, cwd=REPO)
@@ -397,19 +430,17 @@ def card_counts():
             counts = collections.Counter(card["column"] for card in cards)
             snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts),
                               "done": recently_done(cards)})
-            os.makedirs(os.path.dirname(CARD_SNAPSHOTS), exist_ok=True)
-            with open(CARD_SNAPSHOTS, "a") as kept:
-                kept.write(json.dumps(snapshots[-1]) + "\n")
+            append_snapshot(CARD_SNAPSHOTS, snapshots[-1])
         else:
             print("vitals: todo list failed, cards from the last snapshot: " + listing.stderr.strip()[-200:], file=sys.stderr)
     return snapshots
 
 
-def cheapest_cost(warp, arguments, said):
-    """The cheapest of HELLO_RUNS runs of `<warp> <arguments>`: 10^9 instructions retired and wall seconds, by
+def cheapest_cost(warp, arguments, said, runs_count=HELLO_RUNS):
+    """The cheapest of <runs_count> runs of `<warp> <arguments>`: 10^9 instructions retired and wall seconds, by
     /usr/bin/time -l; None when its output doesn't say `said`."""
     runs = []
-    for _ in range(HELLO_RUNS):
+    for _ in range(runs_count):
         run = subprocess.run(["/usr/bin/time", "-l", warp, *arguments], capture_output=True, text=True, cwd=REPO,
                              env={**os.environ, "WARP_WINDOW": "0"})
         instructions, seconds = re.search(r"(\d+)\s+instructions retired", run.stderr), re.search(r"([\d.]+) real", run.stderr)
@@ -439,12 +470,8 @@ def hello_track():
     compilers' commit, warp.wasm.inputs) and kept in HELLO_SNAPSHOTS; then HELLO_REFERENCES, measured by hand."""
     # a later line of a commit adds to its earlier one (the compile, measured since the series began)
     points = {}
-    if os.path.exists(HELLO_SNAPSHOTS):
-        with open(HELLO_SNAPSHOTS) as kept:
-            for line in kept:
-                if line.strip():
-                    point = json.loads(line)
-                    points.setdefault(point["commit"], {}).update(point)
+    for point in read_snapshots(HELLO_SNAPSHOTS):
+        points.setdefault(point["commit"], {}).update(point)
     measured = list(points.values())
     known = {point["commit"] for point in measured if "compile" in point}
     for folder in sorted(glob.glob(os.path.join(INSTALLS, "*"))):
@@ -461,17 +488,93 @@ def hello_track():
             point.update({"instructions": cost[0], "seconds": cost[1]})
             measured.append(point)
         point["compile"] = cost[2]
-        with open(HELLO_SNAPSHOTS, "a") as kept:
-            kept.write(json.dumps(point) + "\n")
+        append_snapshot(HELLO_SNAPSHOTS, point)
     series = sorted([p["time"], p["commit"], p["instructions"], p["seconds"], "", p.get("compile")] for p in measured)
     references = [[commit_date(revision), git("rev-parse", "--short=10", revision).strip(), instructions, seconds, label]
                   for label, revision, instructions, seconds in HELLO_REFERENCES]
     return {"series": series, "references": references}
 
 
+def wap_sizes():
+    """wap's lines at each commit of main that changed wap/: [date, commit, total, lines per stage, core lines then, files
+    over WAP_LINE_LIMIT then] and the files over the limit at the tip, [path, lines]"""
+    classify = lambda path: path.endswith(".wap") and path.startswith("wap/") and next(
+        (stage for stage, prefix in WAP_STAGES if path.startswith(prefix)), WAP_OTHER)
+    series, over = [], []
+    for line in git("log", "--first-parent", "--reverse", "--format=%H %ad", "--date=iso-strict", TIP, "--", "wap").splitlines():
+        sha, date = line.split()
+        stages, files = collections.Counter(), list(file_lines(sha, classify))
+        for path, lines in files:
+            stages[classify(path)] += lines
+        over = sorted(([path, lines] for path, lines in files if lines > WAP_LINE_LIMIT), key=lambda file: -file[1])
+        date = date[:16].replace("T", " ")
+        core = next((sum(row[3][:-1]) for row in reversed(rows) if row[0] <= date), 0)
+        series.append([date, sha[:10], sum(stages.values()), dict(stages), core, len(over)])
+    return series, over
+
+
+def wap_census(files):
+    """The census (notes/wap.md "Road to self-build") of each of <files> in WAP_TREE, niced WAP_CENSUS_JOBS at a time, summed:
+    statements, lowered, bound, files typed and emitted, and the WAP_BLOCKERS most frequent refusals [stage, message, count]"""
+    def run(file):
+        return subprocess.run(["nice", "-n", "19", WARP, "--no-window", WAP_CENSUS, file], capture_output=True,
+                              text=True, cwd=WAP_TREE, env={**os.environ, "WARP_WINDOW": "0"}).stdout
+    with concurrent.futures.ThreadPoolExecutor(WAP_CENSUS_JOBS) as pool:
+        outputs = list(pool.map(run, files))
+    sums, blockers = collections.Counter(files=len(files)), collections.Counter()
+    for file, output in zip(files, outputs):
+        for line in output.splitlines():
+            stage, _, message = line.partition("\t")
+            if match := CENSUS_LINE.search(message) if stage == "ok" else None:
+                statements, lowered, bound, typed, emitted = match.groups()
+                sums.update(statements=int(statements), lowered=int(lowered), bound=int(bound), typed=typed == "yes", emitted=emitted == "yes")
+            elif stage in ("read", "declare", "lower", "bind", "type", "emit"):
+                blockers[stage, REFUSAL_POSITION.sub("", message)] += 1
+        if "ok\t" not in output:
+            print(f"vitals: wap census of {file} gave no result: {output.strip()[-200:]}", file=sys.stderr)
+    return {**sums, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
+
+
+def wap_hello(compiler):
+    """hello compiled by wap and run: 10^9 instructions and seconds of both together; None when it fails"""
+    source, module = (os.path.join(WAP_TREE, name) for name in ("hello.wap", "hello.wasm"))
+    with open(source, "w") as hello:
+        hello.write(WAP_HELLO_SOURCE)
+    costs = [cheapest_cost(WARP, arguments, said, WAP_HELLO_RUNS) for arguments, said in (([compiler, source, module], ""), ([module], "Hello"))]
+    return None if None in costs else [round(sum(cost[i] for cost in costs), 2) for i in (0, 1)]
+
+
+def wap_road(tip_date):
+    """The census and hello by wap, one snapshot in WAP_SNAPSHOTS per state of wap/ at the tip, taken only when wap/ changed
+    since the last one; wap's tests' summary as a snapshot whenever test/wap/run.sh wrote a new one."""
+    snapshots, tree = read_snapshots(WAP_SNAPSHOTS), git("rev-parse", f"{TIP}:wap").strip()[:12]
+    censuses = [s for s in snapshots if s["kind"] == "census"]
+    if not censuses or censuses[-1]["tree"] != tree:
+        shutil.rmtree(WAP_TREE, ignore_errors=True)
+        os.makedirs(WAP_TREE)
+        subprocess.run(f"git -C {REPO} archive {TIP} wap {WAP_CENSUS} | tar -x -C {WAP_TREE}", shell=True, check=True)
+        files = sorted(f for f in git("ls-tree", "-r", "--name-only", TIP, "wap").splitlines() if f.endswith(".wap"))
+        census = wap_census(files)
+        snapshots.append({"kind": "census", "time": tip_date, "commit": TIP[:10], "tree": tree, **census,
+                          "hello": wap_hello(os.path.join(WAP_TREE, "wap/compiler.wap"))})
+        append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
+    if os.path.exists(WAP_TESTS_SUMMARY) and (match := WAP_TESTS_LINE.search(open(WAP_TESTS_SUMMARY).read())):
+        written = datetime.datetime.fromtimestamp(os.path.getmtime(WAP_TESTS_SUMMARY)).strftime("%Y-%m-%d %H:%M")
+        if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
+            snapshots.append({"kind": "tests", "time": written, "passed": int(match[1]), "failed": int(match[2])})
+            append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
+    return snapshots
+
+
+def wap_track():
+    sizes, over = wap_sizes()
+    return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": [name for name, _ in WAP_STAGES] + [WAP_OTHER],
+            "snapshots": wap_road(commit_date(TIP))}
+
+
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
-data = {"cards": card_counts(), "hello": hello_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
+data = {"cards": card_counts(), "hello": hello_track(), "wap": wap_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
         "tip": git("log", "-1", "--format=%h%x09%s%x09%ad", "--date=format:%Y-%m-%d %H:%M", TIP).strip().split("\t"),
         "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)

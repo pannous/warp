@@ -1,0 +1,68 @@
+# The typing of data written as code (notes/backbone.md "Stage languages"): a list's items, an instance's fields and a
+# map's entries, each given the type its place wants; called from the typing stage's dispatch (core/analyze/types.wap typed_form).
+
+use "types.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the counting from 0 that `x[k]` writes, as the place k + 1
+PLUS = "+"
+
+# An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
+# type is the record's name
+instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
+	record = record_named(s.records, head) ?? refused(head, "no class has this name")
+	given = items.map(item => field_typed(item, record, s, f))
+	for field in fields_of(record) { if not items.any(item => text(declared_name(item)) == text(declared_name(field))) { refused(n, "this ${head} gives no value to its field ${declared_name(field)}") } }
+	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
+}
+field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
+	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
+	typed = typed_form(value, s, f, declared_type(field))
+	if not fits_type(typed, declared_type(field)) { refused(value, "this gives ${value_type(typed) ?? "no value"}, the field holds a ${declared_type(field)}") }
+	refitted(Key(name, Op.Colon, typed), item)
+} }
+
+# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
+# list takes the type its place wants.
+list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
+	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
+	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
+}
+
+# A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
+# place wants; all of one type V, the map is a map<text, V>
+map_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => entry_typed(item, held_type(expected), s, f))
+	held = value_type(entry_value(typed#1))
+	if held == ø or not fit_each(typed.map(entry_value), held) { refused(n, "a map's values are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Curly, separator), n), map_type(symbol(TEXT_TYPE), held))
+}
+entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node := match entry { Key(key, Op.Colon, value) => refitted(Key(key, Op.Colon, typed_form(value, s, f, expected)), entry) }
+entry_value(entry: Node) as Node := match entry { Key(key, op, value) => value }
+# a map's value by its key, `m["a"]` or `m.a`: of the map's value type
+entry_read_typed(n: Node, map: Node, key: Node) as Node := with_type_of(refitted(Get(map, key), n), held_type(value_type(map)))
+
+# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
+# the call `#(x, i)`, as a Range answers it
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s)
+# the item of a typed subject at a typed place
+item_got(n: Node, held: Node, place: Node, s: TypingState) as Node := {
+	item = item_type(value_type(held))
+	if item == ø { return word_called(n, PLACE_WORD, [held, place], ø, s) }
+	if not fits_type(place, symbol(INT_TYPE)) { refused(place, "an item's place is an int") }
+	with_type_of(refitted(Get(held, place), n), item)
+}
+
+# `x[k]` by the subject's type: a map's entry of that key, else the item counted from 0, at place k + 1 (a list's or a
+# text's, or what the type's own `#` gives)
+item_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
+	held = typed_form(subject, s, f, ø)
+	map_key = key_type(value_type(held))
+	if map_key != ø { return entry_read_typed(n, held, typed_form(key, s, f, map_key)) }
+	one = with_type(placed_like(Number(1), key), INT_TYPE)
+	item_got(n, held, word_called(key, PLUS, [typed_form(key, s, f, symbol(INT_TYPE)), one], ø, s), s)
+}

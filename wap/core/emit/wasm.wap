@@ -122,6 +122,8 @@ F64_CONVERT_I64_S = [0xB9]
 I64_REINTERPRET_F64 = [0xBD]
 F64_REINTERPRET_I64 = [0xBF]
 REF_NULL = [0xD0]
+REF_IS_NULL = [0xD1]
+REF_AS_NON_NULL = [0xD4]
 END = [0x0B]
 STRUCT_NEW = [0xFB, 0x00]
 STRUCT_GET = [0xFB, 0x02]
@@ -195,6 +197,9 @@ default_of(value_type: list) as list := {
 }
 
 # a reference to the declared type of that index, or null
+# whether a value type is a nullable reference, and the heap type it refers to
+is_reference(type: list) as bool := type#1 == NULLABLE_REFERENCE or type in [ANYREF, ARRAYREF]
+heap_of(reference: list) as list := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
 # whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
 packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))

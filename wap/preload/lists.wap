@@ -13,6 +13,9 @@ any(xs: list, fits) := {
 }
 contains(xs: list, item) := xs.any(x => x == item)
 
+# a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
++(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
+
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
 	out: list<U> = []
@@ -48,4 +51,11 @@ index_where(xs: list, fits) := {
 		if fits(xs#at) { return at }
 	}
 	0
+}
+
+# a list in warp notation, each item shown by its own show: `show([1, 2])` is [1, 2]
+show(xs: list): text := {
+	out = ""
+	for at in 1 to #xs { out = out + (if at > 1 then ", " else "") + show(xs#at) }
+	"[" + out + "]"
 }

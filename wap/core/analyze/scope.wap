@@ -24,6 +24,8 @@ use "../../kernel/forms.wap"
 PROGRAM_DEPTH = 0
 # depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
 LIBRARY_DEPTH = -1
+# a class a Block declares, seen by the methods beside it for their receiver's fields; never a name's meaning
+RECORD_KIND = "record"
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 # (owner: a case's enum)
@@ -50,9 +52,11 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Break() => n
 	Continue() => n
 	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	Item(subject, key) => refitted(Item(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
+	List(items, Bracket.Curly, separator) => refitted(List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator), n)
 	Record(name, fields, variants) => n
 	Number(value) => n
 	Text(value) => n
@@ -109,7 +113,7 @@ type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int)
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }
-# an instance's field, `x: 1`: its value bound, its name the record's field, no variable
+# an instance's field or a map's entry, `x: 1`: its value bound, its name a word, no variable
 field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
 all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
@@ -136,7 +140,19 @@ program_scope(scope: list) as list := scope.filter(definition => definition.dept
 parameters_bound(parameters: List, depth: int) as Node := match parameters {
 	List(items, bracket, separator) => refitted(List(items.map(p => bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
 }
-body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + scope, depth + 1)
+body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + receiver_fields(parameters, scope, depth + 1) + scope, depth + 1)
+# A method's receiver fields: in a function whose first parameter is `self` of a class, each field of the class by its
+# bare name, `c` for `self.c`, read and set; the function's parameters and locals hide them
+receiver_fields(parameters: List, scope: list, depth: int) as list := {
+	receiver = match parameters { List(items, bracket, separator) => if items is empty then ø else items#1 }
+	if receiver == ø or text(parameter_name(receiver)) != SELF_WORD or declared_type(receiver) == ø { return [] }
+	for definition in scope {
+		if definition.kind == RECORD_KIND and definition.name == text(declared_type(receiver)) {
+			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), BOUND_FIELD, parameter_name(receiver), depth))
+		}
+	}
+	[]
+}
 parameter_definitions(parameters: List, depth: int) as list := match parameters {
 	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), BOUND_PARAMETER, parameter_name(p), depth))
 }
@@ -180,7 +196,7 @@ defined_in(statements: list, scope: list, depth: int) as list := {
 }
 definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
-	Record(name, fields, variants) => cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth, text(name)))
+	Record(name, fields, variants) => [Definition(text(name), RECORD_KIND, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth, text(name)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
@@ -231,7 +247,7 @@ resolved(name: Node, scope: list, depth: int) as Node := {
 	if innermost.kind == BOUND_CASE { unambiguous_case(name, innermost, scope) }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
 	bound = with_fact(name, BINDING, symbol(kind))
-	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
 }
 # the depths of these definitions, each once, innermost first as they come
 depths_of(definitions: list) as list := {
@@ -261,7 +277,7 @@ unambiguous_case(name: Node, meant: Definition, scope: list) := {
 definitions_meant(name: text, scope: list) as list := {
 	meant = []
 	for definition in scope {
-		if definition.name == name {
+		if definition.name == name and definition.kind != RECORD_KIND {
 			if not is_function(definition) { return if meant is empty then [definition] else meant }
 			meant = meant + [definition]
 		}

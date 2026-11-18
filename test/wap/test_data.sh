@@ -34,4 +34,15 @@ xs = [1, 2] + [3]
 print text(#xs)
 xs#3')" "3
 3"
+check "a map written as data, read by its key" "$(ran map_read 'NAMES = {yes: 1, no: 0}
+print text(NAMES.yes)')" "1"
+check "a map's value set by its key, a new key added" "$(ran map_set 'm = {a: 1}
+m.a = 5
+m.b = 7
+print text(m.a + m.b)')" "12"
+check "an item counted from 0 is a place" "$(ran item_place 'xs = [1, 2]
+xs[0] = 5
+print text(xs[0] + xs[1])')" "7"
+check "a text's character counted from 0" "$(ran text_item 't = "abc"
+print t[2]')" "c"
 exit $((failures > 0))

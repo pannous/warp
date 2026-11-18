@@ -26,8 +26,6 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
-# the types of the values the host shows when main gives them back
-SHOWN_BY_HOST = [I64]
 # the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
 NEVER_WORD = "never"
 NEVER = [NEVER_WORD]
@@ -40,10 +38,8 @@ OTHER_LABEL = "other"
 # the bindings whose variables live in the function's frame
 FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER, BOUND_CAPTURE]
 
-# The module of a program: its statements become the body of `main`, which the host runs. Its value is shown, as
-# warp shows a program's value: an int the host shows itself, as main's result. Any other kind is dropped until
-# values show themselves (notes/backbone.md "Debts"); the host's float digits are not warp's (0.1 as
-# 0.10000000000000001).
+# The module of a program: its statements become the body of `main`, which the host runs. The typing stage made the
+# program print its value, `print(show(it))`, so main gives nothing back.
 emitted(program: Block) as Module := {
 	m = Module()
 	p = Program(m)
@@ -51,8 +47,7 @@ emitted(program: Block) as Module := {
 	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
 	f = Frame()
 	body = code(program, p, f)
-	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
-	exported(m, "main", FUNCTION_KIND, function_of(m, [], shown, f))
+	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], dropped(body)), f))
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
@@ -65,6 +60,7 @@ host_calls(program: Node) as list := {
 }
 primitives_in(n: Node) as list := match n {
 	Prim(operation, arguments) => [text(operation)] + arguments.flat_map(primitives_in)
+	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) == ø then [] else [MAP_GET]) + primitives_in(subject) + primitives_in(key)
 	List(items, bracket, separator) => items.flat_map(primitives_in)
 	Key(left, op, right) => primitives_in(left) + primitives_in(right)
 	_ => []
@@ -112,12 +108,13 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => Code()
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
-	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
 	Return(value) => return_code(form, value, p, f)
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
+	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
 	List(items, Bracket.Square, separator) => Code(layout(form, p), items.flat_map(item => code(item, p, f).instructions) + instruction(ARRAY_NEW_FIXED, [list_of(form, p), #items]))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
@@ -148,6 +145,12 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 	type = joined(then_part.type, else_part.type)
 	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
 	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
+}
+# a part of a choice, made to fit the choice's type: 3 in `if b then 3 else ø`, an int?, is boxed
+arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := {
+	given = labelled(f, [OTHER_LABEL], () => code(part, p, f))
+	wanted = typed_layout(choice, p)
+	if wanted == ø then given else fitted(given, wanted, p.m)
 }
 # the type of either of two values: the one that finishes, or the common one; none when they differ
 joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []

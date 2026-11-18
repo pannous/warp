@@ -88,3 +88,24 @@ compared(a: text, b: text): int := {
 is_digit(c: text): bool := c >= "0" and c <= "9"
 is_alpha(c: text): bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
 is_hex_digit(c: text): bool := is_digit(c) or hex_letters().contains(c)
+
+# a text in warp notation, in its quotes, its quote and backslash escaped: `show("a\"b")` is "a\"b"; a character in
+# single quotes, as written (as old warp shows them)
+show(t: text): text := "\"" + escaped(t) + "\""
+show(c: char): text := "'" + text(c) + "'"
+# t with a backslash before each quote and backslash
+escaped(t: text): text := {
+	out = ""
+	start = 0
+	at = 0
+	while at < byte_count(t) {
+		if needs_escape(byte_at(t, at)) {
+			out = out + bytes_between(t, start, at) + "\\"
+			start = at
+		}
+		at += 1
+	}
+	out + bytes_between(t, start, at)
+}
+# the bytes of `"` and `\`
+needs_escape(b: int): bool := b == 34 or b == 92
