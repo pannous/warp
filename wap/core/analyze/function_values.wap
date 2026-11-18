@@ -5,9 +5,11 @@
 
 use "types.wap"
 use "calls.wap"
+use "letters.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "fits.wap"
 
 # the names of a function value's own function and of its first parameter, the value itself
 LAMBDA_NAME = "λ"
