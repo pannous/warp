@@ -128,11 +128,13 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 | warp-wap-reader | core/parse/reader.wap, core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap |
 | warp-wap-operators | core/parse/operators.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
 | warp-wap-emitter | core/emit/ (emitter, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
-| warp-wap-binding | core/analyze/ (scope, declarations, types) |
+| warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values) |
 
 ## Rules for every file
 
 - One job, said in its first comment line; a second job is a second file in its folder.
+- About 300 lines at most: a file past that is split by its owner at the next quiet point, along a real seam (one
+  concern per file, never a mechanical cut), in a commit of its own that also updates the Owners table.
 - Its input and output language named in that comment.
 - Total over its input: every case handled or refused loudly, never skipped.
 - No surface spelling outside parse/ and extensions/; no name of a domain (units, colors, keys) in core/.
