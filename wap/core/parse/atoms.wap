@@ -55,11 +55,11 @@ url_read(r: Reader, from: int) := {
 	token(r, LexemeKind.Atom, Text(slice_of(r, r.at, end)), end - r.at)
 }
 
-# operator glyphs: one glyph, joined with its repeats and one `=` after them (`==` `<=` `...` `**=`), Q5
+# operator glyphs: one glyph, joined with its repeats and the `=`s after them (`==` `<=` `...` `**=` `!==`), Q5
 glyphs_read(r: Reader, c: text) := {
 	end = r.at + 1
 	while end < r.n and r.code[end] == c { end += 1 }
-	if end < r.n and r.code[end] == '=' and c != '=' { end += 1 }
+	while end < r.n and r.code[end] == '=' { end += 1 }
 	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 }
 
