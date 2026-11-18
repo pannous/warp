@@ -19,4 +19,9 @@ print Person("ann").name')" "ann"
 check "an instance given to a function" "$(ran given 'class Point { x: int; y: int }
 sum(p: Point): int := p.x + p.y
 sum(Point(2, 5))')" "7"
+# a class a used module declares, its constructor and fields there for the program
+printf '%s\n' 'class Point { x: int; y: int }' >"$stage/points.wap"
+check "a used module's class" "$(ran module_class 'use "points.wap"
+p = Point(4, 5)
+p.y')" "5"
 exit $((failures > 0))

@@ -65,12 +65,14 @@ class TypeFrame {
 typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload))
 # A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
 retyped(program: Block) as Block := typed_among(program, [])
-# the program typed, after those of the library's definitions it calls
+# the program typed, after the library's records and those of its definitions it calls
 typed_among(program: Block, library: list) as Block := {
 	s = TypingState()
-	s.definitions = library
+	defines = library.filter(statement => statement is Define)
+	s.definitions = defines
+	s.records = library.filter(statement => statement is Record)
 	typed = typed_form(program, s, TypeFrame(), ø)
-	refitted(Block(functions_typed_from(library, s) + statements_in(typed)), typed)
+	refitted(Block(s.records + functions_typed_from(defines, s) + statements_in(typed)), typed)
 }
 statements_in(block: Block) as list := match block { Block(statements) => statements }
 
