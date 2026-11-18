@@ -40,8 +40,10 @@ map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
 # An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
 instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Code := {
 	values = fields_of(record).map(field => items.filter(item => text(declared_name(item)) == text(declared_name(field)))#1)
-	Code(layout(form, p), values.flat_map(item => code(given_value(item), p, f).instructions) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
+	Code(layout(form, p), (1 to #values).flat_map(at => field_filled(fields_of(record)#at, code(given_value(values#at), p, f), p)) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
 }
+# the instructions of a value given to a field, made to fit the field's type
+field_filled(field: Node, value: Code, p: Program) as list := fitted(value, layout_of(declared_type(field), p.m, p.records) ?? value.type, p.m).instructions
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
 item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
