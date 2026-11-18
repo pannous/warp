@@ -87,6 +87,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
+	if name == DISPATCHED { return finished(Code(given_layout(form, p), operands + dispatched_code(form, p))) }
 	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
 	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
