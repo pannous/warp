@@ -68,4 +68,6 @@ format_check $'blah a b c # note\ny/* c */=0 // c' $'blah a b c\ny = 0'
 format_check '1 !== 2' '1 !== 2'
 # a block indented after a key at the line's end is the key's value: a definition's body on the next line
 format_check $'f(x: int): int :=\n\tx + 1' 'f(x: int) as int := {x + 1}'
+# an operator ending its line continues the phrase onto the lines indented below it
+format_check $'y = 1 +\n\t2 +\n\t3\nz = 4' $'y = 1 + 2 + 3\nz = 4'
 exit $((failures > 0))
