@@ -158,8 +158,8 @@ global rule_scope = {}
 global first_parameter_types = {}
 # function → the signature of each of its definitions, of the program being rewritten (`where $f takes number`)
 global rule_signatures = {}
-# the names that hold a map, of the program being rewritten (`where $m is map`)
-global rule_maps = {}
+# where the code a rule tries stands, for the names that hold a map there (`where $m is map`, map_names_at)
+global rule_maps = [{}]
 # name → the enum whose cases it holds, of the program being rewritten (`where $c is case of $e`)
 global rule_case_holders = {}
 # enum → its case names, of the program being rewritten (`where $c is case of $e`, `cases of $e`), read before
@@ -276,7 +276,7 @@ own_rules_applied(program: Node, source: text) as Node := {
 	rule_types = ø
 	raw_rules = []
 	for index in 0 ..< #rules { if symbol(raw_word) in rules[index].conditions { raw_rules += [[rules[index], origins[index]]] } }
-	maps = map_names_of(program)
+	maps = [map_names_of(program)]
 	# (each statement walked as a sequence of its own, so the rules of a statement's place apply to it, `law …` too; the
 	# runs across statements by every rule)
 	by_word = rules_by_word(rules)
@@ -295,7 +295,7 @@ own_rules_applied(program: Node, source: text) as Node := {
 # its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
 # (the rules a name the statement binds spells, looked up by that name; a statement mentioning no rule's word, most,
 # binds none and keeps them all, its scope never read)
-statement_rewritten(statement: Node, rules: list, origins: list, maps: map, by_word: map) as Node := {
+statement_rewritten(statement: Node, rules: list, origins: list, maps: list, by_word: map) as Node := {
 	written = if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement
 	scope = if symbol_words(written).any(word => by_word.has(word)) then statement_bindings(written)#1 else {}
 	bound = scope.keys.filter(name => by_word.has(name) and binds_value(scope, name)).flat_map(name => by_word[name])
@@ -402,7 +402,7 @@ sugar_walked(program: Node, rules: list) as Node := {
 	rule_types = ø
 	rule_varying_known = no
 	rule_vectors_known = no
-	maps = map_names_of(program)
+	maps = [map_names_of(program)]
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
 	# each statement walked with the rules that can fire in it (rules_reaching) and whose words it binds no value of its
@@ -413,7 +413,7 @@ sugar_walked(program: Node, rules: list) as Node := {
 	rule_maps = maps
 	sugared_node(walked, rules)
 }
-sugared_statement(statement: Node, rules: list, maps: map) as Node := {
+sugared_statement(statement: Node, rules: list, maps: list) as Node := {
 	rule_vector_scope = function_defined(statement)
 	walked = placed_map_scoped(statement, n => sugared_node(n, rules), maps)
 	rule_vector_scope = ""
@@ -1827,10 +1827,17 @@ is_hole_kind(code: Node, kind: text) as bool := {
 	if kind == "int" { return code is int or (is_big_number_view(code) and not value_of(code)#2.contains(".")) }
 	if kind == "list" { return is_group(code) and bracket_of(code) == "[" }
 	if kind == "block" { return (is_curly_group(code) and not is_braced_map(code)) or is_empty_map(code) }
-	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and rule_maps.has(name_of(code))) }
+	if kind == "map" { return (is_curly_group(code) and is_braced_map(code)) or (code is symbol and map_names_at(rule_maps).has(name_of(code))) }
 	code is symbol and rule_hole(code) == ø
 }
 
+# the names holding a map where a rule reads: the program's (first), then each definition's around the code in turn
+# (the rest), gathered only when a rule asks, never on a walk's way through every function
+map_names_at(places: list) as map := {
+	names = places#1
+	for definition in places[1 ..] { names = map_names_in(nodes_in(key_of(definition)) + outer_nodes_in(value_of(definition)), names) }
+	names
+}
 # the names a program gives only maps: a parameter typed map (`f(m: map)`), or a name every assignment of which is a
 # map written out (`m = {a: 1}`); a name also given anything else holds no map for sure
 map_names_of(program: Node) as map := map_names_in(outer_nodes_in(program), {})
@@ -1874,9 +1881,9 @@ raw_at(n: Node, place: Place) as Node := {
 # definition's or lambda's parts inside the names it binds (rule_method_part, rule_binding), and rule_maps holding the names that
 # hold a map where f meets each node, a function's own inside it (merge of engine-rule-conditions with main's
 # map scoping)
-placed_map_scoped(n: Node, f: function, maps: map) as Node := {
+placed_map_scoped(n: Node, f: function, maps: list) as Node := {
 	n = raw_rewritten(n)
-	inner = if is_function_definition(n) then map_names_in(nodes_in(key_of(n)) + outer_nodes_in(value_of(n)), maps) else maps
+	inner = if is_function_definition(n) then maps + [n] else maps
 	if is_key(n, Op.Dot) {
 		left = placed_map_scoped(key_of(n), f, inner)
 		part = children(value_of(n), x => placed_map_scoped(x, f, inner))
@@ -1931,7 +1938,7 @@ placed_map_scoped(n: Node, f: function, maps: map) as Node := {
 
 # a child walked, marked as the item of a word's block it is for `where item` (a global set here, not in a lambda,
 # which would bind its own)
-walked_item(x: Node, is_item: bool, f: function, maps: map) as Node := {
+walked_item(x: Node, is_item: bool, f: function, maps: list) as Node := {
 	if is_item { rule_next_item = x }
 	placed_map_scoped(x, f, maps)
 }
@@ -2153,7 +2160,7 @@ head_with_parameters(head: Node, changed: function) as Node := {
 
 # a parameter walked as placed_map_scoped walks code, its type kept as written: an annotation names types wherever the
 # program binds their words as values, `sum(xs: list or number)` beside a variable list (decision program-binding)
-walked_parameter(parameter: Node, f: function, maps: map) as Node := match parameter {
+walked_parameter(parameter: Node, f: function, maps: list) as Node := match parameter {
 	Key(name, Op.Colon, type): { if is_type_written(type) then f(placed(Key(walked_parameter(name, f, maps), Op.Colon, type), parameter)) else placed_map_scoped(parameter, f, maps) }
 	Key(typed, Op.Assign, default): f(placed(Key(walked_parameter(typed, f, maps), Op.Assign, placed_map_scoped(default, f, maps)), parameter))
 	_: placed_map_scoped(parameter, f, maps)
