@@ -42,22 +42,21 @@ enum Bracket { Curly, Square, Round, Less, None }
 # A list's separator: `Separator.Comma as text` is ","
 enum Separator { Space, Comma, Semicolon, Newline, Tab, None }
 
-# the place of a Meta node's line and column in its data, the facts after them (the preload holds definitions only,
-# so its constants are functions of nothing)
-meta_line(): int := 1
-meta_column(): int := 2
-meta_facts(): int := 3
+# the place of a Meta node's line and column in its data, the facts after them
+META_LINE := 1
+META_COLUMN := 2
+META_FACTS := 3
 # a node marked with facts but written nowhere has line 0, so no position
-no_line(): int := 0
+NO_LINE := 0
 
 # the symbol of a name: `symbol("x")` is the word x
 symbol(name: text): Node := Symbol(name)
 
 # where n was written, ø for a node without a position
-line_of(n: Node) := written_part(n, meta_line())
-column_of(n: Node) := written_part(n, meta_column())
+line_of(n: Node) := written_part(n, META_LINE)
+column_of(n: Node) := written_part(n, META_COLUMN)
 written_part(n: Node, place: int) := match n {
-	Meta(node, List(data, bracket, separator)) => if number_in(data#meta_line()) == no_line() then ø else number_in(data#place)
+	Meta(node, List(data, bracket, separator)) => if number_in(data#META_LINE) == NO_LINE then ø else number_in(data#place)
 	_ => ø
 }
 number_in(n: Node) := match n {
@@ -75,7 +74,7 @@ attributes_of(n: Node): list<Node> := match n {
 # a Meta's data past its line and column
 facts_in(data: list<Node>): list<Node> := {
 	facts: list<Node> = []
-	at = meta_facts() - 1
+	at = META_FACTS - 1
 	while at < #data {
 		at += 1
 		facts = facts + [data#at]
@@ -84,7 +83,7 @@ facts_in(data: list<Node>): list<Node> := {
 }
 with_attribute(n: Node, fact: Node): Node := match n {
 	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
-	_ => Meta(n, meta_data(no_line(), no_line(), [fact]))
+	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
 }
 
 # the node a Meta wraps, any other node itself
