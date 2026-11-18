@@ -69,6 +69,8 @@ class TypeFrame {
 	returns: list = []
 	# the generic letters its parameters bound, each [letter, type] (core/analyze/calls.wap)
 	letters: list = []
+	# the keys of the optional variables a condition around found present, read as their values (if_typed)
+	present: list = []
 }
 
 # the program typed, after the preload's functions it calls
@@ -138,12 +140,32 @@ function_key_of(definition: Node) as text := place_key(declared_name(written_nam
 
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
+# An optional variable tested, `if x != ø`, is its value in the arm where it is present, `required(x)`.
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	typed = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	tested = condition_typed(condition, s, f)
+	present = present_tested(condition)
+	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, if present != ø and present#2 == at then present#1 else ø, s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
 	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s, f) else typed#at)
-	with_type_of(refitted(If(condition_typed(condition, s, f), chosen#1, chosen#2), n), joined_type(value_type(chosen#1), value_type(chosen#2)))
+	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_type(value_type(chosen#1), value_type(chosen#2)))
 }
+# an arm typed with the variable of this key present in it, ø for none
+present_typed(part: Node, key: text?, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	if key == ø { return typed_form(part, s, f, expected) }
+	before = f.present
+	f.present += [key]
+	typed = typed_form(part, s, f, expected)
+	f.present = before
+	typed
+}
+# the variable a condition finds present, [its key, the arm: 1 then, 2 else]: `x != ø` in the then-arm, `x == ø` in
+# the else-arm; ø for any other condition
+present_tested(condition: Node) as list? := match condition {
+	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and arguments#1 is symbol and fact_of(arguments#1, DEFINED_AT) != ø and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then [place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2] else ø
+	_ => ø
+}
+EQUAL_WORD = "=="
+UNEQUAL_WORD = "!="
 condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
 	tested = typed_form(condition, s, f, symbol(BOOL_TYPE))
 	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
@@ -281,12 +303,14 @@ name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return function_named_typed(n) }
 	type = variable_type(n, s, f)
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
-	with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
+	read = with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
+	if base_of_optional(type) != ø and f.present.contains(place_key(defined_at(n))) then word_called(n, REQUIRED_WORD, [read], ø, s) else read
 }
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
 variables_of(name: Node, s: TypingState, f: TypeFrame) as list := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
 	variable = [place_key(defined_at(name)), type]
+	f.present = f.present.filter(key => key != variable#1)
 	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
 }
 variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := type_keyed(place_key(defined_at(name)), variables_of(name, s, f))
