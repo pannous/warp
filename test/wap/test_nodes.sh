@@ -11,4 +11,8 @@ check "a node without a position" "$(ran no_position 'print text(line_of(Text("a
 check "a fact added keeps the position" "$(ran facts 'n = with_attribute(positioned(Symbol("x"), 2, 1), Text("f"))
 print text(#attributes_of(n)) + " " + text(line_of(n))')" "1 2"
 check "a node shows its parts" "$(ran shown_node 'print show(List([Symbol("f"), Text("a")], Bracket.Round, Separator.Space))')" 'List([Symbol("f"), Text("a")], Round, Space)'
+check "a node's text, as warp prints it" "$(ran node_text 'a = symbol("a")
+print "${a} ${Key(a, Op.Colon, Number(1))} ${Key(symbol("f"), Op.None, List([a], Bracket.Round, Separator.Comma))} ${Key(a, Op.Add, a)} ${Key(a, Op.And, a)}"
+print text(List([Text("x"), Number(2.5)], Bracket.Square, Separator.Comma)) + " " + text(List([a, a], Bracket.Curly, Separator.Semicolon))')" "a a: 1 f(a) a+a a and a
+[\"x\", 2.5] {a; a}"
 exit $((failures > 0))
