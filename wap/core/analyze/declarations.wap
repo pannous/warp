@@ -110,7 +110,7 @@ value_named(place: Node) as Node? := match place {
 
 # the program's statements, and the program put back from them: lines, `;` statements, or the one statement; a run
 # within the run (`a; b` on a line of many, or the two statements a rule wrote) gives its own
-top_level_statements(program: Node) as list := match program {
+top_level_statements(program: Node) as list<Node> := match program {
 	List(items, Bracket.None, separator) => if is_run(separator) then items.flat_map(top_level_statements) else [program]
 	_ => [program]
 }
