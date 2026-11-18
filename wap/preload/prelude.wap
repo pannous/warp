@@ -48,3 +48,14 @@ text(b: bool): text := if b then "yes" else "no"
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes
+
+# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
+all(xs, fits) := {
+	for x in xs { if not fits(x) { return no } }
+	yes
+}
+any(xs, fits) := {
+	for x in xs { if fits(x) { return yes } }
+	no
+}
+contains(xs, item) := xs.any(x => x == item)
