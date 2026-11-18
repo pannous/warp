@@ -42,7 +42,7 @@ is_shape(type: Node) as bool := match type {
 }
 
 # A typed hole `$c: Symbol` reads as a colon key (the reader gives a hole's `:` one type): the hole, its type a fact.
-# A type is never a hole, so `$name: $type` is a colon key of two holes, a typed name taken apart
+# A hole after the colon makes a key of two holes, `$field: $type`, as in `class $name { ($field: $type)... }`
 normalized(n: Node) as Node := match n {
 	List(items, bracket, separator) => List(items.map(normalized), bracket, separator)
 	Key(left, Op.Colon, right) => if is_hole(left) and not is_hole(right) then typed_hole(left, right) else Key(normalized(left), Op.Colon, normalized(right))
