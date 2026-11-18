@@ -145,7 +145,12 @@ arguments_of(group: Node) as list := match group {
 }
 
 # the parameters a definition or a function value names, as the one list Define and Fn take
-parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
+parameter_list(written: Node) as Node := List(arguments_of(written).map(parameter_lowered), Bracket.Round, Separator.Comma)
+# a parameter as written; one with a default, `y: int = 2`, is the parameter with the default as its fact DEFAULT
+parameter_lowered(parameter: Node) as Node := match parameter {
+	Call(called, arguments) => if text(called) == "=" and #arguments == 2 then with_fact(arguments#1, DEFAULT, lowered(arguments#2)) else parameter
+	_ => parameter
+}
 
 # round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
 grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else lowered_block(statements)

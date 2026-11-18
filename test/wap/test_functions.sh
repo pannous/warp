@@ -84,4 +84,10 @@ g(a: int) as int := pick(a, return 7)
 print text(g(1))')" "7"
 check "a function calls itself" "$(ran recursive 'f(n: int): int := if n < 1 then 0 else n + f(n - 1)
 print text(f(3))')" "6"
+# a parameter's default, which a call that leaves it out gives it (a class's field default the same, its constructor's)
+check "a parameter's default" "$(ran parameter_default 'f(x: int, y: int = 2) := x + y
+print text(f(1) + f(1, 5))
+class P { x: int; tag: text = "?" }
+print P(3).tag + P(3, "a").tag')" "9
+?a"
 exit $((failures > 0))
