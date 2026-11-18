@@ -20,7 +20,8 @@ use "../../kernel/forms.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
-# the groups the reader gives as Empty when they hold nothing, `()` and `{}`: a group of no items of either bracket
+# the groups that are Empty when they hold nothing, `()` and `{}` (wiki/Footguns.md: `()` stays ø, which doubles as
+# the empty list): a rule's group of no items fits either
 EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
