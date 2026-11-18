@@ -1,0 +1,128 @@
+#!/usr/bin/env warp
+# Seven objects of NVIDIA's USDCraft-10K (Apache-2.0, samples/physics/usdcraft.NOTICE) dropped onto a floor: a fruit
+# crate, a hex dumbbell, a jewelry box with a drawer and a lid, a drinks can, a toy car and two toy bricks, each at its
+# authored mass and friction. scripts/usdcraft-bodies.py baked their USD collision shapes into the spheres drawn here
+# (samples/physics/usdcraft.bodies); samples/physics/usd_bodies.warp steps them. Each object is one rigid body, its
+# joints (the lid's hinge, the drawer's slide, the car's wheels, the can's tab) welded at rest and listed.
+# In a window the drop plays (in slow motion where the steps can't keep up), drag to turn the camera, r drops again;
+# headless, one still of the scene `seconds` after the drop (default 1.5), also saved when a .png is named:
+# `warp usd_collisions.warp 0.3 strike.png` keeps the dumbbell striking the crate.
+use draw
+use file
+use math
+use "usd_bodies.warp"
+
+width = 960
+height = 540
+bodies = bodies_read(read(program_folder() + "/usdcraft.bodies"))
+named(name) := bodies.filter(b => b.name == name)#1
+up = [0.0, 0.0, 1.0]
+along_x = [1.0, 0.0, 0.0]
+# where each centre of mass starts (x y z, metres) and how each is turned
+scene = [
+	[named("small_fruit_crate"), [0.0, 0.0, 0.11], quat_axis(up, 0.15)],
+	[named("hex_dumbbell"), [-0.06, 0.02, 0.42], quat_mul(quat_axis(up, 0.9), quat_axis(along_x, 0.5))],
+	[named("jewelry_box_with_drawer"), [0.42, 0.1, 0.25], quat_mul(quat_axis(up, -0.5), quat_axis(along_x, 0.7))],
+	[named("standard_330_ml_can"), [0.13, -0.05, 0.3], quat_axis(along_x, 1.35)],
+	[named("four_wheel_toy_sports_car"), [-0.36, -0.16, 0.15], quat_mul(quat_axis(up, 1.1), quat_axis(along_x, 0.5))],
+	[named("classic_2x4_brick"), [0.36, 0.08, 0.42], quat_axis([0.6, 0.8, 0.0], 0.9)],
+	[named("round_2x2_brick"), [-0.3, 0.2, 0.08], quat_axis(along_x, 1.1)]
+]
+start = world_of(scene.map(s => s#1), [x for s in scene for x in s#2], scene.map(s => s#3))
+global world = start
+
+# --- the camera: on a circle around the scene, looking down at its middle
+global turn = -0.25
+lift = 0.55
+distance = 1.2
+focus = [0.03, 0.03, 0.06]
+focal = 900.0
+eye() := [focus#1 + distance * cos(lift) * sin(turn), focus#2 - distance * cos(lift) * cos(turn),
+	focus#3 + distance * sin(lift)]
+# a world point on the screen: [x, y, depth]
+def seen(p: float[], e: float[]) as float[] {
+	f = [focus#1 - e#1, focus#2 - e#2, focus#3 - e#3]
+	fl = norm(f)
+	f = [f#1 / fl, f#2 / fl, f#3 / fl]
+	r = normalize(cross(f, up))
+	u = cross(r, f)
+	d = [p#1 - e#1, p#2 - e#2, p#3 - e#3]
+	z = dot(d, f)
+	[width / 2 + focal * dot(d, r) / z, height / 2 - focal * dot(d, u) / z, z]
+}
+
+shade(c: float[], light: float) := rgb(int(255 * min(1.0, c#1 * light)), int(255 * min(1.0, c#2 * light)),
+	int(255 * min(1.0, c#3 * light)))
+
+# the floor's grid, every sphere's shadow on it, then the spheres far to near, each lit from above
+def drawn(w: World) {
+	e = eye()
+	clear(rgb(176, 182, 193))
+	for k in -6 to 6 {
+		g = 0.1 * k
+		a = seen([g, -0.6, 0.0], e)
+		b = seen([g, 0.6, 0.0], e)
+		line(a#1, a#2, b#1, b#2, rgb(160, 166, 178))
+		a = seen([-0.6, g, 0.0], e)
+		b = seen([0.6, g, 0.0], e)
+		line(a#1, a#2, b#1, b#2, rgb(160, 166, 178))
+	}
+	s = world_spheres(w)
+	count = #s / 5
+	for k in 0 ..< count {
+		h = seen([s#(5 * k + 1), s#(5 * k + 2), 0.0], e)
+		fade = max(0.0, 1 - s#(5 * k + 3) / 0.6)
+		circle(h#1, h#2, focal * s#(5 * k + 4) / h#3 * 0.9, with_alpha(rgb(90, 95, 108), 0.4 * fade))
+	}
+	shown = [seen([s#(5 * k + 1), s#(5 * k + 2), s#(5 * k + 3)], e) for k in 0 ..< count]
+	order = sort([k for k in 0 ..< count], by: k => -shown#(k + 1)#3)
+	for k in order {
+		c = w.bodies#int(s#(5 * k + 5)).color
+		p = shown#(k + 1)
+		r = focal * s#(5 * k + 4) / p#3
+		circle(p#1, p#2, r, shade(c, 0.55))
+		circle(p#1 - 0.15 * r, p#2 - 0.2 * r, r * 0.78, shade(c, 0.8))
+		circle(p#1 - 0.3 * r, p#2 - 0.38 * r, r * 0.4, shade([c#1 + 0.25, c#2 + 0.25, c#3 + 0.25], 1.0))
+	}
+	# each object's name above its centre
+	for i in 1 to #w.bodies {
+		p = seen(body_vec(w.pos, i), e)
+		name = w.bodies#i.title
+		label(p#1 - 3.4 * #name, p#2 - focal * w.reach#i / p#3 - 8, name, rgb(20, 22, 28), 13)
+	}
+	label(16, 26, "USDCraft-10K objects (NVIDIA, Apache-2.0) dropped onto a floor, t = " + round(w.time * 100) / 100 + " s",
+		rgb(20, 22, 28), 16)
+	show()
+}
+
+global last_x = 0.0
+global started = clock()
+seconds = 1.5
+picture = ""
+for arg in args {
+	if ends_with(arg, ".png") { picture = arg } else if float(arg) > 0 { seconds = float(arg) }
+}
+on frame {
+	if painting_headless_frame {
+		world = simulated(start, seconds)
+		drawn(world)
+		if picture != "" { save(canvas(), picture) }
+	} else {
+		if mouse_down { turn = turn - (mouse_x - last_x) * 0.008 }
+		last_x = mouse_x
+		# real time while the steps keep up, else slow motion: at most a thirtieth of a second a frame
+		behind = min(1.0 / 30, float(clock() - started) / 1000 - world.time)
+		if behind > 0 { world = simulated(world, behind) }
+		drawn(world)
+	}
+}
+# r drops them again
+on key {
+	if key == "r" {
+		world = start
+		started = clock()
+	}
+}
+
+canvas.resize(width, height)
+#bodies

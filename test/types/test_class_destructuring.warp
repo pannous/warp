@@ -11,3 +11,8 @@ is! 'class Circle{r:int}; class Rect{w:int h:int}; area(s) := match s { Circle(r
 is! 'class Point{x:int y:int}; class Line{start:Point end:Point}; kind(p) := match p { Point{x: 0, y} => y; Point(x, 0) => x * 10; Point{x, y} => x + y + 100 }; kind(Point(0, 7))' 7
 is! 'class Point{x:int y:int}; class Line{start:Point end:Point}; kind(p) := match p { Point{x: 0, y} => y; Point(x, 0) => x * 10; Point{x, y} => x + y + 100 }; kind(Point(4, 0))' 40
 is! 'class Point{x:int y:int}; class Line{start:Point end:Point}; kind(p) := match p { Point{x: 0, y} => y; Point(x, 0) => x * 10; Point{x, y} => x + y + 100 }; kind(Point(1, 2))' 103
+
+# a_class_pattern_names_some_fields: a place `name: pattern` takes the field of that name, any other place the field at
+# its position; fields no place names are not looked at (decision with the user 2026-11-17, kernel forms as classes)
+is! 'class Call{called: text; arguments: list; origin: text = "?"}; match Call("f", [1, 2]) { Call(f, args) => f + #args; _ => "no" }' 'f2'
+is! 'class Call{called: text; arguments: list; origin: text = "?"}; match Call("f", [1, 2]) { Call{arguments} => #arguments; _ => 0 }' 2

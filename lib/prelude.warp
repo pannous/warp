@@ -379,9 +379,20 @@ paint_each(f: function, width, height) := {
 	rows = columns * height /! width
 	paint([pixel_color(f(float((i % columns) * width /! columns), float((i /! columns) * height /! rows))) for i in 0..columns * rows], columns, rows)
 }
+// f painted on the CPU where a GPU shader was wanted, said once a run with why: its pixels are width × height, which
+// a window shows scaled where a shader paints every pixel of it
+global cpu_painting_said = no
+cpu_painted(f: function, width, height, why: text) := {
+	if not cpu_painting_said {
+		cpu_painting_said = yes
+		hint "painted on the CPU at ${width}×${height}: " + why
+	}
+	paint_each(f, width, height)
+}
 // paint(pixels, width, height) of a list of pixels, row by row, as the host paints them; of a WGSL shader text, as the
-// host renders it; of a function, f(column, row) of each pixel on the CPU (paint_each)
-paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else paint_each(picture, width, height)
+// host renders it; of a function value, f(column, row) of each pixel on the CPU (paint_each): only a function the
+// program names is translated to a shader (lib/shaders.warp paint_function)
+paint(picture, width, height) := if picture is list or picture is text then paint(shader_words(picture), width, height, ø) else cpu_painted(picture, width, height, "only a function the program defines and names, `paint(stripes, 64, 32)`, becomes a GPU shader")
 // the program values a shader reads as the plain floats it takes: a quantity by its amount in SI base units, an angle in
 // radians, each item of a vector (decision no-units-in-shaders: a shader ignores units)
 shader_floats(values) := {
@@ -766,11 +777,19 @@ fits_operation(value: any, pattern: any, bound: map) as bool := fits_pattern(key
 is_case_with_fields(pattern: any) as bool := bracket_of(pattern) == "(" and #pattern > 1 and is_type(pattern#1, "symbol")
 // the class of an instance, Circle of `Circle{r: 2}` (its type, shown by its name)
 class_name(value: any) as text := name_of(type(value))
-// the instance's fields in order fit the patterns after the case name
+// the instance's fields fit the places after the case name: a place `name: pattern` (`Circle{r}` arrives as
+// `Circle(r: r)`) the field of that name, any other place the field at its position; a field no place names is not
+// looked at, as in a map pattern, so `Call(f, args)` takes apart a Call that has more fields (Python's class patterns
+// read the same)
 fits_fields(value: any, pattern: any, bound: map) as bool := {
 	fields = value.keys
-	if #fields != #pattern - 1 { return no }
-	for i in 1 to #fields { if not fits_pattern(value[fields#i], pattern#(i + 1), bound, no) { return no } }
+	if #pattern - 1 > #fields { return no }
+	for i in 1 to #pattern - 1 {
+		place = pattern#(i + 1)
+		named = is_type(place, "key") and op_of(place) == ":" and is_type(key_of(place), "symbol")
+		name = if named then name_of(key_of(place)) else fields#i
+		if not (name in fields) or not fits_pattern(value[name], if named then value_of(place) else place, bound, no) { return no }
+	}
 	yes
 }
 // the items, a rest among them taking those the others leave, the items after it counted from the end

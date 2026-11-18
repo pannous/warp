@@ -1,0 +1,163 @@
+# The one walker every stage runs through: a rewrite applied to a node, and the metadata carried over (notes/wap.md
+# "The pipeline").
+#
+# A stage only says what a node becomes. Where the result was written is never its business: `staged` gives every
+# node the rewrite built the position of the node it rewrote, so an error found three stages later still points at
+# the user's line. Nodes the rewrite reused, the parts of the input it took apart and put back (a pattern's holes),
+# keep their own positions:
+#
+#   print 3                     the phrase, written at line 2
+#   → Call(print, [3])          the Call and its argument list are new: line 2, like the phrase
+#                               print and 3 were reused: their own columns
+#
+# Later the stamp also carries the name of the rule or stage that built the node, for errors like
+# `line 4: unless … (rule extensions/…:3): …`.
+
+use "errors.wap"
+use "../kernel/forms.wap"
+
+# n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
+# also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
+staged(n: Node, rewrite: function) as Node := with_facts_of(placed_like(rewrite(n), n), n)
+
+# The new node a rewrite built, and each of its new parts, given the position of the code it replaced (a rebuilt node
+# keeps its own: refitted); a part that has a position already was reused, and the walk stops there. An origin
+# without a position (a node a stage built) passes on none.
+placed_like(built: Node, origin: Node) as Node := {
+	# Empty (and an empty `{}` or `()`, Empty in warp) carries no metadata
+	if built == ø or line_of(built) != ø or line_of(origin) == ø { return built }
+	placed = with_facts_of(positioned(with_parts(built, part => placed_like(part, origin)), line_of(origin), column_of(origin)), built)
+	if file_of(origin) == ø then placed else with_fact(placed, SOURCE_FILE, Text(file_of(origin)))
+}
+
+# The same node rebuilt, its parts replaced, as a stage that only learns facts rebuilds it (binding, typing): it keeps
+# its own position and the facts earlier stages learned. A new node a rewrite built takes only the position of the
+# code it replaced, placed_like.
+refitted(built: Node, original: Node) as Node := {
+	with_facts_of(if line_of(original) == ø then built else positioned(built, line_of(original), column_of(original)), original)
+}
+
+# n with each fact of the original it does not hold yet; Empty carries none
+with_facts_of(n: Node, original: Node) as Node := {
+	if n == ø { return n }
+	held = attributes_of(n)
+	for fact in attributes_of(original) { if not held.contains(fact) { n = with_attribute(n, fact) } }
+	n
+}
+
+# a node with each of its direct parts changed by f
+with_parts(n: Node, f: function) as Node := match n {
+	Key(left, op, right) => Key(f(left), op, f(right))
+	List(items, bracket, separator) => List(items.map(f), bracket, separator)
+	_ => n
+}
+
+# the fact naming the rule that built a node: the rule's head, where it was written
+RULE = "rule"
+
+# Facts a stage learns about a node (notes/backbone.md "Stage languages"): a name's binding, a type, the overload a
+# call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
+# from stage to stage. A later fact of the same name replaces the earlier.
+with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
+# the fact of that name, ø when no stage has learned it
+fact_of(n: Node, name: text) as Node? := {
+	found: Node? = ø
+	for fact in attributes_of(n) {
+		match fact { Key(Symbol(fact_name), Op.Colon, value) => if fact_name == name { found = value }; _ => ø }
+	}
+	found
+}
+
+# Where a node was written: line_of and column_of its position, file_of the file the reader read it from (ø for a
+# node no file holds), a fact SOURCE_FILE the reader gives every node with a position
+SOURCE_FILE = "file"
+# the spelling a program wrote for code the reader gave another shape, which `wap format` prints back: the text
+# `"a ${x} b"` read as ("a " + text(x) + " b")
+WRITTEN = "written"
+file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
+	Text(name) => name
+	_ => ø
+}
+
+# A written name, bare or with its type, as a parameter, a Set's place and a Define's name write it: `x`, `x: int`.
+# The type is the program's, never a fact a stage learned: declared_name is the name, declared_type the type or ø.
+declared_name(n: Node) as Node := match n {
+	Key(name, Op.Colon, type) => declared_name(name)
+	_ => n
+}
+declared_type(n: Node) as Node? := match n {
+	Key(name, Op.Colon, type) => type
+	_ => ø
+}
+# a written name with a fact on its name: `x: int` keeps its type
+with_name_fact(n: Node, name: text, value: Node) as Node := match n {
+	Key(written, Op.Colon, type) => refitted(Key(with_name_fact(written, name, value), Op.Colon, type), n)
+	_ => with_fact(n, name, value)
+}
+# A definition's key: the file, line and column of the name that defined it, the name (a rule's template places all
+# the names it binds where the rewritten code was), and the signature of a typed function, which tells its typed
+# versions apart
+place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file_of(definer)}:${line_of(definer)}:${column_of(definer)} ${text(definer)}${signature_key(definer)}"
+signature_key(definer: Node) as text := if fact_of(definer, SIGNATURE) == ø then "" else " ${fact_of(definer, SIGNATURE)}"
+
+# The facts of a bound name, learned by core/analyze/scope.wap and read by every later stage: BINDING is what the
+# name refers to, one of the binding words below as a Symbol; DEFINED_AT the name that defined it, positioned.
+BINDING = "binding"
+DEFINED_AT = "defined_at"
+BOUND_LOCAL = "local"
+BOUND_PARAMETER = "parameter"
+BOUND_CAPTURE = "capture"
+BOUND_GLOBAL = "global"
+BOUND_FUNCTION = "function"
+BOUND_LIBRARY = "library"
+# the pattern of a Case's arm that fits any value and names none
+WILDCARD = "_"
+# on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
+# BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
+ASSIGNS = "assigns"
+# on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
+# program's in the whole block, `let x` a new one of the block's
+VARIABLES = "variables"
+# a name of several overloads gets CANDIDATES, their defining names innermost first, instead of DEFINED_AT; the typing
+# stage picks one and sets DEFINED_AT
+CANDIDATES = "candidates"
+# a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
+CAPTURES = "captures"
+
+# The facts of the typing stage, core/analyze/types.wap: a value's TYPE, `int`, as a program writes types; a function's
+# SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
+TYPE = "type"
+SIGNATURE = "signature"
+# a list's TYPE as the reader reads `list<int>`: the word list glued to its item type in angle brackets
+LIST_TYPE = "list"
+list_type(item: Node) as Node := Key(symbol(LIST_TYPE), Op.None, List([item], Bracket.Less, Separator.None))
+# the item type of a list's type, ø for any other type
+item_type(type: Node?) as Node? := match type {
+	Key(name, Op.None, group) => if name == symbol(LIST_TYPE) then only_item(group) else ø
+	_ => ø
+}
+# A record's TYPE is its name, `Point`; these find a record among the Records a program declares, and its fields,
+# each a typed name `x: int` (declared_name, declared_type)
+record_named(records: list, type: Node?) as Node? := {
+	if type == ø or not type is symbol { return ø }
+	for record in records { if record_name(record) == text(type) { return record } }
+	ø
+}
+record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
+fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
+# a record's field of this name, ø when it has none
+field_named(record: Node, key: Node) as Node? := {
+	for field in fields_of(record) { if text(declared_name(field)) == text(key) { return field } }
+	ø
+}
+only_item(group: Node) as Node? := match group {
+	List(items, Bracket.Less, separator) => if #items == 1 then items#1 else ø
+	_ => ø
+}
+
+# The facts of the declaration prescan, core/analyze/declarations.wap: DECLARES on a top-level definition,
+# `name: signature`; DECLARATIONS on the program, the list of them
+DECLARES = "declares"
+DECLARATIONS = "declarations"
+# on a program, the files it USES (`use "path"`), each a Text of the path resolved against the program's own folder
+USES = "uses"

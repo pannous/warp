@@ -1,0 +1,28 @@
+#!/usr/bin/env warp
+# wap, the new compiler (notes/backbone.md, notes/wap.md, the file tree): a program's source in, a wasm module out.
+#
+#   warp wap/compiler.wap hello.wap hello.wasm      compile
+#   warp hello.wasm                                  run it
+#   warp wap/compiler.wap format hello.wap           print it in canonical warp spelling
+#
+# Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
+#   read      text → notation       core/parse/reader.wap
+#   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
+#   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, core/sugar/ and the program
+#   declare   operated → declared   core/analyze/declarations.wap, the names the top level defines, as facts
+#   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
+#   type      bound → typed         core/analyze/types.wap, each value's type and the function each call means, as facts
+#   typed rules typed → typed       core/rules/typed.wap, rules with holes of value types, typed again after each round
+#   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
+#   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
+use "core/pipeline.wap"
+use "core/format.wap"
+use "core/emit/wasm.wap"
+use "core/emit/emitter.wap"
+
+preload = language_loaded(program.folder)
+compiled(file: text) as list := module_bytes(emitted(typed_file(file, preload)))
+
+if #args != 2 { raise "usage: warp wap/compiler.wap <program> <module.wasm>, or format <program>" }
+if args#1 == "format" { print formatted(operated_program(read_notation(args#2))) } else { write_bytes(args#2, compiled(args#1)) }

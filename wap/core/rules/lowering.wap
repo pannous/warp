@@ -1,0 +1,144 @@
+# Operated code → kernel forms, by hand until the rule engine runs (notes/wap.md, notes/kernel.md "How a program
+# reaches the kernel"; the operated shapes it reads: notes/backbone.md "Stage languages").
+#
+# This is where the rule engine will run its three stages (shape, signature, kind). Until it exists, the few
+# spellings the milestones need are lowered here by hand, one arm per form:
+#   print "Hello"            a phrase, a word then its arguments → Call(print, ["Hello"])
+#   f(1, 2)                  a head glued to its arguments, Key(f, Op.None, (1, 2)) → Call(f, [1, 2])
+#   Point{x: 1, y: 2}        an instance, data as the reader reads it, its fields' values lowered
+#   x: int                   a typed name, a record's field or a parameter, as written
+#   a + b                    an operator call, (Call + a b) → Call(+, [a, b])
+#   x = 1                    (Call = x 1) → Set(x, 1)
+#   let x = 1, global x = 1  (Call = (let x) 1) → Set(x, 1) with the fact which variable it assigns: a new one here,
+#                            the program's
+#   f(x) := body             (Call := f(x) body) → Define(f, [x], body); `n := 1` → Define(n, [], 1)
+#   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1)
+#   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
+#                            False, Empty
+#   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
+#   (x + 1)  (a; b)          a group: its one statement, several a Block
+#   [a, b]                   a list, data as the reader reads it, its items lowered
+#   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
+#   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
+#   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
+#   break, continue, return  a statement alone → Break(), Continue(), Return(ø)
+#   (If c a b)               a kernel form a rule built (core/sugar: `if c then a else b`, `unless c { a }`,
+#                            `while c { b }`, `return x`), its parts lowered
+# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
+# the rule engine: `c ? a : b`, `a if c`.
+
+use "../analyze/declarations.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the word that starts a primitive, only the preload writes it
+PRIMITIVE_WORD = "prim"
+# the words that are a kernel form alone: the canonical words of the literals, and the statements that leave a loop or
+# a function (a rule cannot match a word alone: it would have no head)
+WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue": Continue(), "return": Return(Empty)}
+# the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
+# program's
+VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
+
+# the program as one Block of its statements
+lowered_program(program: Node) as Block := staged(program, whole => lowered_block(statements_of(whole)))
+
+# Statements as one Block. A statement naming a variable without a value, `global x` or `let x`, is no code: it says
+# which variable x is in the whole block, the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
+lowered_block(statements: list) as Node := {
+	named = statements.filter(names_a_variable)
+	block = Block(statements.filter(statement => not names_a_variable(statement) and not is_use(statement)).map(lowered))
+	if named is empty then block else with_fact(block, VARIABLES, List(named.map(variable_named), Bracket.Square, Separator.Comma))
+}
+names_a_variable(statement: Node) as bool := match statement {
+	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 is symbol and items#2 is symbol and VARIABLE_WORDS.has(text(items#1))
+	_ => no
+}
+variable_named(statement: Node) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
+
+# code as a kernel form, placed where the code was written (core/stage.wap)
+lowered(n: Node) as Node := staged(n, lowered_form)
+lowered_form(n: Node) as Node := match n {
+	Text(value) => n
+	Number(value) => n
+	Char(value) => n
+	True => n
+	False => n
+	Empty => n
+	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
+	Call(called, arguments) => operator_lowered(n, text(called), arguments)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, List(items.map(field => field_lowered(field, n)), Bracket.Curly, separator)) else not_lowered(n)
+	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
+	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
+	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
+	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
+	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
+	_ => not_lowered(n)
+}
+
+# an operator call: the defining operators as their kernel forms, any other a call of the operator's function
+operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spelling {
+	"=" => assigned(arguments#1, lowered(arguments#2), n)
+	":=" => defined(n, arguments#1, lowered(arguments#2))
+	"=>" => Fn(parameter_list(arguments#1), lowered(arguments#2))
+	_ => Call(symbol(spelling), arguments.map(lowered))
+}
+
+# a phrase headed by a word: a built-in's primitive body, `prim print_text(t)`, or a call of the word
+phrase_lowered(items: list, n: Node) as Node := {
+	if not items#1 is symbol { return not_lowered(n) }
+	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(items#2, n) }
+	Call(items#1, items[1 ..].map(lowered))
+}
+primitive_of(operation: Node, n: Node) as Node := match operation {
+	Key(name, Op.None, group) => if name is symbol then Prim(name, arguments_of(group).map(lowered)) else not_lowered(n)
+	_ => not_lowered(n)
+}
+
+# `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
+assigned(place: Node, value: Node, n: Node) as Node := match place {
+	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
+	Get(subject, key) => Set(lowered(place), value)
+	_ => Set(place, value)
+}
+variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
+
+# `f(x) := body` defines a function, `n := 1` a constant; `f(x): int := body` names its result type with the name
+defined(n: Node, head: Node, body: Node) as Node := match head {
+	Key(signature, Op.Colon, result) => with_result(defined(n, signature, body), result)
+	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(group), body) else not_lowered(n)
+	Symbol(name) => Define(head, parameter_list(Empty), body)
+	_ => not_lowered(n)
+}
+with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
+
+# what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
+# an instance's field, `x: 1`, its value lowered
+field_lowered(field: Node, n: Node) as Node := match field {
+	Key(name, Op.Colon, value) => if name is symbol then refitted(Key(name, Op.Colon, lowered(value)), field) else not_lowered(n)
+	_ => not_lowered(n)
+}
+arguments_of(group: Node) as list := match group {
+	Empty => []
+	List(items, Bracket.Round, Separator.Comma) => items
+	List(items, Bracket.Round, Separator.None) => items
+	_ => [group]
+}
+
+# the parameters a definition or a function value names, as the one list Define and Fn take
+parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Round, Separator.Comma)
+
+# round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
+grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else lowered_block(statements)
+
+# a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
+# one statement
+statements_of(n: Node) as list := match n {
+	List(items, Bracket.None, separator) => if #items == 1 then statements_of(items#1) else top_level_statements(n)
+	_ => [n]
+}
+
+not_lowered(n: Node) := refused(n, "wap does not lower this form yet")

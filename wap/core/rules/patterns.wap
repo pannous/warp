@@ -1,0 +1,205 @@
+# Patterns: code with holes, matched against code (notes/first_principles.md "Holes", wiki/pattern.md). Reads a
+# pattern as the operator stage wrote it, in the very language it matches; compiles it once to a Matcher and matches
+# Nodes with it, binding each hole.
+#
+#   unless $c $body                 a phrase: the word unless, then two holes
+#   $a ÷ $b                         (Call ÷ $a $b), as the operator stage reads it
+#   (If $condition: Node $then …)   a hole typed by a shape: Symbol, List, Key, Text, Number, Node or a declared pattern
+#   (Block $statements...: Node)    a rest hole takes the remaining items, each of the type
+#
+# A hole's type is a shape, checked here; a value type (`$k: int`, `$xs: list<int>`) makes the rule a stage-3 rule,
+# checked by typing (core/analyze/types.wap fits_type).
+use "../analyze/types.wap"
+use "../parse/reader.wap"
+use "../parse/operators.wap"
+use "../format.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+TYPE_FACT = "type"
+# the shapes a hole can ask for, beside Node and the declared patterns
+SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
+
+# a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
+class Declared { name: text, shape: Node, holes: list, matcher: Matcher }
+declared_patterns = {}
+
+# what a part of a pattern asks of the code at its place
+enum Test { Hole, Literal, Sequence, Pair, Repeat }
+class Matcher { test: Test, name: text = "", type: Node = Empty, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list = [] }
+
+# ---- holes
+
+is_hole(n: Node) as bool := is_hole_word(n)
+is_rest_hole(n: Node) as bool := is_hole(n) and spelling_written(n).ends_with(REST_MARK)
+# the spelling a hole is bound under: `$c`, `$items...`
+hole_key(n: Node) as text := spelling_written(n)
+# a hole's type as written, Empty when it has none
+hole_type(n: Node) as Node := {
+	type = fact_of(n, TYPE_FACT)
+	if type == ø then Empty else type
+}
+
+# whether a type is a shape: none, Node, a case of Node or a declared pattern; any other type is a value type
+is_shape(type: Node) as bool := match type {
+	Empty => yes
+	Symbol(name) => name == "Node" or SHAPES.contains(name) or declared_patterns.has(name)
+	_ => no
+}
+
+# A typed hole `$c: Symbol` reads as a colon key (the reader gives a hole's `:` one type): the hole, its type a fact.
+# A hole after the colon makes a key of two holes, `$field: $type`, as in `class $name { ($field: $type)... }`
+normalized(n: Node) as Node := match n {
+	List(items, bracket, separator) => List(items.map(normalized), bracket, separator)
+	Key(left, Op.Colon, right) => if is_hole(left) and not is_hole(right) then typed_hole(left, right) else Key(normalized(left), Op.Colon, normalized(right))
+	Key(left, op, right) => Key(normalized(left), op, normalized(right))
+	_ => n
+}
+
+typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
+
+# ---- compiling
+
+# a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
+compiled_pattern(n: Node) as Matcher := match n {
+	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
+	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
+	Key(left, op, right) => pair_matcher(n, left, op, right)
+	List(items, Bracket.None, Separator.None) => if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else sequence_matcher(items, Bracket.None, Separator.None)
+	List(items, bracket, separator) => sequence_matcher(items, bracket, separator)
+	_ => Matcher(Test.Literal, literal: n)
+}
+sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher := Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(compiled_pattern))
+
+# Repetition, as in macros by example: `($p => $r)...` in a pattern takes items that each fit `$p => $r`, binding $p
+# and $r to the sequences of their matches (as a rest hole binds, under `$p...`); in a template `Arm($p, $r)...`
+# writes one Arm per match. The part repeated, ø when the node is no repetition.
+repeated_part(n: Node) as Node? := match n {
+	List(items, Bracket.None, Separator.None) => if #items == 2 and items#2 is symbol and spelling_written(items#2) == canonical(REST_MARK, Fixity.Anywhere) then items#1 else ø
+	_ => ø
+}
+
+pair_matcher(n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(left), compiled_pattern(right)])
+
+# the declared pattern a name calls, ø for any other name
+pattern_called(head: Node) as Declared? := match head {
+	Symbol(name) => if declared_patterns.has(name) then declared_patterns[name] else ø
+	_ => ø
+}
+
+# a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
+instance(pattern: Declared, parts: list) as Node := built(pattern.shape, bound_in_order(pattern.holes, parts))
+
+bound_in_order(holes: list, parts: list) as map := {
+	bindings = {}
+	for i in 1 to #holes {
+		hole = holes#i
+		if hole.ends_with(REST_MARK) { bindings[hole] = List(parts[i - 1 ..], Bracket.None, Separator.Space) } else { bindings[hole] = parts#i }
+	}
+	bindings
+}
+
+# the holes of a normalized pattern in the order they are written
+holes_in(n: Node) as list := match n {
+	Symbol(name) => if is_hole(n) then [hole_key(n)] else []
+	List(items, bracket, separator) => items.map(holes_in).fold([], (a, b) -> a + b)
+	Key(left, op, right) => holes_in(left) + holes_in(right)
+	_ => []
+}
+
+# `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
+declare_pattern(name: Node, shape: Node) := {
+	normal = normalized(shape)
+	declared_patterns[spelling_written(name)] = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
+}
+
+# ---- matching
+
+# whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
+matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
+	Test.Hole => hole_matches(m, n, bindings)
+	Test.Literal => same_atom(m.literal, n)
+	Test.Sequence => sequence_matches(m, n, bindings)
+	Test.Repeat => repeat_matches(m.parts#1, [n], bindings)
+	Test.Pair => match n { Key(left, op, right) => op == m.op and matches(m.parts#1, left, bindings) and matches(m.parts#2, right, bindings); _ => no }
+}
+
+hole_matches(m: Matcher, n: Node, bindings: map) as bool := {
+	if not of_shape(m.type, n) { return no }
+	if bindings.has(m.name) { return "${bindings[m.name]}" == "${n}" }
+	bindings[m.name] = n
+	yes
+}
+
+same_atom(literal: Node, n: Node) as bool := match literal {
+	Symbol(name) => match n { Symbol(other) => canonical_word(other) == canonical_word(name); _ => no }
+	_ => "${literal}" == "${n}"
+}
+canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
+
+sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
+	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separator == m.separator) and parts_match(m.parts, items, bindings)
+	_ => no
+}
+
+# Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
+# remain when it is last: `if $c... then $a...` stops the condition at the first then. A failed try leaves no binding.
+parts_match(parts: list, items: list, bindings: map) as bool := {
+	if parts is empty { return items is empty }
+	part = parts#1
+	if not part.rest { return #items > 0 and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
+	known = bindings.keys
+	for taken in 0 to #items {
+		if taken_by(part, items[.. taken], bindings) and parts_match(parts[1 ..], items[taken ..], bindings) { return yes }
+		for name in bindings.keys { if not known.contains(name) { bindings.remove(name) } }
+	}
+	no
+}
+
+taken_by(m: Matcher, items: list, bindings: map) as bool := if m.test == Test.Repeat then repeat_matches(m.parts#1, items, bindings) else rest_matches(m, items, bindings)
+
+# each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
+repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
+	met = {}
+	for item in items {
+		own = {}
+		if not matches(part, item, own) { return no }
+		for name in own.keys { met[name] = (if met.has(name) then met[name] else []) + [own[name]] }
+	}
+	for name in met.keys { bindings[name + REST_MARK] = List(met[name], Bracket.None, Separator.Space) }
+	yes
+}
+
+rest_matches(m: Matcher, items: list, bindings: map) as bool := {
+	for item in items { if not of_shape(m.type, item) { return no } }
+	bindings[m.name] = List(items, Bracket.None, Separator.Space)
+	yes
+}
+
+# whether code has the shape a hole asks for
+of_shape(wanted: Node, n: Node) as bool := {
+	if not is_shape(wanted) { return fits_type(n, wanted) }
+	type = spelling_written(wanted)
+	if wanted == Empty or type == "Node" { return yes }
+	if declared_patterns.has(type) { return matches(declared_patterns[type].matcher, n, {}) }
+	match type {
+		"Symbol" => n is symbol
+		"List" => match n { List(items, bracket, separator) => yes; _ => no }
+		"Key" => match n { Key(left, op, right) => yes; _ => no }
+		"Text" => match n { Text(value) => yes; _ => no }
+		"Number" => match n { Number(value) => yes; _ => no }
+		_ => match n { Char(value) => yes; _ => no }
+	}
+}
+
+
+# whether any hole of the matcher asks for a value type: the rule then runs in stage 3, on typed code
+asks_value_type(m: Matcher) as bool := m.test == Test.Hole and not is_shape(m.type) or #m.parts.filter(asks_value_type) > 0
+
+# how many literal parts a pattern names: the more, the more specific
+specificity(m: Matcher) as int := match m.test {
+	Test.Literal => 1
+	Test.Hole => if m.type == Empty or spelling_written(m.type) == "Node" then 0 else 1
+	_ => 1 + m.parts.map(specificity).fold(0, (a, b) -> a + b)
+}

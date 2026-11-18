@@ -23,6 +23,13 @@ source "$(dirname "$0")/../lib/platform.sh"
 COMPILER_PATHS=(core extensions $("$(dirname "$0")/../compiler-inputs.sh" --code-files | sed 's|^|lib/|'))
 field() { sed -n "s/^$1 //p" "$batch"; }
 set_field() { sed_in_place "s/^$1 .*/$1 $2/" "$batch"; }
+# the first commit of main's new line that contains <ref>
+merged_by() {
+	local commit
+	for commit in $(git -C "$tree" rev-list --first-parent --reverse "$base..$tested"); do
+		git -C "$tree" merge-base --is-ancestor "$1" "$commit" && { echo "$commit"; return; }
+	done
+}
 
 # main moved past base: take its new commits onto the tested hash, re-testing only when they touch the compiler's paths
 catch_up() {
@@ -53,7 +60,11 @@ say "pushed ${tested:0:10} to main"
 while read -r key branch ref; do
 	git -C "$tree" merge-base --is-ancestor "$ref" "$tested" || { say "NOT MERGED $key ($ref)"; continue; }
 	commit=$(git -C "$tree" log --merges --format=%H --grep="(card $key)" -1 "$base..$tested")
+	# a card sharing its tip with an earlier card of the batch has no merge of its own: the earlier one brought it in
+	[ -n "$commit" ] || commit=$(merged_by "$ref")
 	# the cloud has no board: after-push.sh closes the card on the Mac once it installs this main
-	if command -v todo >/dev/null; then todo done "$key" "$commit" >/dev/null && say "done $key"; else say "landed $key in ${commit:0:10}"; fi
+	if command -v todo >/dev/null; then
+		todo done "$key" "$commit" >/dev/null && say "done $key" || say "CARD NOT CLOSED $key (landed in ${commit:0:10}): todo done failed"
+	else say "landed $key in ${commit:0:10}"; fi
 	git -C "$tree" push -q origin --delete "$branch" 2>/dev/null
 done < <(field card)

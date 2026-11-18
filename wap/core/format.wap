@@ -1,0 +1,142 @@
+# Code → canonical warp text, what `wap format` prints (notes/backbone.md "Operators"). Reads notation or operated
+# code: each operator Call in its own notation (`(Call + a b)` is `a + b`), brackets only where precedence needs them,
+# and a reading that spacing decided spelled out: `[a -1]` prints as `[a, -1]`, `print -x` as `print (-x)`.
+
+use "parse/operators.wap"
+use "stage.wap"
+use "../kernel/forms.wap"
+use "../preload/operators.wap"
+
+# the operator that defines, whose left side is a definition's head
+DEFINE_SPELLING = ":="
+
+formatted(n: Node) as text := annotations_text(n) + (text_written(n) ?? written(n))
+# the spelling the program wrote, where the reader gave its code another shape (core/stage.wap WRITTEN)
+text_written(n: Node) as text? := match fact_of(n, WRITTEN) { Text(spelling) => spelling; _ => ø }
+
+written(n: Node) as text := match n {
+	Call(called, arguments) => call_text(n, called, arguments)
+	List(items, bracket, separator) => list_text(items, bracket, separator)
+	Key(left, Op.Colon, right) => key_text(left) + ": " + formatted(right)
+	Key(head, Op.None, group) => formatted(head) + (if group == ø then "()" else formatted(group))
+	Number(value) => if value is float and not "${value}".contains(".") and not "${value}".contains("e") then "${value}.0" else "${value}"
+	Text(value) => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
+	Symbol(name) => name
+	_ => "${n}"
+}
+
+# the `@annotations` the reader found before the code, each with its `@`
+annotations_text(n: Node) as text := {
+	said = fact_of(n, "meta")
+	if said == ø { return "" }
+	annotations = match said { List(items, Bracket.None, Separator.Space) => items; _ => [said] }
+	annotations.map(annotation => "@" + formatted(annotation) + " ").join("")
+}
+
+# a definition's head, a function's written result type after `as`, the canonical word (wiki/function.md):
+# `f(x): int` prints as `f(x) as int`; a typed name keeps its `:`, `x: int`
+definition_head_text(head: Node) as text := match head {
+	Key(name, Op.Colon, type) => if is_call_head(name) then formatted(name) + " as " + formatted(type) else formatted(head)
+	_ => formatted(head)
+}
+is_call_head(n: Node) as bool := match n { Key(called, Op.None, group) => yes; _ => no }
+
+# A key in brackets when it is a phrase or an operator call: `(a b): c`, `(a - b): 2`; `a b: c` would key only b
+key_text(key: Node) as text := if is_loose(key) then "(" + formatted(key) + ")" else formatted(key)
+# code that blanks or an operator hold together, which a `:` beside it would split
+is_loose(n: Node) as bool := group_written(n) != "" and group_written(n) != glue_group
+
+# a key before more items of a phrase, written tight, `a:1 b:2`: `a: 1 b: 2` would make `1 b: 2` the value
+tight_key_text(key: Node, value: Node) as text :=
+	key_text(key) + ":" + (if is_loose(value) then "(" + formatted(value) + ")" else formatted(value))
+
+# an operator call in its notation; a call of anything else as `f(a, b)`
+call_text(call: Node, called: Node, arguments: list) as text := {
+	if fact_of(call, COMPOUND) != ø { return compound_text(call, arguments) }
+	if #arguments == 3 and formatted(called) == CHOICE { return operand_text(arguments#1, call, Side.Left) + " ? " + operand_text(arguments#2, call, Side.Left) + " : " + operand_text(arguments#3, call, Side.Right) }
+	spelling = formatted(called)
+	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
+		left = if spelling == DEFINE_SPELLING then definition_head_text(arguments#1) else operand_text(arguments#1, call, Side.Left)
+		return left + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
+	}
+	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" {
+		gap = if is_word(spelling) then " " else ""
+		return spelling + gap + operand_text(arguments#1, call, Side.Right)
+	}
+	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + spelling }
+	spelling + "(" + arguments.map(formatted).join(", ") + ")"
+}
+
+# `x += 1` as written: the assignment x = x + 1 the operator stage read it as, its right side's right operand
+compound_text(call: Node, arguments: list) as text := match arguments#2 {
+	Call(operator, operands) => formatted(arguments#1) + " " + formatted(fact_of(call, COMPOUND)) + " " + formatted(operands#2)
+}
+
+enum Side { Left, Right }
+
+# an operand of an operator, in brackets only when it would not be applied first without them: `1 + (2 * 3)` prints
+# as `1 + 2 * 3`, `(1 + 2) * 3` keeps its brackets; a parameter list keeps its own, `(int) -> int`
+operand_text(operand: Node, call: Node, side: Side) as text := {
+	inner = if side == Side.Left and group_written(call) == parameters_group then operand else ungrouped(operand)
+	if needs_brackets(inner, call, side) then "(" + formatted(inner) + ")" else formatted(inner)
+}
+
+# what round brackets around one item group, the item itself
+ungrouped(n: Node) as Node := match n {
+	List(items, Bracket.Round, separator) => if #items == 1 then ungrouped(items#1) else n
+	_ => n
+}
+
+needs_brackets(operand: Node, call: Node, side: Side) as bool := {
+	inner = group_written(operand)
+	outer = group_written(call)
+	if inner == "" { return no }
+	if inner == outer {
+		grouping = group_named(outer).grouping
+		return not (grouping == Grouping.Left and side == Side.Left or grouping == Grouping.Right and side == Side.Right)
+	}
+	not binds_tighter(inner, outer)
+}
+
+# the precedence group code is written in at its top, "" for an atom or a bracketed list
+group_written(n: Node) as text := match n {
+	Call(called, arguments) => group_of(formatted(called), fixity_of(formatted(called), #arguments))
+	List(items, Bracket.None, Separator.None) => glue_group
+	List(items, Bracket.None, Separator.Space) => juxtaposition_group
+	_ => ""
+}
+
+fixity_of(spelling: text, count: int) as Fixity :=
+	if count == 2 then Fixity.Infix else if group_of(spelling, Fixity.Prefix) != "" then Fixity.Prefix else Fixity.Postfix
+
+is_word(spelling: text) as bool := is_letter(spelling#1)
+
+# Items of a space list: one after the first that spacing alone made prefix (`[a -1]`, `print -x`) is spelled out,
+# with commas inside brackets, in brackets of its own in a phrase.
+list_text(items: list, bracket: Bracket, separator: Separator) as text := {
+	spaced_sign = separator == Separator.Space and #items[1 ..].filter(led_by_sign) > 0
+	shown = []
+	for i in 1 to #items { shown += [phrase_item_text(items#i, i == #items, separator == Separator.Space, spaced_sign and bracket == Bracket.None)] }
+	if spaced_sign and bracket != Bracket.None { separator = Separator.Comma }
+	opening(bracket) + shown.join(separator_text(separator)) + closing(bracket)
+}
+
+# an item of a list; in a phrase a key before the last item is tight, a sign-led item bracketed when asked
+phrase_item_text(n: Node, last: bool, in_phrase: bool, sign_bracketed: bool) as text := {
+	if sign_bracketed and led_by_sign(n) { return "(" + formatted(n) + ")" }
+	if in_phrase and not last { match n { Key(left, Op.Colon, right) => return annotations_text(n) + tight_key_text(left, right); _ => ø } }
+	formatted(n)
+}
+
+# a negative number, or a call of an operator that is prefix and infix alike, applied as prefix
+led_by_sign(n: Node) as bool := match n {
+	Number(value) => value < 0
+	Call(called, arguments) => #arguments == 1 and group_of(formatted(called), Fixity.Infix) != "" and group_of(formatted(called), Fixity.Prefix) != ""
+	_ => no
+}
+
+opening(bracket: Bracket) as text := match bracket { Bracket.Curly => "{"; Bracket.Square => "["; Bracket.Round => "("; Bracket.Less => "<"; _ => "" }
+closing(bracket: Bracket) as text := match bracket { Bracket.Curly => "}"; Bracket.Square => "]"; Bracket.Round => ")"; Bracket.Less => ">"; _ => "" }
+separator_text(separator: Separator) as text := match separator {
+	Separator.Space => " "; Separator.Comma => ", "; Separator.Semicolon => "; "; Separator.Newline => "\n"; Separator.Tab => "\t"; _ => ""
+}

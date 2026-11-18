@@ -1,0 +1,270 @@
+# Binding analysis: kernel → bound kernel (first principles 15, notes/backbone.md "Stage languages").
+#
+# Scopes, shadowing, captures and globals are resolved here, once. Every name of the program gets two facts in its
+# metadata (core/stage.wap with_fact), which every later stage reads instead of looking the name up again:
+#   binding      what the name refers to: local, parameter, capture, global, function or library
+#   defined_at   the name where that was defined, positioned, so an error can say where (ø for a library word)
+#
+#   x = 1                       x: global
+#   f(y) := { z = x + y         z: local, x: global, y: parameter
+#             g() := z          z: capture (g reads its enclosing function's local)
+#             print z }         print: library
+#
+# Scopes: a Block opens one; a function (Define, Fn) opens one that also starts a new depth. A name a Block's
+# statements give a value to, or define, belongs to that Block unless the same function sees it already; so a local
+# never reaches another function, whatever its name (a local `push` in f leaves g's `xs.push` the library's). A
+# definition is seen by its whole Block, before and after it, so functions may call each other.
+# The stage only learns facts: every node keeps its shape and its own metadata.
+
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# depth of the program's own statements: names defined there are globals and top-level functions
+PROGRAM_DEPTH = 0
+# depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
+LIBRARY_DEPTH = -1
+
+# What a name refers to: its kind as seen from the function that defined it, and the defining name itself
+class Definition { name: text; kind: text; definer: Node; depth: int }
+
+# the program bound inside the library, whose declarations (`name: signature`) it may use
+bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.map(library_word), PROGRAM_DEPTH))
+# a library's word: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature ø)
+library_word(declaration: Node) as Definition := match declaration { Key(name, Op.Colon, signature) => Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH) }
+
+# n with the facts on every name it holds; scope lists the definitions visible, the innermost first
+bound(n: Node, scope: list, depth: int) as Node := match n {
+	Symbol(name) => resolved(n, scope, depth)
+	Block(statements) => block_bound(n, statements, named_variables(n, scope, depth) + scope, depth)
+	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
+	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
+	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
+	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
+	Case(subject, arms) => refitted(Case(bound(subject, scope, depth), arms.map(arm => arm_bound(arm, scope, depth))), n)
+	Return(value) => refitted(Return(bound(value, scope, depth)), n)
+	Break() => n
+	Continue() => n
+	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
+	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
+	Record(name, fields, variants) => n
+	Number(value) => n
+	Text(value) => n
+	Char(value) => n
+	True => n
+	False => n
+	Empty => n
+	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
+}
+# An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
+arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
+	Arm(pattern, result) => {
+		inner = pattern_variables(pattern, depth) + scope
+		refitted(Arm(if pattern is symbol and text(pattern) != WILDCARD then resolved(pattern, inner, depth) else pattern, bound(result, inner, depth)), arm)
+	}
+}
+arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
+pattern_variables(pattern: Node, depth: int) as list := match pattern {
+	Symbol(name) => if name == WILDCARD then [] else [Definition(name, local_kind(depth), pattern, depth)]
+	Number(value) => []
+	Text(value) => []
+	Char(value) => []
+	True => []
+	False => []
+	Empty => []
+	_ => refused(pattern, "wap matches literals, names and _ so far")
+}
+
+# an instance's field, `x: 1`: its value bound, its name the record's field, no variable
+field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
+block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
+all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
+
+# The variables a Block names without a value (VARIABLES, core/rules/lowering.wap): `let x` a new one of the block,
+# `global x` the program's x, which the block then reads and changes as its own
+named_variables(block: Node, scope: list, depth: int) as list := match fact_of(block, VARIABLES) {
+	List(items, bracket, separator) => items.map(naming => named_variable(naming, scope, depth))
+	_ => []
+}
+named_variable(naming: Node, scope: list, depth: int) as Definition := match naming {
+	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then Definition(text(name), BOUND_GLOBAL, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
+}
+program_variable(name: Node, scope: list) as Definition := {
+	for definition in program_scope(scope) { if definition.name == text(name) and definition.kind == BOUND_GLOBAL { return definition } }
+	refused(name, "the program has no variable of this name")
+}
+
+# the definitions of the program and the library, the ones `global x = …` sees
+program_scope(scope: list) as list := scope.filter(definition => definition.depth <= PROGRAM_DEPTH)
+
+# A function's parameters and body, one depth further in than the function's definition, the body seeing the
+# parameters before the names around it
+parameters_bound(parameters: List, depth: int) as Node := match parameters {
+	List(items, bracket, separator) => refitted(List(items.map(p => bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
+}
+body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + scope, depth + 1)
+parameter_definitions(parameters: List, depth: int) as list := match parameters {
+	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), BOUND_PARAMETER, parameter_name(p), depth))
+}
+
+# A function with the fact `captures`: the names of the functions around it that its body reads, a nested function's
+# reads included (the function passes them on), each defining name once in the order first read; [] when it captures
+# nothing. A closure is built from them (core/emit/closures.wap).
+with_captures(function: Node, scope: list, depth: int) as Node := {
+	captured = []
+	for definer in captured_definers(function) {
+		if from_enclosing_function(definer, scope, depth) and not identical_in(definer, captured) { captured = captured + [definer] }
+	}
+	with_fact(function, CAPTURES, List(captured, Bracket.Square, Separator.Comma))
+}
+# the defining names of the captures read anywhere in n
+captured_definers(n: Node) as list := match n {
+	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [fact_of(n, DEFINED_AT)] else []
+	Key(left, op, right) => captured_definers(left) + captured_definers(right)
+	List(items, bracket, separator) => items.flat_map(captured_definers)
+	_ => []
+}
+# whether a defining name belongs to a function around the one at depth, not to the program or the library
+from_enclosing_function(definer: Node, scope: list, depth: int) as bool := {
+	for definition in scope { if definition.definer === definer { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
+	no
+}
+identical_in(n: Node, nodes: list) as bool := {
+	for other in nodes { if other === n { return yes } }
+	no
+}
+
+# the name a parameter defines: `x`, or the x of `x: int`
+parameter_name(parameter: Node) as Node := if declared_name(parameter) is symbol then declared_name(parameter) else refused(parameter, "a parameter is a name, or a name and its type")
+
+# The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
+# not see yet. Nested Blocks and functions keep theirs; a Set inside another form (an If's branch) is the Block's.
+defined_in(statements: list, scope: list, depth: int) as list := {
+	made = []
+	for statement in statements { made = made + definitions_made_by(statement, made + scope, depth) }
+	made
+}
+definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
+	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
+	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
+	Block(statements) => []
+	Fn(parameters, body) => []
+	Call(called, arguments) => defined_in(arguments, scope, depth)
+	Prim(operation, arguments) => defined_in(arguments, scope, depth)
+	If(condition, then_part, else_part) => defined_in([condition, then_part, else_part], scope, depth)
+	While(condition, body) => defined_in([condition, body], scope, depth)
+	Case(subject, arms) => defined_in([subject] + arms.map(arm_result), scope, depth)
+	Return(value) => defined_in([value], scope, depth)
+	Get(subject, key) => defined_in([subject, key], scope, depth)
+	List(items, Bracket.Square, separator) => defined_in(items, scope, depth)
+	_ => []
+}
+# The variable an assignment makes: a new one for `let x = …` and for a name its function sees no variable of;
+# none for `global x = …`, the program's, or for a variable its function has. A name that is a variable of the
+# program or of a function around reads two ways, so the assignment is refused naming both.
+assigned_variables(set: Node, place: Node, scope: list, depth: int) as list := {
+	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
+	name = text(place)
+	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
+		if seen_in_function(name, scope, depth) { return [] }
+		outer = outer_variable(name, scope, depth)
+		if outer != ø { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one" + global_reading(outer, name)) }
+	}
+	[Definition(name, local_kind(depth), place, depth)]
+}
+global_reading(outer: Definition, name: text) as text := if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""
+# the variable of that name the program or a function around the one at depth defines, ø when the name is none
+outer_variable(name: text, scope: list, depth: int) as Definition? := {
+	for definition in scope {
+		if definition.name == name { return if definition.depth > LIBRARY_DEPTH and definition.depth < depth and definition.kind != BOUND_FUNCTION then definition else ø }
+	}
+	ø
+}
+local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then BOUND_GLOBAL else BOUND_LOCAL
+seen_in_function(name: text, scope: list, depth: int) as bool := {
+	for definition in scope { if definition.name == name and definition.depth == depth { return yes } }
+	no
+}
+
+# A name with what it refers to, as seen from depth: its own function's names as they were defined, the program's
+# globals and functions and the library's words as such, an enclosing function's names as captures; a name nothing
+# defines is refused
+resolved(name: Node, scope: list, depth: int) as Node := {
+	meant = definitions_meant(text(name), scope)
+	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
+	innermost = meant#1
+	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
+	bound = with_fact(name, BINDING, symbol(kind))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(meant.map(definition => definition.definer), Bracket.Square, Separator.Comma))
+}
+# The definitions a name may mean, innermost first: the one it finds, or, when that is a function, every function of
+# that name around it, its overloads, up to a variable of that name, which hides the rest. The typing stage picks
+# among several by the arguments' types.
+definitions_meant(name: text, scope: list) as list := {
+	meant = []
+	for definition in scope {
+		if definition.name == name {
+			if not is_function(definition) { return if meant is empty then [definition] else meant }
+			meant = meant + [definition]
+		}
+	}
+	meant
+}
+is_function(definition: Definition) as bool := definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY
+
+# Late reads (wiki/Footguns.md "Closures capturing loop variables"): a function reads a program variable when it is
+# called, so where the program changes the variable after the function's definition, the function declares it,
+# `global x`, and the reader sees that it reads the variable as it is then. An undeclared read of such a variable is
+# refused where it is written. The program's first value of a variable is its definition, no change.
+late_reads_checked(program: Node) as Node := {
+	changes = global_changes(program, no)
+	match program {
+		Block(statements) => for statement in statements { if function_defined_by(statement) != ø { late_reads_of(function_defined_by(statement), line_of(statement), [], changes) } }
+		_ => ø
+	}
+	program
+}
+# the function a top-level statement defines: `f(x) := …`, or `f = x => …`
+function_defined_by(statement: Node) as Node? := match statement {
+	Define(name, parameters, body) => statement
+	Set(place, value) => if value is Fn then value else ø
+	_ => ø
+}
+# Each change of a program variable: where the program writes it, or anytime for a change inside a function, which
+# runs whenever the function is called
+class Change { name: text; line: int; anytime: bool }
+global_changes(n: Node, in_function: bool) as list := match n {
+	Set(place, value) => (if is_change(place) then [Change(text(place), line_of(place), in_function)] else []) + global_changes(value, in_function)
+	Define(name, parameters, body) => global_changes(body, yes)
+	Fn(parameters, body) => global_changes(body, yes)
+	Key(left, op, right) => global_changes(left, in_function) + global_changes(right, in_function)
+	List(items, bracket, separator) => items.flat_map(item => global_changes(item, in_function))
+	_ => []
+}
+# whether a place given a value is a program variable given another value than its first
+is_change(place: Node) as bool := fact_of(place, BINDING) == symbol(BOUND_GLOBAL) and not same_place(place, fact_of(place, DEFINED_AT))
+same_place(a: Node, b: Node) as bool := line_of(a) == line_of(b) and column_of(a) == column_of(b)
+
+# the reads in a function, defined at line, of program variables that change after it, refused unless declared
+late_reads_of(n: Node?, line: int, declared: list, changes: list) := match n {
+	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_GLOBAL) and not declared.contains(name) and changes_after(name, line, changes) { refused(n, "the program changes ${name} after this function is defined: write `global ${name}` in the function, so it reads ${name} as it is when called") }
+	Set(place, value) => late_reads_of(value, line, declared, changes)
+	Block(statements) => for statement in statements { late_reads_of(statement, line, declared + globals_named(n), changes) }
+	Key(left, op, right) => { late_reads_of(left, line, declared, changes); late_reads_of(right, line, declared, changes) }
+	List(items, bracket, separator) => for item in items { late_reads_of(item, line, declared, changes) }
+	_ => ø
+}
+changes_after(name: text, line: int, changes: list) as bool := {
+	for change in changes { if change.name == name and (change.anytime or change.line > line) { return yes } }
+	no
+}
+# the names a Block declares the program's, `global x`
+globals_named(block: Node) as list := match fact_of(block, VARIABLES) {
+	List(items, bracket, separator) => items.filter(naming => text(naming.value) == BOUND_GLOBAL).map(naming => text(naming.key))
+	_ => []
+}

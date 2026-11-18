@@ -610,8 +610,8 @@ compiler_stamp(file: text, name: text) as text := {
 	of = if commit.length > 0 then joined(" of ", text_from(commit.address, shown_length as u32)) else " of no commit"
 	if built.length > 0 then joined(joined(joined(name, of), " · built "), built) else joined(name, of)
 }
-# a file of warp code: its name ends in .warp, or a file of that name exists
-is_warp_file(name: text) as bool := ends_with(name, ".warp") or read_file(name).length > 0
+# a file of warp code: its name ends in .warp or .wap (the new compiler's sources, wap/), or a file of that name exists
+is_warp_file(name: text) as bool := ends_with(name, ".warp") or ends_with(name, ".wap") or read_file(name).length > 0
 
 # the words that only say how to run what follows: `run`, `pure` and `eval` what the bare words do, `self` by
 # warp-self.wasm, `fast` (lib/fast_math.warp) at full precision yet
