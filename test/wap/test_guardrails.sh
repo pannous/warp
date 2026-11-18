@@ -8,9 +8,14 @@
 #   one-ranking      definitions are ordered only by `ranked` (analyze/calls.wap): no other sort in core/analyze or core/emit
 #   long-file        no wap file over 300 lines: its owner splits it along a real seam
 #   repeated-code    no line or list written twice in a file (scripts/repeated-code.sh)
+#   one-owner        every wap file and test/wap script falls under exactly one row of notes/wap.md "Owners": a path or
+#                    folder in its files column (wap/'s own paths written without it), or a row's "<folder> … no other
+#                    row names"; a clause in words, a role row's "any file", owns nothing
 # Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
 # the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
 # until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
+RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code one-owner"
+OWNERS=notes/wap.md
 RELATION=conversion
 LONGEST=300
 DECIDING='(^|[^a-z_])(if|match)[ (]|==|!=|[?][?]|^[a-z_]+ = '
@@ -53,12 +58,33 @@ long_file() {
 repeated_code() {
 	bash scripts/repeated-code.sh "$root" --list $wap_files | sed -E 's/^([^:]+):([0-9]+) (.*)/repeated-code\t\1\t\1:\2\t\3/'
 }
+# the owner rows' files, `<row> <path>` a line, a folder ending in /, and `<row> * <folder>` for a catch-all
+owned_paths() {
+	awk -F'|' '/^\| stage \| owner/ { table = 1; next } table && !/^\|/ { exit } table && $2 !~ /^-+$/ {
+		row++
+		count = split($4, entries, /[,;]/)
+		for (i = 1; i <= count; i++) {
+			entry = entries[i]; gsub(/^ +| +$/, "", entry)
+			if (entry ~ /no other row names/ && match(entry, /[^ ]+\//)) print row, "*", substr(entry, RSTART, RLENGTH)
+			else if (entry != "" && entry !~ / /) print row, (entry ~ /^(test|scripts)\// ? "" : "wap/") entry
+		}
+	}' "$OWNERS"
+}
+one_owner() {
+	git ls-files 'wap/*.wap' 'test/wap/*' | awk -v owners="$OWNERS" 'NR == FNR { if ($2 == "*") catch_all[$1] = $3; else path[NR] = $2; row[NR] = $1; next }
+	{
+		delete owning; count = 0
+		for (i in path) if (($0 == path[i] || substr(path[i], length(path[i])) == "/" && index($0, path[i]) == 1) && !(row[i] in owning)) { owning[row[i]] = 1; count++ }
+		if (count == 0) for (r in catch_all) if (index($0, catch_all[r]) == 1) count = 1
+		if (count != 1) printf "one-owner\t%s\t%s:1\tunder %d rows of %s \"Owners\", not one\n", $0, $0, count, owners
+	}' <(owned_paths) -
+}
 
-found=$({ one_fit; emit_reads_type; dynamic_prim; one_ranking; long_file; repeated_code; })
+found=$(for rule in $RULES; do ${rule//-/_}; done)
 # each rule and key, its count found and its count allowed
 counts=$(printf '%s\n' "$found" | awk -F'\t' 'NF { print $1 " " $2 }' | sort | uniq -c | awk '{ print $2, $3, $1 }')
 listed=$(grep -vE '^(#|$)' "$allowed")
-for rule in one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code; do
+for rule in $RULES; do
 	said=$(join -a1 -a2 -e0 -o 0,1.2,2.2 <(printf '%s\n' "$counts" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) \
 		<(printf '%s\n' "$listed" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) |
 		while read -r key count allows; do
