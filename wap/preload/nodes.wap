@@ -56,11 +56,12 @@ symbol(name: text): Node := Symbol(name)
 line_of(n: Node) := written_part(n, META_LINE)
 column_of(n: Node) := written_part(n, META_COLUMN)
 written_part(n: Node, place: int) := match n {
-	Meta(node, List(data, bracket, separator)) => if number_in(data#META_LINE) == NO_LINE then ø else number_in(data#place)
+	Meta(node, List(data, bracket, separator)) => if int_in(data#META_LINE) == NO_LINE then ø else int_in(data#place)
 	_ => ø
 }
-number_in(n: Node) := match n {
-	Number(value) => value
+# the int a node holds, ø for any other node
+int_in(n: Node) := match n {
+	Number(value) => if value is int then value else ø
 	_ => ø
 }
 # n where it was written, its facts kept

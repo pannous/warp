@@ -34,4 +34,11 @@ match x {
 	_ => y = 3
 }
 print text(y)')" "2"
+check "a match with a value in one arm and ø in another gives an optional" "$(ran match_optional 'k(n: int, b: bool) := match b {
+  yes => n
+  _ => ø
+}
+print text(k(3, yes) == 3)
+print text(k(3, no) == ø)')" "yes
+yes"
 exit $((failures > 0))

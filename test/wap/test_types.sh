@@ -99,4 +99,8 @@ yes
 yes"
 check "codepoint is another name of the char type" "$(ran codepoint 'first(c: codepoint): char := c
 print text(first('"'"'a'"'"'))')" "a"
+check "a number tested for int is an int where the test holds" "$(ran number_narrowed 'f(n: number) := if n is int then n + 1 else 0
+print text(f(3))
+print text(f(2.5))')" "4
+0"
 exit $((failures > 0))

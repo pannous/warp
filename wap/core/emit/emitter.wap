@@ -149,9 +149,9 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
 	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
 }
-# a part of a choice, made to fit the choice's type: 3 in `if b then 3 else ø`, an int?, is boxed
-arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := {
-	given = labelled(f, [OTHER_LABEL], () => code(part, p, f))
+arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitted(choice, labelled(f, [OTHER_LABEL], () => code(part, p, f)), part, p)
+# a part's value made to fit its choice's type, an If's or a Case's: 3 in `if b then 3 else ø`, an int?, is boxed
+choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
 	if wanted == ø then given else fitted(given, wanted, part, p.m)
 }
