@@ -46,6 +46,8 @@ for file in RULE_FILES { rules_loaded(operated_program(notation(read(rule_file(f
 PRELOAD = program.folder + "/preload/prelude.wap"
 preload = declared(PRELOAD)
 library = declarations_of(preload)
+# the preload and the modules it uses, whose words only the preload sees
+preload_modules = modules_used(preload, declared) + [preload]
 
 # a file's text read, its operators read, its spellings rewritten by the shape rules, then declared
 declared(file: text) as Node := declared_program(shaped_program(operated_program(notation(read(file), file))))
@@ -57,7 +59,7 @@ compiled(file: text) as list := {
 	code_read = declared(file)
 	modules = modules_used(code_read, declared) + [code_read]
 	whole = Block(modules.flat_map(code => statements_in(prepared(code, modules))))
-	library_code = bound_program(lowered_program(preload), [])
+	library_code = Block(preload_modules.flat_map(code => statements_in(prepared(code, preload_modules))))
 	module_bytes(emitted(typed_by_rules(typed_program(whole, library_code), library, library_code)))
 }
 
