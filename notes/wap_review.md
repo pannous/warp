@@ -38,9 +38,9 @@ file, with a gauge that counts every refusal instead of the first.
   all 27 scripts of test/wap; scripts/wap-census.warp. Of the five commits that landed during the writing, the
   diffs and the new files' seams, not every moved line again.
 - Ran once: `bash test/wap/run.sh --wait` at bc30daa9c8: 376 ✓, 0 ✗ in 27 scripts, 82 s.
-- Ran 53 small programs through wap to check each claim below that says "refused", "runs" or "fails to load"
+- Ran 58 small programs through wap to check each claim below that says "refused", "runs" or "fails to load"
   (appendix A), seven generated ones for timing, three programs through the old compiler, and the census on all
-  43 program files of wap (appendix B). Every such claim was run, not inferred.
+  50 program files of wap (appendix B). Every such claim was run, not inferred.
 
 ## The findings at a glance
 
@@ -244,6 +244,13 @@ None has a test; each fix is a few lines; each needs one check line in test/wap.
    function)` is the first typing refusal of core/errors.wap). core/analyze/calls.wap:265 lets a bare `list` or
    `enum` take its argument's type, not a bare `function`. Do: with fix 3, `function` is the bare function type.
 
+A sixth, in the lowering, met in code that landed while this was written: **the index of an assigned place is
+not lowered.** `xs[double(1)] = 9` and `bindings["$" + sign("b")] = 2` → "the binding analysis reads only kernel
+forms; the lowering should have removed this: double(1)" (probes v01-v03); the same index read, and the same
+place written `xs#(1 + double(1)) = 9`, work (probes v04, v05). core/rules/lowering.wap:116-117 lowers a place
+that is a `Get` and passes any other on as written, so a call inside square brackets reaches binding unlowered.
+wap's source is written so at core/rules/patterns.wap:148. Do: lower the index of every place.
+
 ### Fix 3. One representation for function values, before self-build
 
 - **Where:** core/analyze/function_values.wap:13-14, :30-35, :46, :57-58, :65; core/analyze/letters.wap:115-124;
@@ -430,7 +437,7 @@ None has a test; each fix is a few lines; each needs one check line in test/wap.
   baseline and the cloud suite cannot see them. Write them as pairs files, with test/wap/run.sh as their runner
   for now. After self-build the same files run under `wap test`, and the old corpus under test/ becomes wap's
   breadth gauge for nothing: "which share of the old suite passes under wap", in the cloud run only.
-- **Missing:** the five defects of fix 2; a function value in a list, in a map, in a field; an empty map; a
+- **Missing:** the six defects of fix 2; a function value in a list, in a map, in a field; an empty map; a
   primitive given a wrong operand; a kernel form written by a program (once decision 3 is taken); any file of wap
   compiled by wap (fix 1).
 - **A symptom:** three separate checks pin the character-to-text patch at three sites (test/wap/test_lists.sh:53,
@@ -508,7 +515,7 @@ Where the plan itself is wrong or silent:
 ## The road to self-build
 
 **Where it stands.** 50 program files. wap types 11, none of which holds a function. In front: 9 distinct first
-refusals. Behind them, uncounted: the seven kinds of decision 1 (several hundred places), the five defects of fix
+refusals. Behind them, uncounted: the seven kinds of decision 1 (several hundred places), the six defects of fix
 2, words of the old compiler that wap's preload lacks (`float_bits`, `hint`, `split`, `is_letter` of a character,
 `normalize_path`, `path_join`, `dirname`, `use path`, `program.folder`, `args`, `write_bytes`), and `[if …]`
 three times.
@@ -595,9 +602,11 @@ What I would change:
 
 ## Limits of this review
 
-The old compiler was not reviewed. The old test corpus was not run under wap. Timings were taken once, on a Mac
-that other sessions were using. Programs p, q, r and s ran at bc30daa9c8, t and u and the census at 6fa64cf537.
-The causes named in fix 13 are read from the code, not profiled.
+The old compiler was not reviewed. The old test corpus was not run under wap. Timings were taken once, at
+bc30daa9c8, on a Mac that other sessions were using. The programs and the census are those of bafe539ae6;
+programs p to u ran before at bc30daa9c8 or 6fa64cf537 with the same results, t01 to t06 written anew for the
+second run. test/wap/run.sh was run at bc30daa9c8 only. The causes named in fix 13 are read from the code, not
+profiled.
 
 ## Appendix A: the programs run
 
@@ -646,9 +655,9 @@ The causes named in fix 13 are read from the code, not profiled.
 | r05 | `pick(c: bool, name: text) := if c then name else "?"` | runs |
 | r06 | `["=", ":=", ":"].join(" ")` | `= := :` |
 | s01 | `enum Shape { Block(w: int), Dot }`, `Block(3)` matched | `3` |
-| s02 | `class Item { name: text }` | runs |
+| s02 | `class Item { name: text }` ⏎ `i = Item("pen")` ⏎ `print i.name` | `pen` |
 | s03 | `Set(x: int) := x + 1` | `3` |
-| s04 | `class Record { title: text }` | runs |
+| s04 | `class Record { title: text }` ⏎ `print Record("a b").title` | `a b` |
 | t01 | `found: int? = ø` ⏎ `for x in [1, 2, 3] { if x > 1 { found = x } }` | refused: this gives a int, the name holds a ø |
 | t02 | the same inside a `match` arm of a function | refused: the same |
 | t03 | `enum Color { Red, None }` ⏎ `enum Kind { Atom, Color }` ⏎ `c = Color.None` | refused: no field or function None for a value of type Kind |
@@ -658,6 +667,11 @@ The causes named in fix 13 are read from the code, not profiled.
 | u01 | `xs = ["a", "b"]` ⏎ `xs += ["cd"]` | refused: no + takes (list<char>, list<text>) |
 | u02 | `print ["a", "b"].join(",")` | `a,b` |
 | u03 | `x = "a"` ⏎ `print x + "bc"` ⏎ `print text(#x)` | `abc`, `1` |
+| v01 | `double(x: int) := x * 2` ⏎ `xs = [1, 2, 3]` ⏎ `xs[1 + double(1)] = 9` | refused: the binding analysis reads only kernel forms; the lowering should have removed this: double(1) |
+| v02 | `sign(x: text) := "$" + x` ⏎ `bindings = {"$a": 1}` ⏎ `bindings["$" + sign("b")] = 2` | refused: the same, of sign('b') |
+| v03 | v01 with `xs[double(1)] = 9` | refused: the same |
+| v04 | v01 with the index read: `print text(xs[0 + double(1)])` | `3` |
+| v05 | v01 with `xs#(1 + double(1)) = 9` ⏎ `print show(xs)` | `[1, 2, 9]` |
 
 Under the old compiler: `apply(f: (int) -> int, x: int)` runs (h01); typed lists, a field `entries: list<Entry> =
 []`, `as int?` with an early return and `as list<int>` run (h02); `class Test { fit: (int) -> bool }` with `tests =
@@ -694,6 +708,8 @@ Under the old compiler: `apply(f: (int) -> int, x: int)` runs (h01); typed lists
   letters.wap: `same_type`; matching.wap: `joined_type`, `same_type`; types.wap: `all_settled`);
   core/parse/operator_table.wap (`Use`); core/rules/lowering.wap (`pattern_called`), patterns.wap
   (`shaped_program`), stages.wap (`top_level_statements`) and templates.wap (`REST_MARK`, `phrase_of`).
+- A form wap does not lower, in its own source: the place `bindings[HOLE_SIGN + hole_variable(…)] = …`
+  (core/rules/patterns.wap:148; the sixth defect of fix 2).
 - Words of the old compiler met on the way: `float_bits`, `hint` (core/parse/operators.wap:119), `is_letter` of a
   character (core/format.wap:124), `normalize_path`, `path_join`, `dirname` (core/analyze/declarations.wap:35),
   `split` (core/analyze/calls.wap:219), `program`, `args` (wap/compiler.wap:24, :27).
