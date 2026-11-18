@@ -235,6 +235,12 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if binding == BOUND_FIELD { return typed_form(receiver_field(n), s, f, ø) }
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
 	type = variable_type(n, s, f)
+	# a global a function reads before the statement that gives it its value is read when the function is called
+	# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
+	if type == ø and binding == BOUND_GLOBAL and f.function != ø {
+		type = unknown_type(s)
+		remembered(n, type, s, f)
+	}
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	read = with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
 	known = type_keyed(place_key(defined_at(n)), f.present)
