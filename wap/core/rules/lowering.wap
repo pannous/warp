@@ -5,6 +5,7 @@
 # spellings the milestones need are lowered here by hand, one arm per form:
 #   print "Hello"            a phrase, a word then its arguments → Call(print, ["Hello"])
 #   f(1, 2)                  a head glued to its arguments, Key(f, Op.None, (1, 2)) → Call(f, [1, 2])
+#   make(1)(2)               any head glued to them, a call of its value: Call(Call(make, [1]), [2])
 #   Point{x: 1, y: 2}        an instance, data as the reader reads it, its fields' values lowered
 #   x: int                   a typed name, a record's field or a parameter, as written
 #   a + b                    an operator call, (Call + a b) → Call(+, [a, b])
@@ -69,7 +70,7 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
-	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
+	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(lowered))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_field) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
