@@ -32,3 +32,7 @@ print xs#1.name')" "blue"
 check "an unknown value given to a typed name is checked there" "$(ran checked_in 'xs = ["ab", 3]
 n: int = xs#2
 print text(n + 1)')" "4"
+check "an unknown value beside a known one chooses by both" "$(ran beside_known 'e: any = 2.5
+print text(e == 2.5)
+print text(e == 3.5)')" "yes
+no"
