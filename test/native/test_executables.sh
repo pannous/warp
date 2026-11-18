@@ -31,4 +31,6 @@ built distances 2.03km 'use units\nprint 2 km + 30 m'
 built accents yes 'print "\0303\0251" == "e\0314\0201"'
 ships comparing unicode 'print "\0303\0251" == "e\0314\0201"'
 ships sounding native_host 'use sound\nif no 1 { play A4 }'
+# a library's own calls take its words, never a program's definition of their name (card self-calling-function)
+built own_word_beside_library no 'bracket_of(c: text) := "{"\nprint is_block_value("x")'
 exit $((failures > 0))

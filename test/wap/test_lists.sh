@@ -43,4 +43,11 @@ f(ys: list<int>) := #ys
 print text(f([]))')" "6
 4
 0"
+check "an empty list nothing adds to counts no items" "$(ran empty_list_count 'print text(#[])
+xs = []
+print text(#xs)
+xs += [4]
+print text(#xs)')" "0
+0
+1"
 exit $((failures > 0))
