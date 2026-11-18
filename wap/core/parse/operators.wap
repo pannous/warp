@@ -155,7 +155,8 @@ tokens_read(tokens: list) as Node := {
 			prefix = if operand_follows(next) then reading_as(token.item, Fixity.Prefix) else ø
 			if prefix == ø and called_after_infix(token, next, pending) {
 				last = i + 1
-				while last < #tokens and not is_block(tokens#(last + 1).item) { last = last + 1 }
+				takes_block = phrase_words.leading[spelling_written(token.item)] == yes
+				while last < #tokens and (takes_block or not is_block(tokens#(last + 1).item)) { last = last + 1 }
 				operands.add(tokens_read(tokens[i - 1 .. last]))
 				expecting_operand = no
 				i = last
@@ -205,10 +206,12 @@ operators_called(tokens: list) as list := {
 }
 
 # A word that leads a rule's phrase after an infix operator, with more operands after it, takes the rest of the phrase
-# as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, up to a block, which the statement keeps
-# (`if a == b { … }`). Other words stay operands (`0 - step else step`).
+# as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
+# block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
+# (`0 - step else step`).
 called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := #pending > 0 and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
-# the words rules' phrases start with, `return` of `rule return $value... => …`, told by the rule stage as it loads them
+# The words rules' phrases start with, `return` of `rule return $value... => …`, each with whether one of its rules
+# takes a block. The rule stage tells them as it loads rules: rules/ uses this stage, so it cannot ask rules/ itself.
 class PhraseWords { leading: map }
 phrase_words = PhraseWords({})
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }

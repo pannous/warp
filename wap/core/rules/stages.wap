@@ -87,8 +87,12 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 	rules = if typed then typed_rules else shape_rules
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
 	rules.by_head[rule.head].add(rule)
-	match normal { List(items, Bracket.None, Separator.Space) => for word in list_heads(items) { phrase_words.leading[word] = yes }; _ => ø }
+	match normal { List(items, Bracket.None, Separator.Space) => for word in list_heads(items) { phrase_word_added(word, #matcher.parts.filter(takes_block) > 0) }; _ => ø }
 }
+phrase_word_added(word: text, block: bool) := { if block or not phrase_words.leading.has(word) { phrase_words.leading[word] = block } }
+# a pattern part that takes a block: a braced sequence, `{ ($pattern => $result)... }`, or a hole of a shape a block has
+takes_block(m: Matcher) as bool := m.test == Test.Sequence and m.bracket == Bracket.Curly or m.test == Test.Hole and m.type != Empty and matches(m, SAMPLE_BLOCK, {})
+SAMPLE_BLOCK = List([symbol("x")], Bracket.Curly, Separator.Newline)
 
 # The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its
 # first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
