@@ -24,6 +24,8 @@ use "../../kernel/forms.wap"
 PROGRAM_DEPTH = 0
 # depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
 LIBRARY_DEPTH = -1
+# the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it
+TYPE_TEST_WORD = "is"
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 class Definition { name: text; kind: text; definer: Node; depth: int }
@@ -40,7 +42,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
-	Call(called, arguments) => refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
+	Call(called, arguments) => if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else refitted(Call(bound(called, scope, depth), all_bound(arguments, scope, depth)), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
@@ -92,6 +94,14 @@ pattern_variables(pattern: Node, scope: list, depth: int) as list := match patte
 	_ => refused(pattern, "wap matches literals, names and _ so far")
 }
 
+# A type test, `x is T`: its value bound, its type a case, which binds as one, or a type's name, which stays a name as
+# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap)
+is_type_test(called: Node, scope: list) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
+type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node := {
+	tested = arguments#2
+	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
+	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
+}
 # an instance's field, `x: 1`: its value bound, its name the record's field, no variable
 field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)

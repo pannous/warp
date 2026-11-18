@@ -152,7 +152,7 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
 	Arm(pattern, result) => {
 		if fits_any(pattern) and pattern != symbol(WILDCARD) { remembered(pattern, type, s, f) }
-		tested = if fits_any(pattern) then pattern else if pattern is Call then case_pattern_typed(pattern, s, f) else typed_form(pattern, s, f, type)
+		tested = if fits_any(pattern) then pattern else if pattern is Call then case_pattern_typed(pattern, s, f) else if is_case_name(pattern) then case_typed_as(pattern, pattern, [], s) else typed_form(pattern, s, f, type)
 		if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit the subject, whose type is ${type}") }
 		given = typed_form(result, s, f, expected)
 		with_type_of(refitted(Arm(tested, given), arm), value_type(given))
@@ -165,6 +165,8 @@ covers_cases(arms: list, type: Node, s: TypingState) as bool := {
 }
 # a pattern that fits every value: a name that is no case, or _
 fits_any(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) != symbol(BOUND_CASE)
+# a case's bare name: as a pattern it fits the case whatever its fields hold
+is_case_name(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) == symbol(BOUND_CASE)
 pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
 
 # the type of either of two values: the one that finishes, or the common one; ø when they differ
@@ -253,6 +255,16 @@ variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := {
 }
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
 
+# A type test, `x is T`, left unbound by the binding analysis (core/analyze/scope.wap type_test_bound), a bool: for a
+# case, whether x is that case, the Case `match x { T => yes; _ => no }`; for a type's name, whether x is of that type,
+# known here (x still runs)
+type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+	subject = arguments#1
+	tested = arguments#2
+	if fact_of(tested, BINDING) == symbol(BOUND_CASE) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
+	type = value_type(typed_form(subject, s, f, ø)) ?? refused(subject, "this gives no value to test")
+	typed_form(placed_like(Block([subject, if same_type(type, tested) then True else False]), n), s, f, ø)
+}
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
 case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_named(enum_of(s.records, called), called))
@@ -279,11 +291,12 @@ case_pattern_typed(pattern: Node, s: TypingState, f: TypeFrame) as Node := match
 # arguments; then the function it means, typed for these argument types
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if fact_of(called, BINDING) == symbol(BOUND_CASE) { return case_call_typed(n, called, arguments, s, f) }
+	if called is symbol and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
 	candidates = candidates_of(called).map(definer => definition_at(definer, s))
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
-	meant = chosen_definition(n, called, candidates, given, expected)
+	meant = chosen_definition(n, called, candidates, given, expected, s)
 	wanted = parameters_in(meant).map(type_given)
 	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s, f) else given#at)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
@@ -298,13 +311,13 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
-	chosen = function_typed(chosen_definition(n, key, named, [typed], expected), [value_type(typed)], s, n)
+	chosen = function_typed(chosen_definition(n, key, named, [typed], expected, s), [value_type(typed)], s, n)
 	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
 as_text(character: Node, s: TypingState, f: TypeFrame) as Node := {
 	if character is Char { return typed_form(character, s, f, symbol(TEXT_TYPE)) }
-	chosen = function_typed(chosen_definition(character, symbol(TEXT_FUNCTION), definitions_named(TEXT_FUNCTION, s), [character], ø), [symbol(CHAR_TYPE)], s, character)
+	chosen = function_typed(chosen_definition(character, symbol(TEXT_FUNCTION), definitions_named(TEXT_FUNCTION, s), [character], ø, s), [symbol(CHAR_TYPE)], s, character)
 	with_type_of(refitted(Call(calling(symbol(TEXT_FUNCTION), chosen), [character]), character), chosen.result)
 }
 # the definitions of functions of this name the typing stage holds
@@ -324,10 +337,10 @@ definition_at(definer: Node, s: TypingState) as Node := {
 
 # The one definition that takes these typed arguments, by their types, then by the type expected; none or several
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
-chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?) as Node := {
+chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?, s: TypingState) as Node := {
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
-	fitting = candidates.filter(definition => takes(definition, given, fits))
-	exact = fitting.filter(definition => takes(definition, given, fits_exactly))
+	fitting = candidates.filter(definition => takes(definition, given, (argument, wanted) -> fits(argument, wanted, s.records)))
+	exact = fitting.filter(definition => takes(definition, given, (argument, wanted) -> fits_exactly(argument, wanted, s.records)))
 	if #fitting > 1 and exact is not empty { fitting = exact }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
@@ -340,10 +353,17 @@ takes(definition: Node, given: list, fit: function) as bool := {
 	parameters = parameters_in(definition)
 	#parameters == #given and (1 to #given).all(at => fit(given#at, type_given(parameters#at)))
 }
-fits(argument: Node, wanted: Node?) as bool := fits_exactly(argument, wanted) or reads_as_text(argument, wanted)
-fits_exactly(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument))
+fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted)
+fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
 # a bare `list` wanted, which every list<T> fits
 any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
+# a bare `enum` wanted, which a plain enum fits: one whose cases carry no fields, so its values are equal when their
+# tags are
+ENUM_TYPE = "enum"
+any_enum(wanted: Node, given: Node?, records: list) as bool := {
+	record = if wanted == symbol(ENUM_TYPE) then record_named(records, given) else ø
+	record != ø and not cases_of(record) is empty and cases_of(record).all(case => case_fields(case) is empty)
+}
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
