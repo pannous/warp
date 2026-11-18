@@ -12,6 +12,11 @@ rule if $condition... $then: Braces => If($condition, $then, ø)
 rule if $condition... then if $inner... else $else... => refuse "this else may belong to either if: put the inner if in braces"
 
 rule unless $c $body => If($c, ø, $body)
+
+# a choice written after its condition, `c ? a : b`, and a statement guarded after it, `print "a" if c`; the condition
+# is one form, so `print c ? a : b` is not read as (print c) ? a : b
+rule ($c ? $then... : $else) => If($c, $then, $else)
+rule $then... if $c => If($c, $then, ø)
 # `and` and `or` stop at the first part that decides: the second part runs only when it is needed
 rule $a and $b => If($a, $b, no)
 rule $a or $b => If($a, yes, $b)
