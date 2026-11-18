@@ -66,6 +66,8 @@ class TypeFrame {
 	result: Node? = ø
 	# the types its returns give, ø for a bare return
 	returns: list = []
+	# the generic letters its parameters bound, each [letter, type] (core/analyze/calls.wap)
+	letters: list = []
 }
 
 # the program typed, after the preload's functions it calls
@@ -121,7 +123,7 @@ block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: N
 	s.definitions = s.definitions + statements.filter(statement => statement is Define)
 	s.records = s.records + statements.filter(statement => statement is Record)
 	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
-	for statement in statements { if statement is Define and all_typed(statement) { function_typed(statement, written_types(statement), s, statement) } }
+	for statement in statements { if statement is Define and all_typed(statement, s.records) { function_typed(statement, written_types(statement), s, statement) } }
 	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
 	if typed is empty then block else with_type_of(block, value_type(typed.last))
 }
@@ -228,7 +230,7 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
-	wanted = declared_type(place) ?? variable_type(name, s, f)
+	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
