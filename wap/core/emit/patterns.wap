@@ -77,7 +77,7 @@ case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 	record = enum_declaring(p.records, called)
 	named = case_declaring(p.records, called)
 	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
-	Code(layout(form, p), i32_const(tag_of(called, p)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
+	Code(layout(form, p), i32_const(tag_of(called, p)) + (1 to #arguments).flat_map(at => field_filled(case_fields(named)#at, code(arguments#at, p, f), p)) + instruction(STRUCT_NEW, [made]))
 }
 # A bound case's tag: its place among the cases of every enum the program declares, found by the case that defined
 # it, so cases of two enums never share a tag, not even two of one name
