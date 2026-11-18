@@ -2,6 +2,7 @@
 # reached, read and written, and the variables a bound name refers to.
 
 use "emitter.wap"
+use "lists.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
@@ -13,33 +14,27 @@ use "../../kernel/forms.wap"
 # the layout of a node's type, ø for a node the typing stage left untyped
 typed_layout(n: Node, p: Program) as list? := if fact_of(n, TYPE) == ø then ø else layout_of(fact_of(n, TYPE), p.m, p.records)
 layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for the type ${fact_of(n, TYPE)} yet")
-# the GC array type of a typed list
-list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no list")
 # The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
 # reads it and the one that writes it
 class Place { reached: list; read: list; written: list }
 place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
 	map = fact_of(subject, TYPE)
-	if key_type(map) != ø { return Place(code(subject, p, f).instructions + code(key, p, f).instructions, map_helper_called(MAP_GET, map, p), map_helper_called(MAP_SET, map, p)) }
+	if key_type(map) != ø { return Place(code(subject, p, f).instructions + code(key, p, f).instructions, typed_helper_called(MAP_GET, map, p), typed_helper_called(MAP_SET, map, p)) }
 	record = record_named(p.records, fact_of(subject, TYPE))
 	if record != ø {
 		at = [struct_of(record, p.m, p.records), index_where(fields_of(record), field => text(declared_name(field)) == text(key)) - 1]
 		return Place(code(subject, p, f).instructions, instruction(STRUCT_GET, at), instruction(STRUCT_SET, at))
 	}
-	Place(item_reached(subject, key, p, f), instruction(ARRAY_GET, [list_of(subject, p)]), instruction(ARRAY_SET, [list_of(subject, p)]))
+	Place(item_reached(subject, key, p, f), typed_helper_called(LIST_ITEM, map, p), typed_helper_called(LIST_SET, map, p))
 }
 read_code(type: list, place: Place) as Code := Code(type, place.reached + place.read)
 written_code(place: Place, value: Code) as Code := Code([], place.reached + value.instructions + place.written)
 
-# A map, `{yes: 1, no: 0}`: its keys, a word's spelling as a text, in a new array, its values in another, both in a
+# A map, `{yes: 1, no: 0}`: its keys, a word's spelling as a text, in a new list, its values in another, both in a
 # new struct of the map's type
 map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
-	type = fact_of(form, TYPE)
-	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => key })
-	array = (part, items) => items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [list_index(list_type(part), p.m, p.records), #items])
-	keys_made = array(key_type(type), keys.map(key => if key is symbol then text_literal(text(key), p.m) else code(key, p, f)))
-	values_made = array(held_type(type), entries.map(entry => code(given_value(entry), p, f)))
-	Code(layout(form, p), keys_made + values_made + instruction(STRUCT_NEW, [map_index(type, p.m, p.records)]))
+	keys = entries.map(entry => match entry { Key(key, Op.Colon, value) => if key is symbol then text_literal(text(key), p.m) else code(key, p, f) })
+	Code(layout(form, p), map_made(fact_of(form, TYPE), keys, entries.map(entry => code(given_value(entry), p, f)), p))
 }
 
 # An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
