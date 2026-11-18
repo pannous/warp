@@ -163,6 +163,9 @@ VARIABLES = "variables"
 CANDIDATES = "candidates"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
+# a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
+# as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
+FUNCTION_VALUE = "function_value"
 captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
 	List(items, bracket, separator) => items
 	_ => []
