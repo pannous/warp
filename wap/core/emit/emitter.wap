@@ -105,7 +105,7 @@ class Placed {
 # the code of a kernel form
 code(form: Node, p: Program, f: Frame) as Code := match form {
 	Block(statements) => block_code(statements, p, f)
-	Define(name, parameters, body) => postponed(form, p, f)
+	Define(name, parameters, body) => Code()
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
@@ -124,11 +124,14 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
 }
 
-# Statements run in order, the value the last one's, every other value dropped. The functions the block defines and
-# nothing called are emitted at its end.
+# Statements run in order, the value the last one's, every other value dropped. The functions the block defines wait
+# from its start, so a call before a definition's line finds it; those nothing called are emitted at its end. A
+# definition itself leaves no value.
 block_code(statements: list, p: Program, f: Frame) as Code := {
+	defined = statements.filter(s => s is Define)
+	p.pending += defined
 	codes = statements.map(s => code(s, p, f))
-	keys = statements.filter(s => s is Define).map(function_key)
+	keys = defined.map(function_key)
 	for waiting in p.pending.filter(w => function_key(w) in keys) { if function_key(waiting) in p.pending.map(function_key) { emitted_function(waiting, p) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
@@ -244,11 +247,6 @@ jump(form: Node, f: Frame, label: text) as int := {
 # the instructions of code whose value nobody takes
 dropped(c: Code) as list := c.instructions + (if valued(c.type) then DROP else [])
 
-# a function defined, its body emitted later; the definition leaves no value
-postponed(form: Node, p: Program, f: Frame) as Code := {
-	p.pending += [form]
-	Code()
-}
 # the function a name defines, its body emitted now if it waits
 pending_function(p: Program, called: Node) as Placed? := waiting_function(p, defining_key(called))
 waiting_function(p: Program, key: text) as Placed? := {
