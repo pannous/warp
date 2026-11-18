@@ -61,4 +61,5 @@ print text(xs.sum())
 ys = []
 print text(#ys)')" "2
 0"
+check "a list sorted by a key named by" "$(ran sorted_by_named 'print show(["ccc", "bb", "dddd"].sorted(by: t => #t))')" "[\"bb\", \"ccc\", \"dddd\"]"
 exit $((failures > 0))
