@@ -60,7 +60,7 @@ format_check 'xs:list<int>' 'xs: list<int>'
 format_check 'f: map<text,(int,int)->int>' 'f: map<text, (int, int) -> int>'
 format_check 'n: list<list<int>>' 'n: list<list<int>>'
 format_check 'x<y and y>z' 'x < y and y > z'
-format_check 'f(x):int:=x' 'f(x): int := x'
+format_check 'f(x):int:=x' 'f(x) as int := x'
 format_check 'sample: int := 7' 'sample: int := 7'
 # comments are no code
 format_check $'blah a b c # note\ny/* c */=0 // c' $'blah a b c\ny = 0'

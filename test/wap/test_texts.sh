@@ -10,4 +10,9 @@ if "warp" == "war" then print "same" else print "shorter"')" "differ
 shorter"
 check "two texts joined" "$(ran joined 'greeting(name: text) := "Hello, " + name + "!"
 print greeting("wap")')" "Hello, wap!"
+# a one-character text is a character (wiki/char.md), and a character is a text wherever one is wanted
+check "a character given where a text is wanted" "$(ran char_as_text 'greet() := "x"
+print greet()
+print "a" + greet()')" "x
+ax"
 exit $((failures > 0))

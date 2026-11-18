@@ -115,7 +115,7 @@ Things that move out:
 - **One character:** a text of one code point is a `Char`. wiki/char.md:11 says `'a' == "a"`, and warp does this
   too (warp:parser.warp:3812).
 - **[2]** Templates: wasp splits `` `x $y ${e}` `` into chunks inside the reader (W:634-666). In wap the reader
-  keeps the raw `Text`. A step-2 rule splits it and calls the reader on each hole (§6, item Q8).
+  reads each hole in place, as any code: `"a ${x} b"` is `("a " + text(x) + " b")` (§6, item Q8).
 
 ### 2.6 Words with `$` and `@` [1]
 
@@ -333,7 +333,9 @@ shapes match.
   following `=` (`==`, `<=`); `x=-1` reads `=` then `-1`.
 - **Q6 `#`:** the reader detects comments; the glued `#` operator (count, `#use`) comes later, in step 2.
 - **Q7 other bracket pairs `‖x‖ ⟨x⟩ ⌈x⌉`:** a `Bracket` case Other; details later.
-- **Q8 interpolation:** the reader returns the raw Text; a step-2 rule splits the `${…}` holes.
+- **Q8 interpolation:** in `"…"` and backticks the reader reads each hole, `${…}` or `\(…)`, in place as any code,
+  texts inside it too, and gives the text as its pieces joined: `("a " + text(x) + " b")`; `\$` is a dollar
+  (changed 2026-11-17 from a raw Text split by a later rule: in place, a hole's code needs no second reader).
 - **Q11 `=` in data:** the reader never turns `=` into `:`; `a=1` reads as `Key(a, Assign, 1)` (confirmed 2026-11-17; Op.Eq is `==`); spaced
   `a = 1` splits the phrase as the colon does. Q1's Glue is warp's existing Op.None (the key of `Person{…}`), no new Op case.
 - **Q13 typed declarations:** `=` and `:=` split a phrase (or a glued run) before `:`, and `:=` is a reader key
