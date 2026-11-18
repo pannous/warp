@@ -63,13 +63,13 @@ value_call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 	value = code(called, p, f)
 	f.slots += [Placed("value called by ${place_key(form)}", #f.slots, value.type, [], yes)]
 	held = local_get(f.slots.last.index)
-	struct = signature_value_index(type, p.m, p.records)
+	value_struct = signature_value_index(type, p.m, p.records)
 	taken = signature_parameters(parts, p.m, p.records)
 	if #arguments != #taken { refused(form, "the call gives ${#arguments} arguments, the function value takes ${#taken}") }
 	given = (1 to #arguments).flat_map(at => fitted(code(arguments#at, p, f), taken#at, arguments#at, p.m).instructions)
 	results = signature_results(parts, p.m, p.records)
-	reference = held + instruction(STRUCT_GET, [struct, VALUE_FUNCTION_AT])
-	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(type, p.m, p.records)])))
+	reference = held + instruction(STRUCT_GET, [value_struct, VALUE_FUNCTION_AT])
+	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [value_struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(type, p.m, p.records)])))
 }
 # the values a function value captures, read from the variables they are where it is made
 captures_code(form: Node, f: Frame) as list := {
