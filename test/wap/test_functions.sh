@@ -46,4 +46,7 @@ print text([4, 5].contains(5))')" "yes
 yes
 no
 yes"
+check "a call before its function's definition line" "$(ran later 'n = later(2)
+later(x: int) := x * 2
+n')" "4"
 exit $((failures > 0))
