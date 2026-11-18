@@ -1,0 +1,85 @@
+# The tokens of a phrase as the operator stage reads them (core/parse/operators.wap): each item with whether it touches
+# its neighbours, a glued run of glyphs joined to the longest spelling the operator table knows (`=` `>` is `=>`), and
+# an operator glued to the brackets after it called like any `f(x)`.
+use "operator_table.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "../../preload/operators.wap"
+
+# an item of a phrase and whether it touches the item before and the item after it with no blank between
+class Spaced { item: Node, glued_before: bool, glued_after: bool }
+
+# the tokens of a space phrase: a glued run among its items contributes each of its own items
+tokens_of(items: list) as list := {
+	tokens = []
+	for item in items {
+		match item {
+			List(run, Bracket.None, Separator.None) => tokens = tokens + glued_tokens(run)
+			_ => tokens.add(Spaced(item, no, no))
+		}
+	}
+	tokens
+}
+
+# the tokens of a glued run, adjacent glyphs joined to the longest operator the table knows (`=` `>` is `=>`)
+glued_tokens(run: list) as list := {
+	items = joined_glyphs(run)
+	tokens = []
+	for i in 1 to #items { tokens.add(Spaced(items#i, i > 1, i < #items)) }
+	tokens
+}
+
+# the items of a glued run with each run of glyph symbols joined greedily to the longest known spelling
+joined_glyphs(run: list) as list := {
+	joined = []
+	i = 1
+	while i <= #run {
+		length = longest_spelling_at(run, i)
+		if length == 1 { joined.add(run#i) } else { joined.add(placed_like(symbol(spelling_of(run, i, length)), run#i)) }
+		i = i + length
+	}
+	joined
+}
+
+# how many symbols from position i spell the longest operator or alias the table knows; 1 when none longer does
+longest_spelling_at(run: list, i: int) as int := {
+	longest = 1
+	length = 2
+	while i + length - 1 <= #run and run#(i + length - 1) is symbol {
+		spelled = spelling_of(run, i, length)
+		if known_spelling(spelled) { longest = length }
+		length = length + 1
+	}
+	if run#i is symbol { longest } else { 1 }
+}
+
+spelling_of(run: list, i: int, length: int) as text := {
+	spelled = ""
+	for k in i to i + length - 1 { match run#k { Symbol(name) => spelled = spelled + name; _ => ø } }
+	spelled
+}
+
+known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #aliases.filter(alias => alias.spelling == spelled) > 0 or compound_assignment(spelled) != ""
+
+# An operator glued to the bracket group after it, with nothing glued before it, is called like any `f(x)`:
+# `+(a, b)` is the glued head Key(+, None, (a, b)), whatever fixities + has; `a-(b)` stays a subtraction
+operators_called(tokens: list) as list := {
+	called = []
+	i = 1
+	while i <= #tokens {
+		token = tokens#i
+		if i < #tokens and is_operator_word(token.item) and token.glued_after and not token.glued_before and is_bracketed(tokens#(i + 1).item) {
+			called.add(Spaced(Key(token.item, Op.None, tokens#(i + 1).item), no, tokens#(i + 1).glued_after))
+			i = i + 2
+		} else {
+			called.add(token)
+			i = i + 1
+		}
+	}
+	called
+}
+
+# a symbol the table reads as an operator in any fixity
+is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø
+
+is_bracketed(n: Node) as bool := match n { List(items, bracket, separator) => bracket != Bracket.None; _ => no }

@@ -5,6 +5,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
+use "tokens.wap"
 
 # the assignment a compound one means, `+=` is `=` of `+`
 ASSIGNMENT = "="
@@ -146,6 +147,8 @@ group_of(spelling: text, fixity: Fixity) as text := {
 	match fixity { Fixity.Infix => operator.infix; Fixity.Prefix => operator.prefix; Fixity.Postfix => operator.postfix; _ => "" }
 }
 
+# an operator as it is applied: its canonical spelling, fixity and group, and the item that wrote it (for its place)
+class Use { spelling: text, fixity: Fixity, group: text, written: Node }
 # a word or glyph the table reads in that fixity, ø when it is no operator there
 reading_as(item: Node, fixity: Fixity) as Use? := match item {
 	Symbol(spelling) => {
