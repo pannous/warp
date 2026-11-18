@@ -122,6 +122,7 @@ equality(type: list, p: Program) as list := {
 	if type == F64 { return F64_EQ }
 	if type == I32 { return I32_EQ }
 	if type == nullable(text_type(p.m)) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
+	if type == ANYREF { return instruction(CALL, [helper(p, "any_equal", any_equality_function)]) }
 	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
 }
 
@@ -201,6 +202,21 @@ text_equality_function(p: Program) as int := {
 	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
 }
 
+# The helper of equality of two values of `any` or `number`: two ø are equal; two plain values of one type in their
+# boxes and two texts by their values; any other two references only when they are the same one. Its locals: 0 and 1
+# the values.
+any_equality_function(p: Program) as int := {
+	missing = local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+	boxed = BOXED_WORDS.flat_map(word => compared_as(box_index(p.m, word), instruction(STRUCT_GET, [box_index(p.m, word), 0]), equality(WORD_LAYOUTS[word], p)))
+	texts = compared_as(text_type(p.m), [], equality(nullable(text_type(p.m)), p))
+	same = local_get(0) + instruction(REF_CAST, [EQ_HEAP]) + local_get(1) + instruction(REF_CAST, [EQ_HEAP]) + REF_EQ
+	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing + boxed + texts + same)
+}
+# when the value in local 0 is of a type: no unless local 1 is too, else both taken out and compared
+compared_as(type: int, taken: list, compare: list) as list := {
+	both = local_get(0) + instruction(REF_CAST, [type]) + taken + local_get(1) + instruction(REF_CAST, [type]) + taken
+	local_get(0) + instruction(REF_TEST, [type]) + IF + VOID_BLOCK + local_get(1) + instruction(REF_TEST, [type]) + NO_UNLESS_YES + both + compare + RETURN + END
+}
 # The helper of tag_equal: yes when two cases have one tag and, for a case with fields, equal fields. Tags count the
 # cases of every enum, so one helper serves them all. Its locals: 0 and 1 the cases.
 tag_equality_function(p: Program) as int := {
