@@ -20,6 +20,8 @@ raise(message: text): never := prim raise_text(message)
 +(a: int, b: int): int := prim i64_add(a, b)
 -(a: int, b: int): int := prim i64_sub(a, b)
 *(a: int, b: int): int := prim i64_mul(a, b)
+# an int's sign turned: `-x`
+-(x: int): int := 0 - x
 # the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
 ÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
 %(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
@@ -58,7 +60,7 @@ int(t: text): int := {
 		if digit < 0 or digit > 9 { raise("int: " + t + " is no decimal int") }
 		value = value * 10 + digit
 	}
-	if negative then 0 - value else value
+	if negative then -value else value
 }
 # the bytes of the characters - and 0
 MINUS_BYTE := 45

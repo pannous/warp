@@ -28,4 +28,6 @@ print text(-7 % 3)
 print text(7 % -3)')" "-4
 2
 -2"
+check "an int's sign turned by a leading -" "$(ran int_negated 'x = 5
+print text(-x + 1)')" "-4"
 exit $((failures > 0))
