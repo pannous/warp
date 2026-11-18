@@ -314,3 +314,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Protocols are declared, not yet used** (`trait`): a place typed by a trait is refused by the emitter (no layout
   for a function-typed field) and a class given to it is refused by typing (no structural fit yet). Paid off by the
   owners of core/emit/ and core/analyze/ (asked 2026-11-18); `map default ListMap` waits for maps and class methods.
+- **Decimal literals are floats, not exact** (wap/core/parse/atoms.wap number_read, wap/preload/floats.wap): `0.1 + 0.2`
+  shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
+  Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
+  Nothing pins the float digits.
