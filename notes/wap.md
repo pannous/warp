@@ -133,9 +133,9 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 |---|---|
 | warp-wap-lead | compiler.wap, kernel/forms.wap, core/stage.wap, core/pipeline.wap, core/errors.wap, core/rules/lowering.wap, preload/prelude.wap |
 | warp-wap-reader | core/parse/ (reader, lexemes, atoms, layout, cascade), core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap, preload/lists.wap, preload/nodes.wap, preload/texts.wap, preload/numbers.wap |
-| warp-wap-operators | core/parse/operators.wap, core/parse/operator_table.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
+| warp-wap-operators | core/parse/operators.wap, core/parse/operator_table.wap, core/analyze/data.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
 | warp-wap-emitter | core/emit/ (emitter, functions, patterns, places, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
-| warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values) |
+| warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values; not data.wap) |
 
 ## Rules for every file
 
