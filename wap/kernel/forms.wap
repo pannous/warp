@@ -1,0 +1,69 @@
+# The kernel: the forms wap's emitter understands, and nothing else (notes/kernel.md).
+#
+# Each form is a named pattern of Node, code with holes (user 2026-11-17: kernel forms are patterns, positions ride
+# in the nodes' metadata). One declaration builds a form, `Call(print, ["Hello"])`, tests it, `n is Call`, takes it
+# apart, `Call(called, arguments) => …`, and reads it, `n.called` of a parameter `n: Call`.
+#
+# A form's head is its own name, `(Call print ["Hello"])`: readable when printed and never a keyword. Only the
+# lowering builds kernel nodes, so a program's own `(Call …)` group never reaches the emitter as one. Literals (texts,
+# numbers) are the Node cases themselves and need no declaration. Milestone 1 (`print "Hello"`) needs two forms; the
+# others of notes/kernel.md join as programs need them.
+
+# a call of a function with its arguments, the forms after it: `print "Hello"` is Call(print, ["Hello"]), (Call print "Hello")
+pattern Call = (Call $called: Symbol $arguments...: Node)
+
+# forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
+# list value, a block runs a, then b
+pattern Block = (Block $statements...: Node)
+
+# a named definition, a function or a constant, its parameters a list because the body follows them: `f(x) := x * 2`
+# is Define(f, [x], x * 2), (Define f [x] …); `global` and other annotations are facts in its Meta (core/stage.wap).
+# Its name carries the result type when the program writes one, as a parameter does: `f(n: int): int := n` is
+# Define((f: int), [n: int], n)
+pattern Define = (Define $name: Node $parameters: List $body: Node)
+
+# a function value without a name: `x => x + 1`, `{ it * 2 }`, `|x| …` are Fn([x], x + 1), (Fn [x] …)
+pattern Fn = (Fn $parameters: List $body: Node) # todo: rename to Lambda
+
+# the value a place holds, a list's item or a record's field: `xs#2` is Get(xs, 2), counting from 1, and `p.x` is
+# Get(p, "x"), the field's name a text, as a map's key is (`m.a` is `m#"a"`); a text key that names no field is the
+# function of that name taking the subject (`xs.sum` is sum(xs)), as typing settles it
+pattern Get = (Get $subject: Node $key: Node)
+
+# a value given to a place, a name or a Get: `x = 1`, `xs#1 = 2`, `x += 1` are Set(x, 1), Set(Get(xs, 1), 2) …, (Set x 1)
+pattern Set = (Set $place: Node $value: Node)
+
+# an operation the emitter performs itself, the leaf where warp ends and wasm or the host begins; only the preload
+# writes one, as a built-in's body: `print(t: text) := prim print_text(t)` is Define(print, [t: text], Prim(print_text, [t]))
+pattern Prim = (Prim $operation: Symbol $arguments...: Node)
+
+# the one form that declares a type: its name, its fields and its variants. `class Point { x: int; y: int }` is
+# Record(Point, [x: int, y: int], []), (Record Point [x: int, y: int] []); its constructor is an ordinary Define the
+# same rule writes, `Point(x: int, y: int) := Point{x: x, y: y}`, whose body is the instance as data
+pattern Record = (Record $name: Symbol $fields: List $variants: List)
+
+# a choice between two forms by a condition, yes or no: `if c then a else b`, `if c { a }` are If(c, a, b), If(c, a, ø),
+# (If c a b); with both parts of one type its value is the chosen part's, else it has none
+pattern If = (If $condition: Node $then_part: Node $else_part: Node)
+
+# one arm of a Case: a pattern and the result when it fits the subject: `1 => "one"` is Arm(1, "one"), (Arm 1 "one")
+pattern Arm = (Arm $pattern: Node $result: Node)
+
+# the result of the first arm whose pattern fits the subject: `match x { 1 => "one"; n => "other" }` is
+# Case(x, Arm(1, "one"), Arm(n, "other")), (Case x (Arm 1 "one") …). A literal fits the value equal to it, a name fits
+# any value and holds it in its arm, `_` fits any. With a last arm that fits any value the Case has the arms' value,
+# else none
+pattern Case = (Case $subject: Node $arms...: Arm)
+
+# a body run again and again while a condition holds, yes or no: `while c { b }` is While(c, b), (While c b); it has
+# no value
+pattern While = (While $condition: Node $body: Node)
+
+# the function left at once with a value: `return x` is Return(x), a bare `return` Return(ø)
+pattern Return = (Return $value: Node)
+
+# the innermost loop left at once: `break`
+pattern Break = (Break)
+
+# the innermost loop's next run started at once: `continue`
+pattern Continue = (Continue)

@@ -1,0 +1,99 @@
+# Templates: what a rule writes, its holes filled with the code they matched (notes/first_principles.md "Holes").
+# Reads a normalized template (core/rules/patterns.wap) and the bindings of a match; writes new code. A rest hole
+# splices its items, a declared pattern called by name builds its node (`If(not $c, $body, ø)` is (If (Call not …) …)),
+# a hole inside a text, "$f" or "get_$f", is the spelling of what it took, and every node the template itself spells is
+# new, so the stage walker places it where the rewritten code was.
+use "patterns.wap"
+use "../parse/reader.wap"
+use "../parse/operators.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+FRESH_MARK = "·"
+
+# the template with each hole replaced by its binding
+built(template: Node, bindings: map) as Node := match template {
+	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
+	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
+		pattern = pattern_called(head)
+		if pattern == ø { Key(built(head, bindings), Op.None, grown(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
+	}
+	Key(left, op, right) => Key(built(left, bindings), op, built(right, bindings))
+	List(items, bracket, separator) => grown(built_items(items, bindings), bracket, separator)
+	Text(value) => Text(interpolated(value, bindings))
+	Number(value) => Number(value)
+	_ => template
+}
+
+# a template text, each hole in it replaced by the spelling of what it took, the longest name first ($fx before $f)
+interpolated(value: text, bindings: map) as text := {
+	filled = value
+	for name in sorted_by_key(bindings.keys, name => -#name) { filled = filled.replace(name, text(bindings[name])) }
+	filled
+}
+
+# the items a rest hole took, written as one node where the template names it without dots: `$a` for `$a...` is the
+# phrase `print "a"` (core/parse/reader.wap phrase_of)
+taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items); _ => taken }
+
+# items of a template, a rest hole replaced by the items it took
+built_items(items: list, bindings: map) as list := {
+	all = []
+	for item in items {
+		if is_rest_hole(item) and bindings.has(hole_key(item)) {
+			match bindings[hole_key(item)] { List(taken, bracket, separator) => all = all + taken; _ => all.add(bindings[hole_key(item)]) }
+		} else if repeated_part(item) != ø {
+			all = all + repeated(repeated_part(item), bindings)
+		} else {
+			all.add(built(item, bindings))
+		}
+	}
+	all
+}
+
+# A bracketed list a repetition or rest made longer than written, `{ print($x)... }`, takes its natural separator: a
+# block's statements one a line, other items by commas
+grown(items: list, bracket: Bracket, separator: Separator) as Node := {
+	if bracket == Bracket.None or separator != Separator.None or #items < 2 { return List(items, bracket, separator) }
+	List(items, bracket, if bracket == Bracket.Curly then Separator.Newline else Separator.Comma)
+}
+
+# `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn; a part
+# in parentheses, `($f: $f)...`, is written without them, as a pattern reads it
+repeated(part: Node, bindings: map) as list := {
+	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
+	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
+	times = #items_taken(bindings[sequences#1 + REST_MARK])
+	written = []
+	for i in 1 to times {
+		for hole in sequences { bindings[hole] = items_taken(bindings[hole + REST_MARK])#i }
+		written.add(built(ungrouped(part), bindings))
+	}
+	for hole in sequences { bindings.remove(hole) }
+	written
+}
+items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; _ => [taken] }
+
+# Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
+# capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.
+names_bound_in(template: Node) as list := match template {
+	Call(called, arguments) => {
+		inner = arguments.map(names_bound_in).fold([], (a, b) -> a + b)
+		if #arguments == 2 and assigning(called) and arguments#1 is symbol and not is_hole(arguments#1) then [spelling_written(arguments#1)] + inner else inner
+	}
+	List(items, bracket, separator) => items.map(names_bound_in).fold([], (a, b) -> a + b)
+	Key(left, op, right) => names_bound_in(left) + names_bound_in(right)
+	_ => []
+}
+
+# whether a called operator is in the assignment group: `=`, `:=`, `+=` …
+assigning(called: Node) as bool := group_of(spelling_written(called), Fixity.Infix) == compound_assignment_group
+
+fresh_count = [0]
+# the bindings with each name the template binds made fresh
+with_fresh_names(bindings: map, names: list) as map := {
+	fresh_count[0] = fresh_count[0] + 1
+	for name in names { bindings[name] = with_fact(symbol(name + FRESH_MARK + fresh_count[0]), "fresh", symbol(name)) }
+	bindings
+}

@@ -17,6 +17,8 @@ LENGTH_HEADER = "Content-Length: "
 HEADER_END = "\r\n\r\n"
 FILE_SCHEME = "file://"
 WARP_EXTENSION = ".warp"
+# the files of warp code an editor opens beside a module: warp's own and wap's, the new compiler's (wap/)
+SOURCE_EXTENSIONS = [WARP_EXTENSION, ".wap"]
 # the text a diagnostic checks, written beside its file for the length of one compile
 CHECK_SUFFIX = ".lsp-check.warp"
 ERROR_SEVERITY = 1
@@ -174,7 +176,7 @@ head_path(n: any) as list := if (type(n) is key or type(n) is list) and #n > 0 t
 # the files a name of `uri` is looked for in: the file, the other files of its folder, then the modules it uses
 searched(uri: text) as list := {
 	folder = dirname(path_of(uri))
-	neighbours = list_files(folder).filter(name => name.ends_with(WARP_EXTENSION)).map(name => uri_of(path_join(folder, name)))
+	neighbours = list_files(folder).filter(name => SOURCE_EXTENSIONS.any(extension => name.ends_with(extension))).map(name => uri_of(path_join(folder, name)))
 	[uri] + neighbours.filter(file => file != uri) + used_modules(document_text(uri), folder)
 }
 used_modules(source: text, folder: text) as list := {

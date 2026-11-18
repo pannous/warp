@@ -1,0 +1,340 @@
+# Rigid bodies from NVIDIA's USDCraft-10K (Apache-2.0, samples/physics/usdcraft.NOTICE), dropped and colliding: the
+# reader of samples/physics/usdcraft.bodies (written by scripts/usdcraft-bodies.py) and the physics step
+# samples/physics/usd_collisions.warp draws. Z is up, metres, kilograms, seconds, as in the USD stages.
+# Each object is one rigid body (its links welded, its joints listed), its collision shapes a shell of spheres in its
+# principal frame, its inertia diagonal there. Contacts are springs with damping, sphere on floor and sphere on
+# sphere, the spring's stiffness the pair's reduced mass times ROUGHNESS / dt squared, so a 0.7 g brick and a 16 kg
+# dumbbell rest equally steady at one step; the damping is the one whose bounce is the material's restitution, the
+# sideways push the sliding speed's, capped by Coulomb's friction.
+use math
+use text
+
+GRAVITY = 9.81
+STEP = 0.001 # seconds a step
+ROUGHNESS = 0.2 # a contact's angular frequency times the step: below 2 or the springs blow up, smaller is softer
+SPIN_DAMPING = 0.02 # of the spin a second, the air and the rolling resistance the spheres leave out
+
+type Body: {
+	name: text
+	title: text
+	mass: float
+	inertia: float[] # about the principal axes through the centre of mass
+	com: float[] # the centre of mass in the USD stage
+	pose: float[] # the principal frame's turn in the stage, a quaternion w x y z
+	friction: float
+	restitution: float
+	color: float[]
+	spheres: float[] # x y z r, four numbers a sphere, in the principal frame
+	joints: list
+}
+
+# the bodies of a .bodies text: a `body` line opens one, `end` closes it, # starts a comment
+def bodies_read(source: text) as list {
+	bodies = []
+	b = ø
+	for line in lines(source) {
+		w = words(line)
+		if #w == 0 or starts_with(w#1, "#") { continue }
+		key = w#1
+		numbers: float[] = []
+		if key != "body" and key != "joint" and key != "end" { for x in w[1:] { numbers.push(float(x)) } }
+		if key == "body" {
+			b = Body { name: w#2, title: join(w[3:], " "), mass: 1.0, inertia: [1.0, 1.0, 1.0], com: [0.0, 0.0, 0.0],
+				pose: [1.0, 0.0, 0.0, 0.0], friction: 0.5, restitution: 0.1, color: [0.5, 0.5, 0.5], spheres: [],
+				joints: [] }
+		}
+		if key == "mass" { b.mass = numbers#1 }
+		if key == "inertia" { b.inertia = numbers }
+		if key == "com" { b.com = numbers }
+		if key == "pose" { b.pose = numbers }
+		if key == "friction" { b.friction = numbers#1 }
+		if key == "restitution" { b.restitution = numbers#1 }
+		if key == "color" { b.color = numbers }
+		if key == "sphere" { for x in numbers { b.spheres.push(x) } }
+		if key == "joint" { b.joints = b.joints + [join(w[1:], " ")] }
+		if key == "end" { bodies = bodies + [b] }
+	}
+	bodies
+}
+
+# --- quaternions w x y z, and turning a vector by one
+quat_mul(a, b) := [a#1 * b#1 - a#2 * b#2 - a#3 * b#3 - a#4 * b#4, a#1 * b#2 + a#2 * b#1 + a#3 * b#4 - a#4 * b#3,
+	a#1 * b#3 - a#2 * b#4 + a#3 * b#1 + a#4 * b#2, a#1 * b#4 + a#2 * b#3 - a#3 * b#2 + a#4 * b#1]
+quat_axis(axis, angle) := {
+	s = sin(angle / 2)
+	[cos(angle / 2), axis#1 * s, axis#2 * s, axis#3 * s]
+}
+# v turned by q: v + 2 w (u × v) + 2 u × (u × v), u the vector part
+turned(q, v) := {
+	tx = 2 * (q#3 * v#3 - q#4 * v#2)
+	ty = 2 * (q#4 * v#1 - q#2 * v#3)
+	tz = 2 * (q#2 * v#2 - q#3 * v#1)
+	[v#1 + q#1 * tx + q#3 * tz - q#4 * ty, v#2 + q#1 * ty + q#4 * tx - q#2 * tz, v#3 + q#1 * tz + q#2 * ty - q#3 * tx]
+}
+unturned(q, v) := turned([q#1, -q#2, -q#3, -q#4], v)
+
+# --- the world: the bodies and their state, numbers in flat lists, body i's at 3 (i - 1) + 1 … (4 for a quaternion)
+type World: {
+	bodies: list
+	pos: float[] # centre of mass
+	vel: float[]
+	quat: float[] # principal frame → world
+	spin: float[] # angular velocity, world frame
+	reach: float[] # the farthest sphere edge from the centre, for the cheap test first
+	time: float
+}
+
+# the bodies placed: their centre of mass at `at` (x y z a body), turned by `turns` (a quaternion a body) from their pose
+def world_of(bodies: list, at: float[], turns: list) as World {
+	pos: float[] = []
+	vel: float[] = []
+	quat: float[] = []
+	spin: float[] = []
+	reach: float[] = []
+	for i in 1 to #bodies {
+		b = bodies#i
+		q = quat_mul(turns#i, b.pose)
+		pos = pos + [at#(3 * i - 2), at#(3 * i - 1), at#(3 * i)]
+		vel = vel + [0.0, 0.0, 0.0]
+		quat = quat + q
+		spin = spin + [0.0, 0.0, 0.0]
+		far = 0.0
+		s = b.spheres
+		for k in 0 ..< #s / 4 {
+			far = max(far, sqrt(s#(4 * k + 1) ^ 2 + s#(4 * k + 2) ^ 2 + s#(4 * k + 3) ^ 2) + s#(4 * k + 4))
+		}
+		reach = reach + [far]
+	}
+	World { bodies: bodies, pos: pos, vel: vel, quat: quat, spin: spin, reach: reach, time: 0.0 }
+}
+
+body_quat(w, i) := [w.quat#(4 * i - 3), w.quat#(4 * i - 2), w.quat#(4 * i - 1), w.quat#(4 * i)]
+body_vec(v, i) := [v#(3 * i - 2), v#(3 * i - 1), v#(3 * i)]
+
+# every sphere in the world: x y z r and its body, five numbers a sphere (each body's quaternion as a matrix once)
+def world_spheres(w: World) as list {
+	all = []
+	for i in 1 to #w.bodies {
+		qw = w.quat#(4 * i - 3)
+		qx = w.quat#(4 * i - 2)
+		qy = w.quat#(4 * i - 1)
+		qz = w.quat#(4 * i)
+		m11 = 1 - 2 * (qy * qy + qz * qz)
+		m12 = 2 * (qx * qy - qw * qz)
+		m13 = 2 * (qx * qz + qw * qy)
+		m21 = 2 * (qx * qy + qw * qz)
+		m22 = 1 - 2 * (qx * qx + qz * qz)
+		m23 = 2 * (qy * qz - qw * qx)
+		m31 = 2 * (qx * qz - qw * qy)
+		m32 = 2 * (qy * qz + qw * qx)
+		m33 = 1 - 2 * (qx * qx + qy * qy)
+		cx = w.pos#(3 * i - 2)
+		cy = w.pos#(3 * i - 1)
+		cz = w.pos#(3 * i)
+		s = w.bodies#i.spheres
+		body = float(i)
+		for k in 0 ..< #s / 4 {
+			x = s#(4 * k + 1)
+			y = s#(4 * k + 2)
+			z = s#(4 * k + 3)
+			all.push(cx + m11 * x + m12 * y + m13 * z)
+			all.push(cy + m21 * x + m22 * y + m23 * z)
+			all.push(cz + m31 * x + m32 * y + m33 * z)
+			all.push(float(s#(4 * k + 4)))
+			all.push(body)
+		}
+	}
+	all
+}
+
+# a contact's damping ratio: the one whose bounce leaves `restitution` of the speed
+damping_ratio(restitution) := {
+	l = log(max(restitution, 0.001))
+	-l / sqrt(pi * pi + l * l)
+}
+
+# from body i's centre of mass to the point p
+arm(w, i, p) := [p#1 - w.pos#(3 * i - 2), p#2 - w.pos#(3 * i - 1), p#3 - w.pos#(3 * i)]
+
+# the velocity of body i's point p
+point_vel(w, i, p) := {
+	v = body_vec(w.vel, i)
+	o = body_vec(w.spin, i)
+	r = arm(w, i, p)
+	[v#1 + o#2 * r#3 - o#3 * r#2, v#2 + o#3 * r#1 - o#1 * r#3, v#3 + o#1 * r#2 - o#2 * r#1]
+}
+
+# the force of one contact on body a at point p (b = 0: the floor), n pointing from b to a, `depth` deep; `shared` is
+# how many contacts the pair has now: they share the pair's spring, so ten touching spheres are no stiffer than one
+def contact_force(w: World, a: int, b: int, p: float[], n: float[], depth: float, shared: int, dt: float) as float[] {
+	ba = w.bodies#a
+	ma = ba.mass
+	m = ma
+	mu = ba.friction
+	e = ba.restitution
+	va = point_vel(w, a, p)
+	rel = va
+	if b > 0 {
+		bb = w.bodies#b
+		m = ma * bb.mass / (ma + bb.mass)
+		mu = sqrt(mu * bb.friction)
+		e = max(e, bb.restitution)
+		vb = point_vel(w, b, p)
+		rel = [va#1 - vb#1, va#2 - vb#2, va#3 - vb#3]
+	}
+	m = m / shared
+	omega = ROUGHNESS / dt
+	stiff = m * omega * omega
+	damp = 2 * damping_ratio(e) * m * omega
+	vn = rel#1 * n#1 + rel#2 * n#2 + rel#3 * n#3
+	press = max(0.0, stiff * depth - damp * vn)
+	tx = rel#1 - vn * n#1
+	ty = rel#2 - vn * n#2
+	tz = rel#3 - vn * n#3
+	slide = sqrt(tx * tx + ty * ty + tz * tz)
+	drag = 0.0
+	if slide > 1e-9 { drag = min(damp, mu * press / slide) }
+	[press * n#1 - drag * tx, press * n#2 - drag * ty, press * n#3 - drag * tz]
+}
+
+# a force at point p added to body i's force and torque sums
+def exerted(w: World, force: float[], torque: float[], i: int, f: float[], p: float[]) {
+	r = arm(w, i, p)
+	force#(3 * i - 2) = force#(3 * i - 2) + f#1
+	force#(3 * i - 1) = force#(3 * i - 1) + f#2
+	force#(3 * i) = force#(3 * i) + f#3
+	torque#(3 * i - 2) = torque#(3 * i - 2) + r#2 * f#3 - r#3 * f#2
+	torque#(3 * i - 1) = torque#(3 * i - 1) + r#3 * f#1 - r#1 * f#3
+	torque#(3 * i) = torque#(3 * i) + r#1 * f#2 - r#2 * f#1
+}
+
+# the world one step of dt later
+def stepped(w: World, dt: float) as World {
+	n = #w.bodies
+	force: float[] = []
+	torque: float[] = []
+	for i in 1 to n {
+		force = force + [0.0, 0.0, -GRAVITY * w.bodies#i.mass]
+		torque = torque + [0.0, 0.0, 0.0]
+	}
+	s = world_spheres(w)
+	count = #s / 5
+	# the contacts first, a b px py pz nx ny nz depth each, then how many each pair has
+	touching = []
+	# spheres on the floor z = 0
+	for k in 0 ..< count {
+		depth = s#(5 * k + 4) - s#(5 * k + 3)
+		if depth > 0 {
+			for x in [s#(5 * k + 5), 0.0, s#(5 * k + 1), s#(5 * k + 2), s#(5 * k + 3) - s#(5 * k + 4), 0.0, 0.0, 1.0, depth] {
+				touching.push(x)
+			}
+		}
+	}
+	# spheres on spheres of other bodies, for the pairs of bodies within reach
+	firsts: int[] = [0]
+	for i in 1 to n { firsts = firsts + [firsts#i + #w.bodies#i.spheres / 4] }
+	for a in 1 to n - 1 {
+		for b in a + 1 to n {
+			dx = w.pos#(3 * a - 2) - w.pos#(3 * b - 2)
+			dy = w.pos#(3 * a - 1) - w.pos#(3 * b - 1)
+			dz = w.pos#(3 * a) - w.pos#(3 * b)
+			if dx * dx + dy * dy + dz * dz < (w.reach#a + w.reach#b) ^ 2 {
+				for ka in firsts#a ..< firsts#(a + 1) {
+					ax = s#(5 * ka + 1)
+					ay = s#(5 * ka + 2)
+					az = s#(5 * ka + 3)
+					ar = s#(5 * ka + 4)
+					# only a sphere within reach of the other body's centre can touch one of its spheres
+					ox = ax - w.pos#(3 * b - 2)
+					oy = ay - w.pos#(3 * b - 1)
+					oz = az - w.pos#(3 * b)
+					if ox * ox + oy * oy + oz * oz > (w.reach#b + ar) ^ 2 { continue }
+					for kb in firsts#b ..< firsts#(b + 1) {
+						ex = ax - s#(5 * kb + 1)
+						ey = ay - s#(5 * kb + 2)
+						ez = az - s#(5 * kb + 3)
+						touch = ar + s#(5 * kb + 4)
+						d2 = ex * ex + ey * ey + ez * ez
+						if d2 < touch * touch and d2 > 1e-18 {
+							d = sqrt(d2)
+							# the contact point halfway between the two surfaces
+							back = (ar - (touch - d) / 2) / d
+							for x in [float(a), float(b), ax - ex * back, ay - ey * back, az - ez * back, ex / d, ey / d, ez / d,
+								touch - d] {
+								touching.push(x)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	pairs: int[] = [0 for _ in 1 to (n + 1) * (n + 1)]
+	contacts = #touching / 9
+	for ci in 0 ..< contacts {
+		key = int(touching#(9 * ci + 1)) * (n + 1) + int(touching#(9 * ci + 2)) + 1
+		pairs#key = pairs#key + 1
+	}
+	for ci in 0 ..< contacts {
+		a = int(touching#(9 * ci + 1))
+		b = int(touching#(9 * ci + 2))
+		p = [touching#(9 * ci + 3), touching#(9 * ci + 4), touching#(9 * ci + 5)]
+		normal = [touching#(9 * ci + 6), touching#(9 * ci + 7), touching#(9 * ci + 8)]
+		f = contact_force(w, a, b, p, normal, touching#(9 * ci + 9), pairs#(a * (n + 1) + b + 1), dt)
+		exerted(w, force, torque, a, f, p)
+		if b > 0 { exerted(w, force, torque, b, [-f#1, -f#2, -f#3], p) }
+	}
+	# semi-implicit Euler: velocities first, then positions with the new velocities
+	pos: float[] = []
+	vel: float[] = []
+	quat: float[] = []
+	spin: float[] = []
+	for i in 1 to n {
+		body = w.bodies#i
+		v = body_vec(w.vel, i)
+		f = body_vec(force, i)
+		v = [v#1 + f#1 / body.mass * dt, v#2 + f#2 / body.mass * dt, v#3 + f#3 / body.mass * dt]
+		q = body_quat(w, i)
+		# the spin in the body frame, Euler's equations I ω' = τ - ω × I ω
+		o = unturned(q, body_vec(w.spin, i))
+		t = unturned(q, body_vec(torque, i))
+		inertia = body.inertia
+		lx = inertia#1 * o#1
+		ly = inertia#2 * o#2
+		lz = inertia#3 * o#3
+		o = [o#1 + (t#1 - (o#2 * lz - o#3 * ly)) / inertia#1 * dt, o#2 + (t#2 - (o#3 * lx - o#1 * lz)) / inertia#2 * dt,
+			o#3 + (t#3 - (o#1 * ly - o#2 * lx)) / inertia#3 * dt]
+		keep = 1 - SPIN_DAMPING * dt
+		o = turned(q, [o#1 * keep, o#2 * keep, o#3 * keep])
+		c = body_vec(w.pos, i)
+		pos = pos + [c#1 + v#1 * dt, c#2 + v#2 * dt, c#3 + v#3 * dt]
+		vel = vel + v
+		# q' = ½ [0, ω] q, then back to unit length
+		dq = quat_mul([0.0, o#1, o#2, o#3], q)
+		q = [q#1 + 0.5 * dt * dq#1, q#2 + 0.5 * dt * dq#2, q#3 + 0.5 * dt * dq#3, q#4 + 0.5 * dt * dq#4]
+		norm_q = sqrt(q#1 * q#1 + q#2 * q#2 + q#3 * q#3 + q#4 * q#4)
+		quat = quat + [q#1 / norm_q, q#2 / norm_q, q#3 / norm_q, q#4 / norm_q]
+		spin = spin + o
+	}
+	World { bodies: w.bodies, pos: pos, vel: vel, quat: quat, spin: spin, reach: w.reach, time: w.time + dt }
+}
+
+# the world `seconds` later, in steps of STEP
+def simulated(w: World, seconds: float) as World {
+	steps = int(seconds / STEP + 0.5)
+	for _ in 1 to steps { w = stepped(w, STEP) }
+	w
+}
+
+# the kinetic energy of the world, moving and turning
+def kinetic_energy(w: World) as float {
+	total = 0.0
+	for i in 1 to #w.bodies {
+		b = w.bodies#i
+		v = body_vec(w.vel, i)
+		o = unturned(body_quat(w, i), body_vec(w.spin, i))
+		total = total + 0.5 * b.mass * (v#1 * v#1 + v#2 * v#2 + v#3 * v#3)
+		total = total + 0.5 * (b.inertia#1 * o#1 * o#1 + b.inertia#2 * o#2 * o#2 + b.inertia#3 * o#3 * o#3)
+	}
+	total
+}

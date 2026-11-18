@@ -13,7 +13,7 @@ print [[1, 2], [3, [1, 5]]] replace [1, x] with x  # [2 [3 5]]
 
 # a named pattern is a reusable shape
 pattern Pair = [_, _]
-pattern Tagged = ["tag", label, ..]
+pattern Tagged = ["tag", $label, ..]
 print [1, 2] is Pair                              # yes
 print match ["tag", "red", 1] { Tagged => label; _ => "none" }
 

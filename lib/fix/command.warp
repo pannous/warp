@@ -20,7 +20,7 @@ format_usage = "warp format [check|yes] [hash-comments] <file|folder|code>…  T
 # the commands that lay out only, never rewriting a word; their // comments stay unless hash-comments
 layout_commands = ["format", "lint"]
 hash_comment_rule = "# comment"
-warp_extensions = [".warp", ".wasp"]
+warp_extensions = [".warp", ".wap", ".wasp"]
 # code.golf solutions count their bytes: a folder of them keeps its layout, also when named
 skipped_folders = ["golf"]
 skipped_folder_reason = "code golf counts bytes"

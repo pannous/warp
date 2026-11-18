@@ -1,0 +1,260 @@
+# The wasm binary format: the lower half of wap's emitter (notes/backbone.md, milestone 0).
+#
+# Input: what the emitter asks for (types, functions, data, instructions); output: a module's bytes. It knows
+# modules, sections, types and instructions, and nothing of warp: no Node, no kernel form, no value layout (that is
+# the emitter's). A module is built up by adding its parts (`imported`, `added_type`, `added_function`, `added_global`,
+# `added_data`, `added_text`, `exported`) and turned into bytes once, by `module_bytes`.
+# Format reference: https://webassembly.github.io/spec/core/binary/
+
+MAGIC = [0x00, 0x61, 0x73, 0x6D]
+VERSION = [0x01, 0x00, 0x00, 0x00]
+
+# section ids, in the order the format requires them
+TYPE_SECTION = 1
+IMPORT_SECTION = 2
+FUNCTION_SECTION = 3
+MEMORY_SECTION = 5
+GLOBAL_SECTION = 6
+EXPORT_SECTION = 7
+DATA_COUNT_SECTION = 12
+CODE_SECTION = 10
+DATA_SECTION = 11
+
+# value types, each its bytes; a reference to a declared type is `nullable(index)`
+I32 = [0x7F]
+I64 = [0x7E]
+F64 = [0x7C]
+ANYREF = [0x6E]
+# a reference to any array, ø included: the type every list<T> fits
+ARRAYREF = [0x6A]
+# the storage of an array of bytes, packed
+I8 = [0x78]
+# heap types, each its bytes (a declared type's is signed(index)), and type constructors
+ANY_HEAP = [0x6E]
+NULLABLE_REFERENCE = 0x63
+FUNCTION_TYPE = 0x60
+STRUCT_TYPE = 0x5F
+ARRAY_TYPE = 0x5E
+IMMUTABLE = 0
+MUTABLE = 1
+
+# what an import or export is
+FUNCTION_KIND = 0x00
+MEMORY_KIND = 0x02
+
+# where a data segment lives: placed in the memory, or kept passive for `array.new_data`
+ACTIVE_SEGMENT = 0x00
+PASSIVE_SEGMENT = 0x01
+
+# every memory segment starts at a multiple of this, the size of the largest value, as WASI requires of its records
+DATA_ALIGNMENT = 8
+
+# Instructions, each its opcode bytes; `instruction(opcode, indices)` adds the unsigned immediates it takes.
+UNREACHABLE = [0x00]
+BLOCK = [0x02]
+LOOP = [0x03]
+IF = [0x04]
+ELSE = [0x05]
+BRANCH = [0x0C]
+BRANCH_IF = [0x0D]
+# the type of a block that takes and leaves nothing
+VOID_BLOCK = [0x40]
+RETURN = [0x0F]
+CALL = [0x10]
+DROP = [0x1A]
+LOCAL_GET = [0x20]
+LOCAL_SET = [0x21]
+LOCAL_TEE = [0x22]
+GLOBAL_GET = [0x23]
+GLOBAL_SET = [0x24]
+I32_LOAD = [0x28]
+I64_LOAD = [0x29]
+I32_LOAD8_U = [0x2D]
+I32_STORE = [0x36]
+I32_STORE8 = [0x3A]
+MEMORY_SIZE = [0x3F]
+MEMORY_GROW = [0x40]
+I32_CONST = [0x41]
+I64_CONST = [0x42]
+F64_CONST = [0x44]
+I32_EQZ = [0x45]
+I32_EQ = [0x46]
+I32_NE = [0x47]
+I32_GT_S = [0x4A]
+I32_LT_U = [0x49]
+I32_GE_U = [0x4F]
+I64_EQ = [0x51]
+I64_NE = [0x52]
+I64_LT_S = [0x53]
+I64_GT_S = [0x55]
+I64_LE_S = [0x57]
+I64_GE_S = [0x59]
+F64_EQ = [0x61]
+F64_NE = [0x62]
+F64_LT = [0x63]
+F64_GT = [0x64]
+F64_LE = [0x65]
+F64_GE = [0x66]
+I32_ADD = [0x6A]
+I32_SUB = [0x6B]
+I32_DIV_U = [0x6E]
+I64_ADD = [0x7C]
+I64_SUB = [0x7D]
+I64_MUL = [0x7E]
+I64_DIV_S = [0x7F]
+I64_REM_S = [0x81]
+I32_AND = [0x71]
+I32_OR = [0x72]
+I32_SHR_U = [0x76]
+F64_ADD = [0xA0]
+F64_SUB = [0xA1]
+F64_MUL = [0xA2]
+F64_DIV = [0xA3]
+I32_WRAP_I64 = [0xA7]
+I64_EXTEND_I32_U = [0xAD]
+REF_NULL = [0xD0]
+END = [0x0B]
+STRUCT_NEW = [0xFB, 0x00]
+STRUCT_GET = [0xFB, 0x02]
+STRUCT_SET = [0xFB, 0x05]
+ARRAY_NEW_DEFAULT = [0xFB, 0x07]
+ARRAY_NEW_FIXED = [0xFB, 0x08]
+ARRAY_NEW_DATA = [0xFB, 0x09]
+ARRAY_GET = [0xFB, 0x0B]
+ARRAY_GET_U = [0xFB, 0x0D]
+ARRAY_SET = [0xFB, 0x0E]
+ARRAY_LEN = [0xFB, 0x0F]
+ARRAY_COPY = [0xFB, 0x11]
+# a memory's size in pages
+PAGE_BYTES = 0x10000
+
+# A module in the making. Imports come first among the functions, so a function's index is counted after them.
+class Module {
+	types: list = []
+	imports: list = []
+	functions: list = []
+	globals: list = []
+	exports: list = []
+	# passive segments, each its bytes, for `array.new_data`; numbered first, so an index is final when added
+	texts: list = []
+	# memory segments: [address, bytes]
+	data: list = []
+	# the first free byte of the memory; below it lie the memory segments
+	memory_end: int = 16
+}
+
+# An unsigned number as LEB128, 7 bits a byte, the low bits first, each byte but the last with its high bit set:
+# 624485 → [0xE5, 0x8E, 0x26]
+unsigned(n: int) as list := {
+	bytes = []
+	rest = n
+	while rest >= 0x80 {
+		bytes += [rest % 0x80 + 0x80]
+		rest = rest ÷ 0x80
+	}
+	bytes + [rest]
+}
+# A signed number as LEB128, as `i64.const` takes it: -1 → [0x7F]
+signed(n: int) as list := {
+	bytes = []
+	rest = n
+	while rest < -0x40 or rest >= 0x40 {
+		bytes += [rest % 0x80 + 0x80]
+		rest = (rest - rest % 0x80) ÷ 0x80
+	}
+	bytes + [rest % 0x80]
+}
+# a number as `width` bytes, the lowest first, as memory holds it
+little_endian(n: int, width: int) as list := (0 upto width).map(at => n ÷ 0x100 ^ at % 0x100)
+
+# an instruction with its unsigned immediates: instruction(CALL, [3])
+instruction(opcode: list, indices: list) as list := opcode + indices.flat_map(unsigned)
+i32_const(n: int) as list := I32_CONST + signed(n)
+i64_const(n: int) as list := I64_CONST + signed(n)
+f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
+# the null reference of a heap type, `ref.null any`
+null_of(heap_type: list) as list := REF_NULL + heap_type
+
+# the value a variable of that type starts with: zero, or the null reference
+default_of(value_type: list) as list := {
+	if value_type == I64 { return i64_const(0) }
+	if value_type == F64 { return f64_const(0.0) }
+	if value_type == I32 { return i32_const(0) }
+	if value_type#1 == NULLABLE_REFERENCE { return REF_NULL + value_type[1 ..] }
+	REF_NULL + value_type
+}
+
+# a reference to the declared type of that index, or null
+nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
+
+# The format's lists: their length, then the items. `counted` takes items already in bytes, `bytes_vector` raw bytes.
+counted(items: list) as list := unsigned(#items) + items.flat_map(item => item)
+bytes_vector(bytes: list) as list := unsigned(#bytes) + bytes
+named(name: text) as list := bytes_vector(name.bytes)
+section(id: int, items: list) as list := {
+	content = counted(items)
+	[id] + unsigned(#content) + content
+}
+
+# Types: a function's, a struct's, an array's. A field is its storage type and whether it is mutable.
+function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + counted(parameters) + counted(results)
+field_type(storage: list, mutability: int) as list := storage + [mutability]
+struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
+array_type(item: list) as list := [ARRAY_TYPE] + item
+
+# The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
+added_type(m: Module, type: list) as int := {
+	for at in 1 to #m.types { if m.types#at == type { return at - 1 } }
+	m.types += [type]
+	#m.types - 1
+}
+
+# An imported function, `wasi_snapshot_preview1.fd_write`: its index among the functions.
+imported(m: Module, module: text, name: text, parameters: list, results: list) as int := {
+	m.imports += [named(module) + named(name) + [FUNCTION_KIND] + unsigned(added_type(m, function_type(parameters, results)))]
+	#m.imports - 1
+}
+
+# A function of the module, its locals after its parameters, its body without the final `end`: its index among
+# the functions.
+added_function(m: Module, parameters: list, results: list, locals: list, body: list) as int := {
+	m.functions += [[added_type(m, function_type(parameters, results)), code_entry(locals, body)]]
+	#m.imports + #m.functions - 1
+}
+# a function's code: its size, its locals one entry each, its instructions and `end`
+code_entry(locals: list, body: list) as list := {
+	content = counted(locals.map(local => unsigned(1) + local)) + body + END
+	unsigned(#content) + content
+}
+
+# A global of that type, mutable or not, set at start by the constant instructions `initial`: its index.
+added_global(m: Module, type: list, mutability: int, initial: list) as int := {
+	m.globals += [type + [mutability] + initial + END]
+	#m.globals - 1
+}
+
+exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
+
+# Bytes placed in the memory, aligned: their address.
+added_data(m: Module, bytes: list) as int := {
+	address = (m.memory_end + DATA_ALIGNMENT - 1) ÷ DATA_ALIGNMENT * DATA_ALIGNMENT
+	m.data += [[address, bytes]]
+	m.memory_end = address + #bytes
+	address
+}
+# Bytes kept passive, for `array.new_data`: their segment index.
+added_text(m: Module, bytes: list) as int := {
+	m.texts += [bytes]
+	#m.texts - 1
+}
+
+# The whole module, its sections in the order the format requires.
+module_bytes(m: Module) as list := {
+	declarations = m.functions.map(function => unsigned(function#1))
+	codes = m.functions.map(function => function#2)
+	placed = m.data.map(segment => [ACTIVE_SEGMENT] + i32_const(segment#1) + END + bytes_vector(segment#2))
+	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
+	memory_pages = [[0x00] + unsigned(1)]
+	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#placed + #passive)) + unsigned(#placed + #passive)
+	MAGIC + VERSION + section(TYPE_SECTION, m.types) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
+}

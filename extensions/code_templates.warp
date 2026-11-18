@@ -14,6 +14,8 @@ global writes_templates = no
 code_templates(program: Node) as Node := if writes_templates then templated(program) else program
 
 templated(n: Node) as Node := {
+	# `pattern If = data((if $cond $then_part $else_part))`: a named pattern's body is a pattern, never a template
+	if is_pattern_definition(n) { return n }
 	if is_quote(n) { return template_of(n) }
 	if is_matcher_call(n) { return n }
 	if is_key(n, Op.Eq) and is_quote(value_of(n)) { return Key(templated(key_of(n)), Op.Eq, value_of(n)) }
@@ -100,7 +102,8 @@ holed_items(items: list) as list := {
 	made
 }
 
-# a quote with a hole anywhere, whose filling the prelude gives (prelude_words.warp lowering_words)
-writes_template_in(own: Node) as bool := nodes_in(own).any(is_template)
+# a quote with a hole anywhere, whose filling the prelude gives (prelude_words.warp lowering_words); a named pattern
+# with holes too, whose code body builds by a template (extensions/match_patterns.warp)
+writes_template_in(own: Node) as bool := nodes_in(own).any(n => is_template(n) or (is_pattern_definition(n) and has_holes(n#2)))
 has_holes(n: Node) as bool := hole_name(n) != ø or is_computed_hole_mark(n) or (not is_quote(n) and parts_within(n).any(has_holes))
 is_template(n: Node) as bool := is_quote(n) and has_holes(n#2)

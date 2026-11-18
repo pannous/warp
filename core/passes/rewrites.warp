@@ -326,9 +326,10 @@ unbound_rules(module_rules: list, program: Node) as list := {
 # a rule spelling a definition, `unit $name := $value`, keeps the definitions it matches, though their spaced head
 # (`unit hand := 4inch`, decision spaced-definition-head) binds its first word as the program's function
 spells_definition_in(rule: Rule, parts: list) as bool := defines_last(rule.pattern) and parts.any(part => rule_matches(rule.pattern, part, {}))
-# [the program's scope, its scope outside its type declarations]: the bindings unbound_rules reads, worked out once for
-# all the sugar steps of a program (card speed-module-cache)
-rule_bindings(program: Node) as list := [scope_of(program), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
+# [the values the program binds outside its functions, its scope outside its type declarations]: the bindings
+# unbound_rules reads, worked out once for all the sugar steps of a program (card speed-module-cache). A function's
+# own local, `push = 3` in f, binds no word of the program: g's `xs.push(2)` keeps the alias
+rule_bindings(program: Node) as list := [scope_with({}, outer_nodes_in(program)), scope_with({}, statements_in(program).filter(statement => not is_type_declaration(statement)).flat_map(nodes_in))]
 # (a class's method binds no word of the program: `in(u)` of a class keeps `for x in xs`)
 rules_unbound_by(module_rules: list, bindings: list) as list := module_rules.filter(rule => is_unbound(rule, bindings))
 is_unbound(rule: Rule, bindings: list) as bool := not literal_words(rule.pattern).any(word => binds_value(bindings#1, word) or binds_as(bindings#2, word, Meaning.Function))
@@ -378,9 +379,11 @@ sugar_walked(program: Node, rules: list) as Node := {
 	maps = map_names_of(program)
 	# a program of one statement: that statement, so the rules `where statement` apply to it too
 	if not is_statement_sequence(program) { return sugar_at_place(placed_map_scoped(program, n => sugared_node(n, rules), maps), Place.Statement, rules) }
-	# each statement walked with the rules that can fire in it (rules_reaching), the program's runs with them all
+	# each statement walked with the rules that can fire in it (rules_reaching) and whose words it binds no value of its
+	# own: a function's local `type` keeps its `type in xs` from the rule `type $x` there only; the program's runs
+	# with them all
 	index = rule_index(rules)
-	walked = children(program, statement => sugared_statement(statement, rules_reaching(index, statement), maps))
+	walked = children(program, statement => sugared_statement(statement, rules_unbound_by(rules_reaching(index, statement), [scope_with({}, nodes_in(statement)), {}]), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
 }

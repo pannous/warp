@@ -1,0 +1,200 @@
+# The primitives the emitter performs (notes/kernel.md "Primitives"): where warp ends and wasm or the host begins.
+#
+# Input: a Prim's operation and the code of its arguments; output: the code of the operation. Only the preload
+# writes a Prim, as the body of a built-in (wap/preload/prelude.wap), so each operation here is named once, in the
+# definition that gives it a warp signature. An operation that needs more than a few instructions is a helper
+# function of the module, emitted once.
+
+use "emitter.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+
+# print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
+# answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
+STDOUT = 1
+STDERR = 2
+# the status a program that raised exits with
+RAISED_STATUS = 1
+NEWLINE = 10
+IOVEC_ADDRESS = 0
+WRITTEN_ADDRESS = 8
+BYTES_ADDRESS = 16
+# an int's text: at most 19 digits and a sign; the code points of a digit 0 and of a minus
+INT_TEXT_BYTES = 20
+DIGIT_ZERO = 48
+MINUS = 45
+# a character's UTF-8 bytes: the code point below which it takes 1, 2 or 3 bytes, the lead byte's mark for each count,
+# a following byte's mark, and the bits each following byte holds
+UTF8_LIMITS = [0x80, 0x800, 0x10000]
+UTF8_LEADS = [0, 0xC0, 0xE0, 0xF0]
+UTF8_FOLLOWER = 0x80
+UTF8_BITS = 6
+# read_text's memory: the file's size from fd_seek at 0, the opened file and the count read at 8
+SIZE_ADDRESS = 0
+OPENED_ADDRESS = 8
+# WASI: the folders the host opens for a program, the current one and the root (core/native/driver.warp), so a path
+# starting with / opens in the second; links followed; the rights to read and seek; seek from the start or the end
+CURRENT_FOLDER = 3
+FOLLOW_LINKS = 1
+READ_AND_SEEK = 6
+FROM_START = 0
+FROM_END = 2
+SLASH = 47
+
+# The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
+# its built-in's definition writes (wap/preload/prelude.wap).
+INSTRUCTIONS = {
+	"i64_add": I64_ADD, "i64_sub": I64_SUB, "i64_mul": I64_MUL, "i64_eq": I64_EQ, "i64_ne": I64_NE,
+	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
+	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
+	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
+	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
+}
+# The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
+# primitives call, before any function of its own.
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+# each host function's parameter and result types
+HOST_FUNCTIONS = {
+	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
+	"fd_seek": [[I32, I64, I32, I32], [I32]], "fd_close": [[I32], [I32]],
+	"path_open": [[I32, I32, I32, I32, I32, I64, I64, I32, I32], [I32]]
+}
+# the index of a host function the module imported
+host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
+
+# The operations a helper function of the module performs: operation → the function that builds the helper
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+
+# the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
+# built-in's definition writes
+primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
+	name = text(operation)
+	operands = arguments.flat_map(argument => argument.instructions)
+	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
+	if HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])]))) }
+	refused(form, "no primitive of this name")
+}
+# the instructions that compare two values of one type on the stack, giving yes or no
+equality(type: list, p: Program) as list := {
+	if type == I64 { return I64_EQ }
+	if type == F64 { return F64_EQ }
+	if type == I32 { return I32_EQ }
+	if type == nullable(text_type(p.m)) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
+	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
+}
+
+# the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
+given_layout(form: Node, p: Program) as list := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
+# the helper function of an operation, added by `build` the first time
+helper(p: Program, operation: text, build: function) as int := {
+	for each in p.helpers { if each#1 == operation { return each#2 } }
+	index = build(p)
+	p.helpers += [[operation, index]]
+	index
+}
+
+printing_function(p: Program) as int := writing_function(p, STDOUT, [])
+raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
+# The helper of print_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
+# written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
+writing_function(p: Program, file: int, after: list) as int := {
+	text_type_index = text_type(p.m)
+	the_text = instruction(LOCAL_GET, [0])
+	length = instruction(LOCAL_GET, [1])
+	count = instruction(LOCAL_GET, [2])
+	byte_at_count = i32_const(BYTES_ADDRESS) + count + I32_ADD
+	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
+	grown = memory_grown(length, 2)
+	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
+	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
+	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")]) + DROP
+	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written + after)
+}
+
+# the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
+# short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
+memory_grown(length: list, scratch: int) as list := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + instruction(LOCAL_GET, [scratch]) + instruction(MEMORY_GROW, [0]) + DROP + END
+
+# The helper of read_text: the file at a path, its bytes as a text; a path it cannot open raises "cannot read …".
+# Its locals: 0 the path, 1 whether it starts with / (1 or 0), 2 the path's length after that, 3 a count, 4 the
+# opened file, 5 its size, 6 the text made, 7 the bytes read so far.
+reading_function(p: Program) as int := {
+	type = text_type(p.m)
+	value_of = local => instruction(LOCAL_GET, [local])
+	kept_in = local => instruction(LOCAL_SET, [local])
+	path = value_of(0)
+	rooted = path + ARRAY_LEN + I32_EQZ + IF + I32 + i32_const(0) + ELSE + path + i32_const(0) + instruction(ARRAY_GET_U, [type]) + i32_const(SLASH) + I32_EQ + END + kept_in(1)
+	length = path + ARRAY_LEN + value_of(1) + I32_SUB + kept_in(2)
+	copied = memory_grown(value_of(2), 3) + counted(3, value_of(2), i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + path + value_of(3) + value_of(1) + I32_ADD + instruction(ARRAY_GET_U, [type]) + instruction(I32_STORE8, [0, 0]))
+	refusal = text_literal("cannot read ", p.m).instructions + path + instruction(CALL, [helper(p, "text_joined", joining_function)]) + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+	opened = i32_const(CURRENT_FOLDER) + value_of(1) + I32_ADD + i32_const(FOLLOW_LINKS) + i32_const(BYTES_ADDRESS) + value_of(2) + i32_const(0) + i64_const(READ_AND_SEEK) + i64_const(0) + i32_const(0) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "path_open")]) + IF + VOID_BLOCK + refusal + END + i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0]) + kept_in(4)
+	seek = (whence) => value_of(4) + i64_const(0) + i32_const(whence) + i32_const(SIZE_ADDRESS) + instruction(CALL, [host(p, "fd_seek")]) + DROP
+	sized = seek(FROM_END) + i32_const(SIZE_ADDRESS) + instruction(I64_LOAD, [3, 0]) + I32_WRAP_I64 + kept_in(5) + seek(FROM_START) + memory_grown(value_of(5), 3)
+	# read until the size is reached or the file ends: iovec [bytes + read, size - read], then read += the count
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + value_of(7) + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + value_of(5) + value_of(7) + I32_SUB + instruction(I32_STORE, [2, 0])
+	count_read = i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0])
+	read = i32_const(0) + kept_in(7) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + value_of(7) + value_of(5) + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + value_of(4) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "fd_read")]) + DROP + count_read + I32_EQZ + instruction(BRANCH_IF, [1]) + value_of(7) + count_read + I32_ADD + kept_in(7) + instruction(BRANCH, [0]) + END + END
+	closed = value_of(4) + instruction(CALL, [host(p, "fd_close")]) + DROP
+	made = value_of(7) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(3, value_of(7), value_of(6) + value_of(3) + i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + instruction(I32_LOAD8_U, [0, 0]) + instruction(ARRAY_SET, [type]))
+	added_function(p.m, [nullable(type)], [nullable(type)], [I32, I32, I32, I32, I32, nullable(type), I32], rooted + length + copied + opened + sized + read + closed + made + value_of(6))
+}
+
+# the body run for each count from 0 while it stays below the limit, the count in that local
+counted(local: int, limit: list, body: list) as list := {
+	count = instruction(LOCAL_GET, [local])
+	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
+}
+
+# The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
+# count.
+text_equality_function(p: Program) as int := {
+	type = text_type(p.m)
+	no_unless_equal = I32_NE + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+	byte = local => instruction(LOCAL_GET, [local]) + instruction(LOCAL_GET, [3]) + instruction(ARRAY_GET_U, [type])
+	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
+	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
+	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
+}
+
+# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
+# new one.
+joining_function(p: Program) as int := {
+	type = text_type(p.m)
+	bytes_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
+	joined = instruction(LOCAL_GET, [2])
+	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
+}
+
+# The helper of int_text: an int's digits, written from the last into a buffer, then copied into a text of their
+# length. It counts on the int made negative, so the smallest int has its digits too. Its locals: 0 the int, 1 whether
+# it was negative, 2 the buffer, 3 the place of the first digit so far, 4 the text.
+int_text_function(p: Program) as int := {
+	type = text_type(p.m)
+	n = instruction(LOCAL_GET, [0])
+	place = instruction(LOCAL_GET, [3])
+	buffer = instruction(LOCAL_GET, [2])
+	written_before = byte => buffer + place + i32_const(1) + I32_SUB + instruction(LOCAL_TEE, [3]) + byte + instruction(ARRAY_SET, [type])
+	negated = n + i64_const(0) + I64_LT_S + instruction(LOCAL_TEE, [1]) + I32_EQZ + IF + VOID_BLOCK + i64_const(0) + n + I64_SUB + instruction(LOCAL_SET, [0]) + END
+	made = i32_const(INT_TEXT_BYTES) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2]) + i32_const(INT_TEXT_BYTES) + instruction(LOCAL_SET, [3])
+	digits = LOOP + VOID_BLOCK + written_before(i32_const(DIGIT_ZERO) + n + i64_const(10) + I64_REM_S + I32_WRAP_I64 + I32_SUB) + n + i64_const(10) + I64_DIV_S + instruction(LOCAL_TEE, [0]) + i64_const(0) + I64_NE + instruction(BRANCH_IF, [0]) + END
+	sign = instruction(LOCAL_GET, [1]) + IF + VOID_BLOCK + written_before(i32_const(MINUS)) + END
+	length = i32_const(INT_TEXT_BYTES) + place + I32_SUB
+	copied = length + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_TEE, [4]) + i32_const(0) + buffer + place + length + instruction(ARRAY_COPY, [type, type]) + instruction(LOCAL_GET, [4])
+	added_function(p.m, [I64], [nullable(type)], [I32, nullable(type), I32, nullable(type)], negated + made + digits + sign + copied)
+}
+
+# The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
+char_text_function(p: Program) as int := {
+	type = text_type(p.m)
+	c = instruction(LOCAL_GET, [0])
+	shifted = bits => c + i32_const(bits) + I32_SHR_U
+	follower = bits => shifted(bits) + i32_const(63) + I32_AND + i32_const(UTF8_FOLLOWER) + I32_OR
+	bytes = count => shifted(UTF8_BITS * (count - 1)) + i32_const(UTF8_LEADS#count) + I32_OR + (1 to count - 1).flat_map(i => follower(UTF8_BITS * (count - 1 - i))) + instruction(ARRAY_NEW_FIXED, [type, count])
+	shorter = (1 to UTF8_LIMITS.length).flat_map(count => c + i32_const(UTF8_LIMITS#count) + I32_LT_U + IF + VOID_BLOCK + bytes(count) + RETURN + END)
+	added_function(p.m, [I32], [nullable(type)], [], shorter + bytes(UTF8_LEADS.length))
+}

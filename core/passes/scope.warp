@@ -124,6 +124,8 @@ field_meanings(item: Node) as list := match item {
 
 # every key and list of a program, the program first; an opaque view's parts (a type's name and body) as nodes
 nodes_in(top: Node) as list := nodes_kept(top, n => yes)
+# the same without quoted code, `data [...]`: a quoted definition, as a rule hands one on, defines nothing
+code_nodes_in(top: Node) as list := nodes_kept(top, n => not is_quote(n))
 
 # the nodes found so far, a global, which grows in place (a local stack popped and a local list appended to copied them
 # at each node: a seventh of the passes' time in `warp rebuild self`, card speed-symbol-calls)

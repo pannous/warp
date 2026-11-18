@@ -15,6 +15,9 @@ use math
 use regex
 
 VECTOR_TYPES = ["f32", "vec2f", "vec3f", "vec4f"]
+# the widths a declared result type allows a painted or called function: a Color is 3 channels, a number 1, yes/no 0,
+# a list a vector of 2 to 4 (its type holds no length); a type not named here is not checked
+RESULT_WIDTHS = {Color: [3], float: [1], int: [1], number: [1], bool: [0], list: [2, 3, 4]}
 # a complex number's width: a mark of its own beside the vectors' 2 to 4, a vec2f [re, im] in WGSL
 COMPLEX_WIDTH = 5
 COMPLEX_TYPE = "vec2f"
@@ -127,16 +130,23 @@ is_lambda(n) as bool := keyed(n, "->") or (n is list and bracket_of(n) == "(" an
 is_shown_item(n) as bool := keyed(n, ":") and key_of(n) is symbol and name_of(key_of(n)) in SHOWN_MARKS
 is_big_number_view(n) as bool := keyed(n, ":") and key_of(n) == symbol(OPAQUE_MARK)
 form_of(n) as text := if n is key then "`… ${op_of(n)} …`" else "`${n}`"
-# `f(a, b) := …`: f; `f = x => …`: f
+# `f(a, b) := …`, `f(a, b) as T := …`: f; `f = x => …`: f
 definition_name(definition) as text := {
-	head = key_of(definition)
+	head = call_head(key_of(definition))
 	name_of(if head is list then head#1 else head)
+}
+# the call a definition's head names, its result type left out: `f(a, b)` of `f(a, b): T` and `f(a, b) as T`
+call_head(head) as any := if keyed(head, ":") or keyed(head, "as") then call_head(key_of(head)) else head
+# the result type a definition's head declares, ø for none
+declared_result(definition) as any := {
+	head = key_of(definition)
+	if keyed(definition, ":=") and (keyed(head, ":") or keyed(head, "as")) then value_of(head) else ø
 }
 function_definition(name) as any := if shading.definitions.has(name_of(name)) then shading.definitions[name_of(name)] else ø
 # the parameters as the definition writes them, `a: int` of `f(a: int) := …`, `x` of `f = x => …`
 function_parameters_written(definition) as list := {
 	if keyed(definition, ":=") {
-		head = key_of(definition)
+		head = call_head(key_of(definition))
 		return if head is list then items_of(head)[1 ..] else []
 	}
 	taken = key_of(value_of(definition))
@@ -188,12 +198,12 @@ function_pass(reached: map, fields: map, name: text = "", into: any = ø) as lis
 }
 
 # paint(f, width, height) of a program function: its shader on the GPU, the values it reads as they are now; else f of
-# each pixel on the CPU (lib/prelude.warp paint_each)
+# each pixel on the CPU (lib/prelude.warp paint_each), said where no GPU paints, quiet where the program chose the CPU
 # hash(cell) on the CPU, as the shader word computes it (lib/prelude.warp SHADER_WORDS_WGSL), for a painting without a GPU
 hash(cell: list) := fract(sine(dot(cell .- 289 .* floor(cell ./ 289), [127.1, 311.7])) * 43758.5453)
 // a program paints on the CPU, exact in f64, with `paint_on_gpu = no`
 global paint_on_gpu = yes
-paint_function(reached: map, width, height, f) := if paint_on_gpu and gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_named(reached, shader_made(reached)#2))) else paint_each(f, width, height)
+paint_function(reached: map, width, height, f) := if not paint_on_gpu then paint_each(f, width, height) else if gpu_paints() then paint(shader_of(reached), width, height, shader_floats(values_named(reached, shader_made(reached)#2))) else cpu_painted(f, width, height, "this machine paints no shader")
 # the program values of these names the function's shader reads, as they are now; ø for none
 values_named(reached: map, names: list) as any := {
 	if #names == 0 { return ø }
@@ -694,6 +704,11 @@ wgsl_function(word: text, widths: list, signature: text, n: Node) := {
 	}
 	if scope.returned < 0 {
 		wgsl_refused(n, "${word} gives no value")
+		return
+	}
+	declared_type = declared_result(defined)
+	if declared_type is symbol and RESULT_WIDTHS.has(name_of(declared_type)) and not (scope.returned in RESULT_WIDTHS[name_of(declared_type)]) {
+		wgsl_refused(n, "${word} declares its result ${declared_type} but gives " + wgsl_type(scope.returned))
 		return
 	}
 	declared = []

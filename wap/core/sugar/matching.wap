@@ -1,0 +1,2 @@
+# A choice by patterns, as Case (notes/kernel.md; wiki/pattern-matching.md): `match x { 1 => "one"; _ => "other" }`
+rule match $subject... { ($pattern => $result)... } => Case($subject, Arm($pattern, $result)...)
