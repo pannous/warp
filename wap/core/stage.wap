@@ -96,6 +96,8 @@ EMPTY_BRACES = "{}"
 # in order, the Node pattern that takes it apart in an arm
 PATTERN_HOLES = "pattern_holes"
 PATTERN_TAKEN = "pattern_taken"
+# a pattern a declared pattern's call wrote, `Record(n, f, v)` in an arm, carries the pattern's name
+SHAPE_OF = "shape_of"
 # a list's items, none of any other node
 items_of(n: Node) as list := match n {
 	List(items, bracket, separator) => items

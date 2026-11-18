@@ -10,11 +10,14 @@ use "calls.wap"
 use "../stage.wap"
 use "../errors.wap"
 use "../../kernel/forms.wap"
+use "matching.wap"
 
 # a hole in a declared pattern's taken shape is its builder's parameter after this sign (core/rules/patterns.wap)
 HOLE_MARK = "$"
 # a definition whose written types have their shapes known
 SHAPED = "shaped"
+# the raise where a value is not of the shape a place wants
+OTHER_SHAPE = "this value is of another shape than the"
 
 # the type a shape narrows, ø for any other type
 narrowed_type(type: Node?) as Node? := if type == ø then ø else fact_of(type, NARROWS)
@@ -68,3 +71,27 @@ zipped_parts(shapes: list, patterns: list) as list? := {
 	for at in 1 to #shapes { parts = parts + (form_parts(shapes#at, patterns#at) ?? return ø) }
 	parts
 }
+
+# A shape as a pattern fitting each of its values, the cases it names bound to their enums: a case's name with `_` for
+# each field, `List(_, _, _)`; a declared pattern's taken shape with `_` at its holes
+shape_pattern(type: Node, s: TypingState) as Node := {
+	form = form_named(type, s)
+	enum = narrowed_type(type) ?? refused(type, "a shape narrows a type")
+	if form != ø { return with_fact(bound_shape(form_taken(form), enum, s), SHAPE_OF, type) }
+	Call(case_bound(type, enum, s), wildcards(#case_fields(case_declaring(s.records, case_bound(type, enum, s)))))
+}
+bound_shape(taken: Node, enum: Node, s: TypingState) as Node := {
+	if taken is symbol and text(taken).starts_with(HOLE_MARK) { return symbol(WILDCARD) }
+	match taken {
+		Get(subject, key) => case_bound(symbol(text(key)), subject, s)
+		# a rest hole, `...$arguments`, takes any rest
+		Call(called, arguments) => if rest_named(taken) != ø then Call(called, [symbol(WILDCARD)]) else Call(case_bound(called, enum, s), arguments.map(argument => bound_shape(argument, enum, s)))
+		List(items, bracket, separator) => List(items.map(item => bound_shape(item, enum, s)), bracket, separator)
+		_ => taken
+	}
+}
+case_bound(name: Node, enum: Node, s: TypingState) as Node := with_fact(in_enum(name, enum, s), BINDING, symbol(BOUND_CASE))
+# whether a value is of a shape, as code: `match x { List(_, _, _) => yes; _ => no }`
+shape_test(read: Node, type: Node, at: Node, s: TypingState) as Node := with_fact(placed_like(Case(read, [Arm(shape_pattern(type, s), True), Arm(symbol(WILDCARD), False)]), at), TESTED, type)
+# the raise where a value is not of the shape wanted, naming the place that wanted it
+other_shape(type: Node, at: Node) as text := "${OTHER_SHAPE} ${type} wanted at ${file_of(at)}:${line_of(at)}:${column_of(at)}"

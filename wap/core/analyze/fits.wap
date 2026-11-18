@@ -7,6 +7,7 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 use "letters.wap"
 use "shapes.wap"
+use "dispatch.wap"
 use "../errors.wap"
 
 # REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this file should hold the one relation between types,
@@ -46,12 +47,13 @@ field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := 
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
 # function value where a bare `function` is, an enum where a bare `enum` is, or code that never finishes; boxed, into
 # any or a number; read, a character as its text, where a text or a text? is (wiki/char.md, 'a' == "a"); wrapped, a T
-# or ø where T? is; narrowed, a value of the type a shape narrows where the shape is (core/analyze/shapes.wap); settled, the unknowns of either becoming the other's types, `[]`
-# where a list<int> is; checked, an any's value where another type is, raising there when it holds another; ø when
-# it cannot. The conversions a choice of overloads asks for, the static ones, never check: an any argument is chosen
-# for at run time.
+# or ø where T? is; narrowed, a value of the type a shape narrows where the shape is (core/analyze/shapes.wap), raising
+# there when it is of another shape; settled, the unknowns of either becoming the other's types, `[]` where a
+# list<int> is; checked, an any's value where another type is, raising there when it holds another; ø when it cannot.
+# The conversions a choice of overloads asks for, the static ones, never check: an any argument, or a Node where a
+# shape is wanted, is chosen for at run time (core/analyze/dispatch.wap).
 enum Conversion { Same, Boxed, Read, Wrapped, Narrowed, Settled, Checked }
-STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Read, Conversion.Wrapped, Conversion.Narrowed]
+STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Read, Conversion.Wrapped]
 conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
 	if same_type(given, wanted) or given == symbol(NEVER_TYPE) or bare_fit(given, wanted, s.records) { return Conversion.Same }
@@ -74,7 +76,7 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
 	if way == Conversion.Read { return as_text(n, s) }
-	if way == Conversion.Narrowed { return with_type_of(n, wanted) }
+	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
 	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else n
 }
 # a character where a text is wanted read as its text, any other value as it is: `if c then 'a' else ""`, a char

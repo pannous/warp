@@ -208,7 +208,7 @@ receiver_field(name: Node) as Node := {
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
-	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
+	wanted = shaped(substituted(declared_type(place), f.letters), s) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	# a name given only ø so far holds an optional of a type its uses settle

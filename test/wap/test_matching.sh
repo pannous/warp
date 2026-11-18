@@ -63,4 +63,14 @@ n: Node = Duo(symbol("a"), List([symbol("x"), symbol("y")], Bracket.Square, Sepa
 print(named(n))
 print(text(counted(n)))')" "a
 2"
+check "a Node where a shape is wanted is told apart at run time" "$(ran shape_at_run_time 'pattern Duo = (duo $name: Symbol $items: List)
+kind(d: Duo) as text := "duo"
+kind(n: Node) as text := "node"
+d: Node = Duo(symbol("a"), List([], Bracket.Square, Separator.Comma))
+print(kind(d))
+print(kind(symbol("b")))
+e: Duo = d
+print(text(match e { Duo(name, items) => name }))')" "duo
+node
+a"
 exit $((failures > 0))
