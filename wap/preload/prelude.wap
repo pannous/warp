@@ -66,7 +66,11 @@ raise(message: text): never := prim raise_text(message)
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
 !=(a: text, b: text): bool := not(a == b)
-# two cases of a plain enum, one whose cases carry no fields, are equal by their tags
+# any two values of one type are equal by that type's equality: cases by tag and fields, instances field by field,
+# lists item by item (core/emit/equality.wap); the overloads above are the plain values' own
+==(a: T, b: T): bool := prim tag_equal(a, b)
+!=(a: T, b: T): bool := not(a == b)
+# cases of any two enums, of one enum or not: `Side.Left == Grouping.Left` is no
 ==(a: enum, b: enum): bool := prim tag_equal(a, b)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
