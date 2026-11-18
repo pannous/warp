@@ -43,7 +43,8 @@ declared_patterns = {}
 
 # what a part of a pattern asks of the code at its place
 enum Test { Hole, Literal, Sequence, Pair, Repeat }
-class Matcher { test: Test, name: text = "", type: Node = Empty, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list = [] }
+# a hole's matcher knows, from when it was compiled, whether its type is a shape and which declared pattern it names
+class Matcher { test: Test, name: text = "", type: Node = Empty, shaped: bool = yes, pattern: Declared? = ø, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list = [] }
 
 # ---- holes
 
@@ -80,7 +81,7 @@ typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 # a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
 compiled_pattern(n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else shape_matcher(n)
 shape_matcher(n: Node) as Matcher := match n {
-	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
+	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(hole_type(n)), pattern: pattern_called(hole_type(n)), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
 	Key(left, op, right) => pair_matcher(n, left, op, right)
 	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(items#1) else sequence_matcher(items, bracket, separator)
@@ -127,9 +128,11 @@ holes_in(n: Node) as list := match n {
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
 declare_pattern(name: Node, shape: Node) as Declared := {
 	normal = normalized(shape)
-	declared = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
-	declared.taken = shape_taken(declared)
+	# known before its matcher is compiled, so the pattern may name itself
+	declared = Declared(spelling_written(name), normal, holes_in(normal), Matcher(Test.Literal))
 	declared_patterns[declared.name] = declared
+	declared.matcher = compiled_pattern(normal)
+	declared.taken = shape_taken(declared)
 	declared
 }
 
@@ -187,7 +190,7 @@ item_matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
 }
 
 hole_matches(m: Matcher, n: Node, bindings: map) as bool := {
-	if not of_shape(m.type, n) { return no }
+	if not of_shape(m, n) { return no }
 	if bindings.has(m.name) { return "${bindings[m.name]}" == "${n}" }
 	bindings[m.name] = n
 	yes
@@ -249,17 +252,17 @@ names_bound(m: Matcher) as list := match m.test {
 }
 
 rest_matches(m: Matcher, items: list, bindings: map) as bool := {
-	for item in items { if not of_shape(m.type, item) { return no } }
+	for item in items { if not of_shape(m, item) { return no } }
 	bindings[m.name] = List(items, Bracket.None, Separator.Space)
 	yes
 }
 
 # whether code has the shape a hole asks for
-of_shape(wanted: Node, n: Node) as bool := {
-	if not is_shape(wanted) { return fits_type(n, wanted) }
-	type = spelling_written(wanted)
-	if wanted == Empty or type == "Node" { return yes }
-	if declared_patterns.has(type) { return matches(declared_patterns[type].matcher, n, {}) }
+of_shape(m: Matcher, n: Node) as bool := {
+	if not m.shaped { return fits_type(n, m.type) }
+	if m.pattern != ø { return matches(m.pattern.matcher, n, {}) }
+	type = spelling_written(m.type)
+	if m.type == Empty or type == "Node" { return yes }
 	match type {
 		"Symbol" => n is symbol
 		"List" => match n { List(items, bracket, separator) => yes; _ => no }
@@ -272,7 +275,7 @@ of_shape(wanted: Node, n: Node) as bool := {
 
 
 # whether any hole of the matcher asks for a value type: the rule then runs in stage 3, on typed code
-asks_value_type(m: Matcher) as bool := m.test == Test.Hole and not is_shape(m.type) or #m.parts.filter(asks_value_type) > 0
+asks_value_type(m: Matcher) as bool := m.test == Test.Hole and not m.shaped or #m.parts.filter(asks_value_type) > 0
 
 # how many literal parts a pattern names: the more, the more specific
 specificity(m: Matcher) as int := match m.test {
