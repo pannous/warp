@@ -153,11 +153,20 @@ with_letters(argument: Node, letters: list) as Node := {
 	if type == value_type(argument) then argument else with_type_of(argument, type)
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
-# type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
-most_specific(definitions: list, records: list) as list := {
-	weights = definitions.map(definition => typing_weight(definition, records))
+# type, `===(a: T, b: T)` beats `===(a, b)`; of those, more written structure beats less, `==(a: T?, b: T?)` beats
+# `==(a: T, b: T)`; several equally specific are left for the caller to refuse
+most_specific(definitions: list, records: list) as list := heaviest(heaviest(definitions, definition => typing_weight(definition, records)), written_structure)
+# the definitions of the greatest weight
+heaviest(definitions: list, weight: function) as list := {
+	weights = definitions.map(weight)
 	best = weights.fold(0, (a, b) -> if a > b then a else b)
 	(1 to #definitions).filter(at => weights#at == best).map(at => definitions#at)
+}
+# how much structure a definition's parameter types write: each `?`, `list<…>`, `map<…>` or `(…) -> …` one more
+written_structure(definition: Node) as int := parameters_in(definition).map(parameter => structure(type_given(parameter))).sum()
+structure(type: Node?) as int := {
+	parts = type_parts(type) ?? return 0
+	1 + parts[1 ..].map(structure).sum()
 }
 # of equally specific definitions, those of the innermost scope: a program's `===(a: T, b: T)` hides the library's
 innermost(definitions: list, scopes: list) as list := {
