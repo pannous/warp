@@ -292,8 +292,10 @@ own_rules_applied(program: Node, source: text) as Node := {
 # its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
 statement_rewritten(statement: Node, rules: list, origins: list, maps: map) as Node := {
 	bindings = statement_bindings(statement)
-	kept = (0 ..< #rules).filter(index => is_unbound(rules[index], bindings))
-	placed_map_scoped(statement, n => rule_rewritten(n, kept.map(index => rules[index]), kept.map(index => origins[index])), maps)
+	kept = (0 ..< #rules).filter(at => is_unbound(rules[at], bindings))
+	kept_rules = kept.map(at => rules[at])
+	kept_origins = kept.map(at => origins[at])
+	placed_map_scoped(statement, n => rule_rewritten(n, kept_rules, kept_origins), maps)
 }
 # what a statement binds itself, as unbound_rules reads a program's bindings
 statement_bindings(statement: Node) as list := [scope_with({}, nodes_in(statement)), {}]
