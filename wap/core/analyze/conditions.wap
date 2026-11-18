@@ -18,7 +18,7 @@ if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingSt
 	findings = found(condition, tested, s, f)
 	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, findings.filter(finding => finding#2 == at).map(finding => [finding#1, finding#3]), s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
-	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s) else typed#at)
+	chosen = (1 to 2).map(at => text_read(typed#at, value_type(typed#(3 - at)), s))
 	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_settling(value_type(chosen#1), value_type(chosen#2), s))
 }
 # an arm typed with the variables known in it, each [its key, the type it reads as]

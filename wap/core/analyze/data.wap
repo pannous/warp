@@ -78,9 +78,9 @@ common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	types.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))
 }
 # a value as the type its place holds reads it: a char beside texts its text, a function value where a function type is
-read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")
+read_as(value: Node, type: Node, s: TypingState) as Node := as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")
 # each value fits the wanted type, settling the unknowns it holds: `[]` fits list<int>
-all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => conversion(value_type(value), wanted, s) in STATIC_CONVERSIONS + [Conversion.Settled] or reads_as(wanted, value_type(value)) or as_function_type(value, wanted, s) != ø)
+all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => conversion(value_type(value), wanted, s) in STATIC_CONVERSIONS + [Conversion.Settled] or as_function_type(value, wanted, s) != ø)
 
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
 # place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>
