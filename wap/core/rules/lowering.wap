@@ -68,11 +68,11 @@ lowered_form(n: Node) as Node := match n {
 	Empty => n
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
-	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, List(items.map(field => field_lowered(field, n)), Bracket.Curly, separator)) else not_lowered(n)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
-	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Curly, separator) => if items.all(is_field) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
 	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
@@ -116,6 +116,9 @@ defined(n: Node, head: Node, body: Node) as Node := match head {
 with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
+# a map's or an instance's fields, `{a: 1, b: 2}`, each value lowered: data, not a block (notes/kernel.md Data)
+fields_lowered(items: list, separator: Separator, n: Node) as Node := List(items.map(field => field_lowered(field, n)), Bracket.Curly, separator)
+is_field(item: Node) as bool := match item { Key(name, Op.Colon, value) => yes; _ => no }
 # an instance's field, `x: 1`, its value lowered
 field_lowered(field: Node, n: Node) as Node := match field {
 	Key(name, Op.Colon, value) => if name is symbol then refitted(Key(name, Op.Colon, lowered(value)), field) else not_lowered(n)

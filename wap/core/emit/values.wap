@@ -17,6 +17,8 @@ class Code {
 
 # a case's tag, the first field of an enum's struct: its place among the cases, from 0
 TAG_FIELD = field_type(I32, IMMUTABLE)
+# the type a plain enum's value fits, one whose cases carry no fields: `==(a: enum, b: enum)` compares their tags
+ENUM_WORD = "enum"
 
 # the GC type of a text: its UTF-8 bytes
 text_type(m: Module) as int := added_type(m, array_type(field_type(I8, MUTABLE)))
@@ -35,8 +37,18 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
-	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
-	_ => if list_index(type_name, m, records) == ø then ø else nullable(list_index(type_name, m, records))
+	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
+	_ => {
+		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records)
+		if index == ø then ø else nullable(index)
+	}
+}
+
+# The GC type of a function value: a struct of what it captures, in the order its type writes them; ø for a type that
+# is none. Its function is the one its type names, called directly.
+function_value_index(type: Node, m: Module, records: list) as int? := {
+	parts = function_value_parts(type)
+	if parts == ø then ø else added_type(m, struct_type(parts[1 ..].map(capture => field_type(layout_of(capture, m, records) ?? refused(capture, "the emitter has no value layout for this capture's type yet"), IMMUTABLE))))
 }
 
 # the GC type of a list, `list<int>`: an array of its items' layout; ø for a type that is no list
@@ -48,8 +60,11 @@ list_index(type: Node, m: Module, records: list) as int? := {
 # its cases, its tag first; a case with fields extends it with them.
 struct_of(record: Node, m: Module, records: list) as int := {
 	fields = field_layouts(fields_of(record), m, records)
-	if cases_of(record) is empty then added_type(m, struct_type(fields)) else added_type(m, open_type([], struct_type([TAG_FIELD] + fields)))
+	if cases_of(record) is empty then added_type(m, struct_type(fields)) else added_type(m, open_type([enum_base(m)], struct_type([TAG_FIELD] + fields)))
 }
+# the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
+enum_base(m: Module) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
+tagged(m: Module) as list := instruction(STRUCT_GET, [enum_base(m), 0])
 field_layouts(fields: list, m: Module, records: list) as list := fields.map(field => field_type(layout_of(declared_type(field), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
 case_struct_of(record: Node, case: Node, m: Module, records: list) as int := {
 	base = struct_of(record, m, records)

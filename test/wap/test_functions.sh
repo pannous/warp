@@ -18,4 +18,42 @@ seen()')" "6"
 check "round brackets group one value" "$(ran group 'x = (7)
 x')" "7"
 check "round brackets around statements run them in order" "$(ran statements '(x = 4; x)')" "4"
+check "a function value passed and called twice" "$(ran twice 'twice(f, x) := f(f(x))
+twice(x => x + 1, 3)')" "5"
+check "a function value reads its function's parameter" "$(ran capture 'add(n: int) := {
+	g = x => x + n
+	g(5)
+}
+add(2)')" "7"
+check "a function value made by a function value keeps what both read" "$(ran nested 'outer(a: int) := {
+	b = 10
+	make = x => (y => x + y + a + b)
+	inner = make(100)
+	inner(1000)
+}
+outer(1)')" "1111"
+check "one function value called with an int and a text" "$(ran poly 'id = x => x
+print id("ab")
+id(3)')" "ab
+3"
+check "a function value of two parameters" "$(ran pair 'sum = (a, b) => a + b
+sum(3, 4)')" "7"
+check "the list words take function values" "$(ran words 'limit = 3
+print text([1, 2].all(x => x < limit))
+print text([1, 5].any(x => x > limit))
+print text(["a", "b"].contains("c"))
+print text([4, 5].contains(5))')" "yes
+yes
+no
+yes"
+check "a function's name passed as a value" "$(ran named 'inc(x: int) := x + 1
+apply(f, x) := f(x)
+print text(apply(inc, 2))
+g = inc
+g(g(5))')" "3
+7"
+check "the list words take a function's name" "$(ran named_words 'is_small(x) := x < 3
+print text([1, 2].all(is_small))
+print text([1, 5].any(is_small))')" "yes
+no"
 exit $((failures > 0))

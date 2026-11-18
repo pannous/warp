@@ -38,6 +38,9 @@ raise(message: text): never := prim raise_text(message)
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
 !=(a: text, b: text): bool := not(a == b)
+# two cases of a plain enum, one whose cases carry no fields, are equal by their tags
+==(a: enum, b: enum): bool := prim tag_equal(a, b)
+!=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
 # a value's text, as a text's holes show it: `"n is ${n}"`
@@ -48,3 +51,20 @@ text(b: bool): text := if b then "yes" else "no"
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes
+
+# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
+all(xs, fits) := {
+	for x in xs { if not fits(x) { return no } }
+	yes
+}
+any(xs, fits) := {
+	for x in xs { if fits(x) { return yes } }
+	no
+}
+contains(xs, item) := xs.any(x => x == item)
+
+# bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
+# (`===` compares the type too)
+==(a: bool, b: bool): bool := if a then b else not(b)
+==(a: int, b: bool): bool := a == (if b then 1 else 0)
+==(a: bool, b: int): bool := b == a

@@ -94,6 +94,7 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 heads_of(n: Node) as list := match n {
 	List(items, bracket, separator) => list_heads(items) + shape_heads(items, bracket, separator) + [NO_HEAD]
 	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
+	Key(left, Op.None, Empty) => EMPTY_GROUPS.flat_map(bracket => glued_heads(left, bracket)) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
 	_ => [NO_HEAD]
 }
@@ -186,16 +187,28 @@ parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
 # A phrase no rule fits whole, whose later word heads a rule that fits from there on, `print match x {…}`: that part
-# is the earlier words' last argument, as in `print -x`, so it groups and is rewritten as one
+# is the earlier words' last argument, as in `print -x`: it groups in round brackets, `print (match x {…})`, a group of
+# one phrase the walk rewrites as one, and the grouping `wap format` prints
 inner_rewritten(rules: Rules, items: list, whole: Node) as Node := {
 	for at in 2 to #items {
-		tail = with_facts_of(List(items[at - 1 ..], Bracket.None, Separator.Space), whole)
-		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, tail) != ø {
-			return List(items[.. at - 1] + [tail], Bracket.None, Separator.Space)
+		part = items[at - 1 ..]
+		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, phrase_placed(part, Bracket.None, whole)) != ø {
+			return List(items[.. at - 1] + [phrase_placed(part, Bracket.Round, whole)], Bracket.None, Separator.Space)
 		}
 	}
 	whole
 }
+
+# words as one phrase in those brackets, where the phrase they come from was written
+phrase_placed(words: list, bracket: Bracket, origin: Node) as Node := with_facts_of(List(words, bracket, Separator.Space), origin)
+
+# code with every grouping a rule head inside a phrase makes written out, nothing rewritten: what `wap format` prints;
+# a rule or pattern line is printed as written
+groupings_written(n: Node) as Node := match n {
+	List(items, Bracket.None, Separator.Space) => if declares(items) then n else with_facts_of(with_parts(inner_rewritten(shape_rules, items, n), groupings_written), n)
+	_ => with_facts_of(with_parts(n, groupings_written), n)
+}
+declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
 # statements with each statement sequence among them, one a rule wrote, `A; B`, joined in its place
 spliced(statements: list) as list := statements.map(statement => match statement { List(items, Bracket.None, Separator.Semicolon) => items; List(items, Bracket.None, Separator.Newline) => items; _ => [statement] }).fold([], (a, b) -> a + b)

@@ -28,10 +28,11 @@ declared_program(program: Node) as Node := {
 	statements = top_level_statements(program).map(declared_statement)
 	declarations = []
 	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
-	used = statements.filter(is_use).map(statement => Text(normalize_path(path_join(dirname(file_of(program) ?? "."), used_path(statement)))))
 	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
-	with_fact(declared, USES, List(used, Bracket.Square, Separator.Comma))
+	with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma))
 }
+# the files a program's `use` lines name, resolved against its own folder: plain notation, readable before any stage
+used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => normalize_path(path_join(dirname(file_of(program) ?? "."), used_path(statement))))
 
 # `use "path"`: a statement that brings in a module, no code
 is_use(statement: Node) as bool := match statement {
@@ -45,21 +46,21 @@ uses_of(program: Node) as list := match fact_of(program, USES) {
 	_ => []
 }
 
-# The modules a program uses, each file declared once by declare_file (read, operators, this stage), the modules they
-# use too, every module after the ones it uses. Modules may use each other: a cycle is cut where it closes, so of two
-# such modules the one reached first runs last.
+# The modules a program uses, each file read once by read_file (text to operated code), the modules they use too,
+# every module after the ones it uses, so their rules are loaded before it is shaped. Modules may use each other: a
+# cycle is cut where it closes, so of two such modules the one reached first runs last.
 class Modules { modules: list; files: list }
-modules_used(program: Node, declare_file: function) as list := {
+modules_used(program: Node, read_file: function) as list := {
 	visited = Modules([], [normalize_path(file_of(program) ?? ".")])
-	modules_visited(program, declare_file, visited)
+	modules_visited(program, read_file, visited)
 	visited.modules
 }
-modules_visited(code: Node, declare_file: function, visited: Modules) := {
-	for file in uses_of(code) {
+modules_visited(code: Node, read_file: function, visited: Modules) := {
+	for file in used_files(code) {
 		if not visited.files.contains(file) {
 			visited.files = visited.files + [file]
-			module = declare_file(file)
-			modules_visited(module, declare_file, visited)
+			module = read_file(file)
+			modules_visited(module, read_file, visited)
 			visited.modules = visited.modules + [module]
 		}
 	}

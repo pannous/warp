@@ -21,4 +21,11 @@ check "a typed variable" "$(ran typed_variable 'x: int = 3
 x')" "3"
 check "two typed parameters" "$(ran two 'first(a: int, b: text) := a
 first(3, "b")')" "3"
+check "a bool beside an int counts as 1 or 0, as == compares loosely" "$(ran loose 'print text(0 == no)
+print text(yes == 1)
+print text(2 == yes)
+print text(no == no)')" "yes
+yes
+no
+yes"
 exit $((failures > 0))
