@@ -19,21 +19,45 @@ enum Node {
 	Type(name: Node, body: Node)
 }
 
-# the place of a Meta node's line and column in its data, the facts after them
-META_LINE = 1
-META_COLUMN = 2
-META_FACTS = 3
+# The operators a node carries, each its own value:
+# `Op.Add as text` is "+", `"+" as Op` is Add
+enum Op {
+	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
+	Add, Sub, Mul, Div, FloorDiv, Mod, Rem /*todo (card remainder-as-mod-alias) map Remainder to mod at alias level and get rid of it*/, Pow, LogBase, LogOf, Shl, Shr
+	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
+	Lt, Gt, Le, Ge, Eq, Is, Ne, Identical, NotIdentical, Similar, Rough
+	And, Or, Xor, Not, BitAnd, BitOr
+	Neg, Sqrt, Cbrt, Abs /*unused: √ ∛ ‖ ‖ call functions; kept while the seed's op codes have them, card remove-unused*/, Inc, Dec, Question
+	If, Then, Else, While, Do
+	Hash, Range, To, As, PlusMinus
+	None
+	# any other operator, `a ⊕ b` of key(a, "⊕", b): its spelling is its own (`op as text` is "⊕"), each joining the
+	# runtime's spellings at its first use (card enum-op-should)
+	Other
+}
+
+# A list's bracket: `Bracket.Square as text` is "[", an unbracketed list's None is ""
+enum Bracket { Curly, Square, Round, Less, None }
+
+# A list's separator: `Separator.Comma as text` is ","
+enum Separator { Space, Comma, Semicolon, Newline, Tab, None }
+
+# the place of a Meta node's line and column in its data, the facts after them (the preload holds definitions only,
+# so its constants are functions of nothing)
+meta_line(): int := 1
+meta_column(): int := 2
+meta_facts(): int := 3
 # a node marked with facts but written nowhere has line 0, so no position
-NO_LINE = 0
+no_line(): int := 0
 
 # the symbol of a name: `symbol("x")` is the word x
 symbol(name: text): Node := Symbol(name)
 
 # where n was written, ø for a node without a position
-line_of(n: Node) := written_part(n, META_LINE)
-column_of(n: Node) := written_part(n, META_COLUMN)
+line_of(n: Node) := written_part(n, meta_line())
+column_of(n: Node) := written_part(n, meta_column())
 written_part(n: Node, place: int) := match n {
-	Meta(node, List(data, bracket, separator)) => if number_in(data#META_LINE) == NO_LINE then ø else number_in(data#place)
+	Meta(node, List(data, bracket, separator)) => if number_in(data#meta_line()) == no_line() then ø else number_in(data#place)
 	_ => ø
 }
 number_in(n: Node) := match n {
@@ -45,12 +69,22 @@ positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_dat
 
 # the facts a stage marked n with, and n with one more
 attributes_of(n: Node): list := match n {
-	Meta(node, List(data, bracket, separator)) => data[META_FACTS - 1 ..]
+	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
+}
+# a Meta's data past its line and column
+facts_in(data: list): list := {
+	facts: list<Node> = []
+	at = meta_facts() - 1
+	while at < #data {
+		at += 1
+		facts = facts + [data#at]
+	}
+	facts
 }
 with_attribute(n: Node, fact: Node): Node := match n {
 	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
-	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
+	_ => Meta(n, meta_data(no_line(), no_line(), [fact]))
 }
 
 # the node a Meta wraps, any other node itself
