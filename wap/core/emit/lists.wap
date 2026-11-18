@@ -21,6 +21,8 @@ LIST_ADD = "list_add"
 LIST_COUNT = "list_count"
 MAP_GET = "map_get"
 MAP_SET = "map_set"
+# a map's keys: its list of them itself, not a copy
+MAP_KEYS_WORD = "map_keys"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
