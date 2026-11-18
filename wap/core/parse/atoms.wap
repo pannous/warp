@@ -1,0 +1,225 @@
+# Pass 1 of the reader (core/parse/reader.wap): text → atom tokens, names, URLs, operator glyphs, numbers and texts
+# with their holes of code, and the character classes that tell a word from an operator.
+
+use "lexemes.wap"
+use "layout.wap"
+# a text's holes are code, read token by token as the reader reads (reader.wap read_token)
+use "reader.wap"
+
+QUOTES = "\"'`“‘«"
+QUOTE_CLOSERS = "\"'`”’»"
+# the quote whose text is taken as written, escapes and all
+RAW_QUOTE = '«'
+# escapes read as the character after the backslash, and those that become another character
+ESCAPED_AS_IS = "\\\"'`/" + «$(»
+ESCAPE_LETTERS = "ntre0"
+ESCAPE_CHARACTERS = ["\n", "\t", "\r", "\e", "\u{0}"]
+# escapes later rules read, kept with their backslash: an extension's `\:alpha` and `\:U+12C00`
+LATER_ESCAPES = «{:»
+# the quotes whose texts take holes of code, `"a ${x} b"`, `"a \(x) b"` (wiki/string.md), and what each hole opens
+# and closes with
+INTERPOLATING_QUOTES = "\"`"
+HOLE_OPENERS = [«${», "\\("]
+HOLE_CLOSERS = ["}", ")"]
+# the function a hole's value is given to, its text joining the text's pieces
+TEXT_WORD = "text"
+# operator glyphs beyond ASCII that no range below holds; `∞` and `∅` are name characters
+OTHER_GLYPHS = "¬±×÷·‖…′″"
+# operator glyph ranges beyond ASCII: superscripts and subscripts, arrows, math operators, technical
+GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], ['∟', '⌙'], ['¹', '¹'], ['²', '³']]
+# what starts a hole, `$c`
+HOLE_SIGN = "$"
+# what ends a rest hole, `$items...` (first_principles.md "Holes")
+REST_MARK = "..."
+# what ends a URL: a blank, a bracket, a separator or a quote
+URL_ENDS = " \t\n\r()[]{},;\"'`"
+
+# ── atoms ──
+
+# a run of name characters: a word, `$hole` and `π` included; a rest hole `$items...` is one word, its dots no glyphs
+name_read(r: Reader) := {
+	end = r.at
+	while end < r.n and is_name_char(r.code[end]) { end += 1 }
+	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
+	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
+	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+}
+
+# A word glued to `://` begins a URL, `http://x.com/a?b=1`, any scheme alike: one Text up to the next blank,
+# bracket or separator, as today's warp reads it (reader.md §6, URLs)
+url_read(r: Reader, from: int) := {
+	end = from
+	while end < r.n and not URL_ENDS.contains(r.code[end]) { end += 1 }
+	token(r, LexemeKind.Atom, Text(slice_of(r, r.at, end)), end - r.at)
+}
+
+# operator glyphs: one glyph, joined with its repeats and one `=` after them (`==` `<=` `...` `**=`), Q5
+glyphs_read(r: Reader, c: text) := {
+	end = r.at + 1
+	while end < r.n and r.code[end] == c { end += 1 }
+	if end < r.n and r.code[end] == '=' and c != '=' { end += 1 }
+	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+}
+
+# `12`, `-3`, `1_000`, `3.5`, `3.`, `1e-3`, `0xFF`: an int, or a float when it has a point or a negative exponent
+number_read(r: Reader) := {
+	end = r.at
+	sign = ""
+	if r.code[end] == '-' or r.code[end] == '+' { sign = r.code[end]; end += 1 }
+	if r.code[end] == '0' and (peek_at(r, end + 1) == 'x' or peek_at(r, end + 1) == 'X') { return hex_read(r, sign, end + 2) }
+	digits = digits_end(r, end)
+	written = slice_of(r, end, digits)
+	end = digits
+	is_float = no
+	after = peek_at(r, end + 1)
+	if peek_at(r, end) == '.' and (is_digit(after) or after != '.' and not is_name_char(after)) {
+		end += 1
+		fraction = digits_end(r, end)
+		written += "." + (if fraction > end then slice_of(r, end, fraction) else "0")
+		end = fraction
+		is_float = yes
+	}
+	if end + 1 < r.n and (r.code[end] == 'e' or r.code[end] == 'E') {
+		exponent_sign = r.code[end + 1]
+		signed = (exponent_sign == '-' or exponent_sign == '+') and end + 2 < r.n and is_digit(r.code[end + 2])
+		if is_digit(exponent_sign) or signed {
+			start = end + (if signed then 2 else 1)
+			exponent = digits_end(r, start)
+			# 1e3 is the int 1000, as written out; 1e-3 and 1.5e3 are floats
+			is_float = is_float or exponent_sign == '-'
+			written += if is_float then "e" + (if signed then exponent_sign else "") + slice_of(r, start, exponent) else "0" * int(slice_of(r, start, exponent))
+			end = exponent
+		}
+	}
+	written = (if sign == '-' then "-" else "") + written.replace("_", "")
+	token(r, LexemeKind.Atom, Number(if is_float then float(written) else whole(written)), end - r.at)
+}
+
+# after the digits from `at` on, `_` between two digits included
+digits_end(r: Reader, at: int) as int := {
+	while at < r.n and (is_digit(r.code[at]) or r.code[at] == '_' and at + 1 < r.n and is_digit(r.code[at + 1])) { at += 1 }
+	at
+}
+
+hex_read(r: Reader, sign: text, from: int) := {
+	end = from
+	while end < r.n and (is_hex_digit(r.code[end]) or r.code[end] == '_') { end += 1 }
+	value = hex_number(slice_of(r, from, end).replace("_", ""))
+	token(r, LexemeKind.Atom, Number(if sign == '-' then 0 - value else value), end - r.at)
+}
+
+# an int as written, a float beyond the range of an int
+whole(written: text) as number := if written.length > 18 then number(written) else int(written)
+
+# A text in quotes, its escapes read (`«…»` holds everything as written); one character is a Char. In a text that
+# takes holes, each hole is code the reader reads in place, and the text is its pieces joined: `"a ${x} b"` reads as
+# `("a " + text(x) + " b")`, so every later stage reads the hole as the code it is (notes/reader.md Q8)
+quoted(r: Reader, quote: text) := {
+	closer = QUOTE_CLOSERS[QUOTES.find(quote) - 1]
+	start = r.at
+	start_line = r.line
+	start_column = column(r)
+	at = r.at + 1
+	parts = []
+	copied = at
+	pieces = -1
+	while at < r.n and r.code[at] != closer {
+		hole_closer = if INTERPOLATING_QUOTES.contains(quote) then hole_closer_at(r, at) else ø
+		if hole_closer != ø {
+			if pieces < 0 { bracket_opened(r, "(", 0); pieces = 0 }
+			r.at = at
+			pieces = piece_added(r, Text((parts + [slice_of(r, copied, at)]).join("")), pieces)
+			at = hole_read(r, hole_closer, pieces)
+			if r.error != "" { return ø }
+			pieces += 1
+			parts = []
+			copied = at
+		} else if r.code[at] == '\n' {
+			r.line += 1
+			r.line_start = at + 1
+			at += 1
+		} else if r.code[at] == '\\' and quote != RAW_QUOTE {
+			escape = escaped(r, at)
+			if escape == ø { r.at = at; return failed(r, "a backslash escape the reader does not know") }
+			parts += [slice_of(r, copied, at), escape#1]
+			at += escape#2
+			copied = at
+		} else { at += 1 }
+	}
+	if at >= r.n { return failed_at(r, "this text is never closed", start_line, start_column) }
+	content = (parts + [slice_of(r, copied, at)]).join("")
+	if pieces >= 0 {
+		last_of(r.opened).written = slice_of(r, start, at + 1)
+		r.at = at
+		piece_added(r, Text(content), pieces)
+		return bracket_closed(r, ")")
+	}
+	node: Node = if content.length == 1 then content#1 as codepoint else Text(content)
+	added(r, LexemeKind.Atom, node, start_line, start_column, at + 1)
+}
+# what closes the hole that opens at `at`, ø for none
+hole_closer_at(r: Reader, at: int) as text? := {
+	for i in 1 to HOLE_OPENERS.length { if slice_of(r, at, min(at + 2, r.n)) == HOLE_OPENERS#i { return HOLE_CLOSERS#i } }
+	ø
+}
+# a piece of a text with holes, joined by `+` to those before it; an empty text is no piece. The pieces so far after it
+piece_added(r: Reader, piece: Node, pieces: int) as int := {
+	if piece == Text("") { return pieces }
+	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	r.blank = yes
+	token(r, LexemeKind.Atom, piece, 0)
+	pieces + 1
+}
+# the hole at the reader's place read as `text(…)`, its code as any code is read, up to its closer; where the text
+# goes on after it
+hole_read(r: Reader, hole_closer: text, pieces: int) as int := {
+	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	r.blank = yes
+	token(r, LexemeKind.Atom, Symbol(TEXT_WORD), 0)
+	bracket_opened(r, "(", 2)
+	depth = r.opened.length
+	while r.at < r.n and r.error == "" and not (r.code[r.at] == hole_closer and r.opened.length == depth) { read_token(r) }
+	if r.at >= r.n { failed(r, "this hole of a text is never closed") }
+	if r.error != "" { return r.at }
+	bracket_closed(r, ")")
+	r.at
+}
+
+# the escape at the backslash `at`: [what it reads as, the characters it takes], ø for an unknown one
+escaped(r: Reader, at: int) as list? := {
+	c = if at + 1 < r.n then r.code[at + 1] else ""
+	if ESCAPED_AS_IS.contains(c) { return [c, 2] }
+	if ESCAPE_LETTERS.contains(c) { return [ESCAPE_CHARACTERS[ESCAPE_LETTERS.find(c) - 1], 2] }
+	if LATER_ESCAPES.contains(c) { return ["\\" + c, 2] }
+	if c == 'x' and at + 3 < r.n and is_hex_digit(r.code[at + 2]) and is_hex_digit(r.code[at + 3]) {
+		return [hex_number(slice_of(r, at + 2, at + 4)) as codepoint, 4]
+	}
+	if c == 'u' and peek_at(r, at + 2) == '{' {
+		end = at + 3
+		while end < r.n and is_hex_digit(r.code[end]) { end += 1 }
+		if end > at + 3 and peek_at(r, end) == '}' { return [hex_number(slice_of(r, at + 3, end)) as codepoint, end + 1 - at] }
+	}
+	ø
+}
+
+hex_number(digits: text) as int := {
+	value = 0
+	for digit in digits { value = value * 16 + "0123456789abcdef".find(digit.lower()) - 1 }
+	value
+}
+
+# ── character classes: the only thing that tells a word from an operator ──
+
+# ASCII punctuation but brackets, quotes, separators and the name characters `_` `$`, and the glyphs beyond ASCII
+is_glyph(c: text) as bool := {
+	if c <= '~' { return c > ' ' and not is_alpha(c) and not is_digit(c) and not «_$()[]{}"'`,;».contains(c) }
+	if OTHER_GLYPHS.contains(c) { return yes }
+	for range in GLYPH_RANGES { if c >= range#1 and c <= range#2 { return yes } }
+	no
+}
+
+# letters, digits, `_`, `$`, and every character beyond ASCII that is no glyph, quote or blank
+is_name_char(c: text) as bool := {
+	if c <= '~' { return is_alpha(c) or is_digit(c) or c == '_' or c == '$' }
+	not is_glyph(c) and not QUOTES.contains(c) and not QUOTE_CLOSERS.contains(c) and c != '\u{a0}'
+}
