@@ -10,8 +10,8 @@ use "../../kernel/forms.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
-# the word of an optional value known present, `x!`: its value, raising when it is missing (wiki/optional.md)
-REQUIRED_WORD = "required"
+# the word of an optional value known present, `x!` (named required): its value, raising when it is missing
+REQUIRED_WORD = "!"
 
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types

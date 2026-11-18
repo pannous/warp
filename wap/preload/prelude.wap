@@ -83,9 +83,9 @@ text(x: float): text := float_text(x)
 ===(a: T, b: T): bool := a == b
 ===(a, b): bool := no
 !==(a, b): bool := not(a === b)
-# optional values, T?: a T or ø (wiki/optional.md); required(x), `x!`, is x's value, raising when x is missing
+# optional values, T?: a T or ø (wiki/optional.md); `x!` is x's value, raising when x is missing
 missing(x: T?): bool := prim ref_is_null(x)
-required(x: T?): T := prim optional_value(x)
-==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and required(a) == required(b)
+!(x: T?): T := prim optional_value(x)
+==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and a! == b!
 !=(a: T?, b: T?): bool := not(a == b)
-??(a: T?, b: T): T := if missing(a) then b else required(a)
+??(a: T?, b: T): T := if missing(a) then b else a!

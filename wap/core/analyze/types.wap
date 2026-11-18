@@ -140,7 +140,7 @@ function_key_of(definition: Node) as text := place_key(declared_name(written_nam
 
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
-# An optional variable tested, `if x != ø`, is its value in the arm where it is present, `required(x)`.
+# An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`.
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	tested = condition_typed(condition, s, f)
 	present = present_tested(condition)
