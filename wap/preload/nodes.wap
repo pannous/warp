@@ -48,6 +48,8 @@ META_COLUMN := 2
 META_FACTS := 3
 # a node marked with facts but written nowhere has line 0, so no position
 NO_LINE := 0
+# a Data node's text: its value has no text of its own type
+DATA_TEXT := "data"
 # the text of the case Other, which no node carries: it stands for every spelling no other case has, `⊕`
 OTHER_SPELLING := "·other"
 
@@ -167,4 +169,59 @@ text(op: Op): text := match op {
 	Op.PlusMinus => "±"
 	Op.None => ""
 	Op.Other => OTHER_SPELLING
+}
+
+# A node's text as warp's runtime prints it (core/runtime/show.warp node_text): a word, a text or a character itself,
+# a number its digits, a key `a: 1`, `f(x)`, `a+b`, `a and b`, a list between its brackets, its items as code
+text(n: Node): text := match n {
+	True => "yes"
+	False => "no"
+	Empty => "ø"
+	Number(value) => number_text(value)
+	Char(value) => text(value)
+	Text(value) => value
+	Symbol(name) => name
+	Error(node) => text(node)
+	Key(left, op, right) => key_text(left, op, right)
+	List(items, bracket, separator) => opening(bracket) + items.map(code).join(joiner(separator)) + closing(bracket)
+	Data(value) => DATA_TEXT
+	Meta(node, data) => text(node)
+	Type(name, body) => "type " + text(name) + " " + text(body)
+}
+number_text(value: number): text := if value is int then text(value) else text(value)
+# `a: 1` with a space after the colon, a word operator between spaces, any other written against its operands
+key_text(left: Node, op: Op, right: Node): text := {
+	spelling = text(op)
+	if op == Op.Colon { return code(left) + spelling + " " + code(right) }
+	if spelling != "" and is_alpha(spelling[0 .. 1]) { return code(left) + " " + spelling + " " + code(right) }
+	code(left) + spelling + code(right)
+}
+# a node as code: a text quoted, a character in single quotes, any other node as its text
+code(n: Node): text := match n {
+	Text(value) => show(value)
+	Char(value) => show(value)
+	Meta(node, data) => code(node)
+	_ => text(n)
+}
+opening(bracket: Bracket): text := match bracket {
+	Bracket.Curly => "{"
+	Bracket.Square => "["
+	Bracket.Round => "("
+	Bracket.Less => "<"
+	Bracket.None => ""
+}
+closing(bracket: Bracket): text := match bracket {
+	Bracket.Curly => "}"
+	Bracket.Square => "]"
+	Bracket.Round => ")"
+	Bracket.Less => ">"
+	Bracket.None => ""
+}
+joiner(separator: Separator): text := match separator {
+	Separator.Space => " "
+	Separator.Comma => ", "
+	Separator.Semicolon => "; "
+	Separator.Newline => "\n"
+	Separator.Tab => "\t"
+	Separator.None => ""
 }
