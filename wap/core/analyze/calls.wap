@@ -228,11 +228,11 @@ ENUM_TYPE = "enum"
 BARE_KINDS = [LIST_TYPE, FUNCTION_WORD, ENUM_TYPE]
 # a kind's bare word, or an optional of one: `list`, `enum?`
 names_bare_kind(type: Node?) as bool := {
-	word = base_of_optional(type) ?? type
+	word = base_or_self(type)
 	word != ø and word is symbol and BARE_KINDS.contains(text(word))
 }
 # the type a refusal asks to write in full: `list<…>` for a bare list, else an example
-full_type_hint(written: Node?) as text := if names_bare_kind(written) then text(base_of_optional(written) ?? written) + "<…>" else "int"
+full_type_hint(written: Node?) as text := if names_bare_kind(written) then text(base_or_self(written)) + "<…>" else "int"
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and reads_as(wanted, value_type(argument))
 # types as a message names them, `int, text?`
