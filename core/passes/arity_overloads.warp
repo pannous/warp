@@ -773,8 +773,9 @@ within(judge: ArgumentJudge, n: Node) as ArgumentJudge := {
 	for name in own.keys { variables[name] = own[name] }
 	# a parameter declaring its type has that kind: `make(db: any, name: text) := run(db, name)` passes a text
 	for parameter in declared_parameters(n) { variables[parameter.name] = [overload_kinds[parameter.type_name], ø] }
-	# (a parameter hides the program's function of its name: `go(items: list) := items.map(f)` beside an items(m))
-	ArgumentJudge(variables, without_keys(judge.own, parameters), judge.least, judge.program)
+	# (a name bound inside hides the program's function of its name: `go(items: list) := items.map(f)` or a case
+	# `List(items, …): items.map(f)` beside an items(m))
+	ArgumentJudge(variables, without_keys(judge.own, bound_at(n)), judge.least, judge.program)
 }
 # top-down, so a definition is renamed by its own parameter types
 typed_resolved(n: Node, overloaded: map, judge: ArgumentJudge) as Node := {
