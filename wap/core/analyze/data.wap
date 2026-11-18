@@ -8,6 +8,7 @@ use "../../kernel/forms.wap"
 use "calls.wap"
 use "fits.wap"
 use "letters.wap"
+use "function_values.wap"
 
 # the counting from 0 that `x[k]` writes, as the place k + 1
 PLUS = "+"
@@ -64,14 +65,14 @@ spread_typed(n: Node, items: list, separator: Separator, s: TypingState, f: Type
 # `[[1], []]` is a list<list<int>> and settles the empty list's item type
 common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	if wanted != ø and all_fit(values, wanted, s) { return wanted }
-	types = values.map(value_type).filter(type => type != ø)
+	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).filter(type => type != ø)
 	for type in types.filter(type => not has_unknowns(type)) + types.filter(has_unknowns) { if all_fit(values, type, s) { return type } }
 	value_type(values#1)
 }
-# a value as the type its place holds reads it: a char beside texts its text
-read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else value
+# a value as the type its place holds reads it: a char beside texts its text, a function value where a function type is
+read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else as_function_type(value, type, s) ?? value
 # each value fits the wanted type, settling the unknowns it holds: `[]` fits list<int>
-all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => gives_fitting(value, wanted) or reads_as(wanted, value_type(value)) or value_type(value) != ø and settles(value_type(value), wanted, s))
+all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => gives_fitting(value, wanted) or reads_as(wanted, value_type(value)) or value_type(value) != ø and settles(value_type(value), wanted, s) or as_function_type(value, wanted, s) != ø)
 
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
 # place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>
