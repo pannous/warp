@@ -30,12 +30,18 @@ QUOTE_CLOSERS = "\"'`”’»"
 # the quote whose text is taken as written, escapes and all
 RAW_QUOTE = '«'
 # escapes read as the character after the backslash, and those that become another character
-ESCAPED_AS_IS = "\\\"'`/"
+ESCAPED_AS_IS = "\\\"'`/" + «$(»
 ESCAPE_LETTERS = "ntre0"
 ESCAPE_CHARACTERS = ["\n", "\t", "\r", "\e", "\u{0}"]
-# escapes later rules read, kept with their backslash: a template's holes (notes/reader.md Q8), an extension's
-# `\:alpha` and `\:U+12C00`
-LATER_ESCAPES = «$({:»
+# escapes later rules read, kept with their backslash: an extension's `\:alpha` and `\:U+12C00`
+LATER_ESCAPES = «{:»
+# the quotes whose texts take holes of code, `"a ${x} b"`, `"a \(x) b"` (wiki/string.md), and what each hole opens
+# and closes with
+INTERPOLATING_QUOTES = "\"`"
+HOLE_OPENERS = [«${», "\\("]
+HOLE_CLOSERS = ["}", ")"]
+# the function a hole's value is given to, its text joining the text's pieces
+TEXT_WORD = "text"
 # operator glyphs beyond ASCII that no range below holds; `∞` and `∅` are name characters
 OTHER_GLYPHS = "¬±×÷·‖…′″"
 # operator glyph ranges beyond ASCII: superscripts and subscripts, arrows, math operators, technical
@@ -52,7 +58,7 @@ HASH_COMMENT_FOLLOWERS = " \t\n!#"
 # a token: an atom (its node; a bracket's list has its bracket), an opening or closing bracket, a separator or a key's
 # `:` or `=` (its op), with the blank before it
 enum LexemeKind { Atom, Open, Close, Separator, Key }
-class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon }
+class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon; written: text = "" }
 
 class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty; angle_closers: list<int> = [] }
 
@@ -433,18 +439,34 @@ hex_read(r: Reader, sign: text, from: int) := {
 # an int as written, a float beyond the range of an int
 whole(written: text) as number := if written.length > 18 then number(written) else int(written)
 
-# A text in quotes, its escapes read (`«…»` holds everything as written); one character is a Char. A template's
-# `${…}` holes stay in the text for a later rule (Q8)
+# A text in quotes, its escapes read (`«…»` holds everything as written); one character is a Char. In a text that
+# takes holes, each hole is code the reader reads in place, and the text is its pieces joined: `"a ${x} b"` reads as
+# `("a " + text(x) + " b")`, so every later stage reads the hole as the code it is (notes/reader.md Q8)
 quoted(r: Reader, quote: text) := {
 	closer = QUOTE_CLOSERS[QUOTES.find(quote) - 1]
+	start = r.at
 	start_line = r.line
 	start_column = column(r)
 	at = r.at + 1
 	parts = []
 	copied = at
+	pieces = -1
 	while at < r.n and r.code[at] != closer {
-		if r.code[at] == '\n' { r.line += 1; r.line_start = at + 1 }
-		if r.code[at] == '\\' and quote != RAW_QUOTE {
+		hole_closer = if INTERPOLATING_QUOTES.contains(quote) then hole_closer_at(r, at) else ø
+		if hole_closer != ø {
+			if pieces < 0 { bracket_opened(r, "(", 0); pieces = 0 }
+			r.at = at
+			pieces = piece_added(r, Text((parts + [slice_of(r, copied, at)]).join("")), pieces)
+			at = hole_read(r, hole_closer, pieces)
+			if r.error != "" { return ø }
+			pieces += 1
+			parts = []
+			copied = at
+		} else if r.code[at] == '\n' {
+			r.line += 1
+			r.line_start = at + 1
+			at += 1
+		} else if r.code[at] == '\\' and quote != RAW_QUOTE {
 			escape = escaped(r, at)
 			if escape == ø { r.at = at; return failed(r, "a backslash escape the reader does not know") }
 			parts += [slice_of(r, copied, at), escape#1]
@@ -454,8 +476,41 @@ quoted(r: Reader, quote: text) := {
 	}
 	if at >= r.n { return failed_at(r, "this text is never closed", start_line, start_column) }
 	content = (parts + [slice_of(r, copied, at)]).join("")
+	if pieces >= 0 {
+		last_of(r.opened).written = slice_of(r, start, at + 1)
+		r.at = at
+		piece_added(r, Text(content), pieces)
+		return bracket_closed(r, ")")
+	}
 	node: Node = if content.length == 1 then content#1 as codepoint else Text(content)
 	added(r, LexemeKind.Atom, node, start_line, start_column, at + 1)
+}
+# what closes the hole that opens at `at`, ø for none
+hole_closer_at(r: Reader, at: int) as text? := {
+	for i in 1 to HOLE_OPENERS.length { if slice_of(r, at, min(at + 2, r.n)) == HOLE_OPENERS#i { return HOLE_CLOSERS#i } }
+	ø
+}
+# a piece of a text with holes, joined by `+` to those before it; an empty text is no piece. The pieces so far after it
+piece_added(r: Reader, piece: Node, pieces: int) as int := {
+	if piece == Text("") { return pieces }
+	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	r.blank = yes
+	token(r, LexemeKind.Atom, piece, 0)
+	pieces + 1
+}
+# the hole at the reader's place read as `text(…)`, its code as any code is read, up to its closer; where the text
+# goes on after it
+hole_read(r: Reader, hole_closer: text, pieces: int) as int := {
+	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	r.blank = yes
+	token(r, LexemeKind.Atom, Symbol(TEXT_WORD), 0)
+	bracket_opened(r, "(", 2)
+	depth = r.opened.length
+	while r.at < r.n and r.error == "" and not (r.code[r.at] == hole_closer and r.opened.length == depth) { read_token(r) }
+	if r.at >= r.n { failed(r, "this hole of a text is never closed") }
+	if r.error != "" { return r.at }
+	bracket_closed(r, ")")
+	r.at
 }
 
 # the escape at the backslash `at`: [what it reads as, the characters it takes], ø for an unknown one
@@ -531,6 +586,7 @@ bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	items = level_items(parts)
 	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
 	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
+	if opener.written != "" { written = with_fact(written, WRITTEN, Text(opener.written)) }
 	if opener.bracket == Bracket.Curly then with_duplicates_warned(written, items) else written
 }
 
