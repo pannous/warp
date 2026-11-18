@@ -50,6 +50,7 @@ PASSIVE_SEGMENT = 0x01
 DATA_ALIGNMENT = 8
 
 # Instructions, each its opcode bytes; `instruction(opcode, indices)` adds the unsigned immediates it takes.
+UNREACHABLE = [0x00]
 BLOCK = [0x02]
 LOOP = [0x03]
 IF = [0x04]
