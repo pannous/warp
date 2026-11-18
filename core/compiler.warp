@@ -126,6 +126,8 @@ said_aloud(found: list) := said_again(said_at(found, Level.Warning, module.progr
 global said_warnings = []
 global said_hints = []
 said_again(warnings: list, hints: list) := {
+	global said_warnings
+	global said_hints
 	said_warnings += warnings
 	said_hints += hints
 	for warning in warnings { warn warning }

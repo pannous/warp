@@ -43,6 +43,8 @@ warp_command(words: text) as text := {
 global questions_asked = []
 global asking_recorded = ø
 asked(module: text, member: text, arguments: list) := {
+	global questions_asked
+	global asking_recorded
 	answer = std_io(module, member, arguments)
 	if asking_recorded == ø { asking_recorded = (std_io("warp", "option", ["cache"]) ?? "") != "" }
 	if asking_recorded { questions_asked += [[text(answer_fingerprint(answer)), module, member] + arguments.map(argument => text(argument))] }
