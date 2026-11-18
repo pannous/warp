@@ -70,4 +70,12 @@ print text(twice(y => y * 3, 2))
 print twice(t => t + "!", "ab")')" "5
 18
 ab!!"
+# a definition without parameters is a constant: its name where no function is wanted is its value
+check "a constant's name is its value" "$(ran constant 'n := 5
+twice(x: int) := x * 2
+print text(n + 1)
+print text(twice(n))')" "6
+10"
+check "-> writes a function value as => does (wiki: both arrows denote lambdas)" "$(ran arrow 'g = (a, b) -> a + b
+print text(g(1, 2))')" "3"
 exit $((failures > 0))

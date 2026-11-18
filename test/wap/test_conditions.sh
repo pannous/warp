@@ -34,4 +34,10 @@ check "a statement guarded after it" "$(ran postfix 'print "shown" if yes
 print "hidden" if no
 print "end"')" "shown
 end"
+check "an else on the next line continues the if" "$(ran else_line 'c = no
+if c {
+	print "a"
+}
+else if not c { print "d" }
+else { print "e" }')" "d"
 exit $((failures > 0))

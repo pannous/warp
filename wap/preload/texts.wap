@@ -68,6 +68,20 @@ find(t: text, part: text): int := {
 	0
 }
 contains(t: text, part: text): bool := find(t, part) > 0
+# t with each place of a part given another text: `"a-b-c".replace("-", "+")` is "a+b+c"
+replace(t: text, part: text, other: text): text := {
+	out = ""
+	start = 0
+	at = 0
+	while at <= byte_count(t) - byte_count(part) {
+		if byte_count(part) > 0 and bytes_match_at(t, part, at) {
+			out = out + bytes_between(t, start, at) + other
+			at += byte_count(part)
+			start = at
+		} else { at += 1 }
+	}
+	out + bytes_between(t, start, byte_count(t))
+}
 
 # texts in byte order, which is code point order: `"a" < "b"`
 <(a: text, b: text): bool := compared(a, b) < 0
