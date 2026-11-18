@@ -15,4 +15,6 @@ check "a node's text, as warp prints it" "$(ran node_text 'a = symbol("a")
 print "${a} ${Key(a, Op.Colon, Number(1))} ${Key(symbol("f"), Op.None, List([a], Bracket.Round, Separator.Comma))} ${Key(a, Op.Add, a)} ${Key(a, Op.And, a)}"
 print text(List([Text("x"), Number(2.5)], Bracket.Square, Separator.Comma)) + " " + text(List([a, a], Bracket.Curly, Separator.Semicolon))')" "a a: 1 f(a) a+a a and a
 [\"x\", 2.5] {a; a}"
+check "two nodes are equal wherever they were written" "$(ran node_equal 'x = symbol("x")
+print text(positioned(x, 4, 2) == x) + " " + text([positioned(x, 1, 1)] == [x]) + " " + text(Key(positioned(x, 2, 2), Op.Add, x) == Key(x, Op.Add, x)) + " " + text(x == Text("x")) + " " + text(positioned(x, 1, 1) != symbol("y"))')" "yes yes yes no yes"
 exit $((failures > 0))

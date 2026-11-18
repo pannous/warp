@@ -17,6 +17,13 @@ in(x: T, xs: list<T>): bool := xs.contains(x)
 
 # how many items a list holds: `xs.count`, also written `xs.length` or `xs.size`
 count(xs: list<T>): int := #xs
+# two lists are equal when their items are, in order, each pair by its own type's ==
+==(xs: list<T>, ys: list<T>): bool := {
+	if #xs != #ys { return no }
+	for at in 1 to #xs { if xs#at != ys#at { return no } }
+	yes
+}
+!=(xs: list<T>, ys: list<T>): bool := not(xs == ys)
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
 +(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
 # an item put at the end of a list, which grows in place: every name holding it sees the item

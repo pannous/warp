@@ -259,7 +259,7 @@ same_code(a: Node, b: Node): bool := match a {
 		_ => no
 	}
 	List(items, bracket, separator) => match b {
-		List(other_items, other_bracket, other_separator) => bracket == other_bracket and separator == other_separator and same_items(items, other_items)
+		List(other_items, other_bracket, other_separator) => bracket == other_bracket and separator == other_separator and items == other_items
 		_ => no
 	}
 	Type(name, body) => match b {
@@ -267,9 +267,4 @@ same_code(a: Node, b: Node): bool := match a {
 		_ => no
 	}
 	_ => prim tag_equal(a, b)
-}
-same_items(xs: list<Node>, ys: list<Node>): bool := {
-	if #xs != #ys { return no }
-	for at in 1 to #xs { if xs#at != ys#at { return no } }
-	yes
 }
