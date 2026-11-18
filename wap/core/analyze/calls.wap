@@ -63,7 +63,13 @@ candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø t
 	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items })
 	_ => [[defined_at(called)]]
 }
-definition_at(definer: Node, s: TypingState) as Node := definition_keyed(place_key(definer), s) ?? refused(definer, "the typing stage found no definition here")
+# the definition a defining name means: its own, or, for the name of a function typed already (a call typed again),
+# the definition that typed function came from, so typing a typed form again changes nothing
+definition_at(definer: Node, s: TypingState) as Node := definition_keyed(place_key(definer), s) ?? definition_keyed(typed_from(place_key(definer), s), s) ?? refused(definer, "the typing stage found no definition here")
+typed_from(key: text, s: TypingState) as text := {
+	for typed in s.functions { if place_key(declared_name(typed.signed)) == key { return typed.key } }
+	""
+}
 definition_keyed(key: text, s: TypingState) as Node? := {
 	for definition in s.definitions { if function_key_of(definition) == key { return definition } }
 	ø
