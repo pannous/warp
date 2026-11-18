@@ -206,9 +206,12 @@ does_as(definition: Node, given: Node, arity: int) as bool := {
 
 # whether an argument fits a parameter, exactly or by a conversion: a char read as its text, a T or ø as a T?
 fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted) or type_fits(value_type(argument), wanted)
-fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
+fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_function(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
 # a bare `list` wanted, which every list<T> fits
 any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
+# a bare `function` wanted, which every function value fits
+FUNCTION_WORD = "function"
+any_function(wanted: Node, given: Node?) as bool := wanted == symbol(FUNCTION_WORD) and function_value_parts(given) != ø
 # a bare `enum` wanted, which any enum fits: tag_equal compares tags, then a case's fields
 ENUM_TYPE = "enum"
 any_enum(wanted: Node, given: Node?, records: list) as bool := {
@@ -263,9 +266,9 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
 parameter_type(written: Node?, given: Node, letters: list, records: list) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
-# whether a parameter of this written type is typed anew for each type given: a bare `list` or `enum`, which take any
-# list or enum, a function type, whose function values each type it, and a protocol
-takes_own_type(written: Node, records: list) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or function_type_parts(written) != ø or protocol_named(records, written) != ø
+# whether a parameter of this written type is typed anew for each type given: a bare `list`, `enum` or `function`,
+# which take any list, enum or function value, a function type, whose function values each type it, and a protocol
+takes_own_type(written: Node, records: list) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or function_type_parts(written) != ø or protocol_named(records, written) != ø
 parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 	frame.variables += [[place_key(declared_name(parameter)), type]]
 	with_name_fact(parameter, TYPE, type)

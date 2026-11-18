@@ -112,4 +112,6 @@ check "a field's default is a case of an enum" "$(ran field_default_case 'enum G
 class Group { name: text, grouping: Grouping = Grouping.Left }
 g = Group("a")
 print text(g.grouping == Grouping.Left)')" "yes"
+check "a bare function parameter takes any function value" "$(ran bare_function 'twice(f: function, x: int) := f(f(x))
+print text(twice(x => x + 1, 3))')" "5"
 exit $((failures > 0))
