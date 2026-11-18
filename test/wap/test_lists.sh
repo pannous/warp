@@ -50,4 +50,6 @@ xs += [4]
 print text(#xs)')" "0
 0
 1"
+check "a one-letter text beside texts is a text" "$(ran list_of_texts 'xs = ["ccc", "a", "bb"]
+print xs#2 + "!"')" "a!"
 exit $((failures > 0))

@@ -137,7 +137,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Item(subject, key) => item_typed(n, subject, key, s, f)
 	Fn(parameters, body) => function_value_typed(n, parameters, body, s, f)
 	Symbol(name) => name_typed(n, s, f, expected)
-	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
+	Char(value) => if expected == symbol(TEXT_TYPE) then char_text(n) else with_type(n, CHAR_TYPE)
 	Number(value) => with_type(n, if value is int then INT_TYPE else FLOAT_TYPE)
 	Text(value) => with_type(n, TEXT_TYPE)
 	True => with_type(n, BOOL_TYPE)
@@ -176,7 +176,7 @@ if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingSt
 	present = present_tested(condition)
 	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, if present != ø and present#2 == at then present#1 else ø, s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
-	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s, f) else typed#at)
+	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s) else typed#at)
 	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_settling(value_type(chosen#1), value_type(chosen#2), s))
 }
 # an arm typed with the variable of this key present in it, ø for none
