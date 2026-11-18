@@ -246,3 +246,21 @@ same_code(a: Node, b: Node): bool := match [a, b] {
 	[Type(name, body), Type(other_name, other_body)] => name == other_name and body == other_body
 	_ => prim tag_equal(a, b)
 }
+
+# A node as a condition reads it, as warp's runtime does (core/runtime/conversions.warp node_truthy), wherever it was
+# written: Empty, no and an Error are empty, a number, character, text or word when 0 or blank, a list without items,
+# a key when both its sides are; any other node is not
+empty(n: Node): bool := match unwrapped(n) {
+	Empty => yes
+	False => yes
+	Error(node) => yes
+	Number(value) => number_empty(value)
+	Char(value) => ord(value) == 0
+	Text(value) => empty(value)
+	Symbol(name) => empty(name)
+	List(items, bracket, separator) => empty(items)
+	Key(left, op, right) => empty(left) and empty(right)
+	_ => no
+}
+# the `is` narrows the number to an int or a float, so each arm picks its own empty
+number_empty(value: number): bool := if value is int then empty(value) else empty(value)
