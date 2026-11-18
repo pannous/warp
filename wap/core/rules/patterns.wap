@@ -146,11 +146,12 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
-	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, items, bindings)
+	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or #items < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, items, bindings)
 	Empty => EMPTY_GROUPS.contains(m.bracket) and parts_match(m.parts, [], bindings)
 	_ => no
 }
 
+# a group of one item has no separator to compare: `{ x: int }` fits `{ ($f: $t)... ($m := $b)... }`
 separators_fit(wanted: Separator, given: Separator) as bool := wanted == given or STATEMENT_SEPARATORS.contains(given) and (wanted == Separator.Space or STATEMENT_SEPARATORS.contains(wanted))
 
 # Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
