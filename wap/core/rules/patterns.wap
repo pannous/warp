@@ -16,6 +16,14 @@ use "../format.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/atoms.wap"
+use "../parse/cascade.wap"
+use "../parse/operator_table.wap"
+use "../../preload/operators.wap"
+use "lowering.wap"
+use "../analyze/declarations.wap"
+use "../analyze/fits.wap"
+use "stages.wap"
 
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
@@ -29,7 +37,8 @@ EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
-class Declared { name: text, shape: Node, holes: list, matcher: Matcher }
+# its shape as the Node pattern that takes a value apart, `taken`
+class Declared { name: text, shape: Node, holes: list, matcher: Matcher, taken: Node = Empty }
 declared_patterns = {}
 
 # what a part of a pattern asks of the code at its place
@@ -116,9 +125,44 @@ holes_in(n: Node) as list := match n {
 }
 
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
-declare_pattern(name: Node, shape: Node) := {
+declare_pattern(name: Node, shape: Node) as Declared := {
 	normal = normalized(shape)
-	declared_patterns[spelling_written(name)] = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
+	declared = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
+	declared.taken = shape_taken(declared)
+	declared_patterns[declared.name] = declared
+	declared
+}
+
+# A declared pattern's builder, a function of its name taking its holes in order, a rest hole as a list, that gives
+# its shape with them at their places: `pattern Call = (Call $called: Node $arguments...: Node)` declares
+# Call(called: Node, arguments: list<Node>): Node := List([Symbol("Call"), called, ...arguments], Bracket.Round,
+# Separator.Space), so Call(f, [x]) is (Call f x)
+pattern_builder(pattern: Declared) as Node := operated_program(notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name))
+hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(REST_MARK) then ": list<Node>" else ": Node")
+hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
+# A declared pattern's shape as the Node pattern that takes it apart, its holes those its call's parts fill:
+# `Call(f, args)` in an arm is List([Symbol("Call"), f, ...args], Bracket.Round, Separator.Space)
+shape_taken(pattern: Declared) as Node := lowered(top_level_statements(shaped_program(operated_program(notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
+# A declared pattern's call in an arm, its parts at its holes in order; ø for a call of any other name
+pattern_taken(called: Node, parts: list) as Node? := {
+	pattern = pattern_called(called) ?? return ø
+	if #parts != #pattern.holes { refused(called, "${pattern.name} takes ${#pattern.holes} parts, not ${#parts}") }
+	bindings = {}
+	for at in 1 to #parts { bindings[HOLE_SIGN + hole_variable(pattern.holes#at)] = parts#at }
+	holes_filled(pattern.taken, bindings)
+}
+# lowered code with each hole replaced by its binding; a `...` in it spreads a list, no repetition as in a template
+holes_filled(n: Node, bindings: map) as Node := match n {
+	Symbol(name) => if bindings.has(name) then bindings[name] else n
+	List(items, bracket, separator) => refitted(List(items.map(item => holes_filled(item, bindings)), bracket, separator), n)
+	_ => n
+}
+# The code of a shape: a name its symbol, a group its list, a hole as written by `hole_written`, a rest hole's items
+# spread into the group
+shape_text(shape: Node, hole_written: (text) -> text) as text := match shape {
+	Symbol(name) => if is_hole(shape) then (if is_rest_hole(shape) then REST_MARK else "") + hole_written(hole_key(shape)) else "Symbol(\"${spelling_written(shape)}\")"
+	List(items, bracket, separator) => "List([${items.map(item => shape_text(item, hole_written)).join(", ")}], Bracket.${bracket}, Separator.${separator})"
+	_ => refused(shape, "a pattern's builder writes names, holes and groups, not this part yet")
 }
 
 # ---- matching

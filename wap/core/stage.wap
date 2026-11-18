@@ -130,10 +130,28 @@ OVERLOADS = "overloads"
 DEFAULT = "default"
 # the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it (core/analyze/scope.wap)
 TYPE_TEST_WORD = "is"
+# A type test of a value any or a number holds, `x is int`, is asked at run time: the Prim BOXED_TEST of x, the type
+# it tests its fact TESTED. Where it holds, x reads as that type, the Prim OPTIONAL_VALUE of x, as a present optional
+# reads as its value.
+BOXED_TEST = "boxed_test"
+TESTED = "tested"
+OPTIONAL_VALUE = "optional_value"
 # on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
 PREDICATE = "predicate"
 # the pattern of a Case's arm that fits any value and names none
 WILDCARD = "_"
+# A list pattern, `[]`, `[first, ...rest]`: its items' patterns, a last `...name` naming the items after them; ø for
+# any other pattern
+REST_WORD = "..."
+list_pattern_items(pattern: Node) as list? := match pattern {
+	List(items, Bracket.Square, separator) => items
+	_ => ø
+}
+# the name a list pattern's `...name` gives the rest, ø for any other item
+rest_named(item: Node) as Node? := match item {
+	Call(called, names) => if text(called) == REST_WORD and #names == 1 then names#1 else ø
+	_ => ø
+}
 # on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
 # BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
 ASSIGNS = "assigns"

@@ -65,4 +65,15 @@ print show(Pair(1, 2))
 print show(Dot)')" "Circle(3)
 Pair(1, 2)
 Dot"
+check "cases holding cases compare by their parts" "$(ran tree_equal 'enum Tree { Leaf(n: int), Pair(a: Tree, b: Tree) }
+print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(2)))
+print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(3)))')" "yes
+no"
+check "a case's field typed with its parts" "$(ran case_field_parts 'enum Tree { Leaf, Branch(items: list<int>) }
+t = Branch([1, 2])
+print "ok"')" "ok"
+check "a call picks the case of its name that takes as many values" "$(ran case_by_count 'enum Kind { Key, Word }
+enum Shape { Key(a: int, b: int), Dot }
+s = Key(1, 2)
+print text(match s { Key(a, b) => a + b; Dot => 0 })')" "3"
 exit $((failures > 0))

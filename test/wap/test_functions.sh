@@ -90,4 +90,28 @@ print text(f(1) + f(1, 5))
 class P { x: int; tag: text = "?" }
 print P(3).tag + P(3, "a").tag')" "9
 ?a"
+# a function of a bare list parameter is typed when called, for the list given, so one nothing calls is not refused
+check "an uncalled function of a bare list" "$(ran bare_list_uncalled 'first(xs: list) := xs#1
+print "ok"')" "ok"
+# an argument given by its parameter's name, in any order, the parameters between left to their defaults
+check "named arguments" "$(ran named_arguments 'f(a: int, b: int) := a - b
+print text(f(b: 1, a: 5))
+g(a: int, b: int = 10, c: int = 100) := a + b + c
+print text(g(1, c: 2))
+class Op3 { spelling: text; kind: text = "" }
+print Op3(".", kind: "access").kind
+pick(ys: list<text>, by: (text) -> int) := by(ys#1)
+print text(["ccc", "a"].pick(by: t => #t))')" "4
+13
+access
+3"
+check "a parameter's default names a value of the program" "$(ran default_named 'k = 5
+f(g: int = k) := g
+print text(f())')" "5"
+check "a field's default is a case of an enum" "$(ran field_default_case 'enum Grouping { Left, Right }
+class Group { name: text, grouping: Grouping = Grouping.Left }
+g = Group("a")
+print text(g.grouping == Grouping.Left)')" "yes"
+check "a bare function parameter takes any function value" "$(ran bare_function 'twice(f: function, x: int) := f(f(x))
+print text(twice(x => x + 1, 3))')" "5"
 exit $((failures > 0))

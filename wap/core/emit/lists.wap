@@ -7,6 +7,9 @@ use "emitter.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "host.wap"
+use "equality.wap"
+use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
 
@@ -19,13 +22,14 @@ LIST_ITEM = "list_item"
 LIST_SET = "list_set"
 LIST_ADD = "list_add"
 LIST_COUNT = "list_count"
+LIST_SLICE = "list_slice"
 MAP_GET = "map_get"
 MAP_SET = "map_set"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
 	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function,
-	"map_get": map_reading_function, "map_set": map_setting_function
+	"map_get": map_reading_function, "map_set": map_setting_function, "map_keys": keys_copying_function, "map_remove": map_removing_function, "list_remove_at": item_removing_function
 }
 # a call of the helper of an operation on a value of this type
 typed_helper_called(operation: text, type: Node, p: Program) as list := instruction(CALL, [helper(p, "${operation} ${type}", q => TYPED_HELPERS[operation](q, type))])
@@ -41,6 +45,14 @@ item_reading_function(p: Program, type: Node) as int := added_function(p.m, [lis
 item_setting_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32, item_layout(type, p)], [], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + local_get(2) + instruction(ARRAY_SET, [items_array(type, p)]))
 place_checked(type: Node, p: Program) as list := local_get(1) + count_in(type, 0, p) + I32_GE_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
 
+# The helper of list_remove_at: the item at a place counted from 0 taken out, the items after it moved down one, in
+# their order. Its locals: 0 the list, 1 the place.
+item_removing_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	after = local_get(1) + i32_const(1) + I32_ADD
+	moved = items_in(type, 0, p) + local_get(1) + items_in(type, 0, p) + after + count_in(type, 0, p) + after + I32_SUB + instruction(ARRAY_COPY, [array, array])
+	added_function(p.m, [list_layout(type, p), I32], [], [], place_checked(type, p) + moved + counted_by(type, -1, p))
+}
 # The helper of list_add: the item put at the count, the array first copied into a larger one when full. Its locals:
 # 0 the list, 1 the item, 2 the larger array.
 adding_function(p: Program, type: Node) as int := {
@@ -87,10 +99,23 @@ map_setting_function(p: Program, map: Node) as int := {
 	added = map_part(MAP_KEYS, map, p) + local_get(1) + typed_helper_called(LIST_ADD, keys_of(map), p) + map_part(MAP_VALUES, map, p) + local_get(2) + typed_helper_called(LIST_ADD, values_of(map), p)
 	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p), item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
 }
+# The helper of map_keys: a new list of a map's keys, so no change to it reaches the map. Its local: 0 the map.
+keys_copying_function(p: Program, map: Node) as int := {
+	keys = map_part(MAP_KEYS, map, p)
+	copied = keys + i64_const(0) + keys + count_in(keys_of(map), ø, p) + I64_EXTEND_I32_U + typed_helper_called(LIST_SLICE, keys_of(map), p)
+	added_function(p.m, [map_layout(map, p)], [list_layout(keys_of(map), p)], [], copied)
+}
+# The helper of map_remove: a key and its value taken out of the map, the other entries in their order; a key the map
+# lacks leaves it as it is. Its locals: 0 the map, 1 the key, 2 the count.
+map_removing_function(p: Program, map: Node) as int := {
+	removed = (at, list) => map_part(at, map, p) + local_get(2) + typed_helper_called("list_remove_at", list, p)
+	found = removed(MAP_KEYS, keys_of(map)) + removed(MAP_VALUES, values_of(map)) + RETURN
+	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p)], [], [I32], key_searched(2, found, map, p))
+}
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list, map: Node, p: Program) as list := {
 	keys = map_part(MAP_KEYS, map, p)
-	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + equality(item_layout(keys_of(map), p), p)
+	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + type_equality(key_type(map), p)
 	counted(count, keys + count_in(keys_of(map), ø, p), equal + IF + VOID_BLOCK + found + END)
 }
 # a new map of these keys' and values' code
@@ -98,6 +123,11 @@ map_made(map: Node, keys: list, values: list, p: Program) as list := list_made(k
 
 # the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
 list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): one layout per item type (an array of i64 for list<int>,
+# of references for list<Node>) means a list<int> can never stand where a list of anything is wanted without a copy,
+# and lists are shared, so a copy changes meaning. Proposal: every list and map holds references (small ints as
+# i31, others boxed); `list<int>` is then a promise typing checks, with a cast at the read. Any list fits a bare
+# `list`, the list words exist once instead of once per item type, and wap's own lists (Nodes, texts) pay nothing.
 list_layout(type: Node, p: Program) as list := nullable(list_struct(type, p))
 items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
 item_layout(type: Node, p: Program) as list := layout_of(item_type(type), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")

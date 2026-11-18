@@ -1,0 +1,80 @@
+# The typing of tests and choices by them, called from the typing stage's dispatch (core/analyze/types.wap
+# typed_form): a condition is yes or no, and what a condition finds, a variable present or of a type, its arms read.
+
+use "types.wap"
+use "calls.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "fits.wap"
+use "letters.wap"
+
+# A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
+# finishes fits any) the If has it
+# An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`.
+if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	tested = condition_typed(condition, s, f)
+	present = present_tested(condition, s, f) ?? type_tested(tested)
+	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, if present != ø and present#2 == at then [present#1, present#3] else ø, s, f, expected))
+	# a character beside a text is its text: `if c then 'a' else ""` is a text
+	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s) else typed#at)
+	with_type_of(refitted(If(tested, chosen#1, chosen#2), n), joined_settling(value_type(chosen#1), value_type(chosen#2), s))
+}
+# an arm typed with a variable known in it, [its key, the type it reads as], ø for none
+present_typed(part: Node, known: list?, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	if known == ø { return typed_form(part, s, f, expected) }
+	before = f.present
+	f.present += [known]
+	typed = typed_form(part, s, f, expected)
+	f.present = before
+	typed
+}
+# the variable a condition finds present, [its key, the arm: 1 then, 2 else, its value's type]: `x != ø` and `if x`
+# in the then-arm, `x == ø` in the else-arm; ø for any other condition
+present_tested(condition: Node, s: TypingState, f: TypeFrame) as list? := match condition {
+	Symbol(name) => if is_variable(condition) and base_of_optional(variable_type(condition, s, f)) != ø then [place_key(defined_at(condition)), 1, base_of_optional(variable_type(condition, s, f))] else ø
+	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then [place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))] else ø
+	_ => ø
+}
+# the variable a typed condition finds of a type, [its key, the then-arm, the type]: `x is int` of a number x
+type_tested(tested: Node) as list? := match tested {
+	Prim(operation, arguments) => if text(operation) == BOXED_TEST and is_variable(arguments#1) then [place_key(defined_at(arguments#1)), 1, fact_of(tested, TESTED)] else ø
+	_ => ø
+}
+is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø
+EQUAL_WORD = "=="
+UNEQUAL_WORD = "!="
+condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
+	tested = truth_of(typed_form(condition, s, f, symbol(BOOL_TYPE)), s)
+	# REVIEW (notes/wap_review.md, 2026-11-18): notes/first_principles.md tests emptiness loosely (`if xs`), and
+	# wap's own core/paths.wap writes it; this refuses it. A condition of another type should be one more conversion
+	# (core/analyze/fits.wap): a call of a library word of the preload, overloaded per type, never a table here.
+	if value_type(tested) == ø or not same_type(value_type(tested), symbol(BOOL_TYPE)) { refused(condition, "a condition is yes or no") }
+	tested
+}
+# A value as a condition reads it (wiki/truthiness.md): a bool as it is, a choice by its parts' truth, `xs and o` is
+# If(xs, o, no), any other value by the preload's truthy, an empty list, text, 0 or ø no
+TRUTHY = "truthy"
+truth_of(typed: Node, s: TypingState) as Node := {
+	if value_type(typed) != ø and same_type(value_type(typed), symbol(BOOL_TYPE)) { return typed }
+	match typed {
+		If(condition, then_part, else_part) => with_type(refitted(If(condition, truth_of(then_part, s), truth_of(else_part, s)), typed), BOOL_TYPE)
+		_ => if value_type(typed) == ø then typed else word_called(typed, TRUTHY, [typed], ø, s)
+	}
+}
+# A type test, `x is T`, left unbound by the binding analysis (core/analyze/scope.wap type_test_bound), a bool: for a
+# case, whether x is that case, the Case `match x { T => yes; _ => no }`; for a type's name, whether x is of that type,
+# known here (x still runs), or for a value any or a number holds, asked at run time
+type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+	subject = arguments#1
+	tested = arguments#2
+	if fact_of(tested, BINDING) == symbol(BOUND_CASE) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
+	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
+	typed = typed_form(subject, s, f, ø)
+	type = value_type(typed) ?? refused(subject, "this gives no value to test")
+	if boxed_fit(tested, type) and not same_type(type, tested) { return with_fact(with_type(placed_like(Prim(symbol(BOXED_TEST), [typed]), n), BOOL_TYPE), TESTED, tested) }
+	typed_form(placed_like(Block([subject, if same_type(type, tested) then True else False]), n), s, f, ø)
+}
+# whether a type test's word names a type: a built-in one, a record's or a generic letter; a written compound type,
+# `list<int>`, is one
+names_type(tested: Node, s: TypingState) as bool := not tested is symbol or TYPE_WORDS.contains(text(tested)) or record_named(s.records, tested) != ø or is_letter(tested, s.records)

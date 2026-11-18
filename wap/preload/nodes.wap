@@ -1,7 +1,7 @@
 # The preload's node (notes/wap.md "Layers"): warp's Node, declared case for case as core/node.warp declares it, so
 # wap's own source reads the same under both compilers, and the words over it in plain warp: a node's position and
 # facts, a symbol by its name. A Meta node's data is the list [line, column, facts…] (warp's runtime keeps the same
-# three in its own Meta layout).
+# three in its own Meta layout). A list's items are typed list<Node>, which core/node.warp's bare `list` means.
 
 enum Node {
 	True
@@ -13,18 +13,43 @@ enum Node {
 	Symbol(name: text)
 	Error(node: Node)
 	Key(left: Node, op: Op, right: Node)
-	List(items: list, bracket: Bracket, separator: Separator)
+	List(items: list<Node>, bracket: Bracket, separator: Separator)
 	Data(value: any)
 	Meta(node: Node, data: Node)
 	Type(name: Node, body: Node)
 }
 
+# The operators a node carries, each its own value:
+# `Op.Add as text` is "+" (text(op) below)
+enum Op {
+	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
+	Add, Sub, Mul, Div, FloorDiv, Mod, Rem /*todo (card remainder-as-mod-alias) map Remainder to mod at alias level and get rid of it*/, Pow, LogBase, LogOf, Shl, Shr
+	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
+	Lt, Gt, Le, Ge, Eq, Is, Ne, Identical, NotIdentical, Similar, Rough
+	And, Or, Xor, Not, BitAnd, BitOr
+	Neg, Sqrt, Cbrt, Abs /*unused: √ ∛ ‖ ‖ call functions; kept while the seed's op codes have them, card remove-unused*/, Inc, Dec, Question
+	If, Then, Else, While, Do
+	Hash, Range, To, As, PlusMinus
+	None
+	# any other operator, `a ⊕ b` of key(a, "⊕", b): its spelling is its own (`op as text` is "⊕"), each joining the
+	# runtime's spellings at its first use (card enum-op-should)
+	Other
+}
+
+# A list's bracket: `Bracket.Square as text` is "[", an unbracketed list's None is ""
+enum Bracket { Curly, Square, Round, Less, None }
+
+# A list's separator: `Separator.Comma as text` is ","
+enum Separator { Space, Comma, Semicolon, Newline, Tab, None }
+
 # the place of a Meta node's line and column in its data, the facts after them
-META_LINE = 1
-META_COLUMN = 2
-META_FACTS = 3
+META_LINE := 1
+META_COLUMN := 2
+META_FACTS := 3
 # a node marked with facts but written nowhere has line 0, so no position
-NO_LINE = 0
+NO_LINE := 0
+# the text of the case Other, which no node carries: it stands for every spelling no other case has, `⊕`
+OTHER_SPELLING := "·other"
 
 # the symbol of a name: `symbol("x")` is the word x
 symbol(name: text): Node := Symbol(name)
@@ -33,20 +58,31 @@ symbol(name: text): Node := Symbol(name)
 line_of(n: Node) := written_part(n, META_LINE)
 column_of(n: Node) := written_part(n, META_COLUMN)
 written_part(n: Node, place: int) := match n {
-	Meta(node, List(data, bracket, separator)) => if number_in(data#META_LINE) == NO_LINE then ø else number_in(data#place)
+	Meta(node, List(data, bracket, separator)) => if int_in(data#META_LINE) == NO_LINE then ø else int_in(data#place)
 	_ => ø
 }
-number_in(n: Node) := match n {
-	Number(value) => value
+# the int a node holds, ø for any other node
+int_in(n: Node) := match n {
+	Number(value) => if value is int then value else ø
 	_ => ø
 }
 # n where it was written, its facts kept
 positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
 
 # the facts a stage marked n with, and n with one more
-attributes_of(n: Node): list := match n {
-	Meta(node, List(data, bracket, separator)) => data[META_FACTS - 1 ..]
+attributes_of(n: Node): list<Node> := match n {
+	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
+}
+# a Meta's data past its line and column
+facts_in(data: list<Node>): list<Node> := {
+	facts: list<Node> = []
+	at = META_FACTS - 1
+	while at < #data {
+		at += 1
+		facts = facts + [data#at]
+	}
+	facts
 }
 with_attribute(n: Node, fact: Node): Node := match n {
 	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
@@ -58,4 +94,77 @@ unwrapped(n: Node): Node := match n {
 	Meta(node, data) => node
 	_ => n
 }
-meta_data(line: int, column: int, facts: list): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
+meta_data(line: int, column: int, facts: list<Node>): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
+
+# the text a node carries for an operator, `Op.Add as text` is "+" (core/passes/node_cases.warp node_spellings, case
+# for case)
+text(op: Op): text := match op {
+	Op.Colon => ":"
+	Op.Dot => "."
+	Op.SafeDot => "?."
+	Op.Coalesce => "??"
+	Op.Scope => "::"
+	Op.Define => ":="
+	Op.Assign => "="
+	Op.Arrow => "->"
+	Op.ArrowUp => "↑"
+	Op.ArrowDown => "↓"
+	Op.Add => "+"
+	Op.Sub => "-"
+	Op.Mul => "*"
+	Op.Div => "/"
+	Op.FloorDiv => "÷"
+	Op.Mod => "%"
+	Op.Rem => "rem"
+	Op.Pow => "^"
+	Op.LogBase => "⌞"
+	Op.LogOf => "⌟"
+	Op.Shl => "<<"
+	Op.Shr => ">>"
+	Op.AddAssign => "+="
+	Op.SubAssign => "-="
+	Op.MulAssign => "*="
+	Op.DivAssign => "/="
+	Op.FloorDivAssign => "÷="
+	Op.ModAssign => "%="
+	Op.PowAssign => "^="
+	Op.AndAssign => "&&="
+	Op.OrAssign => "||="
+	Op.XorAssign => "^^="
+	Op.Lt => "<"
+	Op.Gt => ">"
+	Op.Le => "<="
+	Op.Ge => ">="
+	Op.Eq => "=="
+	Op.Is => "is"
+	Op.Ne => "!="
+	Op.Identical => "==="
+	Op.NotIdentical => "!=="
+	Op.Similar => "≈"
+	Op.Rough => "~"
+	Op.And => "and"
+	Op.Or => "or"
+	Op.Xor => "xor"
+	Op.Not => "not"
+	Op.BitAnd => "&"
+	Op.BitOr => "|"
+	Op.Neg => "-"
+	Op.Sqrt => "√"
+	Op.Cbrt => "∛"
+	Op.Abs => "‖"
+	Op.Inc => "++"
+	Op.Dec => "--"
+	Op.Question => "?"
+	Op.If => "if"
+	Op.Then => "then"
+	Op.Else => "else"
+	Op.While => "while"
+	Op.Do => "do"
+	Op.Hash => "#"
+	Op.Range => ".."
+	Op.To => "to"
+	Op.As => "as"
+	Op.PlusMinus => "±"
+	Op.None => ""
+	Op.Other => OTHER_SPELLING
+}

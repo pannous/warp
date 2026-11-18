@@ -6,9 +6,12 @@ use "lists.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "opcodes.wap"
+use "functions.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "patterns.wap"
 
 # the layout of a typed form's value
 # the layout of a node's type, ø for a node the typing stage left untyped

@@ -17,6 +17,10 @@ use "../format.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/atoms.wap"
+use "../analyze/declarations.wap"
+use "lines.wap"
+use "../analyze/declarations.wap"
 
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"
@@ -29,11 +33,10 @@ NO_HEAD = ""
 
 class Rule { head: text, matcher: Matcher, template: Node, fresh: list, written: Node, specificity: int }
 # the rules of one stage, by head
-# the rules of one stage, by head, and the words their phrases spell after the first, `then` and `else` of an if
-class Rules { by_head: map, inner_words: map }
+class Rules { by_head: map }
 # stage 1 asks only shapes; stage 3 asks the types of typed code (a hole of a value type)
-shape_rules = Rules({}, {})
-typed_rules = Rules({}, {})
+shape_rules = Rules({})
+typed_rules = Rules({})
 # code after a stage's rules, and whether any of them fired
 class Fired { code: Node, fired: bool }
 
@@ -42,10 +45,13 @@ class Fired { code: Node, fired: bool }
 # A side of a rule may stand in brackets to keep its keys and operators inside: `rule ($h as $t := $b) => ($h: $t := $b)`.
 # Only a pattern's holes take a type (`$c: Node`); in a template `$h: $t` is the key it writes.
 
-# the rules and patterns of loaded code taken in, the code without them returned
+# the rules and patterns of loaded code taken in, the code returned with each pattern's builder in its place
 rules_loaded(code: Node) as Node := match code {
-	List(items, Bracket.None, Separator.Newline) => List(items.filter(item => not taken_in(sequence_rule(item))), Bracket.None, Separator.Newline)
-	_ => if taken_in(sequence_rule(code)) then Empty else code
+	List(items, Bracket.None, Separator.Newline) => List(items.flat_map(item => left_by(sequence_rule(item)) ?? [item]), Bracket.None, Separator.Newline)
+	_ => {
+		left = left_by(sequence_rule(code))
+		if left == ø then code else if left is empty then Empty else List(left, Bracket.None, Separator.Newline)
+	}
 }
 
 # `rule P => A; B` writes both statements: the `;` binds looser than `=>`, so the line is a sequence whose first
@@ -58,23 +64,26 @@ sequence_rule(statement: Node) as Node := match statement {
 	_ => statement
 }
 
-# a rule or pattern statement taken in (yes), or any other statement left (no)
-taken_in(statement: Node) as bool := match statement {
+# a rule or pattern statement taken in, what it leaves in the code: a pattern its builder, a rule nothing; ø for any
+# other statement
+left_by(statement: Node) as list? := match statement {
 	Call(called, arguments) => declaration_taken(spelling_written(called), arguments)
-	_ => no
+	_ => ø
 }
 
-declaration_taken(called: text, arguments: list) as bool := {
-	if #arguments != 2 { return no }
+declaration_taken(called: text, arguments: list) as list? := {
+	if #arguments != 2 { return ø }
 	words = phrase_items(arguments#1)
-	if #words < 2 or not (words#1 is symbol) { return no }
+	if #words < 2 or not (words#1 is symbol) { return ø }
 	keyword = spelling_written(words#1)
-	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { declare_pattern(words#2, arguments#2); return yes }
-	if called == RULE_ARROW and keyword == RULE_WORD { rule_added(arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2); return yes }
-	no
+	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { return top_level_statements(pattern_builder(declare_pattern(words#2, arguments#2))) }
+	if called == RULE_ARROW and keyword == RULE_WORD {
+		rule_added(arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2)
+		return []
+	}
+	ø
 }
 
-phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
 
 rule_added(written: Node, pattern: Node, template: Node) := {
 	normal = normalized(ungrouped(pattern))
@@ -87,14 +96,15 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))
 	rules = if typed then typed_rules else shape_rules
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
+	# a rule loaded again, its file read twice, is the rule already there
+	if rules.by_head[rule.head].filter(other => "${other.written}" == "${written}") is not empty { return }
 	rules.by_head[rule.head].add(rule)
-	match normal { List(items, Bracket.None, Separator.Space) => words_told(rules, items, #matcher.parts.filter(takes_block) > 0); _ => ø }
+	match normal { List(items, Bracket.None, Separator.Space) => words_told(items, #matcher.parts.filter(takes_block) > 0); _ => ø }
 }
-# a phrase pattern's words: the first ones lead it (the operator stage reads a rule word after an infix by them), the
-# words after the first are inner words, which may continue a line before
-words_told(rules: Rules, items: list, block: bool) := {
+# a phrase pattern's words told the operator stage: the first ones lead it, the words after the first are inner words
+words_told(items: list, block: bool) := {
 	for word in list_heads(items) { if block or not phrase_words.leading.has(word) { phrase_words.leading[word] = block } }
-	for word in items[1 ..].filter(item => item is symbol and not is_hole(item)) { rules.inner_words[spelling_written(word)] = yes }
+	for word in items[1 ..].filter(item => item is symbol and not is_hole(item)) { phrase_words.inner[spelling_written(word)] = yes }
 }
 # a pattern part that takes a block: a braced sequence, `{ ($pattern => $result)... }`, or a hole of a shape a block has
 takes_block(m: Matcher) as bool := m.test == Test.Sequence and m.bracket == Bracket.Curly or m.test == Test.Hole and m.type != Empty and matches(m, SAMPLE_BLOCK, {})
@@ -187,14 +197,20 @@ rewritten_by(rules: Rules, code: Node) as Fired := {
 	Fired(result, fired[0])
 }
 
-rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, unglued(rules, n), fired), whole => parts_applied(rules, whole, fired))
+rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, unglued(n), fired), whole => parts_applied(rules, whole, fired))
 
 # A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
-# is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
+# is that phrase, rewritten as one. A list whose words start with a rule's word, `[if c then a else b]`, holds
+# that phrase as its one item; `[a b c]` holds three. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 	List(items, Bracket.None, Separator.Space) => with_parts(inner_rewritten(rules, items, whole), part => rules_applied(rules, part, fired))
-	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then group_kept(rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired), bracket) else with_parts(whole, part => rules_applied(rules, part, fired))
-	List(items, bracket, separator) => with_facts_of(List(lines_of(rules, items, separator).flat_map(part => spread(rules_applied(rules, part, fired), part)), bracket, separator), whole)
+	List(items, bracket, Separator.Space) => {
+		phrase = with_facts_of(List(items, Bracket.None, Separator.Space), whole)
+		if one_phrase(items, bracket) then group_kept(rules_applied(rules, phrase, fired), bracket)
+		else if bracket == Bracket.Square and items#1 is symbol and phrase_words.leading.has(spelling_written(items#1)) then List([rules_applied(rules, phrase, fired)], bracket, Separator.None)
+		else with_parts(whole, part => rules_applied(rules, part, fired))
+	}
+	List(items, bracket, separator) => with_facts_of(List(lines_of(items, separator).flat_map(part => spread(rules_applied(rules, part, fired), part)), bracket, separator), whole)
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
 # A phrase no rule fits whole, whose later word heads a rule that fits from there on, `print match x {…}`: that part
@@ -216,62 +232,13 @@ phrase_placed(words: list, bracket: Bracket, origin: Node) as Node := with_facts
 # code with every grouping a rule head inside a phrase makes written out, nothing rewritten: what `wap format` prints;
 # a rule or pattern line is printed as written
 groupings_written(n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.Space) => if declares(items) then n else phrase_written(unglued(shape_rules, n))
+	List(items, Bracket.None, Separator.Space) => if declares(items) then n else phrase_written(unglued(n))
 	_ => with_facts_of(with_parts(n, groupings_written), n)
 }
 phrase_written(phrase: Node) as Node := match phrase {
 	List(items, Bracket.None, Separator.Space) => with_facts_of(with_parts(inner_rewritten(shape_rules, items, phrase), groupings_written), phrase)
 }
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
-
-# the items of a list, a block's lines continued
-lines_of(rules: Rules, items: list, separator: Separator) as list := if STATEMENT_SEPARATORS.contains(separator) then lines_continued(rules, items) else items
-
-# A line that starts with a word rules spell inside their phrases but start none with continues the statement before
-# it: `if c {a}⏎else {b}` is one if, so is a `then` or `else` at a line's start
-lines_continued(rules: Rules, statements: list) as list := {
-	joined = []
-	for statement in statements {
-		if joined is not empty and continues(rules, statement) { joined[#joined - 1] = staged(joined.last, line => List(phrase_items(line) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
-	}
-	joined
-}
-# The lines indented below a phrase, which the reader glues to its last word as a block, belong to the phrase: they
-# continue it when they start with such a word, `x = if c then 1⏎	else 2` is `x = if c then 1 else 2`; otherwise the
-# block is the phrase's last part, `if c⏎	print "a"` is `if c {print "a"}`. A block glued on its line, `Point{x: 1}`,
-# stays its word's.
-unglued(rules: Rules, n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.Space) => {
-		split = block_split(items.last)
-		if split == ø { return n }
-		taken = block_taken(rules, split#2)
-		if taken == ø then n else staged(n, phrase => List(items[.. #items - 1] + [split#1] + taken, Bracket.None, Separator.Space))
-	}
-	_ => n
-}
-# the code a block is glued to at its end, and that block: `1{else 2}`, `i in xs{…}` the operator's right side; ø when
-# no block ends it
-block_split(n: Node) as list? := match n {
-	Key(word, Op.None, block) => if is_braced(block) then [word, block] else ø
-	Call(called, arguments) => {
-		inner = if arguments is empty then ø else block_split(arguments.last)
-		if inner == ø then ø else [staged(n, call => Call(called, arguments[.. #arguments - 1] + [inner#1])), inner#2]
-	}
-	_ => ø
-}
-is_braced(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
-# the parts a glued block gives the phrase it ends, ø where it stays glued
-block_taken(rules: Rules, block: Node) as list? := match block {
-	List(lines, Bracket.Curly, separator) => {
-		continued = lines_continued(rules, if STATEMENT_SEPARATORS.contains(separator) then lines else [List(lines, Bracket.None, separator)])
-		if #continued == 1 and continues(rules, continued#1) then phrase_items(continued#1) else if fact_of(block, INDENTED) != ø then [block] else ø
-	}
-	_ => ø
-}
-continues(rules: Rules, statement: Node) as bool := {
-	first = phrase_items(statement)#1
-	first is symbol and rules.inner_words.has(spelling_written(first)) and not rules.by_head.has(spelling_written(first))
-}
 
 # A rule's result as the items it stands for in its list or block: a statement sequence, `A; B`, its statements; a row a
 # rule wrote, `$a, $rest...`, its items; nothing for a rule that wrote nothing, `()`, where something was. Each item keeps

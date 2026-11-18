@@ -16,4 +16,10 @@ check "a dot call on a text" "$(ran on_text 'shout(t: text) := print t
 check "x.f picks the f that takes x's type" "$(ran member_overload 'f(a: int) := 1
 f(a: text) := 2
 "st".f')" "2"
+check "an overload writing more structure is more specific: T? beats T" "$(ran structure_overload 'same(a: T, b: T) as text := "any"
+same(a: T?, b: T?) as text := "optional"
+x: int? = 3
+print(same(x, x))
+print(same(1, 2))')" "optional
+any"
 exit $((failures > 0))

@@ -7,8 +7,26 @@ use "floats.wap"
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+# a text written to the standard error, then a line end; the program goes on
+eprint(t: text) := prim error_text(t)
+# a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
+hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
 read(path: text): text := prim read_text(path)
+# the command line: the program's file as it was named, then its arguments
+arguments(): list<text> := prim arguments()
+# the arguments after the program's file: `warp prog.wasm a b` gives ["a", "b"]
+args := arguments().drop(1)
+# the running program: its file, as the command line names it, and that file's folder
+class Program { file: text; folder: text }
+program := Program(arguments()#1, folder_of(arguments()#1))
+# a file's folder, "." for a file named without one: "core/stage.wap" is in "core"
+folder_of(file: text): text := {
+	parts = file.split("/")
+	if #parts == 1 then "." else parts[.. #parts - 1].join("/")
+}
+# bytes written to the file at a path, made anew or emptied first: what a compiler writes its module with
+write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)
 
@@ -20,6 +38,8 @@ raise(message: text): never := prim raise_text(message)
 +(a: int, b: int): int := prim i64_add(a, b)
 -(a: int, b: int): int := prim i64_sub(a, b)
 *(a: int, b: int): int := prim i64_mul(a, b)
+# an int's sign turned: `-x`
+-(x: int): int := 0 - x
 # the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
 ÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
 %(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
@@ -33,6 +53,9 @@ raise(message: text): never := prim raise_text(message)
 -(a: float, b: float): float := prim f64_sub(a, b)
 *(a: float, b: float): float := prim f64_mul(a, b)
 /(a: float, b: float): float := prim f64_div(a, b)
+# a power by squaring, `2 ^ 10` is 1024, `1.5 ^ 2` is 2.25; a float's negative power is its inverse's, an int's is no int
+^(a: int, b: int): int := if b < 0 then raise "an int's negative power is no int; write a float: 2.0 ^ -1" else powered(a, b, 1)
+^(a: float, b: int): float := if b < 0 then 1.0 / powered(a, 0 - b, 1.0) else powered(a, b, 1.0)
 ==(a: float, b: float): bool := prim f64_eq(a, b)
 !=(a: float, b: float): bool := prim f64_ne(a, b)
 <(a: float, b: float): bool := prim f64_lt(a, b)
@@ -43,19 +66,55 @@ raise(message: text): never := prim raise_text(message)
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
 !=(a: text, b: text): bool := not(a == b)
-# two cases of a plain enum, one whose cases carry no fields, are equal by their tags
+# any two values of one type are equal by that type's equality: cases by tag and fields, instances field by field,
+# lists item by item (core/emit/equality.wap); the overloads above are the plain values' own
+==(a: T, b: T): bool := prim tag_equal(a, b)
+!=(a: T, b: T): bool := not(a == b)
+# cases of any two enums, of one enum or not: `Side.Left == Grouping.Left` is no
 ==(a: enum, b: enum): bool := prim tag_equal(a, b)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
+
+# a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
+keys(m: map<K, V>): list<K> := prim map_keys(m)
+# whether a map holds a key
+has(m: map<K, V>, key: K): bool := m.keys().contains(key)
+# a key taken out of a map with its value, the others kept in their order; a missing key leaves the map as it was
+remove(m: map<K, V>, key: K) := prim map_remove(m, key)
+
+# the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
+int(t: text): int := {
+	negative = byte_count(t) > 1 and byte_at(t, 0) == MINUS_BYTE
+	if byte_count(t) == 0 { raise("int: an empty text writes no int") }
+	value = 0
+	for at in (if negative then 1 else 0) .. byte_count(t) {
+		digit = byte_at(t, at) - ZERO_BYTE
+		if digit < 0 or digit > 9 { raise("int: " + t + " is no decimal int") }
+		value = value * 10 + digit
+	}
+	if negative then -value else value
+}
+# the bytes of the characters - and 0
+MINUS_BYTE := 45
+ZERO_BYTE := 48
 
 # a value's text, as a text's holes show it: `"n is ${n}"`
 text(t: text): text := t
 text(n: int): text := prim int_text(n)
 text(c: char): text := prim char_text(c)
 text(b: bool): text := if b then "yes" else "no"
+# an optional's text: its value's, or ø when it is missing
+text(x: T?): text := if missing(x) then "ø" else text(x!)
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
-not(b: bool): bool := if b then no else yes
+not(x): bool := if x then no else yes
+# a value as a condition reads it (wiki/truthiness.md): 0, 0.0, an empty text or list and ø are falsy, every other
+# value truthy; `if xs` reads truthy(xs)
+truthy(n: int): bool := n != 0
+truthy(x: float): bool := x != 0.0
+truthy(t: text): bool := #t > 0
+truthy(xs: list): bool := #xs > 0
+truthy(x: T?): bool := not missing(x)
 
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
 # (core/sugar/ranges.wap)
@@ -69,6 +128,9 @@ LAST_INT := 0x7FFFFFFFFFFFFFFF
 # the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]
 slice(xs: list<T>, r: Range): list<T> := prim array_slice(xs, r.from, (if r.last < #xs then r.last + 1 else #xs) - r.from)
 
+# a float's 64 bits as an int, and a character's code: `ord('a')` is 97
+float_bits(x: float): int := prim i64_reinterpret_f64(x)
+ord(c: char): int := prim i64_extend_i32_u(c)
 # a float's sign turned, its whole parts, an int as a float
 -(x: float): float := prim f64_neg(x)
 floor(x: float): float := prim f64_floor(x)
@@ -88,6 +150,12 @@ text(x: float): text := float_text(x)
 ===(a: T, b: T): bool := a == b
 ===(a, b): bool := no
 !==(a, b): bool := not(a === b)
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): `[1, 2] == [1, 2]` and `Point(1, 2) == Point(1, 2)`
+# compile and then run out of stack: no `==` takes two lists or two instances, so the choice falls to the `==` of
+# optionals below, whose `a! == b!` chooses itself again. The emitter can compare both by their parts
+# (core/emit/equality.wap) but only `prim tag_equal` reaches that. Wanted: `==` of lists written here in warp, `==`
+# of instances as the least specific overload, a test for each, and a refusal when a function's only call of itself
+# has the types it was called with.
 # optional values, T?: a T or ø (wiki/optional.md); `x!` is x's value, raising when x is missing
 missing(x: T?): bool := prim ref_is_null(x)
 !(x: T?): T := prim optional_value(x)

@@ -20,7 +20,7 @@ use "../rules/lowering.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
-use path
+use "../paths.wap"
 
 USE_WORD = "use"
 
@@ -32,7 +32,7 @@ declared_program(program: Node) as Node := {
 	with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma))
 }
 # the files a program's `use` lines name, resolved against its own folder: plain notation, readable before any stage
-used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => normalize_path(path_join(dirname(file_of(program) ?? "."), used_path(statement))))
+used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => beside(file_of(program) ?? ".", used_path(statement)))
 
 # `use "path"`: a statement that brings in a module, no code
 is_use(statement: Node) as bool := match statement {
@@ -51,7 +51,7 @@ uses_of(program: Node) as list := match fact_of(program, USES) {
 # cycle is cut where it closes, so of two such modules the one reached first runs last.
 class Modules { modules: list; files: list }
 modules_used(program: Node, read_file: function) as list := {
-	visited = Modules([], [normalize_path(file_of(program) ?? ".")])
+	visited = Modules([], [normalized_path(file_of(program) ?? ".")])
 	modules_visited(program, read_file, visited)
 	visited.modules
 }

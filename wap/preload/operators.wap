@@ -13,7 +13,7 @@
 enum Grouping { Left, Right, Refused }
 
 # a precedence group: the groups it binds tighter than, and how a run of its own operators groups
-class Group { name: text, tighter_than: list, grouping: Grouping = Grouping.Left }
+class Group { name: text, tighter_than: list<text>, grouping: Grouping = Grouping.Left }
 
 # an operator: its canonical spelling, its English name, and its group in each fixity it has ("" when it has none)
 class Operator { spelling: text, name: text, infix: text = "", prefix: text = "", postfix: text = "" }
@@ -148,10 +148,10 @@ aliases = [
 	Alias("equals", "==", Fixity.Infix), Alias("through", "to", Fixity.Infix), Alias("upto", "..", Fixity.Infix), Alias("be", ":=", Fixity.Infix),
 	Alias("circa", "≈", Fixity.Infix),
 	# names
-	Alias("size", "count"), Alias("length", "count"),
+	Alias("size", "count"), Alias("length", "count"), Alias("is_letter", "is_alpha"),
 	# constants
 	Alias("true", "yes"), Alias("false", "no"),
 	Alias("null", "ø"), Alias("nil", "ø"), Alias("none", "ø"), Alias("nothing", "ø"), Alias("void", "ø"),
 	# types
-	Alias("string", "text"), Alias("str", "text"), Alias("integer", "int"), Alias("boolean", "bool"),
+	Alias("string", "text"), Alias("str", "text"), Alias("integer", "int"), Alias("boolean", "bool"), Alias("codepoint", "char"),
 ]

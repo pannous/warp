@@ -15,8 +15,10 @@
 #   type      bound → typed         core/analyze/types.wap, each value's type and the function each call means, as facts
 #   typed rules typed → typed       core/rules/typed.wap, rules with holes of value types, typed again after each round
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
-#   encode    module → bytes        core/emit/wasm.wap, the wasm binary format
+#   encode    module → bytes        core/emit/wasm.wap, the wasm binary format (its codes: core/emit/opcodes.wap)
 use "core/pipeline.wap"
+use "core/parse/operators.wap"
+use "core/rules/stages.wap"
 use "core/format.wap"
 use "core/emit/wasm.wap"
 use "core/emit/emitter.wap"

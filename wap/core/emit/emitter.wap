@@ -23,6 +23,8 @@ use "places.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "host.wap"
+use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
@@ -62,7 +64,8 @@ host_calls(program: Node) as list := {
 primitives_in(n: Node) as list := match n {
 	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
 	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) != ø then [MAP_GET] else if item_type(fact_of(subject, TYPE)) != ø then [LIST_ITEM] else []) + primitives_in(subject) + primitives_in(key)
-	List(items, bracket, separator) => items.flat_map(primitives_in)
+	# a list pattern's rest is a slice of the list
+	List(items, bracket, separator) => (if items.any(item => rest_named(item) != ø) then [LIST_SLICE] else []) + items.flat_map(primitives_in)
 	Key(left, op, right) => primitives_in(left) + primitives_in(right)
 	_ => []
 }
@@ -149,9 +152,9 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
 	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
 }
-# a part of a choice, made to fit the choice's type: 3 in `if b then 3 else ø`, an int?, is boxed
-arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := {
-	given = labelled(f, [OTHER_LABEL], () => code(part, p, f))
+arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitted(choice, labelled(f, [OTHER_LABEL], () => code(part, p, f)), part, p)
+# a part's value made to fit its choice's type, an If's or a Case's: 3 in `if b then 3 else ø`, an int?, is boxed
+choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
 	if wanted == ø then given else fitted(given, wanted, part, p.m)
 }

@@ -6,140 +6,7 @@
 # `added_data`, `added_text`, `exported`) and turned into bytes once, by `module_bytes`.
 # Format reference: https://webassembly.github.io/spec/core/binary/
 
-MAGIC = [0x00, 0x61, 0x73, 0x6D]
-VERSION = [0x01, 0x00, 0x00, 0x00]
-
-# section ids, in the order the format requires them
-TYPE_SECTION = 1
-IMPORT_SECTION = 2
-FUNCTION_SECTION = 3
-MEMORY_SECTION = 5
-GLOBAL_SECTION = 6
-EXPORT_SECTION = 7
-DATA_COUNT_SECTION = 12
-CODE_SECTION = 10
-DATA_SECTION = 11
-
-# value types, each its bytes; a reference to a declared type is `nullable(index)`
-I32 = [0x7F]
-I64 = [0x7E]
-F64 = [0x7C]
-ANYREF = [0x6E]
-# the storage of an array of bytes, packed
-I8 = [0x78]
-# heap types, each its bytes (a declared type's is signed(index)), and type constructors
-ANY_HEAP = [0x6E]
-NULLABLE_REFERENCE = 0x63
-FUNCTION_TYPE = 0x60
-STRUCT_TYPE = 0x5F
-ARRAY_TYPE = 0x5E
-# a type that others may extend, with the types it extends
-SUBTYPE = 0x50
-IMMUTABLE = 0
-MUTABLE = 1
-
-# what an import or export is
-FUNCTION_KIND = 0x00
-MEMORY_KIND = 0x02
-
-# where a data segment lives: placed in the memory, or kept passive for `array.new_data`
-ACTIVE_SEGMENT = 0x00
-PASSIVE_SEGMENT = 0x01
-
-# every memory segment starts at a multiple of this, the size of the largest value, as WASI requires of its records
-DATA_ALIGNMENT = 8
-
-# Instructions, each its opcode bytes; `instruction(opcode, indices)` adds the unsigned immediates it takes.
-UNREACHABLE = [0x00]
-BLOCK = [0x02]
-LOOP = [0x03]
-IF = [0x04]
-ELSE = [0x05]
-BRANCH = [0x0C]
-BRANCH_IF = [0x0D]
-# the type of a block that takes and leaves nothing
-VOID_BLOCK = [0x40]
-RETURN = [0x0F]
-CALL = [0x10]
-DROP = [0x1A]
-LOCAL_GET = [0x20]
-LOCAL_SET = [0x21]
-LOCAL_TEE = [0x22]
-GLOBAL_GET = [0x23]
-GLOBAL_SET = [0x24]
-I32_LOAD = [0x28]
-I64_LOAD = [0x29]
-I32_LOAD8_U = [0x2D]
-I32_STORE = [0x36]
-I32_STORE8 = [0x3A]
-MEMORY_SIZE = [0x3F]
-MEMORY_GROW = [0x40]
-I32_CONST = [0x41]
-I64_CONST = [0x42]
-F64_CONST = [0x44]
-I32_EQZ = [0x45]
-I32_EQ = [0x46]
-I32_NE = [0x47]
-I32_GT_S = [0x4A]
-I32_LT_U = [0x49]
-I32_GE_U = [0x4F]
-I64_EQ = [0x51]
-I64_NE = [0x52]
-I64_LT_S = [0x53]
-I64_GT_S = [0x55]
-I64_LE_S = [0x57]
-I64_GE_S = [0x59]
-F64_EQ = [0x61]
-F64_NE = [0x62]
-F64_LT = [0x63]
-F64_GT = [0x64]
-F64_LE = [0x65]
-F64_GE = [0x66]
-I32_ADD = [0x6A]
-I32_SUB = [0x6B]
-I32_MUL = [0x6C]
-I32_DIV_U = [0x6E]
-I64_ADD = [0x7C]
-I64_SUB = [0x7D]
-I64_MUL = [0x7E]
-I64_DIV_S = [0x7F]
-I64_REM_S = [0x81]
-I32_AND = [0x71]
-I32_OR = [0x72]
-I32_SHR_U = [0x76]
-F64_NEG = [0x9A]
-F64_CEIL = [0x9B]
-F64_FLOOR = [0x9C]
-F64_ADD = [0xA0]
-F64_SUB = [0xA1]
-F64_MUL = [0xA2]
-F64_DIV = [0xA3]
-I32_WRAP_I64 = [0xA7]
-I64_EXTEND_I32_U = [0xAD]
-I64_TRUNC_F64_S = [0xB0]
-F64_CONVERT_I64_S = [0xB9]
-I64_REINTERPRET_F64 = [0xBD]
-F64_REINTERPRET_I64 = [0xBF]
-REF_NULL = [0xD0]
-REF_IS_NULL = [0xD1]
-REF_AS_NON_NULL = [0xD4]
-END = [0x0B]
-STRUCT_NEW = [0xFB, 0x00]
-STRUCT_GET = [0xFB, 0x02]
-STRUCT_SET = [0xFB, 0x05]
-REF_TEST = [0xFB, 0x14]
-REF_CAST = [0xFB, 0x16]
-REF_CAST_NULL = [0xFB, 0x17]
-ARRAY_NEW_DEFAULT = [0xFB, 0x07]
-ARRAY_NEW_FIXED = [0xFB, 0x08]
-ARRAY_NEW_DATA = [0xFB, 0x09]
-ARRAY_GET = [0xFB, 0x0B]
-ARRAY_GET_U = [0xFB, 0x0D]
-ARRAY_SET = [0xFB, 0x0E]
-ARRAY_LEN = [0xFB, 0x0F]
-ARRAY_COPY = [0xFB, 0x11]
-# a memory's size in pages
-PAGE_BYTES = 0x10000
+use "opcodes.wap"
 
 # A module in the making. Imports come first among the functions, so a function's index is counted after them.
 class Module {
@@ -184,11 +51,14 @@ little_endian(n: int, width: int) as list := (0 upto width).map(at => n ÷ 0x100
 
 # an instruction with its unsigned immediates: instruction(CALL, [3])
 instruction(opcode: list, indices: list) as list := opcode + indices.flat_map(unsigned)
+# an instruction on a heap type, which the format writes signed, a declared type's index among them: ref.test 64 is
+# [0xFB, 0x14, 0xC0, 0x00]
+heap_instruction(opcode: list, type_index: int) as list := opcode + signed(type_index)
 i32_const(n: int) as list := I32_CONST + signed(n)
 i64_const(n: int) as list := I64_CONST + signed(n)
 f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
-# the null reference of a heap type, `ref.null any`
 local_get(local: int) as list := instruction(LOCAL_GET, [local])
+# the null reference of a heap type, `ref.null any`
 null_of(heap_type: list) as list := REF_NULL + heap_type
 
 # the value a variable of that type starts with: zero, or the null reference
@@ -200,10 +70,10 @@ default_of(value_type: list) as list := {
 	REF_NULL + value_type
 }
 
-# a reference to the declared type of that index, or null
 # whether a value type is a nullable reference, and the heap type it refers to
 is_reference(type: list) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
 heap_of(reference: list) as list := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
+# a nullable reference to the declared type of that index
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
 # whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
 packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
@@ -222,7 +92,7 @@ section(id: int, items: list) as list := {
 
 # Types: a function's, a struct's, an array's. A field is its storage type and whether it is mutable.
 function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + counted(parameters) + counted(results)
-field_type(storage: list, mutability: int) as list := storage + [mutability]
+field_type(storage: list<int>, mutability: int) as list<int> := storage + [mutability]
 struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
 array_type(item: list) as list := [ARRAY_TYPE] + item
 # a type open to subtypes, extending these type indices
@@ -248,7 +118,6 @@ grouped(m: Module, index: int) as list? := {
 	ø
 }
 # the type section's entries: a type declared alone as itself, a group as one entry of its types
-REC_GROUP = 0x4E
 type_entries(m: Module) as list := {
 	entries = []
 	for at in 0 to #m.types - 1 {

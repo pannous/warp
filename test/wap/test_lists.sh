@@ -50,4 +50,26 @@ xs += [4]
 print text(#xs)')" "0
 0
 1"
+check "a one-letter text beside texts is a text" "$(ran list_of_texts 'xs = ["ccc", "a", "bb"]
+print xs#2 + "!"')" "a!"
+check "the first items of a list, and the rest after them" "$(ran take_drop 'print show([1, 2, 3].take(2)) + " " + show([1, 2, 3].drop(2)) + " " + show([1].take(5)) + " " + show([1].drop(5))')" "[1, 2] [3] [1] []"
+check "a list's items summed" "$(ran sum 'print text([1, 2, 3].sum()) + " " + text([0.5, 0.25].sum())')" "6 0.75"
+check "a list sorted by a key, equal keys in their order" "$(ran sorted_by 'print show(["ccc", "bb", "aa", "dddd"].sorted(t => #t))')" "[\"bb\", \"aa\", \"ccc\", \"dddd\"]"
+check "an empty list typed by its later use" "$(ran later_use 'xs = []
+xs.add(2)
+print text(xs.sum())
+ys = []
+print text(#ys)')" "2
+0"
+check "a list sorted by a key named by" "$(ran sorted_by_named 'print show(["ccc", "bb", "dddd"].sorted(by: t => #t))')" "[\"bb\", \"ccc\", \"dddd\"]"
+check "a list's items spread into another list" "$(ran spread 'xs = [1, 2]
+ys = [0, ...xs, 4, ...xs]
+print text(#ys) + " " + text(ys#5)')" "6 1"
+check "a list's last item" "$(ran last 'print "wap/core/x.wap".split("/").last')" "x.wap"
+check "a list of lists shown and searched, each word typed for its item type" "$(ran nested 'print show([[1, 2], [3]])
+print text([["ab"], ["cd", "ef"]].any(row => row.contains("ef")))')" "[[1, 2], [3]]
+yes"
+check "an empty list beside lists of ints is one too" "$(ran empty_item 'xs = [[1], []]
+ys = xs#2 + [5]
+print(text(ys#1 + xs#1#1))')" "6"
 exit $((failures > 0))

@@ -35,6 +35,7 @@ use "../analyze/declarations.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "patterns.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
@@ -73,7 +74,9 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
-	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(lowered))
+	# a type written with its parts, `list<Node>`, stays as written: a named argument's or a case's field's type
+	Key(head, Op.None, List(items, Bracket.Less, separator)) => n
+	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(argument_lowered))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
@@ -81,6 +84,8 @@ lowered_form(n: Node) as Node := match n {
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
 	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
+	# a word written against what follows it, `...rest`, as a phrase
+	List(items, Bracket.None, Separator.None) => phrase_lowered(items, n)
 	_ => not_lowered(n)
 }
 
@@ -109,8 +114,7 @@ primitive_of(operation: Node, n: Node) as Node := match operation {
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
 assigned(place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
-	Get(subject, key) => Set(lowered(place), value)
-	_ => Set(place, value)
+	_ => Set(lowered(place), value)
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
@@ -133,6 +137,11 @@ is_fields(item: Node) as bool := match item {
 	_ => no
 }
 # an instance's field, `x: 1`, its value lowered
+# a call's argument lowered: a named one, `by: f`, its value
+argument_lowered(argument: Node) as Node := match argument {
+	Key(name, Op.Colon, value) => if name is symbol then field_lowered(argument, argument) else lowered(argument)
+	_ => lowered(argument)
+}
 field_lowered(field: Node, n: Node) as Node := match field {
 	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(name), Op.Colon, lowered(value)), field)
 	_ => not_lowered(n)

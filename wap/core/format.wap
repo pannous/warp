@@ -6,6 +6,8 @@ use "parse/operators.wap"
 use "stage.wap"
 use "../kernel/forms.wap"
 use "../preload/operators.wap"
+use "analyze/calls.wap"
+use "parse/operator_table.wap"
 
 # the operator that defines, whose left side is a definition's head
 DEFINE_SPELLING = ":="
@@ -82,12 +84,6 @@ enum Side { Left, Right }
 operand_text(operand: Node, call: Node, side: Side) as text := {
 	inner = if side == Side.Left and group_written(call) == parameters_group then operand else ungrouped(operand)
 	if needs_brackets(inner, call, side) then "(" + formatted(inner) + ")" else formatted(inner)
-}
-
-# what round brackets around one item group, the item itself
-ungrouped(n: Node) as Node := match n {
-	List(items, Bracket.Round, separator) => if #items == 1 then ungrouped(items#1) else n
-	_ => n
 }
 
 needs_brackets(operand: Node, call: Node, side: Side) as bool := {

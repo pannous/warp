@@ -324,3 +324,15 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
   Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
   Nothing pins the float digits.
+- **A one-letter literal key on a map read fails** (wap/core/analyze/data.wap): `m#"b"` gives the key as a char, so
+  the wasm does not validate; `m#"bb"`, `m["b"]` and `m#k` work. Edge case, no wap source writes it.
+- **any compares other references by identity:** inside an `any`, refs other than boxes and texts compare by
+  identity (a record compared directly compares by fields); by type via dispatch, as show does, when code needs it.
+- **The preload copies core/node.warp's enums instead of reading the file** (wap/preload/nodes.wap). wap reads
+  core/node.warp whole, but its `List(items: list, …)` gives an untyped list whose items wap can't read (`data#1` is
+  refused: no # takes (list, int)). Reading it needs a bare `list` to mean list<any> and an `any` read back as a Node by
+  a match. Until then nodes.wap types the items list<Node>, and the two copies must change together.
+- **A rewrite that loops forever hangs the compiler instead of being refused** (wap/core/rules/stages.wap): letting
+  any rule read a square list as one phrase made `xs = [1 2 3]` hang, some rule rewriting the phrase `1 2 3` again and
+  again (the loop was not traced). A list is now one phrase only when its first word leads a rule. A rewrite whose
+  result fires the rules again without end should be refused by name, as every other unknown form is.
