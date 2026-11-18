@@ -7,8 +7,11 @@ were taken again there: `file:line` refers to 73b39f4ad5. Nothing in wap/ or tes
 
 Main did not stand still after that either: in the next 28 minutes 17 commits landed, most of them answers to
 first refusals this report lists. The body stays the snapshot of 73b39f4ad5 (`git show 73b39f4ad5:wap/core/…`
-shows a cited line as it was); the last section, "After the review", takes the census again at 47fd489566 and says
-which findings main has acted on. Read it with the verdict: it is the test of finding 1.
+shows a cited line as it was). The census taken again at b85307a431 (17:13) and at 47fd489566 (17:21) still typed
+the same 11 files, now of 51, while eight first refusals were fixed: the test of finding 1. At 47fd489566, 37 of
+the 40 untyped files stop at fix 2.4 (`Separator.None`, 21 files), decision 1 (13), fix 2.1 (2) or fix 2.5 (1).
+Main took decision 5 as option B (2cc3f843e8). The section "Dynamic types" was added after a talk with the user
+and replaces the recommendation of decision 1.
 
 ## Verdict
 
@@ -591,6 +594,45 @@ What I would change:
 - **Ownership becomes review duty.** In 7000 lines nobody needs a lock: anyone edits any file on a branch, the
   owner of the stage reviews. What is exclusive is the stage's *contract*: the check of fix 5 that says what a
   stage's output is.
+
+## Dynamic types: how to build them (user, 2026-11-18)
+
+The design is the user's and is not in question: warp is optionally typed, dynamic where a type cannot be inferred,
+and the compiler's own source stays fully typed. wap today refuses where it cannot infer. The advice below is how to
+get from one to the other without a second type system. Each point has a `# REVIEW` remark at the place it names.
+
+1. **`any` is the dynamic type, and inference falls back to it.** `joined_type` (core/analyze/fits.wap) gives ø
+   when two types do not meet, and its callers refuse ("a list's items are of one type"). It should give `any`.
+   A name whose type is never settled is an `any`. That is the whole of "dynamic where we can't infer".
+2. **One relation, `conversion(given, wanted)`, with one new answer.** Today "does it fit" is yes or no in more
+   than fifteen functions (fix 4). It should say how: as it is, boxed into `any`, wrapped into `T?`, **checked out
+   of `any`**, or not at all. The checked conversion is the only new machinery dynamic typing needs: a cast that
+   raises with both types and the place. Typing writes the conversion into the kernel; the emitter emits it.
+   Today the emitter meets that case and gives ø instead (core/emit/values.wap, `fitted`): fix this first.
+3. **Calls on dynamic values are elaboration, not an emitter feature.** `show(x: any) := prim dispatched(x)`
+   (wap/preload/prelude.wap, core/analyze/types.wap) is the idea, by hand, for one word and one parameter. General
+   rule: a call with an `any` argument that no overload takes as `any` makes typing write the instance `f(any)`
+   once, as plain kernel: a chain of `is` tests over the overloads, most specific first, each arm a checked
+   conversion and a static call, the last arm a raise. The order is the one the static choice uses, from one
+   function. A field read on an `any` is the same chain over the classes that have the field. No new kernel form,
+   no new emitter code; `dispatched`, the OVERLOADS fact and the hand-assembled `any_equality_function` go.
+4. **Containers hold references.** A `list<int>` is an array of i64 and a `list<Node>` an array of references
+   (core/emit/lists.wap), so a typed list can stand where a bare `list` is wanted only by a copy, and lists are
+   shared (`b = a` ⏎ `b.add(2)` changes `a`, probe y01), so a copy changes meaning. With every list and map
+   holding references (small ints as i31, larger ones boxed), `list<int>` is a promise typing checks with a cast
+   at the read; any list fits a bare `list`; the list words are compiled once instead of once per item type. wap's
+   own lists hold Nodes and texts and pay nothing. This replaces decision 1: a bare `list` is a list of anything,
+   and what was option A (write the item types into wap's source) is only the rule that the compiler's source
+   stays typed.
+5. **Say what was left dynamic.** `warp format` prints an inferred `any` where it matters, and one option lists
+   the dynamic places of a file; the self-build runs with it and expects none.
+6. **Order of work.** (a) point 2's checked cast in place of the ø; (b) `conversion` in fits.wap, callers moved
+   one construct at a time, each with a test; (c) the fallback to `any`; (d) the generated `f(any)`; (e) the
+   layout of containers, the one large change, best before the emitter's second pass (fix 5).
+
+Found on the way, and a test of point 3: `[1, 2] == [1, 2]` and `Point(1, 2) == Point(1, 2)` compile and run out
+of stack (probes y05, y07). No `==` takes two lists or two instances, so the choice falls to the `==` of optionals
+(wap/preload/prelude.wap), whose `a! == b!` chooses itself again. No test compares two lists.
 
 ## What to keep
 
