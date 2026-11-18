@@ -87,6 +87,7 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 	rules = if typed then typed_rules else shape_rules
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
 	rules.by_head[rule.head].add(rule)
+	match normal { List(items, Bracket.None, Separator.Space) => for word in list_heads(items) { phrase_words.leading[word] = yes }; _ => ø }
 }
 
 # The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its

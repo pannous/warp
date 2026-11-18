@@ -46,4 +46,7 @@ format_check 'rule show { ($k: $v)... } => 1' 'rule show {($k: $v)...} => 1'
 # an optional's value, `x!` (wiki/optional.md), beside the prefix `!x` for not
 format_check 'y = x!' 'y = x!'
 format_check 'z = !x' 'z = not x'
+# a word leading a rule's phrase after an infix takes the rest of the phrase, as at a phrase's start; other words stay operands
+format_check 'x = f(a) ?? return ø' 'x = f(a) ?? (return ø)'
+format_check 'n = if s < 0 then 0 - s else s' 'n = if s < 0 then 0 - s else s'
 exit $((failures > 0))

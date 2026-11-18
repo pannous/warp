@@ -142,8 +142,8 @@ known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #ali
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
 # spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
-phrase_read(written: list) as Node := {
-	tokens = operators_called(written)
+phrase_read(written: list) as Node := tokens_read(operators_called(written))
+tokens_read(tokens: list) as Node := {
 	operands = []
 	pending = []
 	expecting_operand = yes
@@ -153,7 +153,13 @@ phrase_read(written: list) as Node := {
 		next = if i < #tokens then tokens#(i + 1) else ø
 		if expecting_operand {
 			prefix = if operand_follows(next) then reading_as(token.item, Fixity.Prefix) else ø
-			if prefix == ø {
+			if prefix == ø and called_after_infix(token, next, pending) {
+				last = i + 1
+				while last < #tokens and not is_block(tokens#(last + 1).item) { last = last + 1 }
+				operands.add(tokens_read(tokens[i - 1 .. last]))
+				expecting_operand = no
+				i = last
+			} else if prefix == ø {
 				operands.add(operated(token.item))
 				expecting_operand = no
 			} else {
@@ -197,6 +203,15 @@ operators_called(tokens: list) as list := {
 	}
 	called
 }
+
+# A word that leads a rule's phrase after an infix operator, with more operands after it, takes the rest of the phrase
+# as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, up to a block, which the statement keeps
+# (`if a == b { … }`). Other words stay operands (`0 - step else step`).
+called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := #pending > 0 and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
+# the words rules' phrases start with, `return` of `rule return $value... => …`, told by the rule stage as it loads them
+class PhraseWords { leading: map }
+phrase_words = PhraseWords({})
+is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
 # a symbol the table reads as an operator in any fixity
 is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø
