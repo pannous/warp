@@ -133,8 +133,9 @@ A rule file is in preload/sugar/ exactly when wap's own source uses its spelling
 
 ## Owners
 
-Owners go by stage (user 2026-11-18, notes/wap_review.md "The workers"). Anyone may edit any wap file on a branch;
-the owner of the file's stage reviews the change before the handoff, and owns the stage's contract: what its output
+Each wap file has one expert owner, whose duties are notes/agents/wap-owner.md (user 2026-11-18); ownership changes
+only through warp-lead, in this table. Owners go by stage (user 2026-11-18, notes/wap_review.md "The workers").
+Anyone may edit any wap file on a branch; the owner of the file's stage reviews the change before the handoff, and owns the stage's contract: what its output
 language is (notes/backbone.md "Stage languages"). Breadth stops until milestone 2: wap gets only what its own
 source uses, and every landing names the functions of wap it turned green (scripts/wap-census.warp). Tests
 (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that blocks wap
