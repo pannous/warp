@@ -56,4 +56,8 @@ check "the list words take a function's name" "$(ran named_words 'is_small(x) :=
 print text([1, 2].all(is_small))
 print text([1, 5].any(is_small))')" "yes
 no"
+check "a call of the value another call gives" "$(ran chained 'adder(n: int) := x => x + n
+print text(adder(2)(40))
+(x => x * 3)(5)')" "42
+15"
 exit $((failures > 0))
