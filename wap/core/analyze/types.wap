@@ -161,16 +161,17 @@ captured_by(definition: Node, types: list) as list := {
 	if parts == ø or text(parts#1) != function_key_of(definition) or captures is empty { return [] }
 	(1 to #captures).map(at => [place_key(captures#at), parts#(at + 1)])
 }
-# A call of a function value, `f(x)` where f holds `y => y + 1`: a call of the value's function, the value its
-# first argument
+# A call of a function value, `f(x)` where f holds `y => y + 1`, or `make(1)(2)`: a call of the value's function, the
+# value its first argument
 value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	type = value_type(typed_form(called, s, f, ø))
 	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
 	lambda = definition_keyed(text(parts#1), s) ?? refused(called, "the typing stage found no function of this value")
-	call_typed(n, with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(written_name(lambda))), [called] + arguments, s, f, expected)
+	name = declared_name(written_name(lambda))
+	call_typed(n, with_fact(with_fact(name, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, name), [called] + arguments, s, f, expected)
 }
-# whether a called name holds a value rather than naming a function
-holds_value(called: Node) as bool := called is symbol and fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
+# whether what a call calls is a value, a name holding one or any other code giving one, rather than a function's name
+holds_value(called: Node) as bool := not called is symbol or not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
 
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
