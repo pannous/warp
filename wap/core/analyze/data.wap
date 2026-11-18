@@ -75,7 +75,7 @@ common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	if wanted != ø and all_fit(values, wanted, s) { return wanted }
 	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).filter(type => type != ø)
 	for type in types.filter(type => not has_unknowns(type)) + types.filter(has_unknowns) { if all_fit(values, type, s) { return type } }
-	types.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))
+	if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_type(a, b, s))
 }
 # a value as the type its place holds reads it: a char beside texts its text, a function value where a function type is
 read_as(value: Node, type: Node, s: TypingState) as Node := as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")

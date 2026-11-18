@@ -46,7 +46,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	called_reads(chosen, n, s, f)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
-	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
+	result_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen)
 }
 # A word with several results gives the one that is wanted (wiki/conversion.md "declared type via as"): an argument
 # whose definitions differ by their result, `int(hi())` beside hi() as int and hi() as text, is wanted as the parameter
@@ -119,7 +119,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
 	called_reads(chosen, n, s, f)
-	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
+	result_of(calling(refitted(Get(typed, key), n), chosen), chosen)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
 as_text(character: Node, s: TypingState) as Node := if character is Char then char_text(character) else word_called(character, TEXT_FUNCTION, [character], ø, s)
@@ -135,7 +135,7 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 	meant = chosen_definition(n, symbol(word), [definitions_named(word, s)], given, expected, s)
 	taken = texts_read(meant, given, s)
 	chosen = function_typed(meant, taken.map(value_type), s, n)
-	with_type_of(refitted(Call(calling(symbol(word), chosen), taken), n), chosen.result)
+	result_of(refitted(Call(calling(symbol(word), chosen), taken), n), chosen)
 }
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
@@ -294,9 +294,9 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result the written
 # one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
-result_given(body_type: Node?, frame: TypeFrame, name: Node, s: TypingState) as Node? := {
+result_given(body: Node, frame: TypeFrame, name: Node, s: TypingState) as Node? := {
 	# a written result is the result, which each returned value fits: `return x` of an int in a function giving int?
-	result = frame.result ?? (if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type)
+	result = frame.result ?? (if jumps(body) then (if frame.returns is empty then ø else frame.returns#1) else value_type(body))
 	for returned in frame.returns { if not (returned == result or conversion(returned, result, s) in STATIC_CONVERSIONS) { refused(name, "this function gives back values of different types") } }
 	result
 }
@@ -315,8 +315,10 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed = TypedFunction(key, types)
 	written = substituted(declared_type(name), letters)
 	# a bare `list` (or `list?`) written takes the body's own type, as a bare list parameter takes its argument's
-	typed.result = if names_bare_kind(written) then ø else written
-	typed.signed = with_signature(name, types, typed.result)
+	typed.jumps = written == symbol(NEVER_RESULT)
+	typed.result = if names_bare_kind(written) or typed.jumps then ø else written
+	# a built-in that never returns keeps its written `never`, which the emitter lays out
+	typed.signed = with_signature(name, types, if typed.jumps then written else typed.result)
 	s.functions += [typed]
 	frame = TypeFrame()
 	frame.result = typed.result
@@ -325,15 +327,18 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed_parameters = (1 to #types).map(at => parameter_typed(parameters_in(definition)#at, types#at, frame))
 	frame.variables += captured_by(definition, types)
 	typed_body = typed_form(body, s, frame, typed.result)
-	given = result_given(value_type(typed_body), frame, name, s)
+	given = result_given(typed_body, frame, name, s)
+	typed.jumps = typed.jumps or jumps(typed_body) and frame.returns is empty
 	if written != ø { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
-	typed.signed = with_signature(name, types, typed.result)
+	typed.signed = with_signature(name, types, if typed.jumps and typed.result == ø then written else typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
 	typed.late = frame.late
 	typed.done = yes
 	typed
 } }
+# a call typed by the function it calls: of its result, or jumping when that never returns
+result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
 parameter_type(written: Node?, given: Node, letters: list, records: list) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
