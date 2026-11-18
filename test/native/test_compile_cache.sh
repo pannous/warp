@@ -30,4 +30,9 @@ check "compiled with one lib/" "$(ran keys.warp)" "3"
 check "with lib/ by another path" "$("$warp" --mute --lib "$folder/lib" "$folder/keys.warp" 2>&1)" "3"
 check "and the first again" "$(ran keys.warp)" "3"
 check "one cached module of the file" "$(ls "$HOME/Library/Caches/warp/compiled" | grep "compile-cache-test.$$_keys.warp.*wasm$" | grep -vc "cwasm$")" "1"
+
+# warp --no-cache compiles cold and keeps nothing (card cold-compile-option)
+printf 'print 4\n' >"$folder/cold.warp"
+check "a cold compile" "$("$warp" --mute --no-cache "$folder/cold.warp" 2>&1)" "4"
+check "keeps no module" "$(ls "$HOME/Library/Caches/warp/compiled" | grep -c "compile-cache-test.$$_cold.warp")" "0"
 exit $((failures > 0))
