@@ -46,6 +46,9 @@ print text([4, 5].contains(5))')" "yes
 yes
 no
 yes"
+check "a call before its function's definition line" "$(ran later 'n = later(2)
+later(x: int) := x * 2
+n')" "4"
 check "a function's name passed as a value" "$(ran named 'inc(x: int) := x + 1
 apply(f, x) := f(x)
 print text(apply(inc, 2))
@@ -54,6 +57,10 @@ g(g(5))')" "3
 7"
 check "the list words take a function's name" "$(ran named_words 'is_small(x) := x < 3
 print text([1, 2].all(is_small))
-print text([1, 5].any(is_small))')" "yes
+print text([4, 5].any(is_small))')" "yes
 no"
+check "a call of the value another call gives" "$(ran chained 'adder(n: int) := x => x + n
+print text(adder(2)(40))
+(x => x * 3)(5)')" "42
+15"
 exit $((failures > 0))

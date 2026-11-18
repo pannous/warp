@@ -3,3 +3,6 @@
 # a class, its fields typed names, then its methods; the rule writes its constructor, the instance as data, and each
 # method as a function whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too
 rule class $name { ($field: $type)... ($method($parameters...) := $body)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}; ($method(self: $name, $parameters...) := $body)...
+
+# an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's type
+rule enum $name { $cases... } => Record($name, [], [$cases...])
