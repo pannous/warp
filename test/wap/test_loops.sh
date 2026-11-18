@@ -34,6 +34,9 @@ while i < 6 { i = i + 1
 if i == 2 then continue
 sum = sum + i }
 sum')" "19"
+check "a block of one keyword phrase" "$(ran one 'x = 1
+while x < 2 { if x == 1 { x = 2 } }
+x')" "2"
 # until c { b } is while not c (wiki/keyword.md)
 check "until loops until its condition holds" "$(ran until 'x = 0
 until x >= 3 { x = x + 1 }
