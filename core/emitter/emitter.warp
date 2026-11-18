@@ -490,7 +490,7 @@ shared_names(statements: list) := {
 # the name a statement `global name = value` or `global name` declares, else ø
 declared_global_name(s: Node) as text? := {
 	declaration = if is_group(s) and bracket_of(s) == "" and #s == 2 and s#1 == symbol("global") then s#2 else if is_key(s, Op.Colon) and key_of(s) == symbol("global") then value_of(s) else ø
-	if declaration is symbol then name_of(declaration) else if is_key(declaration, Op.Assign) and key_of(declaration) is symbol then name_of(key_of(declaration)) else ø
+	if declaration is symbol then name_of(declaration) else if is_key(declaration, Op.Assign) and assigned_variable(key_of(declaration)) is symbol then name_of(assigned_variable(key_of(declaration))) else ø
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
 class Mentions { wanted: any; found: map = {} }
