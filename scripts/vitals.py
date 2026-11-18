@@ -9,7 +9,7 @@ landing's compiler builds, read from the build records in the store (STORE). All
 (scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
 artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
-import collections, concurrent.futures, datetime, glob, json, os, re, shutil, subprocess, sys
+import collections, concurrent.futures, datetime, glob, json, os, re, shutil, subprocess, sys, tempfile
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SINCE = sys.argv[1] if len(sys.argv) > 1 else "2026-10-29"
@@ -63,7 +63,9 @@ WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 WAP_CENSUS_JOBS = 4  # census runs at once, niced: each takes ~25 s
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
-WAP_HELLO_RUNS = 1  # a compile by wap takes ~20 s
+# warp caches a program file's compile by its path (~/Library/Caches/warp/compiled, flattened path in the name): a copy of
+# wap/ in a folder never used before is compiled cold, and its cache entry is deleted after
+WARP_COMPILE_CACHE = os.path.expanduser("~/Library/Caches/warp/compiled")
 WAP_TESTS_SUMMARY = os.path.join(REPO, "data/wap-tests/summary.txt")  # written by test/wap/run.sh
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
 CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound, typed: (\w+), emitted: (\w+)")
@@ -535,29 +537,42 @@ def wap_census(files):
     return {**sums, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
 
 
-def wap_hello(compiler):
-    """hello compiled by wap and run: 10^9 instructions and seconds of both together; None when it fails"""
+def wap_hello():
+    """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed: the wap compiler built by warp,
+    always cold (a copy of wap/ in a new folder, compiled the first time); hello by wap, always warm (wap compiling hello and
+    that run, the compiler's compile cached by then)."""
     source, module = (os.path.join(WAP_TREE, name) for name in ("hello.wap", "hello.wasm"))
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
-    costs = [cheapest_cost(WARP, arguments, said, WAP_HELLO_RUNS) for arguments, said in (([compiler, source, module], ""), ([module], "Hello"))]
-    return None if None in costs else [round(sum(cost[i] for cost in costs), 2) for i in (0, 1)]
+    fresh = tempfile.mkdtemp(dir=WAP_TREE)
+    try:
+        shutil.copytree(os.path.join(WAP_TREE, "wap"), os.path.join(fresh, "wap"))
+        compile_hello = [os.path.join(fresh, "wap/compiler.wap"), source, module]
+        cold = cheapest_cost(WARP, compile_hello, "", 1)
+        warm, run = cheapest_cost(WARP, compile_hello, ""), cheapest_cost(WARP, [module], "Hello")
+    finally:
+        for entry in glob.glob(os.path.join(WARP_COMPILE_CACHE, f"*{os.path.basename(fresh)}*")):
+            os.remove(entry)
+    if None in (cold, warm, run):
+        return None
+    return {"build": [round(cold[i] - warm[i], 2) for i in (0, 1)], "hello": [round(warm[i] + run[i], 2) for i in (0, 1)]}
 
 
 def wap_road(tip_date):
-    """The census and hello by wap, one snapshot in WAP_SNAPSHOTS per state of wap/ at the tip, taken only when wap/ changed
-    since the last one; wap's tests' summary as a snapshot whenever test/wap/run.sh wrote a new one."""
+    """The census and hello by wap, each a snapshot in WAP_SNAPSHOTS per state of wap/ at the tip, taken only when wap/ changed
+    since the last one of its kind; wap's tests' summary as a snapshot whenever test/wap/run.sh wrote a new one."""
     snapshots, tree = read_snapshots(WAP_SNAPSHOTS), git("rev-parse", f"{TIP}:wap").strip()[:12]
-    censuses = [s for s in snapshots if s["kind"] == "census"]
-    if not censuses or censuses[-1]["tree"] != tree:
+    stale = [kind for kind in ("census", "hello") if not any(s["kind"] == kind and s["tree"] == tree for s in snapshots)]
+    if stale:
         shutil.rmtree(WAP_TREE, ignore_errors=True)
         os.makedirs(WAP_TREE)
         subprocess.run(f"git -C {REPO} archive {TIP} wap {WAP_CENSUS} | tar -x -C {WAP_TREE}", shell=True, check=True)
-        files = sorted(f for f in git("ls-tree", "-r", "--name-only", TIP, "wap").splitlines() if f.endswith(".wap"))
-        census = wap_census(files)
-        snapshots.append({"kind": "census", "time": tip_date, "commit": TIP[:10], "tree": tree, **census,
-                          "hello": wap_hello(os.path.join(WAP_TREE, "wap/compiler.wap"))})
-        append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
+    measures = {"census": lambda: wap_census(sorted(f for f in git("ls-tree", "-r", "--name-only", TIP, "wap").splitlines()
+                                                    if f.endswith(".wap"))), "hello": wap_hello}
+    for kind in stale:
+        if measured := measures[kind]():
+            snapshots.append({"kind": kind, "time": tip_date, "commit": TIP[:10], "tree": tree, **measured})
+            append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
     if os.path.exists(WAP_TESTS_SUMMARY) and (match := WAP_TESTS_LINE.search(open(WAP_TESTS_SUMMARY).read())):
         written = datetime.datetime.fromtimestamp(os.path.getmtime(WAP_TESTS_SUMMARY)).strftime("%Y-%m-%d %H:%M")
         if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
