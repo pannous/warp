@@ -11,7 +11,7 @@ built(template: Node, bindings: map) as Node := match template {
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
 		pattern = pattern_called(head)
-		if pattern == ø { Key(built(head, bindings), Op.None, List(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
+		if pattern == ø { Key(built(head, bindings), Op.None, grown(built_items(arguments, bindings), Bracket.Round, separator)) } else { instance(pattern, built_items(arguments, bindings)) }
 	}
 	Key(left, op, right) => Key(built(left, bindings), op, built(right, bindings))
 	List(items, bracket, separator) => grown(built_items(items, bindings), bracket, separator)
@@ -53,7 +53,8 @@ grown(items: list, bracket: Bracket, separator: Separator) as Node := {
 	List(items, bracket, if bracket == Bracket.Curly then Separator.Newline else Separator.Comma)
 }
 
-# `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn
+# `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn; a part
+# in parentheses, `($f: $f)...`, is written without them, as a pattern reads it
 repeated(part: Node, bindings: map) as list := {
 	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
 	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
@@ -61,7 +62,7 @@ repeated(part: Node, bindings: map) as list := {
 	written = []
 	for i in 1 to times {
 		for hole in sequences { bindings[hole] = items_taken(bindings[hole + REST_MARK])#i }
-		written.add(built(part, bindings))
+		written.add(built(ungrouped(part), bindings))
 	}
 	for hole in sequences { bindings.remove(hole) }
 	written

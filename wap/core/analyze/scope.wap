@@ -51,6 +51,8 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Get(subject, key) => refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
+	Record(name, fields, variants) => n
 	Number(value) => n
 	Text(value) => n
 	Char(value) => n
@@ -78,6 +80,8 @@ pattern_variables(pattern: Node, depth: int) as list := match pattern {
 	_ => refused(pattern, "wap matches literals, names and _ so far")
 }
 
+# an instance's field, `x: 1`: its value bound, its name the record's field, no variable
+field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
 all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
 
