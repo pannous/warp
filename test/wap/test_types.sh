@@ -59,4 +59,10 @@ check "any value fits any" "$(ran any_fits 'f(x: any) := 1
 print text(f(3) + f("ab") + f([1]) + f(2.5))')" "4"
 check "an int or a float fits a number" "$(ran number_fits 'g(x: number) := 2
 print text(g(3) + g(2.5))')" "4"
+# a function's written result type is its type, whatever its body gives that fits it
+check "the written result type wins" "$(ran written_result 'f(a: int) as int? := ø
+h(x: int?) := 1
+print text(missing(f(1)))
+print text(h(f(1)))')" "yes
+1"
 exit $((failures > 0))
