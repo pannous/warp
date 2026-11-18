@@ -87,17 +87,19 @@ lists_joining_function(p: Program, type: Node) as int := {
 	added_function(p.m, [list_layout(type, p), list_layout(type, p)], [list_layout(type, p)], [nullable(array)], made + total + local_get(2) + instruction(STRUCT_NEW, [list_struct(type, p)]))
 }
 
+# a map helper's first two parameters: the map and a key
+keyed_layouts(map: Node, p: Program) as list := [map_layout(map, p), item_layout(keys_of(map), p)]
 # The helpers of map_get and map_set. Their locals: 0 the map, 1 the key, then for map_set 2 the value; the count
 # after them. A map's keys are searched in order, by their type's equality; map_set sets the value of a key it finds,
 # and adds the key and value at the end otherwise.
 map_reading_function(p: Program, map: Node) as int := {
 	found = map_part(MAP_VALUES, map, p) + items_in(values_of(map), ø, p) + local_get(2) + instruction(ARRAY_GET, [items_array(values_of(map), p)]) + RETURN
-	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p)], [item_layout(values_of(map), p)], [I32], key_searched(2, found, map, p) + raised(NO_SUCH_KEY, p))
+	added_function(p.m, keyed_layouts(map, p), [item_layout(values_of(map), p)], [I32], key_searched(2, found, map, p) + raised(NO_SUCH_KEY, p))
 }
 map_setting_function(p: Program, map: Node) as int := {
 	found = map_part(MAP_VALUES, map, p) + local_get(3) + local_get(2) + typed_helper_called(LIST_SET, values_of(map), p) + RETURN
 	added = map_part(MAP_KEYS, map, p) + local_get(1) + typed_helper_called(LIST_ADD, keys_of(map), p) + map_part(MAP_VALUES, map, p) + local_get(2) + typed_helper_called(LIST_ADD, values_of(map), p)
-	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p), item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
+	added_function(p.m, keyed_layouts(map, p) + [item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
 }
 # The helper of map_keys: a new list of a map's keys, so no change to it reaches the map. Its local: 0 the map.
 keys_copying_function(p: Program, map: Node) as int := {
@@ -110,7 +112,7 @@ keys_copying_function(p: Program, map: Node) as int := {
 map_removing_function(p: Program, map: Node) as int := {
 	removed = (at, list) => map_part(at, map, p) + local_get(2) + typed_helper_called("list_remove_at", list, p)
 	found = removed(MAP_KEYS, keys_of(map)) + removed(MAP_VALUES, values_of(map)) + RETURN
-	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p)], [], [I32], key_searched(2, found, map, p))
+	added_function(p.m, keyed_layouts(map, p), [], [I32], key_searched(2, found, map, p))
 }
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list, map: Node, p: Program) as list := {
