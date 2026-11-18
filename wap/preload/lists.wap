@@ -46,10 +46,30 @@ fold(xs: list<T>, first: U, combined: (U, T) -> U): U := {
 	for x in xs { value = combined(value, x) }
 	value
 }
+# the items added up: `[1, 2, 3].sum()` is 6
+sum(xs: list<int>): int := xs.fold(0, (total, x) => total + x)
+sum(xs: list<float>): float := xs.fold(0.0, (total, x) => total + x)
 # texts joined, the separator between each two: `["a", "b"].join(", ")` is "a, b"
 join(texts: list<text>, separator: text): text := {
 	out = ""
 	for at in 1 to #texts { out = out + (if at > 1 then separator else "") + texts#at }
+	out
+}
+
+# the first n items, and the items after them: `[1, 2, 3].take(2)` is [1, 2], `[1, 2, 3].drop(2)` is [3]
+take(xs: list<T>, n: int): list<T> := xs[0 .. n]
+drop(xs: list<T>, n: int): list<T> := xs[min(n, #xs) .. #xs]
+# the items in the order of their keys, equal keys in the list's order: `["bb", "a"].sorted_by_key(t => #t)` is ["a", "bb"]
+sorted_by_key(xs: list<T>, key: (T) -> K): list<T> := {
+	out: list<T> = []
+	keys: list<K> = []
+	for x in xs {
+		k = key(x)
+		at = #keys
+		while at > 0 and k < keys#at { at -= 1 }
+		out = out.take(at) + [x] + out.drop(at)
+		keys = keys.take(at) + [k] + keys.drop(at)
+	}
 	out
 }
 

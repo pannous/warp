@@ -8,6 +8,8 @@ continuation_from(): int := 128
 continuation_until(): int := 192
 # the characters a hex digit takes beyond the digits
 hex_letters(): text := "abcdefABCDEF"
+# the blanks trim takes off: space, tab, line feed, carriage return
+blank_bytes(): list<int> := [32, 9, 10, 13]
 
 byte_count(t: text): int := prim array_len(t)
 byte_at(t: text, at: int): int := prim array_get_u(t, at)
@@ -70,6 +72,15 @@ find(t: text, part: text): int := {
 	0
 }
 contains(t: text, part: text): bool := find(t, part) > 0
+# t without the blanks (spaces, tabs, line ends) at its start and end: `"  a b ".trim()` is "a b"
+trim(t: text): text := {
+	start = 0
+	stop = byte_count(t)
+	while start < stop and is_blank_byte(byte_at(t, start)) { start += 1 }
+	while stop > start and is_blank_byte(byte_at(t, stop - 1)) { stop -= 1 }
+	bytes_between(t, start, stop)
+}
+is_blank_byte(b: int): bool := b in blank_bytes()
 # t with each place of a part given another text: `"a-b-c".replace("-", "+")` is "a+b+c"
 replace(t: text, part: text, other: text): text := {
 	out = ""
