@@ -65,6 +65,7 @@ Three details:
 | Quote | `code`, `$x` holes spliced | `data a + b`, `data f($x)` |
 | Define | `name parameters body` | `f(x) := …`, constants, `global n = 0` |
 | Get | `place`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
+| Item | `x[k]`, an item counted from 0 or a map's entry, by the subject's type; typing turns it into Get or item(x, k) | `xs[0]`, `m["a"]` |
 | Set | `place value` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
 | Fn | `parameters body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
 | Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x`, `make(1)(2)` (called: a name or code giving a function value) |

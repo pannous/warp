@@ -106,6 +106,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
 	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	List(items, Bracket.Curly, separator) => map_typed(n, items, separator, s, f, expected)
+	Item(subject, key) => item_typed(n, subject, key, s, f)
 	Fn(parameters, body) => function_value_typed(n, parameters, body, s, f)
 	Symbol(name) => name_typed(n, s, f)
 	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
@@ -258,6 +259,7 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 # A value given to a name: its type the one the name holds, written or given before; the value expected it
 set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
 	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
+	Item(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
 	_ => if fact_of(place, BINDING) == symbol(BOUND_FIELD) then item_set_typed(n, typed_form(receiver_field(place), s, f, ø), value, s, f) else name_set_typed(n, place, value, s, f)
 }
 # a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
@@ -282,17 +284,6 @@ item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	given = typed_form(value, s, f, wanted)
 	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
-}
-
-# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
-# the call `#(x, i)`, as a Range answers it
-get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
-	held = typed_form(subject, s, f, ø)
-	place = typed_form(key, s, f, symbol(INT_TYPE))
-	item = item_type(value_type(held))
-	if item == ø { return word_called(n, PLACE_WORD, [held, place], ø, s) }
-	if not fits_type(place, symbol(INT_TYPE)) { refused(key, "an item's place is an int") }
-	with_type_of(refitted(Get(held, place), n), item)
 }
 
 # a name's value: a parameter, local or global, of the type given to it

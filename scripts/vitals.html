@@ -104,6 +104,13 @@ footer { color: var(--ink-3); font-size: 12px; }
   </section>
 
   <section>
+    <h2>wap, the new compiler</h2>
+    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; then the road to self-build, measured by scripts/wap-census.warp on each wap file (statements lowered and bound, files typed and emitted, the most frequent refusals), one snapshot whenever wap/ changed; wap's tests (test/wap/run.sh, as last run); hello compiled by wap and run; and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
+    <div class="tiers" id="wap"></div>
+    <div class="table-wrap"><table id="wap-blockers"></table></div>
+  </section>
+
+  <section>
     <h2>Tests passing</h2>
     <p class="section-note">Each committed results file, one panel per lane, on one shared scale from 50% to 100%. A dot is one run; click it to open the commit that saved it.</p>
     <div class="tiers" id="tiers"></div>
@@ -239,44 +246,100 @@ const commitLink = sha => `<a href="${COMMIT_URL}${sha}" target="_blank" rel="no
 const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
 const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
 
+// one panel on its own time axis: a card with the latest value and a chart of <lines> ({name, points, index, color}, a
+// point being [time, commit, …]) and <extraDots>, points not on a line (hello's hand measurements). A point's commit
+// opens on click; <hollow> and <annotate> style an extra dot.
+const timeOf = date => new Date(date.replace(" ", "T")).getTime();
+function trendPanel(holder, { label, value, note, lines, extraDots = [], describe, hollow = () => false, annotate = () => null }) {
+  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18;
+  const dots = [...lines.flatMap(line => line.points.map(point => [point, line])), ...extraDots.map(point => [point, lines[0]])];
+  const times = dots.map(([point]) => timeOf(point[0])), start = Math.min(...times), end = Math.max(...times);
+  const top = Math.max(...dots.map(([point, line]) => point[line.index]), 1) * 1.1;
+  const x = date => L + (timeOf(date) - start) / Math.max(1, end - start) * (W - L - R);
+  const y = v => T + (1 - v / top) * (H - T - B);
+  const card = document.createElement("div"); card.className = "tier";
+  const legend = lines.length > 1 ? `<div class="legend">${lines.map(line => `<span><i style="background:var(${line.color})"></i>${line.name}</span>`).join("")}</div>` : "";
+  card.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div><div class="change">${note}</div>${legend}`;
+  const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label }, card);
+  [0, top / 2, top].forEach(v => {
+    element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
+    element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = +v.toFixed(v < 10 ? 2 : 0);
+  });
+  [start, end].forEach((t, i) => element("text", { x: i ? W - R : L, y: H - 4, "text-anchor": i ? "end" : "start" }, svg).textContent = shortDay(new Date(t).toISOString().slice(0, 10)));
+  lines.forEach(line => line.points.length > 1 && element("polyline", { points: line.points.map(point => `${x(point[0])},${y(point[line.index])}`).join(" "), fill: "none", stroke: `var(${line.color})`, "stroke-width": 2, "stroke-linejoin": "round" }, svg));
+  dots.forEach(([point, line]) => {
+    const isHollow = extraDots.includes(point) && hollow(point);
+    const dot = element("circle", { cx: x(point[0]), cy: y(point[line.index]), r: 3, fill: isHollow ? "var(--panel)" : `var(${line.color})`, stroke: `var(${line.color})`, "stroke-width": 1.5, style: point[1] ? "cursor:pointer" : "" }, svg);
+    element("title", {}, dot).textContent = describe(point, line);
+    if (point[1]) dot.addEventListener("click", () => window.open(COMMIT_URL + point[1], "_blank", "noopener"));
+    const text = extraDots.includes(point) && annotate(point);
+    if (text) element("text", { x: x(point[0]), y: y(point[line.index]) - 6, "text-anchor": "middle" }, svg).textContent = text;
+  });
+  holder.appendChild(card);
+}
+
 // hello per main tip, one panel per measure on its own time axis: the hand-measured references reach back before
 // self-hosting (1.4.1), so they don't share the commit rows' axis
 (function hello() {
   const { series, references } = DATA.hello, holder = document.getElementById("hello");
-  const all = [...references, ...series], time = date => new Date(date.replace(" ", "T")).getTime();
-  if (!all.length) { holder.innerHTML = `<div class="tier"><div class="empty">no measurement yet</div></div>`; return; }
-  const start = Math.min(...all.map(p => time(p[0]))), end = Math.max(...all.map(p => time(p[0])));
-  const W = 300, H = 110, L = 34, R = 8, T = 6, B = 18, INSTRUCTIONS = 2, SECONDS = 3, COMPILE = 5;
-  const x = date => L + (time(date) - start) / Math.max(1, end - start) * (W - L - R);
+  if (!series.length && !references.length) { holder.innerHTML = `<div class="tier"><div class="empty">no measurement yet</div></div>`; return; }
+  const INSTRUCTIONS = 2, SECONDS = 3, COMPILE = 5;
   const describe = p => `${p[0]} · ${p[4] ? p[4] + " · " : ""}${p[1]} · ${p[INSTRUCTIONS]} G instructions · ${p[SECONDS]} s` +
     (p[COMPILE] != null ? ` · compile alone ${p[COMPILE]} G` : "");
   // the compile alone (hello minus warp version, notes/hello_startup.md) only of the installs measured since it began
   const compiled = series.filter(p => p[COMPILE] != null);
-  [[INSTRUCTIONS, "G instructions", "instructions retired", all, series],
-   [SECONDS, "s", "wall time", all, series],
-   [COMPILE, "G instructions", "the compile alone, startup apart", compiled, compiled]].forEach(([index, unit, name, dots, line]) => {
-    if (!dots.length) return;
-    const top = Math.max(...dots.map(p => p[index])) * 1.1, y = v => T + (1 - v / top) * (H - T - B);
-    const latest = line.length ? line[line.length - 1] : dots[dots.length - 1];
-    const card = document.createElement("div"); card.className = "tier";
-    card.innerHTML = `<div class="label">hello: ${name}</div><div class="value">${latest[index]} ${unit}</div>` +
-      `<div class="change">${latest[1]} · ${latest[0]} · ${line.length} installs measured</div>`;
-    const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `hello ${name} per main tip` }, card);
-    [0, top / 2, top].forEach(v => {
-      element("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "var(--rule)", "stroke-width": 0.6 }, svg);
-      element("text", { x: L - 4, y: y(v) + 3, "text-anchor": "end" }, svg).textContent = +v.toFixed(2);
-    });
-    [start, end].forEach((t, i) => element("text", { x: i ? W - R : L, y: H - 4, "text-anchor": i ? "end" : "start" }, svg).textContent = shortDay(new Date(t).toISOString().slice(0, 10)));
-    if (line.length > 1) element("polyline", { points: line.map(p => `${x(p[0])},${y(p[index])}`).join(" "), fill: "none", stroke: "var(--s3)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
-    dots.forEach(p => {
-      const measuredByHand = Boolean(p[4]);
-      const dot = element("circle", { cx: x(p[0]), cy: y(p[index]), r: 3, fill: measuredByHand ? "var(--panel)" : "var(--s3)", stroke: "var(--s3)", "stroke-width": 1.5, style: "cursor:pointer" }, svg);
-      element("title", {}, dot).textContent = describe(p);
-      dot.addEventListener("click", () => window.open(COMMIT_URL + p[1], "_blank", "noopener"));
-      if (measuredByHand && p[4].match(/^\d/)) element("text", { x: x(p[0]), y: y(p[index]) - 6, "text-anchor": "middle" }, svg).textContent = p[4];
-    });
-    holder.appendChild(card);
+  [[INSTRUCTIONS, "G instructions", "instructions retired", references, series],
+   [SECONDS, "s", "wall time", references, series],
+   [COMPILE, "G instructions", "the compile alone, startup apart", [], compiled]].forEach(([index, unit, name, extraDots, line]) => {
+    if (!extraDots.length && !line.length) return;
+    const latest = line.length ? line[line.length - 1] : extraDots[extraDots.length - 1];
+    trendPanel(holder, { label: `hello: ${name}`, value: `${latest[index]} ${unit}`, note: `${latest[1]} · ${latest[0]} · ${line.length} installs measured`,
+      lines: [{ name, points: line, index, color: "--s3" }], extraDots, describe, hollow: p => Boolean(p[4]), annotate: p => p[4].match(/^\d/) && p[4] });
   });
+})();
+
+// wap, the new compiler (notes/wap.md): its size beside the core's, the road to self-build, its tests, hello by wap, its
+// files over the line limit
+(function wap() {
+  const { sizes, over, limit, stages, snapshots } = DATA.wap, holder = document.getElementById("wap");
+  const censuses = snapshots.filter(s => s.kind === "census"), tests = snapshots.filter(s => s.kind === "tests");
+  const pointsOf = (list, ...fields) => list.map(s => [s.time, s.commit, ...fields.map(f => s[f])]);
+  const noMeasurement = label => { holder.insertAdjacentHTML("beforeend", `<div class="tier"><div class="label">${label}</div><div class="empty">no measurement yet</div></div>`); };
+  const note = (point, extra = "") => `${point[1]} · ${point[0]}${extra}`;
+  // sizes: [date, commit, total, per stage, core, files over the limit]
+  const TOTAL = 2, CORE = 4, OVER = 5, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+  if (sizes.length) {
+    const latest = sizes[sizes.length - 1], describeSize = p => `${p[0]} · ${p[1]} · wap ${format(p[TOTAL])} lines (` + stages.map(name => `${name} ${p[3][name] || 0}`).join(", ") + `) · core ${format(p[CORE])}`;
+    trendPanel(holder, { label: "wap source lines beside the core", value: `${format(latest[TOTAL])} of core's ${format(latest[CORE])}`, note: note(latest, ` · ${percent(sizes[0][TOTAL], latest[TOTAL])} since ${shortDay(sizes[0][0].slice(0, 10))}`),
+      lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3" }, { name: "core/ without extensions", points: sizes, index: CORE, color: "--s1" }], describe: describeSize });
+    const byStage = stages.map((name, i) => ({ name, points: sizes.map(p => [p[0], p[1], p[3][name] || 0]), index: 2, color: STAGE_COLORS[i] }));
+    trendPanel(holder, { label: "wap source lines by stage folder", value: `${format(latest[TOTAL])} lines`, note: note(latest, " · " + stages.map(name => `${name} ${latest[3][name] || 0}`).join(", ")), lines: byStage, describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${p[2]} lines` });
+    trendPanel(holder, { label: `wap files over ${limit} lines`, value: String(latest[OVER]), note: note(latest, over.length ? " · " + over.map(([path, n]) => `${path.replace(/^wap\//, "")} ${n}`).join(", ") : ""),
+      lines: [{ name: "files", points: sizes, index: OVER, color: "--s2" }], describe: p => `${p[0]} · ${p[1]} · ${p[OVER]} files over ${limit} lines` });
+  } else noMeasurement("wap source lines");
+  if (censuses.length) {
+    const latest = censuses[censuses.length - 1], census = (...fields) => pointsOf(censuses, ...fields);
+    const describeCensus = p => `${p[0]} · ${p[1]} · ${p.slice(2).join(" / ")}`;
+    trendPanel(holder, { label: "road to self-build: statements", value: `${latest.bound} of ${latest.statements} bound`, note: note([latest.commit, latest.time], ` · ${latest.lowered} lowered`),
+      lines: [{ name: "statements", points: census("statements"), index: 2, color: "--ink-3" }, { name: "lowered", points: census("lowered"), index: 2, color: "--s1" }, { name: "bound", points: census("bound"), index: 2, color: "--s3" }],
+      describe: describeCensus });
+    trendPanel(holder, { label: "road to self-build: files", value: `${latest.typed} typed, ${latest.emitted} emitted`, note: note([latest.commit, latest.time], ` · of ${latest.files} program files`),
+      lines: [{ name: "typed", points: census("typed"), index: 2, color: "--s1" }, { name: "emitted", points: census("emitted"), index: 2, color: "--s3" }], describe: describeCensus });
+    document.getElementById("wap-blockers").innerHTML = latest.blockers.length ? `<thead><tr><th>Stage</th><th>Top blockers of the census at ${latest.commit}</th><th style="text-align:right">Count</th></tr></thead><tbody>` +
+      latest.blockers.map(([stage, message, count]) => `<tr><td>${stage}</td><td>${escape(message)}</td><td class="num">${count}</td></tr>`).join("") + "</tbody>" : "";
+  } else noMeasurement("road to self-build");
+  if (tests.length) {
+    const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
+    trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh, run ${latest.time}`,
+      lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }, { name: "failed", points: tests.map(point), index: 3, color: "--s2" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
+  } else noMeasurement("wap tests");
+  const timed = censuses.filter(s => s.hello);
+  if (timed.length) {
+    const latest = timed[timed.length - 1], point = s => [s.time, s.commit, ...s.hello];
+    [[2, "G instructions", "instructions retired"], [3, "s", "wall time"]].forEach(([index, unit, name]) =>
+      trendPanel(holder, { label: `hello by wap: ${name}`, value: `${latest.hello[index - 2]} ${unit}`, note: note([latest.commit, latest.time], " · wap compiles hello, then it runs"),
+        lines: [{ name, points: timed.map(point), index, color: "--s3" }], describe: p => `${p[0]} · ${p[1]} · ${p[2]} G instructions · ${p[3]} s` }));
+  } else noMeasurement("hello by wap");
 })();
 
 (function tiers() {

@@ -22,3 +22,7 @@
 'f(x: int) := 1; f(x: text) := "a"; f.signatures'	['(x: int) -> int', '(x: text) -> text']
 'sample(nr: int) as text := "seven"; sample(nr: int) as int := 7; sample.signature'	'(nr: int) -> text | (nr: int) -> int'
 'twice(x) := x*2; twice.signatures'	['(x) -> int']
+# a parameter, lambda parameter or local named like a function is that value: its field, never the function's signature (card parameters-must)
+'g(a: int) := a; class D { signature: text }; f(g: D) := g.signature; f(D{signature: "s"})'	's'
+'g(a: int) := a; class D { signature: text }; h = (g => g.signature); h(D{signature: "s"})'	's'
+'g(a: int) := a; f() := { g = {signature: "s", params: [1]}; [g.signature, g.params] }; f()'	['s', [1]]
