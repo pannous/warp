@@ -103,7 +103,14 @@ text(b: bool): text := if b then "yes" else "no"
 text(x: T?): text := if missing(x) then "ø" else text(x!)
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
-not(b: bool): bool := if b then no else yes
+not(x): bool := if x then no else yes
+# a value as a condition reads it (wiki/truthiness.md): 0, 0.0, an empty text or list and ø are falsy, every other
+# value truthy; `if xs` reads truthy(xs)
+truthy(n: int): bool := n != 0
+truthy(x: float): bool := x != 0.0
+truthy(t: text): bool := #t > 0
+truthy(xs: list): bool := #xs > 0
+truthy(x: T?): bool := not missing(x)
 
 # the ints from one to another, both included: `2 to 5` is Range(2, 5), `2 .. 5` stops before 5, Range(2, 4)
 # (core/sugar/ranges.wap)
