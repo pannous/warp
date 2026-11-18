@@ -3,3 +3,6 @@
 # a list's item by its place, counting from 1: `xs#2`
 rule ($subject#$key) => Get($subject, $key)
 
+
+# a list's item by its index, counting from 0 (wiki/indexing.md): `xs[0]` is the first item, `xs#1`
+rule $subject[$index] => Get($subject, $index + 1)
