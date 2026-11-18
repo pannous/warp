@@ -71,3 +71,6 @@ show(xs: list): text := {
 	for at in 1 to #xs { out = out + (if at > 1 then ", " else "") + show(xs#at) }
 	"[" + out + "]"
 }
+
+# whether a list has no items: `xs is empty`
+empty(xs: list): bool := #xs == 0

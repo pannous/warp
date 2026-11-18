@@ -359,9 +359,14 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 	subject = arguments#1
 	tested = arguments#2
 	if fact_of(tested, BINDING) == symbol(BOUND_CASE) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
+	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	type = value_type(typed_form(subject, s, f, ø)) ?? refused(subject, "this gives no value to test")
 	typed_form(placed_like(Block([subject, if same_type(type, tested) then True else False]), n), s, f, ø)
 }
+# whether a type test's word names a type: a built-in one, a record's or a generic letter; a written compound type,
+# `list<int>`, is one
+names_type(tested: Node, s: TypingState) as bool := not tested is symbol or TYPE_WORDS.contains(text(tested)) or record_named(s.records, tested) != ø or is_letter(tested, s.records)
+TYPE_WORDS = [INT_TYPE, FLOAT_TYPE, TEXT_TYPE, CHAR_TYPE, BOOL_TYPE, ANY_TYPE, NUMBER_TYPE, LIST_TYPE, MAP_TYPE, ENUM_TYPE]
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
 case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_declaring(s.records, called))
