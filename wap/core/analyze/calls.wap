@@ -255,6 +255,7 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	frame = TypeFrame()
 	frame.result = typed.result
 	frame.letters = letters
+	frame.function = declared_name(name)
 	typed_parameters = (1 to #types).map(at => parameter_typed(parameters_in(definition)#at, types#at, frame))
 	frame.variables += captured_by(definition, types)
 	typed_body = typed_form(body, s, frame, typed.result)
