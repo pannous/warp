@@ -73,7 +73,7 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
 	fitting = candidates.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits(argument, wanted, s.records)))
 	exact = fitting.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits_exactly(argument, wanted, s.records)))
-	if #fitting > 1 and exact is not empty { fitting = exact }
+	if #fitting > 1 and exact { fitting = exact }
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
@@ -100,8 +100,8 @@ most_specific(definitions: list, records: list) as list := {
 # of equally specific definitions, those of the innermost scope: a program's `===(a: T, b: T)` hides the library's
 innermost(definitions: list, scopes: list) as list := {
 	for scope in scopes {
-		inner = definitions.filter(definition => scope.contains(definition))
-		if inner is not empty { return inner }
+		inner = definitions.filter(definition => scope.any(candidate => function_key_of(candidate) == function_key_of(definition)))
+		if inner { return inner }
 	}
 	definitions
 }
