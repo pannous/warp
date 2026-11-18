@@ -87,4 +87,14 @@ for x in xs { print show(x) }')" "1
 2.5
 \"a b\"
 yes"
+# `x is w`: a type's word tests the type, a predicate's word calls it (wiki keyword.md: `x = []; x is empty` is yes)
+check "is with a predicate word calls it" "$(ran is_predicate 'x = []
+print text(x is empty)
+print text("a" is empty)
+even(n: int): bool := n % 2 == 0
+print text(4 is even)
+print text(3 is int)')" "yes
+no
+yes
+yes"
 exit $((failures > 0))

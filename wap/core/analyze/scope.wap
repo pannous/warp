@@ -95,6 +95,11 @@ names_case(name: Node, scope: list) as bool := {
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant#1.kind == BOUND_CASE
 }
+# whether a name means functions and no type
+names_predicate(name: Node, scope: list) as bool := {
+	meant = definitions_meant(text(name), scope)
+	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
+}
 arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: list, depth: int) as list := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
@@ -110,10 +115,12 @@ pattern_variables(pattern: Node, scope: list, depth: int) as list := match patte
 }
 
 # A type test, `x is T`: its value bound, its type a case, which binds as one, or a type's name, which stays a name as
-# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap)
+# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap). A word naming a function and
+# no type is a test of its own, the call of that predicate: `xs is empty` is empty(xs)
 is_type_test(called: Node, scope: list) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
 type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node := {
 	tested = arguments#2
+	if tested is symbol and names_predicate(tested, scope) { return with_fact(bound(refitted(Call(tested, [arguments#1]), n), scope, depth), PREDICATE, True) }
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }

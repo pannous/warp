@@ -48,4 +48,7 @@ if c then print "a"
 	else if c then print "b"
 	else print "c"')" "2
 c"
+check "a block indented below an if is its body" "$(ran if_indented 'c = yes
+if c
+	print "body"')" "body"
 exit $((failures > 0))
