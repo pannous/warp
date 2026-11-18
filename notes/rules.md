@@ -37,6 +37,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   two equally specific ones are refused naming both.
 - **Walk:** top-down; a node is rewritten until no rule fits, then its parts. Built nodes take the rewritten code's
   place (stage.wap `staged`) and carry the fact RULE, the rule's written head.
+- **Modules:** a used module's rules apply to the program that uses it (`use` and `rule` build the language the
+  program is written in): the `use` lines are read before shaping, each module is declared after the ones it uses.
 - **Hygiene:** a name a template binds by itself (`t = $a`) is made fresh per use (`t·3`, fact `fresh`).
 - **Termination at load:** the heads a template writes must not lead back to the rule's own head, unless each rule
   on that cycle writes less code than it matches and uses no hole twice.
@@ -44,7 +46,5 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
-- Whether a used module's rules apply to the program that uses it: today they don't, because the program is shaped
-  before its modules are read.
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
