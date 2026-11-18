@@ -17,6 +17,7 @@ use "../format.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/atoms.wap"
 
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"

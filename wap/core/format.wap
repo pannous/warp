@@ -6,6 +6,8 @@ use "parse/operators.wap"
 use "stage.wap"
 use "../kernel/forms.wap"
 use "../preload/operators.wap"
+use "analyze/calls.wap"
+use "parse/operator_table.wap"
 
 # the operator that defines, whose left side is a definition's head
 DEFINE_SPELLING = ":="

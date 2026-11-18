@@ -9,6 +9,7 @@ use "../parse/operators.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../parse/operator_table.wap"
 
 FRESH_MARK = "·"
 
