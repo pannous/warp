@@ -28,4 +28,9 @@ print text(-7 % 3)
 print text(7 % -3)')" "-4
 2
 -2"
+check "a power of an int and of a float" "$(ran power 'print text(2 ^ 10)
+print text(1.5 ^ 2)
+print text(2.0 ^ -1)')" "1024
+2.25
+0.5"
 exit $((failures > 0))
