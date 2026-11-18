@@ -45,4 +45,6 @@ xs[0] = 5
 print text(xs[0] + xs[1])')" "7"
 check "a text's character counted from 0" "$(ran text_item 't = "abc"
 print t[2]')" "c"
+check "a map with text keys, one letter long too" "$(ran text_keys 'm = {"a": 1, "bb": 2}
+print text(m["bb"] + m["a"])')" "3"
 exit $((failures > 0))
