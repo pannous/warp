@@ -5,4 +5,4 @@ rule ($subject#$key) => Get($subject, $key)
 
 
 # a list's item by its index, counting from 0 (wiki/indexing.md): `xs[0]` is the first item, `xs#1`
-rule $subject[$index] => Get($subject, $index + 1)
+rule $subject[$index] => Item($subject, $index)

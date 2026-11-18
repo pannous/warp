@@ -14,8 +14,6 @@ raise(message: text): never := prim raise_text(message)
 
 # how many items a list holds, a list of any items: a bare `list` fits every list<T>
 #(xs: list): int := prim array_len(xs)
-# the item at a place counted from 0, `xs[0]`, of anything whose items `#` takes from 1: a list, a text, a range
-item(x, at: int) := x#(at + 1)
 
 # arithmetic and comparisons of ints and of floats, each one wasm instruction; a call picks the overload its
 # arguments' types fit
@@ -83,3 +81,9 @@ text(x: float): text := float_text(x)
 ===(a: T, b: T): bool := a == b
 ===(a, b): bool := no
 !==(a, b): bool := not(a === b)
+# optional values, T?: a T or ø (wiki/optional.md); `x!` is x's value, raising when x is missing
+missing(x: T?): bool := prim ref_is_null(x)
+!(x: T?): T := prim optional_value(x)
+==(a: T?, b: T?): bool := if missing(a) then missing(b) else not missing(b) and a! == b!
+!=(a: T?, b: T?): bool := not(a == b)
+??(a: T?, b: T): T := if missing(a) then b else a!

@@ -10,7 +10,9 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 
 # the layout of a typed form's value
-layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for this type yet")
+# the layout of a node's type, ø for a node the typing stage left untyped
+typed_layout(n: Node, p: Program) as list? := if fact_of(n, TYPE) == ø then ø else layout_of(fact_of(n, TYPE), p.m, p.records)
+layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for the type ${fact_of(n, TYPE)} yet")
 # the GC array type of a typed list
 list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no list")
 # The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
@@ -57,8 +59,9 @@ assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Cod
 
 # A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
 set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
+	held = variable_of(place, p, f) ?? added_variable(place, typed_layout(place, p) ?? value.type, p, f)
+	value = fitted(value, held.type, p.m)
 	if not valued(value.type) { refused(form, "this gives no value to set") }
-	held = variable_of(place, p, f) ?? added_variable(place, value.type, p, f)
 	if held.type != value.type { refused(form, "this name held another kind of value before") }
 	Code(value.type, value.instructions + kept(held))
 }
