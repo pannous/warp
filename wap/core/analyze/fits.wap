@@ -44,31 +44,37 @@ same_types(these: list, those: list) as bool := #these == #those and (1 to #thes
 field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, declared_type(field), s, value, "the field holds a")
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
 # function value where a bare `function` is, an enum where a bare `enum` is, or code that never finishes; boxed, into
-# any or a number; wrapped, a T or ø where T? is; settled, the unknowns of either becoming the other's types, `[]`
+# any or a number; read, a character as its text, where a text or a text? is (wiki/char.md, 'a' == "a"); wrapped, a T
+# or ø where T? is; settled, the unknowns of either becoming the other's types, `[]`
 # where a list<int> is; checked, an any's value where another type is, raising there when it holds another; ø when
 # it cannot. The conversions a choice of overloads asks for, the static ones, never check: an any argument is chosen
 # for at run time.
-enum Conversion { Same, Boxed, Wrapped, Settled, Checked }
-STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Wrapped]
+enum Conversion { Same, Boxed, Read, Wrapped, Settled, Checked }
+STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Read, Conversion.Wrapped]
 conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
 	if same_type(given, wanted) or given == symbol(NEVER_TYPE) or bare_fit(given, wanted, s.records) { return Conversion.Same }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
 	optional = base_of_optional(wanted)
+	if reads_as(base_or_self(wanted), given) { return Conversion.Read }
 	# an optional where one is wanted whose value is as it is: a list<int>? where a list? is
 	if optional != ø and base_of_optional(given) != ø and conversion(base_of_optional(given), optional, s) == Conversion.Same { return Conversion.Same }
 	if optional != ø and (given == symbol(EMPTY_TYPE) or conversion(given, optional, s) == Conversion.Same) { return Conversion.Wrapped }
 	if (has_unknowns(given) or has_unknowns(wanted)) and unified(wanted, given, [], s) != ø { return Conversion.Settled }
 	if given == symbol(ANY_TYPE) then Conversion.Checked else ø
 }
-# typed code as the wanted type has its value, its conversion written: an unknown settled, an any's value checked by
-# `prim cast`, typed the wanted type, at the code's place; refused at `at` when it cannot get there, naming the place
-# that wants it, `the field holds a`
+# typed code as the wanted type has its value, its conversion written: an unknown settled, a character read as its
+# text, an any's value checked by `prim cast`, typed the wanted type, at the code's place; refused at `at` when it
+# cannot get there, naming the place that wants it, `the field holds a`
 converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node := {
 	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
+	if way == Conversion.Read { return as_text(n, s) }
 	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else n
 }
+# a character where a text is wanted read as its text, any other value as it is: `if c then 'a' else ""`, a char
+# argument of a text parameter
+text_read(n: Node, wanted: Node?, s: TypingState) as Node := if wanted != ø and conversion(value_type(n), wanted, s) == Conversion.Read then as_text(n, s) else n
 # a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
 bare_fit(given: Node, wanted: Node, records: list) as bool := {
 	if wanted == symbol(LIST_TYPE) { return item_type(given) != ø }
