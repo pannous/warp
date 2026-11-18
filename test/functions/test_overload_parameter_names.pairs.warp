@@ -2,3 +2,4 @@
 # name, and a function with a defaulted parameter fits a variant taking its least count of arguments
 'map(m: map, f: any) := { out = {}; for k in keys(m) { out[k] = f(m.get(k)) }; out }; items(m: any) := m; double(x: int) := x * 2; go(items: list) := items.map(double); go([1, 2, 3])'	[2, 4, 6]
 'map(m: map, f: any) := { out = {}; for k in keys(m) { out[k] = f(m.get(k)) }; out }; double(x: int, y: int = 2) := x * y; [1, 2, 3].map(double)'	[2, 4, 6]
+'map(m: map, f: any) := { out = {}; for k in keys(m) { out[k] = f(m.get(k)) }; out }; items(m: any) := m; double(x: int) := x * 2; go(n: Node) := match n { List(items, bracket, separator): items.map(double); _: [] }; go([1, 2, 3])'	[2, 4, 6]
