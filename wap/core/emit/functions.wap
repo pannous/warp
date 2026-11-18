@@ -49,8 +49,10 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 } }
 # The layout of a function's result as its signature, which the typing stage writes on its name, says: none for ø
 SIGNATURE_LESS = "this function reached the emitter without its signature"
+# a typed function's parameter and result types, as typing signed it
+signed_parts(name: Node) as FunctionParts := function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
 signed_result(name: Node, p: Program) as list := {
-	result = (function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS))#2
+	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
 # the items of a list node: a definition's parameters, a fact's list
@@ -114,10 +116,10 @@ dispatched_code(form: Node, p: Program) as list := {
 # cast, a plain one taken out of its box, and the overload called
 dispatching_function(p: Program, form: Node, overloads: list) as int := {
 	tried = overloads.flat_map(overload => {
-		taken = function_type_parts(fact_of(overload, SIGNATURE))#1#1
+		taken = signed_parts(overload).parameters#1
 		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
 		local_get(0) + heap_instruction(REF_TEST, held_in_any(taken, overload, p)#1) + IF + VOID_BLOCK + local_get(0) + held_value(taken, overload, p) + instruction(CALL, [called.index]) + RETURN + END
 	})
-	taken = overloads.map(overload => text(function_type_parts(fact_of(overload, SIGNATURE))#1#1)).join(", ")
+	taken = overloads.map(overload => text(signed_parts(overload).parameters#1)).join(", ")
 	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + raised("no ${text(overloads#1)} takes this value; it takes ${taken}", p))
 }

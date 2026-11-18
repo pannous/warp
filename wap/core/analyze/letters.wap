@@ -95,7 +95,8 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if is_letter(wanted, records) or is_unknown(wanted) { return bound_as(wanted, given, bound, s) }
 	if is_unknown(given) { return bound_as(given, wanted, bound, s) }
 	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, s) }
-	if function_type_parts(wanted) != ø and function_value_parts(given) != ø { return function_value_bound(function_type_parts(wanted), given, bound, s) }
+	wanted_function = function_type_parts(wanted)
+	if wanted_function != ø and function_value_parts(given) != ø { return function_value_bound(wanted_function, given, bound, s) }
 	wanted_parts = type_parts(wanted)
 	given_parts = type_parts(given)
 	if wanted_parts == ø or given_parts == ø or #wanted_parts != #given_parts { return if same_type(given, wanted) then bound else ø }
@@ -113,11 +114,11 @@ bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
 reads_as(held: Node, given: Node) as bool := same_type(held, symbol(TEXT_TYPE)) and given == symbol(CHAR_TYPE)
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
-function_value_bound(wanted: list, value: Node, bound: list, s: TypingState) as list? := {
-	parameters = wanted#1.map(type => substituted(type, bound))
+function_value_bound(wanted: FunctionParts, value: Node, bound: list, s: TypingState) as list? := {
+	parameters = wanted.parameters.map(type => substituted(type, bound))
 	if parameters.any(type => has_letters(type, s.records)) { return ø }
 	result = (value_function_typed(parameters, value, s) ?? return ø).result ?? return ø
-	unified(wanted#2, result, bound, s)
+	unified(wanted.result, result, bound, s)
 }
 # the function of a value of this type, fn<key, capture types…>, typed for these parameter types, a function value's
 # own one taking the value first; ø when its parameters take others
