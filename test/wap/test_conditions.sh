@@ -29,6 +29,7 @@ d"
 check "an if later in a phrase is the earlier word's argument" "$(ran inner 'print if no then "one" else "two"')" "two"
 check "c ? a : b chooses" "$(ran ternary 'x = no ? 1 : 2
 x')" "2"
+check "a choice as a spaced call's argument" "$(ran ternary_print 'print yes ? "a" : "b"')" "a"
 check "a statement guarded after it" "$(ran postfix 'print "shown" if yes
 print "hidden" if no
 print "end"')" "shown

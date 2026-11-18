@@ -40,6 +40,7 @@ tight_key_text(key: Node, value: Node) as text :=
 # an operator call in its notation; a call of anything else as `f(a, b)`
 call_text(call: Node, called: Node, arguments: list) as text := {
 	if fact_of(call, COMPOUND) != ø { return compound_text(call, arguments) }
+	if #arguments == 3 and formatted(called) == CHOICE { return operand_text(arguments#1, call, Side.Left) + " ? " + operand_text(arguments#2, call, Side.Left) + " : " + operand_text(arguments#3, call, Side.Right) }
 	spelling = formatted(called)
 	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
 		return operand_text(arguments#1, call, Side.Left) + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
