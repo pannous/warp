@@ -13,4 +13,10 @@ check "the command line, the program first" "$(ran command_line 'arguments(): li
 for each in arguments() { print each }' >/dev/null; $warp "$stage/command_line.wasm" a "b c")" "$stage/command_line.wasm
 a
 b c"
+check "bytes written to a file, made or emptied first" "$(ran bytes_written "write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
+write_bytes(\"$stage/written.bin\", [104, 105, 33])
+print read(\"$stage/written.bin\")
+write_bytes(\"$stage/written.bin\", [111, 107])
+print read(\"$stage/written.bin\")")" "hi!
+ok"
 exit $((failures > 0))
