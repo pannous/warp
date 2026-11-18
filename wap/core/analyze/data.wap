@@ -1,5 +1,5 @@
-# The typing of data written as code (notes/backbone.md "Stage languages"): a list's items and an instance's fields,
-# each given the type its place wants; called from the typing stage's dispatch (core/analyze/types.wap typed_form).
+# The typing of data written as code (notes/backbone.md "Stage languages"): a list's items, an instance's fields and a
+# map's entries, each given the type its place wants; called from the typing stage's dispatch (core/analyze/types.wap typed_form).
 
 use "types.wap"
 use "../errors.wap"
@@ -29,3 +29,16 @@ list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFr
 	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
 	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
 }
+
+# A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
+# place wants; all of one type V, the map is a map<text, V>
+map_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = items.map(item => entry_typed(item, held_type(expected), s, f))
+	held = value_type(entry_value(typed#1))
+	if held == ø or not fit_each(typed.map(entry_value), held) { refused(n, "a map's values are of one type") }
+	with_type_of(refitted(List(typed, Bracket.Curly, separator), n), map_type(symbol(TEXT_TYPE), held))
+}
+entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node := match entry { Key(key, Op.Colon, value) => refitted(Key(key, Op.Colon, typed_form(value, s, f, expected)), entry) }
+entry_value(entry: Node) as Node := match entry { Key(key, op, value) => value }
+# a map's value by its key, `m["a"]` or `m.a`: of the map's value type
+entry_read_typed(n: Node, map: Node, key: Node) as Node := with_type_of(refitted(Get(map, key), n), held_type(value_type(map)))
