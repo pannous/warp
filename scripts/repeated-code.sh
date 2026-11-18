@@ -2,7 +2,7 @@
 # scripts/repeated-code.sh <tree> [--report]: repeated code within one warp file (card repeated-code-check; user
 # 2026-11-06: lib/units.warp wrote one 35-unit list 12 times). A code line of LONG_LINE+ characters or a literal list
 # of LONG_LIST+ written again in the same file is a repeat: name it once and use the name.
-# Without --report: exit 1 naming both lines when the tree's change (against origin/main) adds a repeat (smoke.sh);
+# --list <files>: every repeat in those files, one a line. Without --report or --list: exit 1 naming both lines when the tree's change (against origin/main) adds a repeat (smoke.sh);
 # repeats already on main never block. --report: every repeat of core/, extensions/ and lib/ into
 # data/repeated-code.txt, so each gets a card (after-push.sh)
 set -uo pipefail
@@ -28,6 +28,11 @@ if [ "${2-}" = --report ]; then
 	mkdir -p "$(dirname "$REPORT")"
 	for file in $(git ls-files 'core/*.warp' 'extensions/*.warp' 'lib/*.warp'); do repeats "$file" | shown "$file"; done >"$REPORT"
 	echo "repeated-code: $(wc -l <"$REPORT" | tr -d ' ') repeats in $tree/$REPORT"
+	exit 0
+fi
+if [ "${2-}" = --list ]; then
+	shift 2
+	for file in "$@"; do repeats "$file" | shown "$file"; done
 	exit 0
 fi
 base=$(git merge-base origin/main HEAD) || exit 2
