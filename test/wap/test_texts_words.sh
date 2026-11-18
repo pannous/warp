@@ -10,4 +10,5 @@ check "a text holds a part" "$(ran contains 'print text("abc".contains("x"))')" 
 check "a text starts and ends with parts" "$(ran ends 'print text("hello".starts_with("he") and "hello".ends_with("lo"))')" "yes"
 check "texts in order" "$(ran order 'print text("ab" < "b")')" "yes"
 check "the kinds of characters" "$(ran kinds 'print text(is_digit("7") and is_alpha("q") and is_hex_digit("F") and not is_digit("x"))')" "yes"
+check "a text's character at a place" "$(ran place 'print "héllo"#2')" "é"
 exit $((failures > 0))
