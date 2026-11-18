@@ -109,4 +109,9 @@ print(text(q.n))
 r = Q{n: 4}
 print(text(r.o == ø))')" "2
 yes"
+check "a map's own word read as its part is that word, any other name its entry" "$(ran map_word 'M = {"ab": [1], "cd": [2]}
+print(M.keys#2 + "z")
+m = {name: "x", first: "y"}
+print(m.name + m.first)')" "cdz
+xy"
 exit $((failures > 0))
