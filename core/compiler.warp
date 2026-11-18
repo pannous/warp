@@ -232,8 +232,6 @@ with_dependencies(name: text, names: list, ordered: list, visiting: list) as lis
 # warp's cached module of it is current
 compile_file(source_file: text, wasm_file: text, folder: text) := {
 	if cached_current() { return ø }
-	# (the compiler and lib/ asked for as a question too, which the module keeps: another compiler's module is never current)
-	run_option(CACHE_KEY_OPTION)
 	emitting_file(working_relative(source_file))
 	compile_written(read(source_file), wasm_file, folder)
 }
@@ -248,7 +246,6 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 # the module the questions it asked the host (host_io.warp asked_host) and the warnings and hints it said, a record each,
 # its parts apart by a unit separator
 QUESTIONS_SECTION = "warp.questions"
-CACHE_KEY_OPTION = "cache-key"
 WARNINGS_SECTION = "warp.warnings"
 HINTS_SECTION = "warp.hints"
 RECORDS_APART = "\u{1e}"
