@@ -35,4 +35,8 @@ print text(2.0 ^ -1)')" "1024
 0.5"
 check "an int's sign turned by a leading -" "$(ran int_negated 'x = 5
 print text(-x + 1)')" "-4"
+check "a float read from its text" "$(ran float_read 'print text(float("2.5") + float("-0.25") + float("1e3") + float("12"))')" "1014.25"
+check "a number read from a text beyond an int's range" "$(ran number_read 'f(x: number) := if x is float then "float" else "int"
+print f(number("99999999999999999999"))')" "float"
+check "a character made from its code" "$(ran char_made 'print text(char(97))')" "a"
 exit $((failures > 0))
