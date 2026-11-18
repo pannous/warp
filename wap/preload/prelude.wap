@@ -36,11 +36,6 @@ raise(message: text): never := prim raise_text(message)
 # a power by squaring, `2 ^ 10` is 1024, `1.5 ^ 2` is 2.25; a float's negative power is its inverse's, an int's is no int
 ^(a: int, b: int): int := if b < 0 then raise "an int's negative power is no int; write a float: 2.0 ^ -1" else powered(a, b, 1)
 ^(a: float, b: int): float := if b < 0 then 1.0 / powered(a, 0 - b, 1.0) else powered(a, b, 1.0)
-powered(a: T, b: int, one: T): T := {
-	if b == 0 { return one }
-	half = powered(a, b ÷ 2, one)
-	if b % 2 == 0 then half * half else half * half * a
-}
 ==(a: float, b: float): bool := prim f64_eq(a, b)
 !=(a: float, b: float): bool := prim f64_ne(a, b)
 <(a: float, b: float): bool := prim f64_lt(a, b)
