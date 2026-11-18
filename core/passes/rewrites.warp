@@ -279,8 +279,7 @@ own_rules_applied(program: Node, source: text) as Node := {
 	maps = [map_names_of(program)]
 	# (each statement walked as a sequence of its own, so the rules of a statement's place apply to it, `law …` too; the
 	# runs across statements by every rule)
-	by_word = rules_by_word(rules)
-	program = if is_statement_sequence(program) then group_like(program, statement_runs(spliced_statements(items_of(program).map(statement => statement_rewritten(group_like(program, [statement]), rules, origins, maps, by_word))), rules, origins)) else statement_rewritten(program, rules, origins, maps, by_word)
+	program = if is_statement_sequence(program) then group_like(program, statement_runs(spliced_statements(items_of(program).map(statement => statement_rewritten(group_like(program, [statement]), rules, origins, maps))), rules, origins)) else statement_rewritten(program, rules, origins, maps)
 	raw_rules = []
 	program = with_program_rules(program, rules, origins)
 	uses = []
@@ -293,22 +292,12 @@ own_rules_applied(program: Node, source: text) as Node := {
 
 # the statement rewritten by the rules none of whose words it binds itself: a function's loop variable `val` keeps
 # its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
-# (the rules a name the statement binds spells, looked up by that name; a statement mentioning no rule's word, most,
-# binds none and keeps them all, its scope never read)
-statement_rewritten(statement: Node, rules: list, origins: list, maps: list, by_word: map) as Node := {
-	written = if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement
-	scope = if symbol_words(written).any(word => by_word.has(word)) then statement_bindings(written)#1 else {}
-	bound = scope.keys.filter(name => by_word.has(name) and binds_value(scope, name)).flat_map(name => by_word[name])
-	kept = if #bound == 0 then ø else (0 ..< #rules).filter(at => at not in bound)
-	kept_rules = if kept == ø then rules else kept.map(at => rules[at])
-	kept_origins = if kept == ø then origins else kept.map(at => origins[at])
+statement_rewritten(statement: Node, rules: list, origins: list, maps: list) as Node := {
+	bindings = statement_bindings(if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement)
+	kept = (0 ..< #rules).filter(at => is_unbound(rules[at], bindings))
+	kept_rules = kept.map(at => rules[at])
+	kept_origins = kept.map(at => origins[at])
 	placed_map_scoped(statement, n => rule_rewritten(n, kept_rules, kept_origins), maps)
-}
-# each literal word of the rules → the places of the rules spelling it (literal_words, as is_unbound reads them)
-rules_by_word(rules: list) as map := {
-	by_word = {}
-	for at in 0 ..< #rules { for word in literal_words(rules[at].pattern) { by_word[word] = (by_word.get(word) ?? []) + [at] } }
-	by_word
 }
 # what a statement binds itself, as unbound_rules reads a program's bindings
 statement_bindings(statement: Node) as list := [scope_with({}, nodes_in(statement)), {}]
