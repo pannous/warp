@@ -59,7 +59,7 @@ result_wanted(argument: Node, at: int, outer: list, s: TypingState) as Node? := 
 }
 # the results a call's definitions write, of those taking as many arguments
 results_written(argument: Node, s: TypingState) as list := match argument {
-	Call(called, parts) => candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => declared_type(written_name(definition))).filter(result => result != ø)
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => declared_type(written_name(definition))).filter(result => result != ø)
 	_ => []
 }
 parameter_type_at(definition: Node, at: int) as Node? := if #parameters_in(definition) < at then ø else type_given(parameters_in(definition)#at)
