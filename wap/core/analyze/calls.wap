@@ -78,12 +78,18 @@ defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
 defaults_given(definition: Node, count: int, s: TypingState, f: TypeFrame) as list := {
 	parameters_in(definition).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
 }
+# a map's own word, `m.keys`, beside its entries, `m.name`: a function of that name taking a map alone (wiki/map.md)
+map_word(key: Node, s: TypingState) as bool := definitions_named(text(key), s).any(definition => takes_count(definition, 1) and takes_map(parameters_in(definition)#1))
+takes_map(parameter: Node) as bool := {
+	type = type_given(parameter) ?? return no
+	text((type_parts(type) ?? [type])#1) == MAP_TYPE
+}
 # A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
 # Get then calls; a map's value by its key (core/analyze/data.wap); on an any, the field of whichever record holds it
 # (core/analyze/dispatch.wap)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
-	if key_type(value_type(typed)) != ø { return entry_read_typed(n, typed, key) }
+	if key_type(value_type(typed)) != ø and not map_word(key, s) { return entry_read_typed(n, typed, key) }
 	reader = if value_type(typed) == symbol(ANY_TYPE) then field_dispatching(key, s) else ø
 	if reader != ø { return typed_form(named_call(text(declared_name(written_name(reader))), [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
