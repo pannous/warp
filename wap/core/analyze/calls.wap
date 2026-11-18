@@ -142,12 +142,11 @@ fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argum
 fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
 # a bare `list` wanted, which every list<T> fits
 any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
-# a bare `enum` wanted, which a plain enum fits: one whose cases carry no fields, so its values are equal when their
-# tags are
+# a bare `enum` wanted, which any enum fits: tag_equal compares tags, then a case's fields
 ENUM_TYPE = "enum"
 any_enum(wanted: Node, given: Node?, records: list) as bool := {
 	record = if wanted == symbol(ENUM_TYPE) then record_named(records, given) else ø
-	record != ø and not cases_of(record) is empty and cases_of(record).all(case => case_fields(case) is empty)
+	record != ø and not cases_of(record) is empty
 }
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
