@@ -17,4 +17,7 @@ check "an error line, and the program runs on" "$(ran error_line 'note(t: text) 
 note("careful")
 print "still running"')" "careful
 still running"
+check "a hint is a got-it line on the standard error, the program going on" "$(ran hinted 'hint "write a + b"
+print "out"' 2>/dev/null)" "hint: write a + b
+out"
 exit $((failures > 0))
