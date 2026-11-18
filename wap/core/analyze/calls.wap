@@ -12,6 +12,7 @@ use "letters.wap"
 use "fits.wap"
 use "conditions.wap"
 use "scope.wap"
+use "dispatch.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
@@ -72,10 +73,13 @@ defaults_given(definition: Node, count: int, s: TypingState, f: TypeFrame) as li
 	parameters_in(definition).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
 }
 # A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
-# Get then calls; a map's value by its key (core/analyze/data.wap)
+# Get then calls; a map's value by its key (core/analyze/data.wap); on an any, the field of whichever record holds it
+# (core/analyze/dispatch.wap)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
 	if key_type(value_type(typed)) != ø { return entry_read_typed(n, typed, key) }
+	reader = if value_type(typed) == symbol(ANY_TYPE) then field_dispatching(key, s) else ø
+	if reader != ø { return typed_form(named_call(text(declared_name(written_name(reader))), [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
 	field = if record == ø then ø else field_named(record, key)
 	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
@@ -127,6 +131,8 @@ definition_keyed(key: text, s: TypingState) as Node? := {
 chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: Node?, s: TypingState) as Node := {
 	candidates = scopes.flat_map(scope => scope)
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
+	dispatcher = dispatching(called, candidates, types, s)
+	if dispatcher != ø { return dispatcher }
 	fitting = candidates.filter(definition => takes(definition, given, s, (argument, wanted) -> fits(argument, wanted, s)))
 	exact = fitting.filter(definition => takes(definition, given, s, (argument, wanted) -> fits_exactly(argument, wanted, s)))
 	if #fitting > 1 and exact { fitting = exact }
@@ -155,13 +161,13 @@ with_letters(argument: Node, letters: list) as Node := {
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; of those, more written structure beats less, `==(a: T?, b: T?)` beats
 # `==(a: T, b: T)`; several equally specific are left for the caller to refuse
-most_specific(definitions: list, records: list) as list := heaviest(heaviest(definitions, definition => typing_weight(definition, records)), written_structure)
-# the definitions of the greatest weight
-heaviest(definitions: list, weight: function) as list := {
-	weights = definitions.map(weight)
-	best = weights.fold(0, (a, b) -> if a > b then a else b)
-	(1 to #definitions).filter(at => weights#at == best).map(at => definitions#at)
+most_specific(definitions: list, records: list) as list := {
+	order = ranked(definitions, records)
+	order.filter(definition => typing_weight(definition, records) == typing_weight(order#1, records) and written_structure(definition) == written_structure(order#1))
 }
+# The one ranking of a word's definitions, most specific first, by typing weight, then by written structure: the
+# static choice takes its first that fits, a dynamic call (core/analyze/dispatch.wap) tests them in this order
+ranked(definitions: list, records: list) as list := definitions.sorted(by: definition => -written_structure(definition)).sorted(by: definition => -typing_weight(definition, records))
 # how much structure a definition's parameter types write: each `?`, `list<…>`, `map<…>` or `(…) -> …` one more
 written_structure(definition: Node) as int := parameters_in(definition).map(parameter => structure(type_given(parameter))).sum()
 structure(type: Node?) as int := {

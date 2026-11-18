@@ -1,0 +1,83 @@
+# Calls on dynamic values (notes/first_principles.md "dynamic where we can't infer the type"): code the typing stage
+# writes once, as ordinary code, a dispatching function, where a value is an any.
+# - A call whose arguments hold an any, where a definition of its word wants another type there (from the static
+#   choice, core/analyze/calls.wap chosen_definition): a chain of `is` tests over the definitions in the one ranking
+#   the static choice uses, most specific first, each passing the tested values on as their types (core/analyze/
+#   conditions.wap found); then the definition that takes the values as they are, else a raise naming the word.
+# - A field read on an any, `xs#1.name` (calls.wap part_typed): a chain of `is` tests over the records that have the
+#   field, in the order they are declared, each reading its field, else a raise.
+
+use "types.wap"
+use "calls.wap"
+use "fits.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the name of a dispatching function's parameters, numbered: x1, x2 …
+PARAMETER_WORD = "x"
+RAISE_WORD = "raise"
+# a field read's dispatching function is named after the field, `.name(any)`, apart from a function of that name
+FIELD_MARK = "."
+
+# The dispatching function a call of these definitions with arguments of these types means; ø when no argument is an
+# any that some definition wants of another type
+dispatching(called: Node, candidates: list, types: list, s: TypingState) as Node? := {
+	counted = candidates.filter(definition => takes_count(definition, #types))
+	if not counted.any(definition => tested_places(definition, types, s) != []) { return ø }
+	name = placed_like(symbol("${called}(${types_text(types)})"), written_name(counted#1))
+	known = definition_keyed(place_key(name), s)
+	if known != ø { return known }
+	reads = parameters_of(name, types)
+	order = ranked(counted, s.records)
+	untested = order.filter(definition => tested_places(definition, types, s) == [] and takes(definition, reads, s, (argument, wanted) -> fits(argument, wanted, s)))
+	last = if untested is empty then raised("${called}: no definition takes these values' types", name, s) else named_call(text(called), untested, reads, name)
+	tried = order.filter(definition => tested_places(definition, types, s) != []).map(definition => [tests_of(definition, reads, types, s, name), named_call(text(declared_name(written_name(definition))), [definition], reads, name)])
+	dispatcher_made(name, reads, chained(tried, last, name), order.map(definition => declared_type(written_name(definition))), s)
+}
+# The dispatching function a read of this field on an any means, `.name(any)`; ø when no record has the field
+field_dispatching(key: Node, s: TypingState) as Node? := {
+	holders = s.records.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
+	if holders is empty { return ø }
+	name = placed_like(symbol("${FIELD_MARK}${key}(${ANY_TYPE})"), declared_name(field_named(holders#1, key)))
+	known = definition_keyed(place_key(name), s)
+	if known != ø { return known }
+	read = parameters_of(name, [symbol(ANY_TYPE)])#1
+	tried = holders.map(record => [[test_of(read, symbol(record_name(record)), name)], placed_like(Get(read, key), name)])
+	dispatcher_made(name, [read], chained(tried, raised("${key}: no record of this value's type has this field", name, s), name), holders.map(record => declared_type(field_named(record, key))), s)
+}
+
+# a dispatching function's parameters, x1 …, one of each type, as its body reads them
+parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
+	parameter = placed_like(symbol(PARAMETER_WORD + text(at)), name)
+	with_type_of(with_fact(with_fact(parameter, BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, parameter), types#at)
+})
+# The dispatching function, kept with the typing stage's definitions and placed with the program's functions; its
+# result written when every choice writes its own, so a choice calling back through the dispatch finds it
+dispatcher_made(name: Node, reads: list, body: Node, results: list, s: TypingState) as Node := {
+	written = if results.all(result => result != ø) then Key(name, Op.Colon, results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))) else name
+	dispatcher = placed_like(Define(written, List(reads.map(read => Key(read, Op.Colon, value_type(read))), Bracket.Round, Separator.Comma), body), name)
+	s.definitions += [dispatcher]
+	s.dispatchers += [dispatcher]
+	dispatcher
+}
+# the choices, each [its tests, its code], tried in order: the first whose tests all pass runs, else the last
+chained(choices: list, last: Node, at: Node) as Node := {
+	chain = last
+	for place in 0 upto #choices {
+		choice = choices#(#choices - place)
+		condition = choice#1[1 ..].fold(choice#1#1, (both, test) -> placed_like(If(both, test, False), at))
+		chain = placed_like(If(condition, choice#2, chain), at)
+	}
+	chain
+}
+# the places where a definition wants another type than the any its argument gives: an `is` test there chooses it
+tested_places(definition: Node, types: list, s: TypingState) as list := (1 to #types).filter(at => types#at == symbol(ANY_TYPE) and dispatchable(type_given(parameters_in(definition)#at), s.records))
+tests_of(definition: Node, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, type_given(parameters_in(definition)#place), at))
+# whether an any's value is of the type: `x is int`
+test_of(read: Node, type: Node, at: Node) as Node := with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
+# a call of one of these definitions, chosen among them as any call is
+named_call(word: text, definitions: list, arguments: list, at: Node) as Node := {
+	called = with_fact(with_fact(placed_like(symbol(word), at), BINDING, symbol(BOUND_FUNCTION)), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+	placed_like(Call(called, arguments), at)
+}
+raised(message: text, at: Node, s: TypingState) as Node := named_call(RAISE_WORD, definitions_named(RAISE_WORD, s), [Text(message)], at)

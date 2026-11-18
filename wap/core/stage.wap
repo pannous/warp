@@ -211,7 +211,9 @@ function_type_parts(type: Node?) as list? := match type {
 items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; Empty => []; _ => [n] }
 # An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
 OPTIONAL_MARK = "?"
-optional_type(base: Node) as Node := if base_of_optional(base) != ø then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
+# the dynamic type, which holds any value, ø too: an any? is an any
+ANY_TYPE = "any"
+optional_type(base: Node) as Node := if base_of_optional(base) != ø or base == symbol(ANY_TYPE) then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
 base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
 	_ => ø

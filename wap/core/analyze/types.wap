@@ -42,8 +42,8 @@ TEXT_FUNCTION = "text"
 EMPTY_TYPE = "ø"
 # the type of code that never finishes, a return, break or continue: it fits wherever any type is expected
 NEVER_TYPE = "never"
-# any holds every value, number an int or a float, each boxed as a T? holds its value (core/emit/values.wap)
-ANY_TYPE = "any"
+# number holds an int or a float, as any (core/stage.wap) holds every value, each boxed as a T? holds its value
+# (core/emit/values.wap)
 NUMBER_TYPE = "number"
 # the type words a type test may name besides records and letters
 TYPE_WORDS = [INT_TYPE, FLOAT_TYPE, TEXT_TYPE, CHAR_TYPE, BOOL_TYPE, ANY_TYPE, NUMBER_TYPE, LIST_TYPE, MAP_TYPE, ENUM_TYPE]
@@ -58,6 +58,8 @@ class TypingState {
 	globals: list = []
 	# the functions of the function values met, and the keys of the variables they capture
 	lambdas: list = []
+	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
+	dispatchers: list = []
 	captured: list = []
 	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
 	unknowns: int = 0
@@ -111,10 +113,11 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	}
 	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
-	library_keys = (defines + s.lambdas).map(function_key_of)
+	written = defines + s.lambdas + s.dispatchers
+	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
 	late = s.functions.drop(typed_before).filter(each => not (each.key in library_keys)).map(each => each.define)
-	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + late + statements), typed)
+	whole = refitted(Block(s.records + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
@@ -261,7 +264,8 @@ case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 }
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
-	typed = with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
+	# a primitive the typing stage wrote, a test or a checked cast, keeps its type
+	typed = with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), fact_of(n, TYPE) ?? f.result)
 	if text(operation) != DISPATCHED { return typed }
 	function = f.function ?? refused(n, "a dispatch is the body of a function of an any, `f(x: any) := prim dispatched(x)`")
 	with_fact(typed, OVERLOADS, List(dispatched_overloads(function, s), Bracket.Square, Separator.Comma))
