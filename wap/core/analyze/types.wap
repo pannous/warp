@@ -57,6 +57,8 @@ class TypingState {
 	records: list = []
 	functions: list = []
 	globals: list = []
+	# the keys of the globals functions read before the statements that give them their values, until those statements
+	unset: list = []
 	# the functions of the function values met, and the keys of the variables they capture
 	lambdas: list = []
 	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
@@ -77,6 +79,8 @@ class TypedFunction {
 	signed: Node = ø
 	define: Node = ø
 	done: bool = no
+	# the globals it reads, itself or through the functions it calls, before the statements that give them their values
+	late: list = []
 }
 # The function whose body is being typed: its variables' types, each [key, type], and its written result type
 class TypeFrame {
@@ -91,6 +95,8 @@ class TypeFrame {
 	present: list = []
 	# the name of the function typed, ø for the program
 	function: Node? = ø
+	# the globals it reads before the statements that give them their values (TypedFunction late)
+	late: list = []
 }
 
 # the program typed, after the preload's functions it calls
@@ -210,6 +216,8 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	name = declared_name(place)
 	wanted = shaped(substituted(declared_type(place), f.letters), s) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
+	# a global functions read before it is set from here on
+	s.unset = s.unset.filter(key => key != place_key(defined_at(name)))
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	# a name given only ø so far holds an optional of a type its uses settle
 	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
@@ -228,6 +236,14 @@ item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	refitted(Set(place, converted(given, wanted, s, n, "the place holds a")), n)
 }
 
+# A call's function known by its caller: a function calls the globals its callee reads late too; the program's call
+# runs it now, so one of those globals not given its value yet is refused
+called_reads(chosen: TypedFunction, at: Node, s: TypingState, f: TypeFrame) := {
+	if f.function != ø { f.late = f.late + chosen.late }
+	if f.function != ø { return }
+	pending = chosen.late.filter(name => place_key(defined_at(name)) in s.unset)
+	if pending { refused(at, "this call runs code that reads ${pending#1} before the statement that gives it its value") }
+}
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	binding = text(fact_of(n, BINDING))
@@ -235,6 +251,14 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if binding == BOUND_FIELD { return typed_form(receiver_field(n), s, f, ø) }
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
 	type = variable_type(n, s, f)
+	# a global a function reads before the statement that gives it its value is read when the function is called
+	# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
+	if type == ø and binding == BOUND_GLOBAL and f.function != ø {
+		type = unknown_type(s)
+		remembered(n, type, s, f)
+		s.unset = s.unset + [place_key(defined_at(n))]
+	}
+	if binding == BOUND_GLOBAL and f.function != ø and place_key(defined_at(n)) in s.unset { f.late = f.late + [n] }
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	read = with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
 	known = type_keyed(place_key(defined_at(n)), f.present)

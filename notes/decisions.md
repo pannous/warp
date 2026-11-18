@@ -224,3 +224,8 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - kernel-record-form (user, 2026-11-17, wap self-build): one Record(name, fields, variants) form declares class, enum and `type X = A | B`. Constructors and field reads stay ordinary forms.
 - 2026-11-17 use-cycles (wap-binding, wap self-build): modules may use each other; each file is declared once and a cycle is cut where it closes (of two such modules the one reached first runs last), as the wap sources need (emitter.wap and primitives.wap). Replaces the earlier refusal "these modules use each other".
 - empty-groups-falsy (user, 2026-11-18, card wap-empty-rest): an empty `()` or `{}` need not keep old warp's value (wap reads it as ø); only falsiness is pinned.
+- type-words-travel (user, 2026-11-18, wap review): a type's own words travel with it: a call on a value of type A also finds what A's class and A's module declare taking an A, so library show, == and sort work for program types.
+- bare-container-types (user, 2026-11-18, wap review decision 1): a bare `list`/`map`/`function` type takes the type of the value given, results too; fields and self-calling functions write the full type.
+- instance-truthy (user, 2026-11-18): an instance is truthy unless its class defines `empty` (wiki/falsey.md; truthiness.md's `cat{}` line to be fixed).
+- none-into-list (user, 2026-11-18): ø reaching a list place becoming [] is an edge case: not built until real code needs it.
+- kind-word-is (wiki Footguns.md:180, 2026-11-18): on a Node, `n is symbol`/`n is text` tests the case, as `n is Symbol`.

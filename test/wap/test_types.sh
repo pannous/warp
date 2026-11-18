@@ -144,4 +144,9 @@ none"
 check "a program's own class shadows the preload's of the same name" "$(ran own_program_class 'class Program { m: int }
 p = Program(3)
 print(text(p.m))')" "3"
+check "a kind word after is on a Node tests its case, beside a maker of that name; on a text it is the type" "$(ran kind_test 'f(t: Node?) as text := if t is text then "text" else if t is symbol then text(t) else "other"
+print(f(Text("b")) + f(symbol("a")) + f(Empty))
+g(x: text) as bool := x is text
+print(text(g("a")))')" "textaother
+yes"
 exit $((failures > 0))

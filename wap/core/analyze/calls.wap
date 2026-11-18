@@ -13,6 +13,7 @@ use "fits.wap"
 use "conditions.wap"
 use "scope.wap"
 use "dispatch.wap"
+use "shapes.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
@@ -33,14 +34,38 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	candidates = scopes.flat_map(scope => scope)
 	if arguments.any(is_named) { arguments = arranged_arguments(n, called, arguments, candidates) }
 	by_count = candidates.filter(definition => takes_count(definition, #arguments))
-	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
+	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else (1 to #arguments).map(at => result_wanted(arguments#at, at, by_count, s))
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
+	# `n is symbol` on a Node tests the kind even beside a maker symbol(name) (core/analyze/shapes.wap kind_named)
+	kind = if fact_of(n, PREDICATE) == ø then ø else kind_named(called, value_type(given#1), s)
+	if kind != ø { return typed_form(shape_test(arguments#1, kind, n, s), s, f, ø) }
+	known = candidates.map(function_key_of)
+	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(function_key_of(definition)))]
 	meant = chosen_definition(n, called, scopes, given, expected, s)
 	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	called_reads(chosen, n, s, f)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
+# A word with several results gives the one that is wanted (wiki/conversion.md "declared type via as"): an argument
+# whose definitions differ by their result, `int(hi())` beside hi() as int and hi() as text, is wanted as the parameter
+# type of the outer definition that one of its results is; T(x) of an x that can be a T takes it as a T, int(n: int)
+# before int(t: text); ø where no single type is left
+result_wanted(argument: Node, at: int, outer: list, s: TypingState) as Node? := {
+	results = results_written(argument, s)
+	if #results < 2 { return ø }
+	taking = outer.filter(definition => results.any(result => same_type(result, parameter_type_at(definition, at))))
+	giving = taking.filter(definition => same_type(declared_type(written_name(definition)), parameter_type_at(definition, at)))
+	chosen = if #giving == 1 then giving else taking
+	if #chosen == 1 then parameter_type_at(chosen#1, at) else ø
+}
+# the results a call's definitions write, of those taking as many arguments
+results_written(argument: Node, s: TypingState) as list := match argument {
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => declared_type(written_name(definition))).filter(result => result != ø)
+	_ => []
+}
+parameter_type_at(definition: Node, at: int) as Node? := if #parameters_in(definition) < at then ø else type_given(parameters_in(definition)#at)
 # A call's arguments with the named ones, `f(b: 1, a: 5)`, put in their parameters' places, a left-out parameter
 # given its default: the same places for every definition the name may mean, else refused
 arranged_arguments(n: Node, called: Node, arguments: list, candidates: list) as list := {
@@ -73,12 +98,18 @@ defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
 defaults_given(definition: Node, count: int, s: TypingState, f: TypeFrame) as list := {
 	parameters_in(definition).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
 }
+# a map's own word, `m.keys`, beside its entries, `m.name`: a function of that name taking a map alone (wiki/map.md)
+map_word(key: Node, s: TypingState) as bool := definitions_named(text(key), s).any(definition => takes_count(definition, 1) and takes_map(parameters_in(definition)#1))
+takes_map(parameter: Node) as bool := {
+	type = type_given(parameter) ?? return no
+	text((type_parts(type) ?? [type])#1) == MAP_TYPE
+}
 # A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
 # Get then calls; a map's value by its key (core/analyze/data.wap); on an any, the field of whichever record holds it
 # (core/analyze/dispatch.wap)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
-	if key_type(value_type(typed)) != ø { return entry_read_typed(n, typed, key) }
+	if key_type(value_type(typed)) != ø and not map_word(key, s) { return entry_read_typed(n, typed, key) }
 	reader = if value_type(typed) == symbol(ANY_TYPE) then field_dispatching(key, s) else ø
 	if reader != ø { return typed_form(named_call(text(declared_name(written_name(reader))), [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
@@ -87,6 +118,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
+	called_reads(chosen, n, s, f)
 	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
@@ -109,6 +141,16 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
+# A type's own words travel with it: the definitions of a called name that the module of an argument's record declares
+# taking a value of that record, so a library's `show(xs#at)` finds a program's show(p: P), in the one ranking
+own_words(called: Node, given: list, s: TypingState) as list := {
+	records = given.map(argument => record_named(s.records, base_or_self(value_type(argument)))).filter(record => record != ø)
+	definitions_named(text(called), s).filter(definition => records.any(record => file_of(declared_name(written_name(definition))) == file_of(record) and parameters_in(definition).any(parameter => takes_record(parameter, record))))
+}
+takes_record(parameter: Node, record: Node) as bool := {
+	type = type_given(parameter) ?? return no
+	text(base_or_self(type)) == record_name(record)
+}
 # the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
 # its candidates
 candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
@@ -170,11 +212,13 @@ with_letters(argument: Node, letters: list) as Node := {
 # `==(a: T, b: T)`; several equally specific are left for the caller to refuse
 most_specific(definitions: list, records: list) as list := {
 	order = ranked(definitions, records)
-	order.filter(definition => typing_weight(definition, records) == typing_weight(order#1, records) and written_structure(definition) == written_structure(order#1))
+	order.filter(definition => typing_weight(definition, records) == typing_weight(order#1, records) and written_structure(definition) == written_structure(order#1) and derived(definition) == derived(order#1))
 }
-# The one ranking of a word's definitions, most specific first, by typing weight, then by written structure: the
-# static choice takes its first that fits, a dynamic call (core/analyze/dispatch.wap) tests them in this order
-ranked(definitions: list, records: list) as list := definitions.sorted(by: definition => -written_structure(definition)).sorted(by: definition => -typing_weight(definition, records))
+# The one ranking of a word's definitions, most specific first, by typing weight, then by written structure, then one
+# the program wrote before one a rule wrote, the class's derived show(self: P) after its own show(p: P): the static
+# choice takes its first that fits, a dynamic call (core/analyze/dispatch.wap) tests them in this order
+ranked(definitions: list, records: list) as list := definitions.sorted(by: derived).sorted(by: definition => -written_structure(definition)).sorted(by: definition => -typing_weight(definition, records))
+derived(definition: Node) as int := if has_fact(declared_name(written_name(definition)), DERIVED) then 1 else 0
 # how much structure a definition's parameter types write: each `?`, `list<…>`, `map<…>` or `(…) -> …` one more
 written_structure(definition: Node) as int := parameters_in(definition).map(parameter => structure(type_given(parameter))).sum()
 structure(type: Node?) as int := {
@@ -286,6 +330,7 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
 	typed.signed = with_signature(name, types, typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
+	typed.late = frame.late
 	typed.done = yes
 	typed
 } }

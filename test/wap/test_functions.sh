@@ -164,4 +164,21 @@ f(n: int) as P? := {
 print(text((f(3) ?? P(0)).a))
 print(text(f(-1) == ø))')" "3
 yes"
+check "a function taken as a value reads a global set after it when it is called" "$(ran late_global 'H = {"a": f}
+X = 1
+f(n: int) as int := X + n
+g = H["a"]
+print(text(g(2)))')" "3"
+check "a function reading a global set before the program calls it" "$(ran global_set_first 'f() as int := h() + 1
+h() as int := g
+g = 3
+print(text(f()))')" "4"
+check "a λ of a signature called where it is written" "$(ran signature_in_place 'print text(([x => x * 5]#1)(2))')" "10"
+check "a λ of a signature taking nothing" "$(ran signature_no_parameters 'fs: list<() -> int> = [() => 5]
+print text((fs#1)())')" "5"
+check "a λ of a signature keeps what the λ around it captured" "$(ran signature_captures_of_captures 'made(n: int): list<(int) -> list<(int) -> int>> := [x => {
+	inner: list<(int) -> int> = [y => x + y + n]
+	inner
+}]
+print text(((made(1)#1)(2)#1)(3))')" "6"
 exit $((failures > 0))
