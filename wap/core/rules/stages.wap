@@ -190,13 +190,16 @@ parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 # one phrase the walk rewrites as one, and the grouping `wap format` prints
 inner_rewritten(rules: Rules, items: list, whole: Node) as Node := {
 	for at in 2 to #items {
-		tail = with_facts_of(List(items[at - 1 ..], Bracket.None, Separator.Space), whole)
-		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, tail) != ø {
-			return List(items[.. at - 1] + [with_facts_of(List(items[at - 1 ..], Bracket.Round, Separator.Space), whole)], Bracket.None, Separator.Space)
+		part = items[at - 1 ..]
+		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, phrase_placed(part, Bracket.None, whole)) != ø {
+			return List(items[.. at - 1] + [phrase_placed(part, Bracket.Round, whole)], Bracket.None, Separator.Space)
 		}
 	}
 	whole
 }
+
+# words as one phrase in those brackets, where the phrase they come from was written
+phrase_placed(words: list, bracket: Bracket, origin: Node) as Node := with_facts_of(List(words, bracket, Separator.Space), origin)
 
 # code with every grouping a rule head inside a phrase makes written out, nothing rewritten: what `wap format` prints;
 # a rule or pattern line is printed as written
