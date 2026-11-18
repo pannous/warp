@@ -2,7 +2,6 @@
 # remainder of ints (warp's ÷ and % floor; they come later on top of these), and a float's shortest text, the warp
 # runtime's algorithm (core/runtime/floats.warp)
 
-bits_of(x: float): int := prim i64_reinterpret_f64(x)
 float_of_bits(bits: int): float := prim f64_reinterpret_i64(bits)
 quotient(a: int, b: int): int := prim i64_div_s(a, b)
 rem(a: int, b: int): int := prim i64_rem_s(a, b)
@@ -66,11 +65,11 @@ float_digits(x: float): list<int> := {
 	whole = trunc(hi) + trunc(floor(lo))
 	fraction = lo - floor(lo)
 	# the gaps to the neighbours; the largest float's upper one is its lower
-	below = x - float_of_bits(bits_of(x) - 1)
-	above = float_of_bits(bits_of(x) + 1) - x
+	below = x - float_of_bits(float_bits(x) - 1)
+	above = float_of_bits(float_bits(x) + 1) - x
 	if above == infinity() { above = below }
 	# an odd last bit excludes a halfway that is whole
-	odd = rem(bits_of(x), 2)
+	odd = rem(float_bits(x), 2)
 	lowest = float_scaled(x, below * -1.0, shift)
 	low_lo = lowest#2
 	low = trunc(lowest#1) + trunc(ceil(low_lo))
