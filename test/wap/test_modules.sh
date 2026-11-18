@@ -30,4 +30,15 @@ print "used"')" "used"
 # a used module's rules build the language the program is written in (wiki kernel.md)
 check "a used module's rule" "$(ran use_rule 'use "doubling.wap"
 twice 4')" "8"
+# a used module's enums and classes are the program's to use; a program's own case hides the module's
+printf '%s\n' 'enum Tree { Leaf(value: int), Named(name: text), Nothing }' 'class Box { n: int }' >"$stage/trees.wap"
+check "a used module's case with fields" "$(ran use_cases 'use "trees.wap"
+print match Named("x") { Named(name) => name; _ => "o" }')" "x"
+check "a used module's class and bare case" "$(ran use_class 'use "trees.wap"
+b = Box(2)
+t = Tree.Nothing
+print text(b.n + 3)')" "5"
+check "a program's own case hides the module's" "$(ran use_hidden_case 'use "trees.wap"
+enum Side { Leaf, Root }
+print text(Side.Leaf == Leaf)')" "yes"
 exit $((failures > 0))
