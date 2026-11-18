@@ -42,7 +42,8 @@ FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER]
 # 0.10000000000000001).
 emitted(program: Block) as Module := {
 	m = Module()
-	p = Program(m, imported(m, WASI, "fd_write", [I32, I32, I32, I32], [I32]), imported(m, WASI, "proc_exit", [I32], []))
+	p = Program(m)
+	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
 	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
 	f = Frame()
 	body = code(program, p, f)
@@ -52,13 +53,25 @@ emitted(program: Block) as Module := {
 	m
 }
 
-# What the emitter knows of the whole program: the module, the output it prints through, and the functions and
+# the host functions the primitives of a program call, each once, in the order met
+host_calls(program: Node) as list := {
+	names = []
+	for operation in primitives_in(program).filter(operation => HOST_CALLS.has(operation)) { for name in HOST_CALLS[operation] { if not names.contains(name) { names.add(name) } } }
+	names
+}
+primitives_in(n: Node) as list := match n {
+	Prim(operation, arguments) => [text(operation)] + arguments.flat_map(primitives_in)
+	List(items, bracket, separator) => items.flat_map(primitives_in)
+	Key(left, op, right) => primitives_in(left) + primitives_in(right)
+	_ => []
+}
+
+# What the emitter knows of the whole program: the module, the host functions it imported, and the functions and
 # globals emitted so far, each a Placed
 class Program {
 	m: Module
-	output: int
-	# the function that ends the program with a status
-	exit: int
+	# the host functions imported: name → index
+	host: map = {}
 	functions: list = []
 	globals: list = []
 	# the Defines whose body is not emitted yet

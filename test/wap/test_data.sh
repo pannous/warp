@@ -26,4 +26,7 @@ check "a list of any items counted" "$(ran count_texts 'names = ["ann", "bo", "c
 #names')" "3"
 check "for over a list of texts" "$(ran for_texts 'for name in ["ann", "bo"] { print name }')" "ann
 bo"
+check "a compound assignment to a list position" "$(ran compound_item 'xs = [1, 2, 3]
+xs#2 *= 5
+xs#2')" "10"
 exit $((failures > 0))

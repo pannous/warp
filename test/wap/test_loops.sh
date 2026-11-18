@@ -53,4 +53,7 @@ sum [1, 2, 3, 4]')" "10"
 check "continue in a for moves to the next item" "$(ran for_continue 'for x in [1, 2, 3] { if x == 2 then continue
 print "item" }')" "item
 item"
+check "a for inside a for" "$(ran for_nested 'pairs = 0
+for i in 1 to 3 { for j in 1 to 2 { pairs = pairs + 1 } }
+pairs')" "6"
 exit $((failures > 0))

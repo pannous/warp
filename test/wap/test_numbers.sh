@@ -10,4 +10,9 @@ if 2.0 * 3.0 != 6.5 then print "float" else print "other"')" "int
 float"
 # parentheses group: the form inside is computed first
 check "a group is computed first" "$(ran group '(1 + 2) * 3')" "9"
+# x op= v is x = x op v for every infix operator of the table (notes/operators.md)
+check "compound assignments" "$(ran compound 'x = 2
+x += 1
+x *= 3
+x')" "9"
 exit $((failures > 0))
