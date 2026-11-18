@@ -51,4 +51,6 @@ b.scaled(10)')" "5
 3
 6
 30"
+check "a class of one field" "$(ran one_field 'class P { x: int }
+P(3).x')" "3"
 exit $((failures > 0))
