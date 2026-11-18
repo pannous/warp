@@ -229,3 +229,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - instance-truthy (user, 2026-11-18): an instance is truthy unless its class defines `empty` (wiki/falsey.md; truthiness.md's `cat{}` line to be fixed).
 - none-into-list (user, 2026-11-18): ø reaching a list place becoming [] is an edge case: not built until real code needs it.
 - kind-word-is (wiki Footguns.md:180, 2026-11-18): on a Node, `n is symbol`/`n is text` tests the case, as `n is Symbol`.
+- never-type-dropped (user, 2026-11-18, fits.wap TODO): wap has no NEVER_TYPE; a jump (return, break, raise) gets no type and joins skip jumping arms.
+- conversion-is-implicit-as (user, 2026-11-18, fits.wap TODO): conversion(given, wanted) is what `x as T` would do where nothing is written (Checked = the cast, the rest repacking); no separate convert/cast functions; `x as T` stays `T(x)`.
