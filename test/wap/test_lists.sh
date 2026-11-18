@@ -52,7 +52,7 @@ print text(#xs)')" "0
 1"
 check "the first items of a list, and the rest after them" "$(ran take_drop 'print show([1, 2, 3].take(2)) + " " + show([1, 2, 3].drop(2)) + " " + show([1].take(5)) + " " + show([1].drop(5))')" "[1, 2] [3] [1] []"
 check "a list's items summed" "$(ran sum 'print text([1, 2, 3].sum()) + " " + text([0.5, 0.25].sum())')" "6 0.75"
-check "a list sorted by a key, equal keys in their order" "$(ran sorted_by_key 'print show(["ccc", "bb", "aa", "dddd"].sorted_by_key(t => #t))')" "[\"bb\", \"aa\", \"ccc\", \"dddd\"]"
+check "a list sorted by a key, equal keys in their order" "$(ran sorted_by 'print show(["ccc", "bb", "aa", "dddd"].sorted(t => #t))')" "[\"bb\", \"aa\", \"ccc\", \"dddd\"]"
 check "an empty list typed by its later use" "$(ran later_use 'xs = []
 xs.add(2)
 print text(xs.sum())

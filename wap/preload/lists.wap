@@ -59,12 +59,12 @@ join(texts: list<text>, separator: text): text := {
 # the first n items, and the items after them: `[1, 2, 3].take(2)` is [1, 2], `[1, 2, 3].drop(2)` is [3]
 take(xs: list<T>, n: int): list<T> := xs[0 .. n]
 drop(xs: list<T>, n: int): list<T> := xs[min(n, #xs) .. #xs]
-# the items in the order of their keys, equal keys in the list's order: `["bb", "a"].sorted_by_key(t => #t)` is ["a", "bb"]
-sorted_by_key(xs: list<T>, key: (T) -> K): list<T> := {
+# the items in the order of their keys, equal keys in the list's order: `["bb", "a"].sorted(by: t => #t)` is ["a", "bb"]
+sorted(xs: list<T>, by: (T) -> K): list<T> := {
 	out: list<T> = []
 	keys: list<K> = []
 	for x in xs {
-		k = key(x)
+		k = by(x)
 		at = #keys
 		while at > 0 and k < keys#at { at -= 1 }
 		out = out.take(at) + [x] + out.drop(at)
