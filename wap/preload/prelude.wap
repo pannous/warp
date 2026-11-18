@@ -25,6 +25,8 @@ folder_of(file: text): text := {
 	parts = file.split("/")
 	if #parts == 1 then "." else parts[.. #parts - 1].join("/")
 }
+# bytes written to the file at a path, made anew or emptied first: what a compiler writes its module with
+write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)
 
