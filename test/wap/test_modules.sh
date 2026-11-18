@@ -27,4 +27,7 @@ pong"
 printf '%s\n' 'rule twice $x => $x + $x' >"$stage/doubling.wap"
 check "a module of rules only" "$(ran use_rules 'use "doubling.wap"
 print "used"')" "used"
+# a used module's rules build the language the program is written in (wiki kernel.md)
+check "a used module's rule" "$(ran use_rule 'use "doubling.wap"
+twice 4')" "8"
 exit $((failures > 0))
