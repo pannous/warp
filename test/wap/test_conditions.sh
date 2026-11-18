@@ -26,6 +26,7 @@ if yes or loud() then print "a" else print "b"')" "a"
 check "not turns a condition round" "$(ran not 'if not no then print "a" else print "b"
 if !yes then print "c" else print "d"')" "a
 d"
+check "an if later in a phrase is the earlier word's argument" "$(ran inner 'print if no then "one" else "two"')" "two"
 check "c ? a : b chooses" "$(ran ternary 'x = no ? 1 : 2
 x')" "2"
 check "a statement guarded after it" "$(ran postfix 'print "shown" if yes
