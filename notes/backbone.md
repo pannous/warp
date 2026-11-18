@@ -229,6 +229,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open, not built yet
 
+- **Methods, the rest of wiki/class.md:** bare field names inside a method reading and writing the receiver
+  (`inc() := { c = c + 1 }`; scope's, binding a bare name to `self.c`), a getter without parentheses
+  (`double := v * 2`), defaults (`n: int = 1`), `init`, and `extends`. Built: methods written after a class's fields,
+  each a function taking `self` first, so `b.area()` and `b.area` both call it.
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
 - **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
@@ -240,6 +244,12 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)
+
+- **A decimal literal is a binary float (f64), not exact:** `0.1 + 0.2` is 0.30000000000000004 in wap and 0.3 in warp,
+  whose decimal literals are exact (notes/decisions.md core-round-untyped-half, exact-decimal-big; tests
+  test/numbers/test_number_and_unit_rules:7, test_fraction_written_form:11, test_declared_float_exact_reals:13). The
+  compiler's own source barely uses decimals, so self-build does not wait for it; the exact number kind (the runtime's
+  exact numbers as preload warp) comes after self-build. No test pins the f64 value.
 
 - **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
   program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
@@ -301,6 +311,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   of several overloads not yet. Its captures
   are copied when it is made, so a change of one afterwards is refused. Paid off by function references (a funcref
   beside the captures, call_ref), for values chosen at run time.
-- **Protocols are declared, not yet used** (`trait`): a place typed by a trait is refused by the emitter (no layout
-  for a function-typed field) and a class given to it is refused by typing (no structural fit yet). Paid off by the
-  owners of core/emit/ and core/analyze/ (asked 2026-11-18); `map default ListMap` waits for maps and class methods.
+- **Protocols fit structurally, by specialisation only** (wap/core/analyze/calls.wap `conforms`): a function of a
+  protocol parameter is typed anew for each type given, so a list of mixed protocol values (run-time dispatch through
+  function references), a protocol's default bodies (decision traits-are-protocols), `x is shape`, and a class's field
+  counting as a word are not there yet. Paid off by slice B's function references in core/emit/ and the typing of
+  defaults in core/analyze/; `map default ListMap` waits for its declaration rule.
+- **A method's bare field names come from the classes of its Block only** (wap/core/analyze/scope.wap
+  `receiver_fields`): a method of a preload or used module's class still writes `self.c`, and a function value inside
+  a method that reads a bare field is not given self as a capture. Paid off when the binding sees the library's
+  Records beside its declarations, and a field's capture captures its receiver.
+- **Decimal literals are floats, not exact** (wap/core/parse/atoms.wap number_read, wap/preload/floats.wap): `0.1 + 0.2`
+  shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
+  Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
+  Nothing pins the float digits.

@@ -41,4 +41,19 @@ both {
 x
 q
 p"
+check "two repeated groups in a row" "$(ran two_repeats 'rule klass $name { ($field: $type)... ($m := $b)... } => print "two"
+klass P { x: int; y: int }
+klass Q { x: int; f := 1 }')" "two
+two"
+check "a repetition that takes nothing writes nothing" "$(ran empty_repeat 'rule klass $name { ($field: $type)... ($m := $b)... } => print "fields"; ($m := $b)...
+klass P { x: int; y: int }
+klass Q { x: int; g := "q" }
+print g()')" "fields
+fields
+q"
+check "a template that is a repetition, with and without the rest it repeats" "$(ran repeated_template 'rule methods { ($method($parameters...) := $body)... } => ($method(self: int, $parameters...) := $body)...
+methods { twice(k: int) := self * k; ten() := self * 10 }
+print text(twice(3, 4) + ten(2))')" "32"
+check "a block pattern of two parts fits a group of one item" "$(ran one_item 'rule klass $name { ($field: $type)... ($m := $b)... } => print "two"
+klass P { x: int }')" "two"
 exit $((failures > 0))

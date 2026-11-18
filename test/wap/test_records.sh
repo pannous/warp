@@ -24,4 +24,36 @@ printf '%s\n' 'class Point { x: int; y: int }' >"$stage/points.wap"
 check "a used module's class" "$(ran module_class 'use "points.wap"
 p = Point(4, 5)
 p.y')" "5"
+check "a method reads its instance through self" "$(ran method 'class Box { w: int; h: int; area() := self.w * self.h }
+b = Box(2, 3)
+b.area()')" "6"
+check "a method's parameters follow self" "$(ran method_parameters 'class Box { w: int; h: int; scaled(k: int) := self.w * k }
+Box(2, 3).scaled(10)')" "20"
+check "a method without parentheses is called too" "$(ran method_read 'class Box { w: int; h: int; area() := self.w * self.h }
+b = Box(2, 3)
+b.area')" "6"
+check "a method reads and sets its receiver's fields by their bare names, a parameter hiding one" "$(ran bare_fields 'class Counter { c: int
+inc() := { c = c + 1; c }
+}
+print text(Counter(4).inc())
+k = Counter(1)
+k.inc()
+k.inc()
+print text(k.c)
+class Box { w: int
+h: int
+area() := w * h
+scaled(w) := w * h
+}
+b = Box(2, 3)
+print text(b.area())
+b.scaled(10)')" "5
+3
+6
+30"
+check "a class of one field" "$(ran one_field 'class P { x: int }
+P(3).x')" "3"
+check "an instance shows itself in its constructor form" "$(ran shown 'class P { x: int }
+class Q { p: P; name: text }
+print show(Q(P(1), "a"))')" 'Q{p: P{x: 1}, name: "a"}'
 exit $((failures > 0))

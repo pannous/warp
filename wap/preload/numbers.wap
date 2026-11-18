@@ -1,0 +1,10 @@
+# The preload's number words (notes/wap.md "Layers"): plain warp over the prelude's comparisons.
+
+# the smaller and the larger of two ints: `min(3, 2)` is 2
+min(a: int, b: int): int := if a < b then a else b
+max(a: int, b: int): int := if a > b then a else b
+
+# a value in warp notation, as a program's result shows it: an int, a float by its shortest digits, yes or no
+show(n: int): text := text(n)
+show(x: float): text := text(x)
+show(b: bool): text := text(b)

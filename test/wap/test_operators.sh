@@ -38,7 +38,12 @@ format_check 'total := fold +' 'total := fold +'
 # a function's result type prints after `as`, the canonical word (wiki/function.md); a typed name keeps its `:`
 format_check 'twice(x): int := x * 2' 'twice(x) as int := x * 2'
 format_check 'x: int := 3' 'x: int := 3'
+format_check 'x: int = 3' 'x: int = 3'
 # a case named by its enum, either way (wiki/enum.md)
 format_check 'Coin::Dime' 'Coin.Dime'
 format_check 'x = p . x+1' 'x = p.x + 1'
+format_check 'rule show { ($k: $v)... } => 1' 'rule show {($k: $v)...} => 1'
+# an optional's value, `x!` (wiki/optional.md), beside the prefix `!x` for not
+format_check 'y = x!' 'y = x!'
+format_check 'z = !x' 'z = not x'
 exit $((failures > 0))

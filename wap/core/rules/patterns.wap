@@ -20,8 +20,9 @@ use "../../kernel/forms.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
-# the groups that are Empty when they hold nothing, `()` and `{}` (wiki/Footguns.md: `()` stays ø, which doubles as
-# the empty list): a rule's group of no items fits either
+# the groups that are Empty when they hold nothing, `()` and `{}`: the host collapses empty round and curly groups to
+# ø; only their falsiness is pinned, so wap may keep the bracket once it reads its own Nodes. A rule's group of no
+# items fits either
 EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 # the separators that end a statement, one for matching: a block's statements fit a pattern whether `;` or line ends
 # part them, and a pattern that parts them by spaces, `{ $a... $b... }`, fits either
@@ -68,11 +69,11 @@ typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 # ---- compiling
 
 # a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
-compiled_pattern(n: Node) as Matcher := match n {
+compiled_pattern(n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else shape_matcher(n)
+shape_matcher(n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
 	Key(left, op, right) => pair_matcher(n, left, op, right)
-	List(items, Bracket.None, Separator.None) => if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else sequence_matcher(items, Bracket.None, Separator.None)
 	List(items, bracket, separator) => sequence_matcher(items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
 }
@@ -82,7 +83,7 @@ sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher
 # and $r to the sequences of their matches (as a rest hole binds, under `$p...`); in a template `Arm($p, $r)...`
 # writes one Arm per match. The part repeated, ø when the node is no repetition.
 repeated_part(n: Node) as Node? := match n {
-	List(items, Bracket.None, Separator.None) => if #items == 2 and items#2 is symbol and spelling_written(items#2) == canonical(REST_MARK, Fixity.Anywhere) then items#1 else ø
+	Call(called, parts) => if spelling_written(called) == REST_MARK and #parts == 1 then parts#1 else ø
 	_ => ø
 }
 
@@ -145,11 +146,12 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
-	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, items, bindings)
+	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or #items < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, items, bindings)
 	Empty => EMPTY_GROUPS.contains(m.bracket) and parts_match(m.parts, [], bindings)
 	_ => no
 }
 
+# a group of one item has no separator to compare: `{ x: int }` fits `{ ($f: $t)... ($m := $b)... }`
 separators_fit(wanted: Separator, given: Separator) as bool := wanted == given or STATEMENT_SEPARATORS.contains(given) and (wanted == Separator.Space or STATEMENT_SEPARATORS.contains(wanted))
 
 # Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
@@ -171,6 +173,8 @@ taken_by(m: Matcher, items: list, bindings: map) as bool := if m.test == Test.Re
 # each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
 repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 	met = {}
+	# none taken binds each name to the empty sequence, so a template writes the part no times
+	for name in names_bound(part) { met[name] = [] }
 	for item in items {
 		own = {}
 		if not matches(part, item, own) { return no }
@@ -178,6 +182,13 @@ repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 	}
 	for name in met.keys { bindings[name + REST_MARK] = List(met[name], Bracket.None, Separator.Space) }
 	yes
+}
+
+# the names a matcher binds when it fits: its holes, a repetition's under `$p...`
+names_bound(m: Matcher) as list := match m.test {
+	Test.Hole => [m.name]
+	Test.Repeat => names_bound(m.parts#1).map(name => name + REST_MARK)
+	_ => m.parts.flat_map(names_bound)
 }
 
 rest_matches(m: Matcher, items: list, bindings: map) as bool := {

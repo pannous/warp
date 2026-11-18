@@ -63,4 +63,11 @@ check "a call of the value another call gives" "$(ran chained 'adder(n: int) := 
 print text(adder(2)(40))
 (x => x * 3)(5)')" "42
 15"
+check "a parameter of a function type takes a function value, its letters bound by typing the value's function" "$(ran function_types 'apply(f: (int) -> int, x: int) := f(x)
+print text(apply(y => y + 1, 4))
+twice(f: (T) -> T, x: T): T := f(f(x))
+print text(twice(y => y * 3, 2))
+print twice(t => t + "!", "ab")')" "5
+18
+ab!!"
 exit $((failures > 0))

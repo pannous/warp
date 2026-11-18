@@ -25,7 +25,8 @@ COMMAND_COUNT_AT = 16
 CODE_SIGNATURE = 29
 SIGNATURE_OFFSET_AT = 8
 STDERR = 2
-# access()'s R_OK, W_OK and X_OK
+# access()'s F_OK, R_OK, W_OK and X_OK
+EXISTING = 0
 READABLE = 4
 WRITABLE = 2
 EXECUTABLE = 1
@@ -1264,19 +1265,39 @@ raised_message(caller: handle, context: handle, instance: pointer, failed: point
 }
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile, then the module runs with the arguments
+# A compile is cached: the module it writes is kept (cached_module), and the next compile of that file only asks
+# whether it is still current (compiler.warp cached_current), so a program runs at once the second time
 compiled_and_run(compiler: text, written: text, first: int) as nothing := {
 	given = downloaded(written)
 	file = reachable_path(given)
 	library = library_folder()
-	output = compiled_path()
+	cached = cached_module(compiler, file, library)
+	# (a compile writes beside the cached module, then renames it over: a run beside this one never reads half of one)
+	output = if cached.length == 0 then compiled_path() else joined(joined(cached, "."), text_of(getpid()))
 	compiling = compiler_arguments(compiler)
 	added(compiling, file)
 	added(compiling, output)
 	added(compiling, folder_of(file))
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
+	option_given("cache", cached)
 	file_ran(compiler, compiling)
-	written_run(output, given, first)
+	# (the program asks the host its own questions, unrecorded)
+	option_given("cache", "")
+	if cached.length == 0 { return written_run(output, given, first) }
+	# a compile that found the cached module current wrote none
+	if access(c_string(output), EXISTING) == 0 { rename(c_string(output), c_string(cached)) }
+	file_ran(cached, program_arguments(given, first))
+}
+# where the module of the file compiled by this compiler with this lib/ is cached: in the cache folder, named by the
+# file and the fingerprint of both; "" without a cache folder
+cached_module(compiler: text, file: text, library: text) as text := {
+	cache = cache_folder()
+	if cache.length == 0 { return cache }
+	folder = joined(cache, "compiled")
+	mkdir(c_string(folder), FOLDER_MODE)
+	identity = text_of(fingerprint_of(joined(text_of(fingerprint_of(read_file(compiler))), library)))
+	joined(joined(joined(joined(joined(folder, "/"), flattened(resolved_path(file))), "."), identity), ".wasm")
 }
 # a program given as a URL (`warp https://host/a.warp`): fetched by curl, run by its argument vector, into the cache
 # folder under the whole URL, and run from there; any other word as it is. A fetch that fails stops with curl's reason

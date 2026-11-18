@@ -3,15 +3,18 @@
 # variable, bound by the call: map's U is f's result for an item.
 
 # whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
-all(xs, fits) := {
+all(xs: list, fits) := {
 	for x in xs { if not fits(x) { return no } }
 	yes
 }
-any(xs, fits) := {
+any(xs: list, fits) := {
 	for x in xs { if fits(x) { return yes } }
 	no
 }
-contains(xs, item) := xs.any(x => x == item)
+contains(xs: list, item) := xs.any(x => x == item)
+
+# a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
++(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
 
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
@@ -36,4 +39,23 @@ join(texts: list<text>, separator: text): text := {
 	out = ""
 	for at in 1 to #texts { out = out + (if at > 1 then separator else "") + texts#at }
 	out
+}
+
+# the position of an item, counted from 1, 0 when the list holds none: `[10, 20].index_of(20)` is 2 (wiki/indexing.md)
+index_of(xs: list, item) := xs.index_where(x => x == item)
+# the position of the first item that fits a test, 0 when none does
+index_where(xs: list, fits) := {
+	at = 0
+	while at < #xs {
+		at += 1
+		if fits(xs#at) { return at }
+	}
+	0
+}
+
+# a list in warp notation, each item shown by its own show: `show([1, 2])` is [1, 2]
+show(xs: list): text := {
+	out = ""
+	for at in 1 to #xs { out = out + (if at > 1 then ", " else "") + show(xs#at) }
+	"[" + out + "]"
 }

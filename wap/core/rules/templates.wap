@@ -12,8 +12,10 @@ use "../../kernel/forms.wap"
 
 FRESH_MARK = "·"
 
-# the template with each hole replaced by its binding
-built(template: Node, bindings: map) as Node := match template {
+# the template with each hole replaced by its binding; a template that is a repetition, `($m := $b)...`, the statements
+# it writes, spliced where it stands
+built(template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(template, bindings)
+filled(template: Node, bindings: map) as Node := match template {
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
 		pattern = pattern_called(head)
@@ -42,7 +44,7 @@ built_items(items: list, bindings: map) as list := {
 	all = []
 	for item in items {
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
-			match bindings[hole_key(item)] { List(taken, bracket, separator) => all = all + taken; _ => all.add(bindings[hole_key(item)]) }
+			all = all + items_taken(bindings[hole_key(item)])
 		} else if repeated_part(item) != ø {
 			all = all + repeated(repeated_part(item), bindings)
 		} else {
@@ -73,7 +75,8 @@ repeated(part: Node, bindings: map) as list := {
 	for hole in sequences { bindings.remove(hole) }
 	written
 }
-items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; _ => [taken] }
+# what a rest or repetition took; none taken is Empty, as the host gives an empty list
+items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; Empty => []; _ => [taken] }
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.

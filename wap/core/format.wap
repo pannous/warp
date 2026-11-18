@@ -60,11 +60,8 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 		gap = if group_of(spelling, Fixity.Infix) == glue_group then "" else " "
 		return left + gap + spelling + gap + operand_text(arguments#2, call, Side.Right)
 	}
-	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" {
-		gap = if is_word(spelling) then " " else ""
-		return spelling + gap + operand_text(arguments#1, call, Side.Right)
-	}
-	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + spelling }
+	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" { return spelling + word_gap(spelling) + operand_text(arguments#1, call, Side.Right) }
+	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + word_gap(spelling) + spelling }
 	spelling + "(" + arguments.map(formatted).join(", ") + ")"
 }
 
@@ -91,6 +88,10 @@ ungrouped(n: Node) as Node := match n {
 needs_brackets(operand: Node, call: Node, side: Side) as bool := {
 	inner = group_written(operand)
 	outer = group_written(call)
+	# a key binds looser than every operator, the reader keys before the table applies: `($field: $type)...`; the
+	# typed place an assignment sets is no operand, `x: int = 3`
+	typed_place = side == Side.Left and outer == compound_assignment_group
+	match operand { Key(left, op, right) => if op != Op.None and not typed_place { return yes }; _ => ø }
 	if inner == "" { return no }
 	if inner == outer {
 		grouping = group_named(outer).grouping
@@ -98,6 +99,9 @@ needs_brackets(operand: Node, call: Node, side: Side) as bool := {
 	}
 	not binds_tighter(inner, outer)
 }
+
+# a word operator stands apart from its operand, `not x`, `x required`; a glyph touches it, `-x`, `x²`
+word_gap(spelling: text) as text := if is_word(spelling) then " " else ""
 
 # the precedence group code is written in at its top, "" for an atom or a bracketed list
 group_written(n: Node) as text := match n {
