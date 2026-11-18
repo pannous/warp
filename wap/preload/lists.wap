@@ -73,6 +73,8 @@ sorted(xs: list<T>, by: (T) -> K): list<T> := {
 	out
 }
 
+# a list's last item; an empty list raises: `[1, 2].last` is 2
+last(xs: list<T>): T := xs#(#xs)
 # the position of an item, counted from 1, 0 when the list holds none: `[10, 20].index_of(20)` is 2 (wiki/indexing.md)
 index_of(xs: list, item) := xs.index_where(x => x == item)
 # the position of the first item that fits a test, 0 when none does
