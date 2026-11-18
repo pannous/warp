@@ -70,4 +70,11 @@ format_check '1 !== 2' '1 !== 2'
 format_check $'f(x: int): int :=\n\tx + 1' 'f(x: int) as int := {x + 1}'
 # an operator ending its line continues the phrase onto the lines indented below it
 format_check $'y = 1 +\n\t2 +\n\t3\nz = 4' $'y = 1 + 2 + 3\nz = 4'
+check "a comma at a line's end continues the row, a line without one starts a new row" "$(ran comma_rows 'xs = [
+	1, 2,
+	3, 4,
+]
+ys = [1, 2
+3, 4]
+print text(#xs) + " " + text(#ys)')" "4 2"
 exit $((failures > 0))
