@@ -52,7 +52,7 @@ field_parts(pattern: Node, value: list, p: Program) as list := match pattern {
 		record = enum_declaring(p.records, called)
 		cast = case_struct_of(record, case_declaring(p.records, called), p.m, p.records)
 		types = case_fields(case_declaring(p.records, called)).map(field => layout_of(declared_type(field), p.m, p.records))
-		(1 to #patterns).map(at => Part(patterns#at, value + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
+		(1 to #patterns).map(at => Part(patterns#at, value + heap_instruction(REF_CAST_NULL, cast) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
 	}
 	_ => []
 }

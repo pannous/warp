@@ -90,7 +90,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == BOXED_TEST { return Code(given_layout(form, p), operands + instruction(REF_TEST, [held_in_any(fact_of(form, TESTED), form, p)#1])) }
+	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
 	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
 	if name == DISPATCHED { return finished(Code(given_layout(form, p), operands + dispatched_code(form, p))) }

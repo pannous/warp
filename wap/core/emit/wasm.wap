@@ -51,6 +51,9 @@ little_endian(n: int, width: int) as list := (0 upto width).map(at => n ÷ 0x100
 
 # an instruction with its unsigned immediates: instruction(CALL, [3])
 instruction(opcode: list, indices: list) as list := opcode + indices.flat_map(unsigned)
+# an instruction on a heap type, which the format writes signed, a declared type's index among them: ref.test 64 is
+# [0xFB, 0x14, 0xC0, 0x00]
+heap_instruction(opcode: list, type_index: int) as list := opcode + signed(type_index)
 i32_const(n: int) as list := I32_CONST + signed(n)
 i64_const(n: int) as list := I64_CONST + signed(n)
 f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
