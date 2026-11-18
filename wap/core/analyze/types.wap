@@ -109,7 +109,9 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
-gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and value_type(n) != symbol(NEVER_TYPE) and value_type(n) != symbol(EMPTY_TYPE)
+gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and valued_type(value_type(n))
+# whether a type is one of a value: not none, not ø alone, not code that never finishes
+valued_type(type: Node?) as bool := type != ø and not [symbol(NEVER_TYPE), symbol(EMPTY_TYPE)].contains(type)
 statements_in(block: Block) as list := match block { Block(statements) => statements }
 
 # a kernel form with the types it learned, expected the type its place wants, ø for any
@@ -267,7 +269,7 @@ pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
 # the type that holds both: either when they are one, `T?` for a T and ø (or a T?), ø when none does
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
-	if a != ø and b != ø and a != symbol(NEVER_TYPE) and b != symbol(NEVER_TYPE) and a != symbol(EMPTY_TYPE) and b != symbol(EMPTY_TYPE) { settles(a, b, s) }
+	if valued_type(a) and valued_type(b) { settles(a, b, s) }
 	joined_type(substituted(a, s.settled), substituted(b, s.settled))
 }
 joined_type(a: Node?, b: Node?) as Node? := {
