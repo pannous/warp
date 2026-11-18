@@ -45,4 +45,12 @@ xs[0] = 5
 print text(xs[0] + xs[1])')" "7"
 check "a text's character counted from 0" "$(ran text_item 't = "abc"
 print t[2]')" "c"
+check "a list grows in place, every name holding it sees the items" "$(ran grown 'xs = [1]
+ys = xs
+for i in 1 to 9 { xs.add(i) }
+print text(#ys)')" "10"
+check "the last item taken off a list, then ø" "$(ran popped 'xs = [7]
+print text(xs.pop()!)
+print text(xs.pop() ?? 0)')" "7
+0"
 exit $((failures > 0))
