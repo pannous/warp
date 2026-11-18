@@ -206,13 +206,15 @@ words_missing(definitions: list, types: list, s: TypingState) as text := {
 		if #parameters == #types {
 			for at in 1 to #types {
 				protocol = protocol_named(s.records, type_given(parameters#at))
-				if protocol != ø { missing += fields_of(protocol).filter(word => not does_word(types#at, word, s)).map(word => "${types#at} is no ${record_name(protocol)}: define ${declared_name(word)}(x: ${types#at}${", …" * #(function_type_parts(declared_type(word))#1)})") }
+				if protocol != ø { missing += fields_of(protocol).filter(word => not does_word(types#at, word, s)).map(word => "${types#at} is no ${record_name(protocol)}: define ${declared_name(word)}(x: ${types#at}${", …" * parameter_count(word)})") }
 			}
 		}
 	}
 	if missing is empty then "" else "; " + missing.join("; ")
 }
-does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, #(function_type_parts(declared_type(word))#1)))
+does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, parameter_count(word)))
+# how many parameters a protocol's word takes besides the value's own, its field a function type (protocol_named checks it)
+parameter_count(word: Node) as int := #(function_type_parts(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters
 # whether a definition takes a value of this type first, then as many parameters as a protocol's word
 does_as(definition: Node, given: Node, arity: int) as bool := {
 	parameters = parameters_in(definition)

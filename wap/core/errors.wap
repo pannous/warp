@@ -10,7 +10,11 @@
 
 use "stage.wap"
 
-refused(code: Node, why: text) := raise place_of(code) + why + ": " + code
+refused(code: Node, why: text) := raise place_of(code) + why + ": ${code}"
 
 # `hello.wap line 2:1: `, `line 2:1: ` for code no file holds, or nothing for code without a position
-place_of(code: Node) as text := if line_of(code) == ø then "" else "${if file_of(code) == ø then "" else file_of(code) + " "}line ${line_of(code)}:${column_of(code)}: "
+place_of(code: Node) as text := {
+	at = position_of(code) ?? return ""
+	file = file_of(code) ?? return "line ${at.line}:${at.column}: "
+	"${file} line ${at.line}:${at.column}: "
+}
