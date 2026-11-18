@@ -284,5 +284,3 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
-- **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
-  the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.

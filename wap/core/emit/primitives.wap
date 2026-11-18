@@ -50,6 +50,9 @@ INSTRUCTIONS = {
 	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
 	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
 	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
+	"i64_div_s": I64_DIV_S, "i64_rem_s": I64_REM_S, "f64_neg": F64_NEG, "f64_floor": F64_FLOOR, "f64_ceil": F64_CEIL,
+	"i64_trunc_f64_s": I64_TRUNC_F64_S, "f64_convert_i64_s": F64_CONVERT_I64_S,
+	"i64_reinterpret_f64": I64_REINTERPRET_F64, "f64_reinterpret_i64": F64_REINTERPRET_I64,
 	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's

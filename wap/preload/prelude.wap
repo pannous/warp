@@ -48,3 +48,181 @@ text(b: bool): text := if b then "yes" else "no"
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes
+
+# a float's sign turned, its whole parts, its bits; an int as a float; the truncated quotient and remainder of ints
+-(x: float): float := prim f64_neg(x)
+floor(x: float): float := prim f64_floor(x)
+ceil(x: float): float := prim f64_ceil(x)
+truncated(x: float): int := prim i64_trunc_f64_s(x)
+float(n: int): float := prim f64_convert_i64_s(n)
+bits_of(x: float): int := prim i64_reinterpret_f64(x)
+float_of_bits(bits: int): float := prim f64_reinterpret_i64(bits)
+quotient(a: int, b: int): int := prim i64_div_s(a, b)
+rem(a: int, b: int): int := prim i64_rem_s(a, b)
+
+# The text of a float: its shortest digits that read back, positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7;
+# ∞, -∞ and NaN by name (the warp runtime's algorithm, core/runtime/floats.warp)
+# the largest float beyond the finite ones
+infinity(): float := float_of_bits(9218868437227405312)
+text(x: float): text := {
+	if x != x { return "NaN" }
+	if x == infinity() { return "∞" }
+	if x == -infinity() { return "-∞" }
+	if x == 0.0 { return "0" }
+	if x < 0.0 { return "-" + positive_float_text(x * -1.0) }
+	positive_float_text(x)
+}
+positive_float_text(x: float): text := {
+	found = float_digits(x)
+	digits = found#1
+	count = digit_count(digits)
+	exponent = count - 1 - found#2
+	if exponent >= 15 or exponent < -5 {
+		rest = if count > 1 then "." + padded(rem(digits, power_of_ten(count - 1)), count - 1) else ""
+		return text(quotient(digits, power_of_ten(count - 1))) + rest + "e" + text(exponent)
+	}
+	if exponent >= count - 1 { return text(digits) + zeros(exponent - count + 1) }
+	if exponent >= 0 { return text(quotient(digits, power_of_ten(count - 1 - exponent))) + "." + padded(rem(digits, power_of_ten(count - 1 - exponent)), count - 1 - exponent) }
+	"0." + zeros(-1 - exponent) + text(digits)
+}
+# [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
+# digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
+# bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
+float_digits(x: float): list<int> := {
+	exponent = 0
+	mantissa = x
+	while mantissa >= 10.0 {
+		mantissa = mantissa / 10.0
+		exponent = exponent + 1
+	}
+	while mantissa < 1.0 {
+		mantissa = mantissa * 10.0
+		exponent = exponent - 1
+	}
+	shift = 16 - exponent
+	scaled = float_scaled(x, 0.0, shift)
+	while has_17_digits(scaled, 1.0e17) or not has_17_digits(scaled, 1.0e16) {
+		shift = shift + (if has_17_digits(scaled, 1.0e17) then -1 else 1)
+		scaled = float_scaled(x, 0.0, shift)
+	}
+	hi = scaled#1
+	lo = scaled#2
+	whole = truncated(hi) + truncated(floor(lo))
+	fraction = lo - floor(lo)
+	# the gaps to the neighbours; the largest float's upper one is its lower
+	below = x - float_of_bits(bits_of(x) - 1)
+	above = float_of_bits(bits_of(x) + 1) - x
+	if above == infinity() { above = below }
+	# an odd last bit excludes a halfway that is whole
+	odd = rem(bits_of(x), 2)
+	lowest = float_scaled(x, below * -1.0, shift)
+	low_lo = lowest#2
+	low = truncated(lowest#1) + truncated(ceil(low_lo))
+	if odd == 1 and low_lo == ceil(low_lo) { low = low + 1 }
+	highest = float_scaled(x, above, shift)
+	high_lo = highest#2
+	high = truncated(highest#1) + truncated(floor(high_lo))
+	if odd == 1 and high_lo == floor(high_lo) { high = high - 1 }
+	# the largest power of ten with a multiple from low to high
+	power = 10
+	while quotient(low + power - 1, power) * power <= high { power = power * 10 }
+	power = quotient(power, 10)
+	# its multiple nearest x · 10^shift: the one below or the next, by twice the distance minus the power
+	multiple = whole - rem(whole, power)
+	twice = float((whole - multiple) * 2 - power) + fraction * 2.0
+	if twice > 0.0 or (twice == 0.0 and rem(quotient(multiple, power), 2) == 1) { multiple = multiple + power }
+	if multiple < low { multiple = multiple + power }
+	if multiple > high { multiple = multiple - power }
+	while rem(multiple, 10) == 0 {
+		multiple = quotient(multiple, 10)
+		shift = shift - 1
+	}
+	[multiple, shift]
+}
+# the double-double scaled reaches bound: hi beyond it, or at it with lo not below
+has_17_digits(scaled: list<float>, bound: float): bool := scaled#1 > bound or (scaled#1 == bound and scaled#2 >= 0.0)
+# [hi, lo]: (x + gap/2) · 10^shift as the double-double hi + lo, by at most 10^22 a step (each power exact): a product's
+# error is Dekker's exact product, a quotient's the remainder of its exact product. Exact in one step, within 2^-104 in
+# more. A float beyond ±2^900 is moved by 2^∓128 first and back after, so no product overflows, no half underflows
+# the bounds 2^900 and 2^-900, the moves 2^-128 and 2^128, the largest power of ten a float holds exactly
+large(): float := float_of_bits(8660422083433463808)
+small(): float := float_of_bits(553942754166571008)
+shrink(): float := float_of_bits(4030721666496593920)
+grow(): float := float_of_bits(5183643171103440896)
+power_step(): int := 22
+float_scaled(x: float, gap: float, shift: int): list<float> := {
+	value = x
+	scaled_gap = gap
+	scale = 1.0
+	if x >= large() {
+		value = x * shrink()
+		scaled_gap = scaled_gap * shrink()
+		scale = grow()
+	}
+	if x < small() {
+		value = x * grow()
+		scaled_gap = scaled_gap * grow()
+		scale = shrink()
+	}
+	hi = value
+	lo = scaled_gap / 2.0
+	left = shift
+	while left != 0 {
+		step = if left > power_step() then power_step() else if left < 0 - power_step() then 0 - power_step() else left
+		power = 1.0
+		count = if step < 0 then 0 - step else step
+		for k in 1 to count { power = power * 10.0 }
+		if step > 0 {
+			product = hi * power
+			lo = product_error(hi, power, product) + lo * power
+			hi = product
+		} else {
+			ratio = hi / power
+			product = ratio * power
+			lo = (hi - product - product_error(ratio, power, product) + lo) / power
+			hi = ratio
+		}
+		# renormalized, so hi is the nearest float
+		sum = hi + lo
+		lo = lo - (sum - hi)
+		hi = sum
+		left = left - step
+	}
+	[hi * scale, lo * scale]
+}
+# a · b - product exactly, a and b split in halves of 26 bits whose products are exact (Veltkamp, Dekker)
+product_error(a: float, b: float, product: float): float := {
+	a_hi = upper_half(a)
+	a_lo = a - a_hi
+	b_hi = upper_half(b)
+	b_lo = b - b_hi
+	a_hi * b_hi - product + a_hi * b_lo + a_lo * b_hi + a_lo * b_lo
+}
+# v's upper 26 bits: 2^27 + 1 times v, less its distance to v
+upper_half(v: float): float := {
+	t = v * 134217729.0
+	t - (t - v)
+}
+# how many digits a positive int has; 10 to the power n
+digit_count(n: int): int := {
+	count = 1
+	left = n
+	while left >= 10 {
+		left = quotient(left, 10)
+		count = count + 1
+	}
+	count
+}
+power_of_ten(n: int): int := {
+	power = 1
+	for k in 1 to n { power = power * 10 }
+	power
+}
+# n's digits, zeros before them up to width
+padded(n: int, width: int): text := zeros(width - digit_count(n)) + text(n)
+# a text of count zero digits
+zeros(count: int): text := {
+	all = ""
+	for k in 1 to count { all = all + "0" }
+	all
+}
