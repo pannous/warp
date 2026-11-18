@@ -17,6 +17,8 @@
 #   emit      kernel → module       core/emit/emitter.wap, one case per kernel form
 #   encode    module → bytes        core/emit/wasm.wap, the wasm binary format (its codes: core/emit/opcodes.wap)
 use "core/pipeline.wap"
+use "core/parse/operators.wap"
+use "core/rules/stages.wap"
 use "core/format.wap"
 use "core/emit/wasm.wap"
 use "core/emit/emitter.wap"

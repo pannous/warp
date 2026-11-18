@@ -13,4 +13,7 @@ check "the command line, the program first" "$(ran command_line 'arguments(): li
 for each in arguments() { print each }' >/dev/null; $warp "$stage/command_line.wasm" a "b c")" "$stage/command_line.wasm
 a
 b c"
+check "args are the command line after the program's file, program its file and folder" "$(printf '%s\n' 'print text(#args)' 'print args#2' 'print program.folder' > "$stage/program_words.wap" && $warp "$compiler" "$stage/program_words.wap" "$stage/program_words.wasm" 2>&1 && $warp "$stage/program_words.wasm" a "b c" 2>&1)" "2
+b c
+$stage"
 exit $((failures > 0))
