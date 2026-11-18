@@ -143,6 +143,11 @@ parts_of_type(word: text, type: Node?) as list? := match type {
 	Key(name, Op.None, List(items, Bracket.Less, separator)) => if name == symbol(word) then items else ø
 	_ => ø
 }
+# any type's word and parts, `list` and `int` of `list<int>`; ø for a type without parts
+type_parts(type: Node?) as list? := match type {
+	Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
+	_ => ø
+}
 # a list's TYPE, `list<int>`, and its item type, ø for any other type
 LIST_TYPE = "list"
 list_type(item: Node) as Node := generic_type(LIST_TYPE, [item])
