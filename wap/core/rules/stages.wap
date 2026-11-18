@@ -247,9 +247,10 @@ spread_items(result: Node) as list? := match result {
 	List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) or separator == Separator.Comma and fact_of(result, RULE) != ø then items.map(item => with_rule_of(item, result)) else ø
 	_ => ø
 }
-# a group of one phrase keeps its brackets around what the phrase became, unless that is a row or nothing, which the
-# list around the group takes in its place: `[(both a), c]`
-group_kept(result: Node, bracket: Bracket) as Node := if result is Empty or spread_items(result) != ø then result else List([result], bracket, Separator.None)
+# a group of one phrase keeps its brackets only around a phrase it became, whose words they hold together; any other
+# result, a key, a call, a row or nothing, takes the group's place: `[(both a), c]`, `{(sub $x)...}`
+group_kept(result: Node, bracket: Bracket) as Node := if is_phrase(result) and spread_items(result) == ø then List([result], bracket, Separator.None) else result
+is_phrase(n: Node) as bool := match n { List(items, Bracket.None, Separator.Space) => yes; _ => no }
 # a spliced item keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
 with_rule_of(item: Node, sequence: Node) as Node := if fact_of(sequence, RULE) == ø then item else with_fact(item, RULE, fact_of(sequence, RULE))
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
