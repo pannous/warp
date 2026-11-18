@@ -75,7 +75,9 @@ set_code(form: Node, place: Node, given: Node, p: Program, f: Frame) as Code := 
 name_code(name: Node, p: Program, f: Frame) as Code := {
 	if is_case(name) { return case_value_code(name, name, [], p, f) }
 	if binding_of(name) in [BOUND_FUNCTION, BOUND_LIBRARY] { return function_value_code(name, p, f) }
-	held = variable_of(name, p, f) ?? refused(name, "this name is read before any value is given to it; a global is read only after the statement that sets it, until the typing stage")
+	# a global a function reads before the statement that sets it, the function emitted where its value is taken: the
+	# global made here, its statement setting it later
+	held = variable_of(name, p, f) ?? (if binding_of(name) == BOUND_GLOBAL then added_variable(name, layout(name, p), p, f) else refused(name, "this name is read before any value is given to it"))
 	Code(held.type, fetched(held))
 }
 
