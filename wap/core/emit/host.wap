@@ -34,9 +34,11 @@ FROM_START = 0
 FROM_END = 2
 SLASH = 47
 
-# The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
-# primitives call, before any function of its own.
-HOST_CALLS = {"print_text": ["fd_write"], "error_text": ["fd_write"], "arguments": ["args_sizes_get", "args_get"], "bytes_written": ["path_open", "fd_write", "fd_close", "proc_exit"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "dispatched": ["fd_write", "proc_exit"], "map_keys": ["fd_write", "proc_exit"], "map_remove": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+# The host's functions (WASI) a module imports, before any function of its own: fd_write and proc_exit, which print
+# and every helper that raises call, into every module, first; the others only for the primitives that call them,
+# operation → their names
+RAISING_CALLS = ["fd_write", "proc_exit"]
+HOST_CALLS = {"arguments": ["args_sizes_get", "args_get"], "bytes_written": ["path_open", "fd_close"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close"]}
 # each host function's parameter and result types
 HOST_FUNCTIONS = {
 	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
@@ -52,6 +54,8 @@ error_writing_function(p: Program) as int := writing_function(p, STDERR, [])
 raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
 # a raise of a message from inside a helper
 raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+# a raise of a message and the text the code `ending` gives, joined
+raised_with(message: text, ending: list, p: Program) as list := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
 # The helper of print_text, error_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
 writing_function(p: Program, file: int, after: list) as int := {
@@ -122,7 +126,7 @@ path_opened(first: int, open_flags: int, rights: int, refusal: text, p: Program)
 	rooted = path + ARRAY_LEN + I32_EQZ + IF + I32 + i32_const(0) + ELSE + path + i32_const(0) + instruction(ARRAY_GET_U, [type]) + i32_const(SLASH) + I32_EQ + END + kept_in(0)
 	length = path + ARRAY_LEN + value_of(0) + I32_SUB + kept_in(1)
 	copied = memory_grown(value_of(1), first + 2) + counted(first + 2, value_of(1), i32_const(BYTES_ADDRESS) + value_of(2) + I32_ADD + path + value_of(2) + value_of(0) + I32_ADD + instruction(ARRAY_GET_U, [type]) + instruction(I32_STORE8, [0, 0]))
-	refused_open = text_literal(refusal, p.m).instructions + path + instruction(CALL, [helper(p, "text_joined", joining_function)]) + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+	refused_open = raised_with(refusal, path, p)
 	opened = i32_const(CURRENT_FOLDER) + value_of(0) + I32_ADD + i32_const(FOLLOW_LINKS) + i32_const(BYTES_ADDRESS) + value_of(1) + i32_const(open_flags) + i64_const(rights) + i64_const(0) + i32_const(0) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "path_open")]) + IF + VOID_BLOCK + refused_open + END + i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0]) + kept_in(3)
 	rooted + length + copied + opened
 }
