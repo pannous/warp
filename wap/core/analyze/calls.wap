@@ -14,11 +14,12 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	if fact_of(called, BINDING) == symbol(BOUND_CASE) { return case_call_typed(n, called, arguments, s, f) }
 	if called is symbol and text(called) == TYPE_TEST_WORD and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
-	candidates = candidates_of(called).map(definer => definition_at(definer, s))
+	scopes = candidate_scopes(called).map(scope => scope.map(definer => definition_at(definer, s)))
+	candidates = scopes.flat_map(scope => scope)
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
-	meant = chosen_definition(n, called, candidates, given, expected, s)
+	meant = chosen_definition(n, called, scopes, given, expected, s)
 	wanted = parameters_in(meant).map(type_given)
 	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s, f) else given#at)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
@@ -33,23 +34,24 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
-	chosen = function_typed(chosen_definition(n, key, named, [typed], expected, s), [value_type(typed)], s, n)
+	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
 	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
 as_text(character: Node, s: TypingState, f: TypeFrame) as Node := {
 	if character is Char { return typed_form(character, s, f, symbol(TEXT_TYPE)) }
-	chosen = function_typed(chosen_definition(character, symbol(TEXT_FUNCTION), definitions_named(TEXT_FUNCTION, s), [character], ø, s), [symbol(CHAR_TYPE)], s, character)
+	chosen = function_typed(chosen_definition(character, symbol(TEXT_FUNCTION), [definitions_named(TEXT_FUNCTION, s)], [character], ø, s), [symbol(CHAR_TYPE)], s, character)
 	with_type_of(refitted(Call(calling(symbol(TEXT_FUNCTION), chosen), [character]), character), chosen.result)
 }
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
-# the definitions a called name may mean: the one it was bound or typed to, else its candidates
-candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {
-	List(items, bracket, separator) => items
-	_ => [defined_at(called)]
+# the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
+# its candidates
+candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
+	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items })
+	_ => [[defined_at(called)]]
 }
 definition_at(definer: Node, s: TypingState) as Node := definition_keyed(place_key(definer), s) ?? refused(definer, "the typing stage found no definition here")
 definition_keyed(key: text, s: TypingState) as Node? := {
@@ -59,12 +61,14 @@ definition_keyed(key: text, s: TypingState) as Node? := {
 
 # The one definition that takes these typed arguments, by their types, then by the type expected; none or several
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
-chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?, s: TypingState) as Node := {
+chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: Node?, s: TypingState) as Node := {
+	candidates = scopes.flat_map(scope => scope)
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
 	fitting = candidates.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits(argument, wanted, s.records)))
 	exact = fitting.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits_exactly(argument, wanted, s.records)))
 	if #fitting > 1 and exact is not empty { fitting = exact }
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
+	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
@@ -85,6 +89,14 @@ most_specific(definitions: list, records: list) as list := {
 	weights = definitions.map(definition => typing_weight(definition, records))
 	best = weights.fold(0, (a, b) -> if a > b then a else b)
 	(1 to #definitions).filter(at => weights#at == best).map(at => definitions#at)
+}
+# of equally specific definitions, those of the innermost scope: a program's `===(a: T, b: T)` hides the library's
+innermost(definitions: list, scopes: list) as list := {
+	for scope in scopes {
+		inner = definitions.filter(definition => scope.contains(definition))
+		if inner is not empty { return inner }
+	}
+	definitions
 }
 typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter), records) then 1 else 2).fold(0, (a, b) -> a + b)
 

@@ -1,0 +1,5 @@
+# The preload's number words (notes/wap.md "Layers"): plain warp over the prelude's comparisons.
+
+# the smaller and the larger of two ints: `min(3, 2)` is 2
+min(a: int, b: int): int := if a < b then a else b
+max(a: int, b: int): int := if a > b then a else b
