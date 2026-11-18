@@ -6,6 +6,9 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
+# the counting from 0 that `x[k]` writes, as the place k + 1
+PLUS = "+"
+
 # An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
 # type is the record's name
 instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
@@ -42,3 +45,24 @@ entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node 
 entry_value(entry: Node) as Node := match entry { Key(key, op, value) => value }
 # a map's value by its key, `m["a"]` or `m.a`: of the map's value type
 entry_read_typed(n: Node, map: Node, key: Node) as Node := with_type_of(refitted(Get(map, key), n), held_type(value_type(map)))
+
+# A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
+# the call `#(x, i)`, as a Range answers it
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s)
+# the item of a typed subject at a typed place
+item_got(n: Node, held: Node, place: Node, s: TypingState) as Node := {
+	item = item_type(value_type(held))
+	if item == ø { return word_called(n, PLACE_WORD, [held, place], ø, s) }
+	if not fits_type(place, symbol(INT_TYPE)) { refused(place, "an item's place is an int") }
+	with_type_of(refitted(Get(held, place), n), item)
+}
+
+# `x[k]` by the subject's type: a map's entry of that key, else the item counted from 0, at place k + 1 (a list's or a
+# text's, or what the type's own `#` gives)
+item_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
+	held = typed_form(subject, s, f, ø)
+	map_key = key_type(value_type(held))
+	if map_key != ø { return entry_read_typed(n, held, typed_form(key, s, f, map_key)) }
+	one = with_type(placed_like(Number(1), key), INT_TYPE)
+	item_got(n, held, word_called(key, PLUS, [typed_form(key, s, f, symbol(INT_TYPE)), one], ø, s), s)
+}

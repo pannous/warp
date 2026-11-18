@@ -31,6 +31,10 @@ pattern Fn = (Fn $parameters: List $body: Node) # todo: rename to Lambda
 # function of that name taking the subject (`xs.sum` is sum(xs)), as typing settles it
 pattern Get = (Get $subject: Node $key: Node)
 
+# an item counted from 0 or a map's entry, `x[k]`, by the subject's type: only typing sees it, and it leaves as a Get,
+# Get(xs, k + 1) or a map's Get(m, k) (core/analyze/data.wap), so it is a place as a Get is: `xs[0] = 5`
+pattern Item = (Item $subject: Node $key: Node)
+
 # a value given to a place, a name or a Get: `x = 1`, `xs#1 = 2`, `x += 1` are Set(x, 1), Set(Get(xs, 1), 2) …, (Set x 1)
 pattern Set = (Set $place: Node $value: Node)
 
