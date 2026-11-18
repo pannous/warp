@@ -8,6 +8,9 @@ use "../../kernel/forms.wap"
 
 # the counting from 0 that `x[k]` writes, as the place k + 1
 PLUS = "+"
+# a range as an item key takes the items in it, `xs[1 .. 3]`, `xs[2 ..]`: the preload's slice
+RANGE_TYPE = "Range"
+SLICE = "slice"
 
 # An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
 # type is the record's name
@@ -70,6 +73,8 @@ item_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as N
 	held = typed_form(subject, s, f, ø)
 	map_key = key_type(value_type(held))
 	if map_key != ø { return entry_read_typed(n, held, typed_form(key, s, f, map_key)) }
+	range = typed_form(key, s, f, ø)
+	if fits_type(range, symbol(RANGE_TYPE)) { return word_called(n, SLICE, [held, range], ø, s) }
 	one = with_type(placed_like(Number(1), key), INT_TYPE)
 	item_got(n, held, word_called(key, PLUS, [typed_form(key, s, f, symbol(INT_TYPE)), one], ø, s), s)
 }
