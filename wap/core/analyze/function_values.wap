@@ -58,8 +58,9 @@ function_named_typed(n: Node) as Node := {
 	if fact_of(n, CANDIDATES) != ø { refused(n, "several functions have this name; a value of one of them comes with written function types, not yet") }
 	with_type_of(n, function_value_type(place_key(defined_at(n)), []))
 }
-# whether a called name holds a value rather than naming a function
-holds_value(called: Node) as bool := called is symbol and fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
+# whether what a call calls is a value, a name holding one or any other code giving one, `make(1)(2)`, rather than a
+# function's name
+holds_value(called: Node) as bool := not called is symbol or fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
 # whether a value given to a name changes a variable a function value has captured
 changes_capture(name: Node, s: TypingState) as bool := {
 	place_key(defined_at(name)) in s.captured and not is_definer(name)
