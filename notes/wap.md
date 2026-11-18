@@ -45,7 +45,8 @@ the position of the node it rewrote, and the name of the rule or stage that buil
 
 ## The tree
 
-Layers as in notes/backbone.md: kernel, core, extensions, library. A folder holds one topic; its name is that topic,
+Layers as in notes/backbone.md: kernel, core, preload (its sugar/ the surface rules every program gets), extensions,
+library. A folder holds one topic; its name is that topic,
 never two joined by an underscore.
 
 ```
@@ -81,10 +82,6 @@ wap/
       stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
       lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the rule files
 
-    sugar/                    rule files of the spellings wap's own source uses, one per topic
-      loops.wap               for, until, loop, n times → While
-      conditions.wap          unless, a if c, a ? b : c → If
-
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
       scope.wap               the one binding analysis: what each name refers to
@@ -110,6 +107,9 @@ wap/
 
   preload/                    the standard language every program gets: data and rules, no mechanism
     operators.wap             the operator table: precedence groups and their relations, operators, aliases
+    sugar/                    the rules of the surface spellings wap's own source uses, one file per topic
+      loops.wap               for, until, loop, n times → While
+      conditions.wap          unless, a if c, a ? b : c → If
 
   extensions/                 rule files no compiler needs, one per topic, loaded like modules: no hook table
     units.wap                 3km, 90km/h: a unit multiplied in
@@ -126,10 +126,10 @@ What each file may know:
 - **core/rules/** knows patterns and templates, no particular form: every form it handles comes from a rule file.
 - **core/analyze/** reads, never rewrites.
 - **core/emit/** reads only the kernel; `wasm.wap` reads not even that.
-- **core/sugar/** and **extensions/** hold rules only; a rule that needs code calls a function in lib/.
+- **preload/sugar/** and **extensions/** hold rules only; a rule that needs code calls a function in lib/.
 
 Which of the two a rule file belongs in is measured, not argued: wap compiles itself with extensions/ switched off.
-A rule file is in core/sugar/ exactly when wap's own source uses its spelling; when that changes, the file moves.
+A rule file is in preload/sugar/ exactly when wap's own source uses its spelling; when that changes, the file moves.
 
 ## Owners
 
@@ -144,7 +144,7 @@ goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new fil
 |---|---|---|
 | lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap |
 | self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
-| front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/sugar/, core/format.wap, core/language.wap, preload/ |
+| front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/format.wap, core/language.wap, preload/ |
 | types: declare, bind, type | warp-wap-binding | core/analyze/, core/paths.wap |
 | back: emitter, runtime | warp-wap-emitter | core/emit/ |
 
@@ -171,13 +171,13 @@ Next, in order:
 1. kernel/primitives.wap, the list of primitives, once there are several
 2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
 3. Define and Name, then If and While, each with an outcome test
-4. core/rules/ taking over lowering.wap; the first rule files in core/sugar/ and extensions/
+4. core/rules/ taking over lowering.wap; the first rule files in preload/sugar/ and extensions/
 
 ## Road to self-build
 
 Measured 2026-11-18 (main 05ae82852f) by scripts/wap-census.warp, which runs the compiler's own stages
 (wap/core/pipeline.wap, the shape rules included) on each of wap's 21 program files (762 top-level statements; the 8
-rule files, kernel/forms.wap and core/sugar/, pass every stage). Lowering and binding run statement by statement, each
+rule files, kernel/forms.wap and preload/sugar/, pass every stage). Lowering and binding run statement by statement, each
 file bound with the names its `use`d modules define; a statement stops at its first refusal, so each row counts the
 statements a missing piece blocks first. Typing and emitting run on the whole file with its modules, as the compiler
 does: 705 statements lower, 359 bind, no program file types yet.

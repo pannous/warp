@@ -72,7 +72,7 @@ functions_probe(file: text) as Tally := {
 	modules = []
 	try modules = declared_modules(language, file) catch e { report("declare", e.message); return Tally() }
 	prepared_modules = []
-	try prepared_modules = modules.map(module => statements_in(prepared(module, modules, preload))) catch e { report("bind", e.message); return Tally() }
+	try prepared_modules = modules.map(module => statements_in(prepared(language, module, modules, preload))) catch e { report("bind", e.message); return Tally() }
 	program = prepared_modules.flat_map(statements => statements)
 	own = prepared_modules.last.filter(statement => statement is Define)
 	typed_alone = 0
