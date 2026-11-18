@@ -23,12 +23,12 @@ probe(file: text) := {
 	try statements = top_level_statements(read_notation(file)).filter(statement => not is_use(operated_program(statement))) catch e { report("read", e.message) }
 	lowered_ok = []
 	for statement in statements {
-		try lowered_ok = lowered_ok + [lowered(declared_code(statement))] catch e { report("lower", e.message) }
+		try { lowered_ok = lowered_ok + [lowered(declared_code(statement))] } catch e { report("lower", e.message) }
 	}
 	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used_scope(file) + library_scope
 	bound_ok = []
 	for statement in lowered_ok {
-		try bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] catch e { report("bind", e.message) }
+		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
 	}
 	# typing and emitting run on the whole file, as the compiler runs them: the first refusal stops them
 	typed = no
