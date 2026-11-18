@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # all of wap's tests, test/wap/run.sh [--wait] [<test scripts>] (default every test/wap/test_*.sh): first wap's
 # compiler compiled and run once, or its error, the first signal a worker waits for; then the scripts run detached, niced, as many
-# at once as the machine has cores, each one's output in data/wap-tests/<script>.txt and one summary line in
+# at once as the machine's job slots allow (scripts/job-slot.sh, shared by every worktree), each one's output in data/wap-tests/<script>.txt and one summary line in
 # data/wap-tests/summary.txt, read later. --wait runs them in the foreground and prints the summary. The warp under
 # test is WARP (default the warp on PATH). The self-build ratchet, ratchet_census.sh (about 4 min), is no default
 # script: run it by name, test/wap/run.sh --wait test/wap/ratchet_census.sh, after each wap landing
@@ -9,6 +9,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 results="$here/../../data/wap-tests"
 SUMMARY="$results/summary.txt"
 cores=$(getconf _NPROCESSORS_ONLN)
+job_slot="$here/../../scripts/job-slot.sh"
 
 # the outputs of the scripts run, each data/wap-tests/<script>.txt
 outputs() { for script in "$@"; do echo "$results/$(basename "$script" .sh).txt"; done; }
@@ -19,10 +20,10 @@ summed() {
 	failed=$(outputs "$@" | xargs cat | grep -c '^✗')
 	echo "wap tests: $passed ✓, $failed ✗ in $# scripts, $(($(date +%s) - started)) s$( [ "$failed" = 0 ] || printf '; failed: %s' "$(outputs "$@" | xargs grep -l '^✗' | xargs -n1 basename | sed 's/\.txt$//' | tr '\n' ' ')")"
 }
-# every script run, niced, one per core at a time, then the summary written
+# every script run in a job slot, niced, then the summary written; a script waiting for its slot says so in its output
 all_run() {
 	started=$(date +%s)
-	printf '%s\n' "$@" | nice -n 19 xargs -P "$cores" -I{} bash -c 'bash "$1" >"$2/$(basename "$1" .sh).txt" 2>&1' _ {} "$results"
+	printf '%s\n' "$@" | xargs -P "$cores" -I{} bash -c '"$3" bash "$1" >"$2/$(basename "$1" .sh).txt" 2>&1' _ {} "$results" "$job_slot"
 	summed "$@" | tee "$SUMMARY"
 }
 
