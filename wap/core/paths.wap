@@ -3,7 +3,8 @@
 
 # the file `use` names, beside the file naming it: "../stage.wap" used by "core/analyze/scope.wap" is "core/stage.wap"
 beside(file: text, used: text) as text := normalized_path(if used.starts_with("/") then used else folder_of(file) + "/" + used)
-# a file's folder, "." for a file named without one
+# a file's folder, "." for a file named without one (the preload's folder_of, written here too while old warp, which
+# reads no wap preload, builds the compiler)
 folder_of(file: text) as text := {
 	parts = file.split("/")
 	if #parts == 1 then "." else parts[.. #parts - 1].join("/")

@@ -13,7 +13,7 @@
 enum Grouping { Left, Right, Refused }
 
 # a precedence group: the groups it binds tighter than, and how a run of its own operators groups
-class Group { name: text, tighter_than: list, grouping: Grouping = Grouping.Left }
+class Group { name: text, tighter_than: list<text>, grouping: Grouping = Grouping.Left }
 
 # an operator: its canonical spelling, its English name, and its group in each fixity it has ("" when it has none)
 class Operator { spelling: text, name: text, infix: text = "", prefix: text = "", postfix: text = "" }

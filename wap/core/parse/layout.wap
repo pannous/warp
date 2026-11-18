@@ -105,8 +105,10 @@ new_line(r: Reader) := {
 
 separated_line(r: Reader) := {
 	last = last_token(r)
-	if last != ø and last.kind != LexemeKind.Open { separated(r, Separator.Newline, 0) }
+	if last != ø and last.kind != LexemeKind.Open and not ends_in_comma(last) { separated(r, Separator.Newline, 0) }
 }
+# a comma at a line's end continues its row: `[⏎\t1, 2,⏎\t3, 4,⏎]` is one list of four, `[1, 2⏎3, 4]` two rows
+ends_in_comma(last: Lexeme) as bool := last.kind == LexemeKind.Separator and last.separator == Separator.Comma
 
 # The indentation of the next line that holds code (empty lines and comment lines change nothing): a deeper one
 # opens a block `{` glued to the line before, a shallower one closes blocks down to its level

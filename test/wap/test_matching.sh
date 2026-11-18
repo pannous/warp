@@ -49,4 +49,11 @@ print second(["x", "y", "z"])
 print second(["x"])')" "y
 y+
 none"
+check "a match on an optional tests its value's cases" "$(ran optional_cases 'enum Shape { Dot, Circle(r: int) }
+f(s: Shape?) := match s { Circle(r) => r; Dot => 0; _ => -1 }
+print text(f(Circle(3)))
+print text(f(Dot))
+print text(f(ø))')" "3
+0
+-1"
 exit $((failures > 0))
