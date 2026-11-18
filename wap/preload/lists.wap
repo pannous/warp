@@ -34,6 +34,12 @@ flat_map(xs: list<T>, f: (T) -> list<U>): list<U> := {
 	for x in xs { out = out + f(x) }
 	out
 }
+# the items combined into one value from a first one, left to right: `[1, 2, 3].fold(0, (sum, x) => sum + x)` is 6
+fold(xs: list<T>, first: U, combined: (U, T) -> U): U := {
+	value = first
+	for x in xs { value = combined(value, x) }
+	value
+}
 # texts joined, the separator between each two: `["a", "b"].join(", ")` is "a, b"
 join(texts: list<text>, separator: text): text := {
 	out = ""
