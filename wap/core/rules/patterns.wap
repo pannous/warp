@@ -74,7 +74,7 @@ shape_matcher(n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
 	Key(left, op, right) => pair_matcher(n, left, op, right)
-	List(items, bracket, separator) => if bracket == Bracket.Round and #items == 1 then compiled_pattern(items#1) else sequence_matcher(items, bracket, separator)
+	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(items#1) else sequence_matcher(items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
 }
 sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher := Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(compiled_pattern))
@@ -124,15 +124,20 @@ declare_pattern(name: Node, shape: Node) := {
 # ---- matching
 
 # whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
-# Round brackets around one item only group it: `($f: $t)` in a pattern is the key, and code in such brackets is matched
-# as its item; a hole still takes the group as written
+# Round brackets around one key or call only group it: `($f: $t)` in a pattern is the key, and code in such brackets is
+# matched as its key; a hole or a sequence still takes the group as written. Brackets around a phrase or a list keep their meaning.
 matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
 	Test.Hole => hole_matches(m, n, bindings)
-	_ => shape_matches(m, ungrouped(n), bindings)
-}
-shape_matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
-	Test.Literal => same_atom(m.literal, n)
 	Test.Sequence => sequence_matches(m, n, bindings)
+	_ => item_matches(m, grouped_item(n) ?? n, bindings)
+}
+is_list(n: Node) as bool := match n { List(items, bracket, separator) => yes; _ => no }
+grouped_item(n: Node) as Node? := match n {
+	List(items, Bracket.Round, separator) => if #items == 1 and not is_list(items#1) and repeated_part(items#1) == ø then items#1 else ø
+	_ => ø
+}
+item_matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
+	Test.Literal => same_atom(m.literal, n)
 	Test.Repeat => repeat_matches(m.parts#1, [n], bindings)
 	Test.Pair => match n { Key(left, op, right) => op == m.op and matches(m.parts#1, left, bindings) and matches(m.parts#2, right, bindings); _ => no }
 }
