@@ -135,7 +135,8 @@ indentation(r: Reader) := {
 	if depth > outer {
 		r.indents += [depth]
 		# glued to the line before, but a key's value after `:=`, `:` or `=` at the line's end, as if written after a blank
-		r.blank = last_token(r) != ø and last_token(r).kind == LexemeKind.Key
+		last = last_token(r)
+		r.blank = last != ø and last.kind == LexemeKind.Key
 		bracket_opened(r, "{", 0)
 		last_of(r.tokens).indented = yes
 		return ø
@@ -149,7 +150,10 @@ indentation(r: Reader) := {
 }
 
 # the last token so far is an operator glyph, `+` or `->`
-ends_in_operator(r: Reader) as bool := last_token(r) != ø and last_token(r).kind == LexemeKind.Atom and is_operator(last_token(r).node)
+ends_in_operator(r: Reader) as bool := {
+	last = last_token(r) ?? return no
+	last.kind == LexemeKind.Atom and is_operator(last.node)
+}
 
 # the depth of the innermost indented block, 0 outside all
 indent_level(r: Reader) as int := if r.indents.length > 0 then r.indents.last else 0

@@ -45,9 +45,10 @@ last_token(r: Reader) as Lexeme? := if r.tokens.length > 0 then last_of(r.tokens
 # the first thing the reader cannot read, kept with what was written there
 failed(r: Reader, why: text) := failed_at(r, why, r.line, column(r))
 failed_at(r: Reader, why: text, line: int, column: int) := {
-	if r.error != "" { return ø }
-	r.error = why
-	r.failure = positioned(Text(slice_of(r, r.at, min(r.at + 10, r.n))), line, column)
+	if r.error == "" {
+		r.error = why
+		r.failure = positioned(Text(slice_of(r, r.at, min(r.at + 10, r.n))), line, column)
+	}
 }
 
 commented(n: Node, comments: list) as Node := {
