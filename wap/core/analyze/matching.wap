@@ -23,9 +23,14 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 	if narrowed_type(type) != ø and witness == ø and not arms.any(arm => fits_any(pattern_of(arm))) { typed = typed + [arm_typed(placed_like(Arm(symbol(WILDCARD), raised(other_shape(type, n), n, s)), n), subject, type, s, f, expected)] }
 	results = typed.map(arm => value_type(arm))
 	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
-	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`") }
+	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`${shape_offered(arms)}") }
 	given = if witness == ø then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_settling(a, b, s)) else ø
 	with_type_of(refitted(Case(subject, typed), n), given)
+}
+# where every arm names one declared pattern, `Record(…)`, the fix-it of taking that shape instead
+shape_offered(arms: list) as text := {
+	shapes = arms.map(arm => fact_of(pattern_of(arm), SHAPE_OF))
+	if shapes.any(shape => shape == ø) or shapes.any(shape => text(shape) != text(shapes#1)) then "" else ", or take a ${shapes#1}: write the parameter as `x: ${shapes#1}`"
 }
 # an arm's result, its variable subject known of the shape a declared pattern's pattern names: `n` a Record in
 # `Record(name, fields, variants) => n`
@@ -46,6 +51,10 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 		return pattern
 	}
 	if narrowed_type(type) != ø { return shape_pattern_typed(pattern, type, s, f) }
+	# an arm naming a declared pattern on a value of the type it narrows, `Record(name, fields, variants)` on a Node: its
+	# holes hold their types too
+	named = if fact_of(pattern, SHAPE_OF) == ø then ø else shaped(symbol(text(fact_of(pattern, SHAPE_OF))), s)
+	if named != ø and same_type(narrowed_type(named), type) { holes_remembered(pattern, named, s, f) }
 	if list_pattern_items(pattern) != ø { return list_pattern_typed(pattern, type, s, f) }
 	# a case of an optional's value: `Text(name)` fits a Node? holding a text node, never ø
 	if base_of_optional(type) != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base_of_optional(type), s, f) }
@@ -56,14 +65,17 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 # A pattern of a shape's value, `Record(name, fields, variants)` of a Record, as one of the type the shape narrows; a
 # declared pattern's holes named in it hold their holes' types, `fields` a List
 shape_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
-	form = form_named(type, s)
-	if form != ø {
-		parts = form_parts(form_taken(form), pattern) ?? []
-		holes = hole_types(form, s)
-		# known before the pattern binds them as the narrowed type's parts: a variable's first type is its type
-		for at in 1 to #parts { if fits_any(parts#at) and parts#at != symbol(WILDCARD) { remembered(parts#at, holes#at, s, f) } }
-	}
+	holes_remembered(pattern, type, s, f)
 	with_type_of(pattern_typed(pattern, narrowed_type(type), s, f), type)
+}
+# the variables a declared pattern's arm names at its holes, of their holes' types, `fields` a List: known before the
+# pattern binds them as the narrowed type's parts, as a variable's first type is its type
+holes_remembered(pattern: Node, shape: Node, s: TypingState, f: TypeFrame) := {
+	form = form_named(shape, s)
+	if form == ø { return }
+	parts = form_parts(form_taken(form), pattern) ?? []
+	holes = hole_types(form, s)
+	for at in 1 to #parts { if fits_any(parts#at) and parts#at != symbol(WILDCARD) { remembered(parts#at, holes#at, s, f) } }
 }
 # A list pattern of a list's type: each item's pattern of its item type, a last `...name` holding the items after them
 list_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
