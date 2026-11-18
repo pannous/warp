@@ -117,6 +117,9 @@ xy"
 check "an instance made from a map, each field made into its type" "$(ran from_map 'class person { name: text; age: int }
 print text(person({name: "Ann", age: "40"}).age + 1)
 form = {name: "Bo", age: "7"}
-print(person(form).name)')" "41
-Bo"
+print(person(form).name)
+class lock { keys: int }
+print text(lock({keys: "3"}).keys)')" "41
+Bo
+3"
 exit $((failures > 0))
