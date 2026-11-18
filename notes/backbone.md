@@ -270,6 +270,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
   versions typing made before, not a new one.
+- **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
+  char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
+  a typed rule sees only its hole's type.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
