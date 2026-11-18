@@ -31,6 +31,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	wanted = parameters_in(meant).map(type_given)
 	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s, f) else given#at) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
+	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
 # whether a definition takes this many arguments: one for each parameter, those with defaults at the end left out or not
