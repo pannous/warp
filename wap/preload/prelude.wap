@@ -3,6 +3,10 @@
 # or the host begins (notes/kernel.md "Primitives"). The compiler knows none of these names: the declare stage reads
 # their signatures from this file, the emitter their bodies.
 
+# the list words and the node (preload/lists.wap, preload/nodes.wap)
+use "lists.wap"
+use "nodes.wap"
+
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
 # the text of the file at a path, relative to the current folder or from the root (/…)
@@ -51,17 +55,6 @@ text(b: bool): text := if b then "yes" else "no"
 
 # the other truth value: `not yes` is no (`!` and `¬` are its aliases)
 not(b: bool): bool := if b then no else yes
-
-# whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
-all(xs, fits) := {
-	for x in xs { if not fits(x) { return no } }
-	yes
-}
-any(xs, fits) := {
-	for x in xs { if fits(x) { return yes } }
-	no
-}
-contains(xs, item) := xs.any(x => x == item)
 
 # bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
 # (`===` compares the type too)
