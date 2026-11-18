@@ -1,7 +1,7 @@
 # The preload's node (notes/wap.md "Layers"): warp's Node, declared case for case as core/node.warp declares it, so
 # wap's own source reads the same under both compilers, and the words over it in plain warp: a node's position and
 # facts, a symbol by its name. A Meta node's data is the list [line, column, facts…] (warp's runtime keeps the same
-# three in its own Meta layout).
+# three in its own Meta layout). A list's items are typed list<Node>, which core/node.warp's bare `list` means.
 
 enum Node {
 	True
@@ -13,7 +13,7 @@ enum Node {
 	Symbol(name: text)
 	Error(node: Node)
 	Key(left: Node, op: Op, right: Node)
-	List(items: list, bracket: Bracket, separator: Separator)
+	List(items: list<Node>, bracket: Bracket, separator: Separator)
 	Data(value: any)
 	Meta(node: Node, data: Node)
 	Type(name: Node, body: Node)
@@ -68,12 +68,12 @@ number_in(n: Node) := match n {
 positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
 
 # the facts a stage marked n with, and n with one more
-attributes_of(n: Node): list := match n {
+attributes_of(n: Node): list<Node> := match n {
 	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
 }
 # a Meta's data past its line and column
-facts_in(data: list): list := {
+facts_in(data: list<Node>): list<Node> := {
 	facts: list<Node> = []
 	at = meta_facts() - 1
 	while at < #data {
@@ -92,4 +92,4 @@ unwrapped(n: Node): Node := match n {
 	Meta(node, data) => node
 	_ => n
 }
-meta_data(line: int, column: int, facts: list): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
+meta_data(line: int, column: int, facts: list<Node>): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
