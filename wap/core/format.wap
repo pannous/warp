@@ -89,10 +89,12 @@ ungrouped(n: Node) as Node := match n {
 }
 
 needs_brackets(operand: Node, call: Node, side: Side) as bool := {
-	# a key binds looser than every operator, the reader keys before the table applies: `($field: $type)...`
-	match operand { Key(left, op, right) => if op != Op.None { return yes }; _ => ø }
 	inner = group_written(operand)
 	outer = group_written(call)
+	# a key binds looser than every operator, the reader keys before the table applies: `($field: $type)...`; the
+	# typed place an assignment sets is no operand, `x: int = 3`
+	typed_place = side == Side.Left and outer == compound_assignment_group
+	match operand { Key(left, op, right) => if op != Op.None and not typed_place { return yes }; _ => ø }
 	if inner == "" { return no }
 	if inner == outer {
 		grouping = group_named(outer).grouping
