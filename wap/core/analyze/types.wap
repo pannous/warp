@@ -123,7 +123,9 @@ functions_typed_from(definitions: list, s: TypingState) as list := {
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	chosen = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	typed = [then_part, else_part].map(part => typed_form(part, s, f, expected))
+	# a character beside a text is its text: `if c then 'a' else ""` is a text
+	chosen = (1 to 2).map(at => if reads_as_text(typed#at, value_type(typed#(3 - at))) then as_text(typed#at, s, f) else typed#at)
 	with_type_of(refitted(If(condition_typed(condition, s, f), chosen#1, chosen#2), n), joined_type(value_type(chosen#1), value_type(chosen#2)))
 }
 condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
@@ -285,7 +287,9 @@ takes(definition: Node, given: list, fit: function) as bool := {
 	#parameters == #given and (1 to #given).all(at => fit(given#at, type_given(parameters#at)))
 }
 fits(argument: Node, wanted: Node?) as bool := fits_exactly(argument, wanted) or reads_as_text(argument, wanted)
-fits_exactly(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument))
+fits_exactly(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument))
+# a bare `list` wanted, which every list<T> fits
+any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
@@ -294,7 +298,7 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # its body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
-	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then ø else frame.returns#1) else body_type
+	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
 	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and same_type(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }

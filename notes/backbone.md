@@ -231,6 +231,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
+- **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
 
 ## Debts
 
@@ -279,9 +280,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
-- **`#xs` counts only lists of ints** (wap/preload/prelude.wap `#(xs: list<int>)`). Reason: the preload cannot write
-  one `#` for every item type until a type may be written with a variable; one copy per item type would repeat it.
-  Paid off with type variables (`#(xs: list<T>): int`).
 - **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
   the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
 - **`wap format` prints a text with holes as its pieces joined** (wap/core/format.wap): the reader gives

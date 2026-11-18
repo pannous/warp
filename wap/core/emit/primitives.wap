@@ -14,6 +14,9 @@ use "../stage.wap"
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
 # answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
 STDOUT = 1
+STDERR = 2
+# the status a program that raised exits with
+RAISED_STATUS = 1
 NEWLINE = 10
 IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
@@ -39,7 +42,7 @@ INSTRUCTIONS = {
 	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -47,7 +50,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	name = text(operation)
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
-	if HELPERS.has(name) { return Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])])) }
+	if HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])]))) }
 	refused(form, "no primitive of this name")
 }
 # the instructions that compare two values of one type on the stack, giving yes or no
@@ -59,10 +62,10 @@ equality(type: list, p: Program) as list := {
 	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
 }
 
-# the wasm type of the value a primitive gives, [] when its definition writes none
+# the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
 given_layout(form: Node, p: Program) as list := {
 	type = fact_of(form, TYPE)
-	if type == ø then [] else layout_of(type, p.m) ?? refused(form, "the emitter has no value layout for this type yet")
+	if type == ø then [] else if text(type) == NEVER_WORD then NEVER else layout_of(type, p.m) ?? refused(form, "the emitter has no value layout for this type yet")
 }
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
@@ -72,9 +75,11 @@ helper(p: Program, operation: text, build: function) as int := {
 	index
 }
 
-# The helper of print_text: the text's bytes and a line end copied into the memory, grown as needed, then written.
-# Its locals: 0 the text, 1 its length, 2 a count.
-printing_function(p: Program) as int := {
+printing_function(p: Program) as int := writing_function(p, STDOUT, [])
+raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [p.exit]))
+# The helper of print_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
+# written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
+writing_function(p: Program, file: int, after: list) as int := {
 	text_type_index = text_type(p.m)
 	the_text = instruction(LOCAL_GET, [0])
 	length = instruction(LOCAL_GET, [1])
@@ -86,8 +91,8 @@ printing_function(p: Program) as int := {
 	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
-	written = i32_const(STDOUT) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
-	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written)
+	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
+	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written + after)
 }
 
 # the body run for each count from 0 while it stays below the limit, the count in that local
