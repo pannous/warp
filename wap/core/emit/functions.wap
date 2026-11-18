@@ -104,22 +104,3 @@ called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 }
 
-# `prim dispatched(x)` in f(x: any): a call of whichever of f's other overloads takes x's type at run time, tried in
-# the order of the Prim's fact OVERLOADS, each a function's name as a call names it, its SIGNATURE on it; a value
-# none takes, ø included, raises
-DISPATCHED = "dispatched"
-dispatched_code(form: Node, p: Program) as list := {
-	overloads = listed(fact_of(form, OVERLOADS) ?? refused(form, "the typing stage gave this dispatch no overloads"))
-	instruction(CALL, [helper(p, "${DISPATCHED} ${overloads.map(place_key).join(" ")}", q => dispatching_function(q, form, overloads))])
-}
-# The helper of a dispatch: for each overload, a test of its parameter's type on the value in local 0, then the value
-# cast, a plain one taken out of its box, and the overload called
-dispatching_function(p: Program, form: Node, overloads: list) as int := {
-	tried = overloads.flat_map(overload => {
-		taken = signed_parts(overload).parameters#1
-		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
-		local_get(0) + heap_instruction(REF_TEST, held_in_any(taken, overload, p)#1) + IF + VOID_BLOCK + local_get(0) + held_value(taken, overload, p) + instruction(CALL, [called.index]) + RETURN + END
-	})
-	taken = overloads.map(overload => text(signed_parts(overload).parameters#1)).join(", ")
-	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + raised("no ${text(overloads#1)} takes this value; it takes ${taken}", p))
-}

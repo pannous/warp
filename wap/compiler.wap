@@ -8,7 +8,7 @@
 # Its stages, each with one job and a declared input and output (the full pipeline: notes/wap.md):
 #   read      text → notation       core/parse/reader.wap
 #   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
-#   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, core/sugar/ and the program
+#   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, preload/sugar/ and the program
 #   declare   operated → declared   core/analyze/declarations.wap, the names the top level defines, as facts
 #   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
 #   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts

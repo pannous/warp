@@ -54,7 +54,7 @@ HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.
 # wap, the new compiler (notes/wap.md): its lines by stage folder, its road to self-build and its tests, as trends
 WAP_STAGES = [("parse", "wap/core/parse/"), ("analyze", "wap/core/analyze/"), ("rules", "wap/core/rules/"),
               ("emit", "wap/core/emit/"), ("kernel", "wap/kernel/"), ("preload", "wap/preload/")]
-WAP_OTHER = "other"  # compiler.wap, wap/core/*.wap and wap/core/sugar/
+WAP_OTHER = "other"  # compiler.wap and wap/core/*.wap
 WAP_LINE_LIMIT = 300  # a wap file past it is split (notes/wap.md)
 WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (with hello) when wap/ changed, "tests"

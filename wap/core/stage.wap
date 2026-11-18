@@ -88,6 +88,15 @@ WRITTEN = "written"
 INDENTED = "indented"
 # empty braces as the reader reads them, one word: the host keeps no empty curly group, so `{}` could carry no facts
 EMPTY_BRACES = "{}"
+# what a declared pattern's builder carries on its name, so that binding finds the pattern through scope: its holes
+# in order, the Node pattern that takes it apart in an arm
+PATTERN_HOLES = "pattern_holes"
+PATTERN_TAKEN = "pattern_taken"
+# a list's items, none of any other node
+items_of(n: Node) as list := match n {
+	List(items, bracket, separator) => items
+	_ => []
+}
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø
@@ -133,11 +142,6 @@ SELF_WORD = "self"
 # on a Define a rule wrote for every class, as its show: typed only when something calls it, so a class whose field
 # has no show of its own is not refused for a show nothing uses
 TYPED_WHEN_CALLED = "typed_when_called"
-# the primitive that calls, at run time, the overload a value's type has: `show(x: any): text := prim dispatched(x)`
-# calls the show of x's type; on the Prim, OVERLOADS lists those overloads typed, each as a call names its function
-# (DEFINED_AT), records first
-DISPATCHED = "dispatched"
-OVERLOADS = "overloads"
 # on a parameter, the value a call that leaves it out gives it: `f(x: int, y: int = 2)`, f(1) is f(1, 2)
 DEFAULT = "default"
 # the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it (core/analyze/scope.wap)
@@ -146,6 +150,8 @@ TYPE_TEST_WORD = "is"
 # it tests its fact TESTED. Where it holds, x reads as that type, the Prim OPTIONAL_VALUE of x, as a present optional
 # reads as its value.
 BOXED_TEST = "boxed_test"
+# `prim cast(x)`, x an any: its value as the Prim's type, checked, raising with the place when it holds another type
+CHECKED_CAST = "cast"
 TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
 # on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
@@ -220,7 +226,11 @@ function_type_parts(type: Node?) as FunctionParts? := match type {
 items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; Empty => []; _ => [n] }
 # An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
 OPTIONAL_MARK = "?"
-optional_type(base: Node) as Node := if base_of_optional(base) != ø then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
+# the dynamic type, which holds any value, ø too: an any? is an any
+ANY_TYPE = "any"
+# an optional's value type, any other type itself: int of int? and of int
+base_or_self(type: Node?) as Node? := base_of_optional(type) ?? type
+optional_type(base: Node) as Node := if base_of_optional(base) != ø or base == symbol(ANY_TYPE) then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
 base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
 	_ => ø
