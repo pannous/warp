@@ -88,3 +88,6 @@ contains(xs, item) := xs.any(x => x == item)
 ==(a: bool, b: bool): bool := if a then b else not(b)
 ==(a: int, b: bool): bool := a == (if b then 1 else 0)
 ==(a: bool, b: int): bool := b == a
+# identical: equal and of one type, so `0 === no` is no where `0 == no` is yes (wiki/Footguns.md)
+===(a: T, b: T): bool := a == b
+===(a, b): bool := no
