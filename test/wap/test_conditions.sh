@@ -55,4 +55,7 @@ g(a: int) as int := {
 print text(g(3))
 print text(g(-1))')" "6
 0"
+check "a block indented below an if is its body" "$(ran if_indented 'c = yes
+if c
+	print "body"')" "body"
 exit $((failures > 0))
