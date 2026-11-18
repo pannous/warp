@@ -34,4 +34,9 @@ xs = [1, 2] + [3]
 print text(#xs)
 xs#3')" "3
 3"
+check "the item at a place from 0 of a list, a text and a range" "$(ran item 'print text(item([5, 6, 7], 0))
+print item("héllo", 1)
+item(2 to 5, 3)')" "5
+é
+5"
 exit $((failures > 0))
