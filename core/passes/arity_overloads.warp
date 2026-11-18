@@ -49,9 +49,7 @@ overloaded_arities(program: Node) as map := {
 		call = definition_call(n)
 		if call != ø {
 			name = name_of(call#1)
-			span = arity_of(call)
-			if name not in arities { arities[name] = [] }
-			if not (span in arities[name]) { arities[name] = arities[name] + [span] }
+			arities[name] = with_span(arities.get(name) ?? [], arity_of(call))
 		}
 	}
 	overloaded = {}
@@ -59,6 +57,13 @@ overloaded_arities(program: Node) as map := {
 		if #arities[name] > 1 and all_distinct(arities[name].map(span => span#2)) and spans_apart(arities[name]) { overloaded[name] = arities[name] }
 	}
 	overloaded
+}
+# the spans with one more, one span per count: `g(a: int)` and `g(xs: list)` both take one argument, the second
+# gathering more (a variant of one count, its types telling them apart), so the span gathers when one of them does
+with_span(spans: list, span: list) as list := {
+	same_count = spans.filter(seen => seen#1 == span#1 and seen#2 == span#2)
+	if #same_count == 0 { return spans + [span] }
+	spans.map(seen => if seen#1 == span#1 and seen#2 == span#2 then [seen#1, seen#2, seen#3 or span#3] else seen)
 }
 # no count two spans both take: `f(d: D, long = no, iso = no)` (1 to 3) beside `f(t: text, v)` (2) stays one name,
 # whose definitions its typed overloads tell apart, as a variant per count could not

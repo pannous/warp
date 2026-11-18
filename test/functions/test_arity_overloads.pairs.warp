@@ -19,3 +19,6 @@
 'f(x) := x * 2; f(x, y) := x + y; 3.f + 3.f(4)'	13
 # one name with a definition of defaults spanning counts beside another of a count among them: its typed overloads tell them apart (card double-verb-time)
 'class D { ms: int }; g(d: D, long = no, iso = no) := "L"; g(t: text, v) := "T"; [g(D(1), yes, no), g("a", 1), g(D(1))]'	["L", "T", "L"]
+
+# variants_of_one_count_one_gathering_stay_one_count (wap: grouped of a list beside one of an enum)
+'enum E { A, B }; g(a: int) := 1; g(s: list) := 2; g(x, e: E) := 3; g([1]) * 100 + g(5) * 10 + g(0, E.B)'	213

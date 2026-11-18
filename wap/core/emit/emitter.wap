@@ -175,10 +175,11 @@ while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Cod
 	Code([], BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + inner.instructions + END + END)
 }
 
-# The function left with a value, or with none for a bare return; the code after it never runs
+# The function left with a value, or with none for a bare return of a function that gives nothing (`return ø` of a
+# function giving P? gives its ø); the code after it never runs
 return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	if not f.function { refused(form, "a return leaves a function; the program has none to leave") }
-	given = if value is Empty then Code() else signed_fit(code(value, p, f), value, f, p)
+	given = if value is Empty and not valued(f.signed) then Code() else signed_fit(code(value, p, f), value, f, p)
 	f.returns += [given.type]
 	Code(NEVER, given.instructions + RETURN)
 }
