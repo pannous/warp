@@ -121,9 +121,17 @@ compile(source: text, folder: text, library_runtime: any = ø, links: any = ø) 
 }
 
 # the warnings once the module is made, and its hints unless the run asked for none (`warp --no-hints`: wiki/warning.md)
-said_aloud(found: list) := {
-	for warning in said_at(found, Level.Warning, module.program_file) { warn warning }
-	if run_option("no-hints") == ø { for said in said_at(found, Level.Hint, module.program_file) { hint said } }
+said_aloud(found: list) := said_again(said_at(found, Level.Warning, module.program_file), if run_option("no-hints") == ø then said_at(found, Level.Hint, module.program_file) else [])
+# the warnings and hints the compile said, which a cached module says again
+global said_warnings = []
+global said_hints = []
+said_again(warnings: list, hints: list) := {
+	global said_warnings
+	global said_hints
+	said_warnings += warnings
+	said_hints += hints
+	for warning in warnings { warn warning }
+	for said in hints { hint said }
 }
 
 # what the checks diagnosed past the first `known` facts; an error among them fails the compile with its text (card
@@ -220,8 +228,10 @@ with_dependencies(name: text, names: list, ordered: list, visiting: list) as lis
 	ordered + [name]
 }
 
-# the module of the source file written to the wasm file, the source's uses found in folder
+# the module of the source file written to the wasm file, the source's uses found in folder; none when the native
+# warp's cached module of it is current
 compile_file(source_file: text, wasm_file: text, folder: text) := {
+	if cached_current() { return ø }
 	emitting_file(working_relative(source_file))
 	compile_written(read(source_file), wasm_file, folder)
 }
@@ -230,8 +240,34 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 	compiled = compile(source, folder)
 	# a program outside the emitter's core: the run fails with the refusal, no module written (card compiler-refusal-loud)
 	if compiled is text { raise compiled }
-	write_bytes(wasm_file, compiled)
+	write_bytes(wasm_file, with_questions(compiled))
 }
+# A compile the native warp caches (its run option cache names the cached module, core/native/driver.warp) keeps in
+# the module the questions it asked the host (host_io.warp asked_host) and the warnings and hints it said, a record each,
+# its parts apart by a unit separator
+QUESTIONS_SECTION = "warp.questions"
+WARNINGS_SECTION = "warp.warnings"
+HINTS_SECTION = "warp.hints"
+RECORDS_APART = "\u{1e}"
+PARTS_APART = "\u{1f}"
+with_questions(wasm: list) as list := if not asking_recorded then wasm else wasm + records_section(QUESTIONS_SECTION, questions_asked) + records_section(WARNINGS_SECTION, said_warnings.map(said => [said])) + records_section(HINTS_SECTION, said_hints.map(said => [said]))
+records_section(name: text, records: list) as list := section(section_ids.custom, name_bytes(name) + records.map(record => record.join(PARTS_APART)).join(RECORDS_APART).bytes)
+records_in(wasm: list, name: text) as list := {
+	place = section_place(wasm, section_ids.custom, name)
+	if place == ø or place#1 == place#2 then [] else utf8_text(wasm[place#1 ..< place#2]).split(RECORDS_APART).map(record => record.split(PARTS_APART))
+}
+# whether the cached module is current: each question its compile asked gets the same answer now (asked of the host
+# directly, so these never join the questions of a compile that follows); then its warnings and hints said again
+cached_current() as bool := {
+	cached = run_option("cache") ?? ""
+	if cached == "" or not std_io("file", "exists", [cached]) { return no }
+	wasm = std_io("file", "read_bytes", [cached])
+	questions = records_in(wasm, QUESTIONS_SECTION)
+	if questions.length == 0 or not questions.all(answered_alike) { return no }
+	said_again(records_in(wasm, WARNINGS_SECTION).map(record => record#1), records_in(wasm, HINTS_SECTION).map(record => record#1))
+	yes
+}
+answered_alike(question: list) as bool := known_answer(question#2, question#3) == question#1
 
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
 # runtime-prepended), read once. A compile has no other runtime: without it, it fails
