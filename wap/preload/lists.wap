@@ -12,9 +12,15 @@ any(xs: list, fits) := {
 	no
 }
 contains(xs: list, item) := xs.any(x => x == item)
+# whether a list holds an item, the operator's reading: `x in xs` is xs.contains(x)
+in(x, xs: list): bool := xs.contains(x)
 
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
 +(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
+# an item put at the end of a list, which grows in place: every name holding it sees the item
+add(xs: list<T>, item: T) := prim list_add(xs, item)
+# the last item taken off a list; an empty one raises
+pop(xs: list<T>): T := prim list_pop(xs)
 
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
@@ -33,6 +39,12 @@ flat_map(xs: list<T>, f: (T) -> list<U>): list<U> := {
 	out: list<U> = []
 	for x in xs { out = out + f(x) }
 	out
+}
+# the items combined into one value from a first one, left to right: `[1, 2, 3].fold(0, (sum, x) => sum + x)` is 6
+fold(xs: list<T>, first: U, combined: (U, T) -> U): U := {
+	value = first
+	for x in xs { value = combined(value, x) }
+	value
 }
 # texts joined, the separator between each two: `["a", "b"].join(", ")` is "a, b"
 join(texts: list<text>, separator: text): text := {
