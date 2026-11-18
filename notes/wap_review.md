@@ -5,6 +5,11 @@ read at bc30daa9c8 and 6fa64cf537. While the report was written main moved on to
 three commits that split the largest files), so every `file:line`, every count, the census and all the programs
 were taken again there: `file:line` refers to 73b39f4ad5. Nothing in wap/ or test/ was changed.
 
+Main did not stand still after that either: in the next 28 minutes 17 commits landed, most of them answers to
+first refusals this report lists. The body stays the snapshot of 73b39f4ad5 (`git show 73b39f4ad5:wap/core/…`
+shows a cited line as it was); the last section, "After the review", takes the census again at 47fd489566 and says
+which findings main has acted on. Read it with the verdict: it is the test of finding 1.
+
 ## Verdict
 
 In two days and about 300 commits wap became a working compiler: 7000 lines, ten stages, every outcome check
@@ -193,6 +198,9 @@ because square brackets hold items separated by spaces. wap's own source writes 
 - **B: a row in square brackets led by a word that leads a rule is one phrase.** About 5 core lines; rows in lists
   then read two ways depending on their first word.
 - **Park.**
+
+Main took B while this was written (2cc3f843e8, 17:11; 9 lines). It is still the user's to confirm or turn back:
+"After the review" at the end.
 
 ## Fixes for the team, by importance
 
