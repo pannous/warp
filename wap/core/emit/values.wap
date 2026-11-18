@@ -43,7 +43,7 @@ literal(n: Node, m: Module) as Code? := match n {
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
 	Symbol(name) => if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
 	_ => {
-		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? map_index(type_name, m, records)
+		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? signature_value_index(type_name, m, records) ?? map_index(type_name, m, records)
 		if index == ø then optional_layout(type_name, m, records) else nullable(index)
 	}
 }
@@ -100,6 +100,25 @@ function_value_index(type: Node, m: Module, records: list) as int? := {
 	parts = function_value_parts(type)
 	if parts == ø then ø else added_type(m, struct_type(parts[1 ..].map(capture => field_type(layout_of(capture, m, records) ?? refused(capture, "the emitter has no value layout for this capture's type yet"), IMMUTABLE))))
 }
+
+# The GC type of a function value of a signature, `(int) -> int`, chosen at run time: a struct of a reference to its
+# function and what it captures, ø for a type that is no signature. Every function of one signature has one wasm type,
+# its captures first as an anyref, then its parameters, giving its result.
+VALUE_FUNCTION_AT = 0
+VALUE_CAPTURES_AT = 1
+EMPTY_TYPE_WORD = "ø"
+signature_value_index(type: Node, m: Module, records: list) as int? := {
+	function = signature_function_index(type, m, records)
+	if function == ø then ø else added_type(m, struct_type([field_type(nullable(function), IMMUTABLE), field_type(ANYREF, IMMUTABLE)]))
+}
+signature_function_index(type: Node, m: Module, records: list) as int? := {
+	parts = function_type_parts(type)
+	if parts == ø { return ø }
+	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
+}
+signature_parameters(parts: list, m: Module, records: list) as list := parts#1.map(parameter => signed_layout(parameter, m, records))
+signature_results(parts: list, m: Module, records: list) as list := if text(parts#2) == EMPTY_TYPE_WORD then [] else [signed_layout(parts#2, m, records)]
+signed_layout(type: Node, m: Module, records: list) as list := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for this type of a signature yet")
 
 # The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the
 # count spare (lists.wap); ø for a type that is no list. Every list's type extends the list base, its count alone, so
