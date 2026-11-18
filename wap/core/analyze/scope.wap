@@ -220,10 +220,10 @@ depths_of(definitions: list) as list := {
 	for definition in definitions { if not depths.contains(definition.depth) { depths = depths + [definition.depth] } }
 	depths
 }
-# A case named by its enum, `Side.Right`: that enum's case, bound as the bare name `Right` would be; ø for any other
-# part of a value
+# A case named by its enum, `Side.Right`: that enum's case, bound as the bare name `Right` would be, even where a case
+# of another enum has the enum's name (LexemeKind.Separator beside the enum Separator); ø for any other part of a value
 qualified_case(n: Node, subject: Node, key: Node, scope: list) as Node? := {
-	if not subject is symbol or not key is text or not definitions_meant(text(subject), scope) is empty { return ø }
+	if not subject is symbol or not key is text or not definitions_meant(text(subject), scope).all(definition => definition.kind == BOUND_CASE) { return ø }
 	for definition in scope {
 		if definition.kind == BOUND_CASE and definition.name == text(key) and definition.owner == text(subject) {
 			return with_fact(with_fact(placed_like(symbol(text(key)), n), BINDING, symbol(BOUND_CASE)), DEFINED_AT, definition.definer)

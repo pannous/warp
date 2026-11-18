@@ -82,7 +82,8 @@ pattern_test(pattern: Node, value: list, type: list, p: Program) as list := {
 }
 # the test of a case pattern's tag or a list pattern's count, ø for any other pattern
 shape_test(pattern: Node, value: list, p: Program) as list? := {
-	if is_case(case_name(pattern)) { return value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ }
+	# a missing value, an optional's ø, is no case
+	if is_case(case_name(pattern)) { return value + REF_IS_NULL + IF + I32 + i32_const(0) + ELSE + value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ + END }
 	items = list_pattern_items(pattern) ?? return ø
 	fixed = #items.filter(item => rest_named(item) == ø)
 	value + count_in(fact_of(pattern, TYPE), ø, p) + i32_const(fixed) + (if fixed < #items then I32_GE_U else I32_EQ)

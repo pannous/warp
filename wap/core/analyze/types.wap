@@ -202,8 +202,10 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
 	if wanted != ø and not type_fits(type, wanted) and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
-	remembered(name, type, s, f)
-	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
+	# the name keeps the type it holds, `found: Node? = ø` a Node? whatever it is given
+	held = wanted ?? type
+	remembered(name, held, s, f)
+	with_fact(refitted(Set(with_name_fact(place, TYPE, held), given), n), TYPE, held)
 }
 
 # a list's item or a record's field given a value of its type; the Set itself gives none
