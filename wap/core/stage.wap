@@ -180,6 +180,8 @@ base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
 	_ => ø
 }
+# a type as a message writes it, `int?`
+type_text(type: Node?) as text := if type == ø then "no type" else if base_of_optional(type) != ø then type_text(base_of_optional(type)) + OPTIONAL_MARK else "${type}"
 # a list's TYPE, `list<int>`, and its item type, ø for any other type
 LIST_TYPE = "list"
 list_type(item: Node) as Node := generic_type(LIST_TYPE, [item])

@@ -89,7 +89,7 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
-	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}${words_missing(candidates, types, s)}") }
+	if fitting is empty { refused(n, "no ${called} takes (${types_text(types)}): ${candidates_text(candidates)}${words_missing(candidates, types, s)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
@@ -175,9 +175,11 @@ letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 	}
 	bound
 }
-# the letters bound so far with those a wanted type binds against a given one, ø when they don't fit
+# the letters bound so far with those a wanted type binds against a given one, ø when they don't fit; code that never
+# gives a value, `return 0`, binds none
 unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if given == ø { return ø }
+	if given == symbol(NEVER_TYPE) { return bound }
 	records = s.records
 	if is_letter(wanted, records) {
 		held = type_keyed(text(wanted), bound)
@@ -224,6 +226,8 @@ any_enum(wanted: Node, given: Node?, records: list) as bool := {
 }
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
+# types as a message names them, `int, text?`
+types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result written or
