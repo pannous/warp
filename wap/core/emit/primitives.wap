@@ -77,8 +77,8 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 # an array's operations given a list work on its items: operation → the list's
 ON_LISTS = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
 # the operation a primitive performs: the one it names, or the list's for an array's operation given a list
-operation_of(form: Node) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
-first_operand_type(form: Node) as Node? := match form { Prim(operation, given) => if given is empty then ø else fact_of(given#1, TYPE) }
+operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
+first_operand_type(form: Prim) as Node? := match form { Prim(operation, given) => if given is empty then ø else fact_of(given#1, TYPE) }
 is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIST_TYPE)
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
 # missing one traps. A value any or a number holds, known of its type, is cast to it first.

@@ -39,7 +39,7 @@ is_use(statement: Node) as bool := match statement {
 	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 == symbol(USE_WORD) and items#2 is text
 	_ => no
 }
-used_path(statement: Node) as text := match statement { List(items, bracket, separator) => text(items#2) }
+used_path(statement: List) as text := match statement { List(items, bracket, separator) => text(items#2) }
 # the files a declared program uses, in the order written
 uses_of(program: Node) as list := match fact_of(program, USES) {
 	List(items, bracket, separator) => items.map(text)

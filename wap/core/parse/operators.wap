@@ -98,7 +98,7 @@ rule_word(language: Language, n: Node) as bool := n is symbol and (language.phra
 
 # An arrow is no place to assign to: `1 => y = 2` assigns in the arrow's result, `1 => (y = 2)`, as a match arm or a
 # function's body means it
-arrow_assigned(language: Language, spelling: text, arrow: Node, value: Node) as Node := match arrow {
+arrow_assigned(language: Language, spelling: text, arrow: Call, value: Node) as Node := match arrow {
 	Call(called, parts) => with_facts_of(Call(called, [parts#1, infix_call(language, spelling, parts#2, value)]), arrow)
 }
 arrow_parts(language: Language, n: Node) as list? := match n {
