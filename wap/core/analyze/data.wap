@@ -27,8 +27,7 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
 	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
 	typed = typed_form(value, s, f, declared_type(field))
-	field_checked(typed, field, value, s.records)
-	refitted(Key(name, Op.Colon, typed), item)
+	refitted(Key(name, Op.Colon, field_checked(typed, field, value, s)), item)
 } }
 
 # A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>, or all
@@ -67,12 +66,12 @@ common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	if wanted != ø and all_fit(values, wanted, s) { return wanted }
 	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).filter(type => type != ø)
 	for type in types.filter(type => not has_unknowns(type)) + types.filter(has_unknowns) { if all_fit(values, type, s) { return type } }
-	value_type(values#1)
+	types.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))
 }
 # a value as the type its place holds reads it: a char beside texts its text, a function value where a function type is
-read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else as_function_type(value, type, s) ?? value
+read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")
 # each value fits the wanted type, settling the unknowns it holds: `[]` fits list<int>
-all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => gives_fitting(value, wanted, s.records) or reads_as(wanted, value_type(value)) or value_type(value) != ø and settles(value_type(value), wanted, s) or as_function_type(value, wanted, s) != ø)
+all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => conversion(value_type(value), wanted, s) in STATIC_CONVERSIONS + [Conversion.Settled] or reads_as(wanted, value_type(value)) or as_function_type(value, wanted, s) != ø)
 
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
 # place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>

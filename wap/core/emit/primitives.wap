@@ -52,8 +52,6 @@ HELPERS = {"print_text": printing_function, "error_text": error_writing_function
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
 
-# `prim cast(x)`, x an any: its value as the Prim's type, checked, raising with the place when it holds another type
-CHECKED_CAST = "cast"
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
