@@ -9,6 +9,7 @@ use "patterns.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
 
