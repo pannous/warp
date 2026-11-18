@@ -161,13 +161,22 @@ captured_by(definition: Node, types: list) as list := {
 	if parts == ø or text(parts#1) != function_key_of(definition) or captures is empty { return [] }
 	(1 to #captures).map(at => [place_key(captures#at), parts#(at + 1)])
 }
-# A call of a function value, `f(x)` where f holds `y => y + 1`: a call of the value's function, the value its
-# first argument
+# A call of a function value, `f(x)` where f holds `y => y + 1` or a function's name: a call of the value's function,
+# a function value's own one taking the value as its first argument
 value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	type = value_type(typed_form(called, s, f, ø))
 	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
-	lambda = definition_keyed(text(parts#1), s) ?? refused(called, "the typing stage found no function of this value")
-	call_typed(n, with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(written_name(lambda))), [called] + arguments, s, f, expected)
+	key = text(parts#1)
+	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
+	name = declared_name(written_name(definition))
+	given = if s.lambdas.any(lambda => function_key_of(lambda) == key) then [called] + arguments else arguments
+	call_typed(n, with_fact(with_fact(name, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, name), given, s, f, expected)
+}
+# A function's name as a value, `apply(inc, 2)`: of a type of its own like a function value's, capturing nothing, so a
+# call of the value is a call of that function; a name of several functions is one only for a written function type
+function_named_typed(n: Node) as Node := {
+	if fact_of(n, CANDIDATES) != ø { refused(n, "several functions have this name; a value of one of them comes with written function types, not yet") }
+	with_type_of(n, function_value_type(place_key(defined_at(n)), []))
 }
 # whether a called name holds a value rather than naming a function
 holds_value(called: Node) as bool := called is symbol and fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
@@ -277,7 +286,7 @@ get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as No
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
 	binding = text(fact_of(n, BINDING))
-	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { refused(n, "a function's name as a value comes with function references, not yet: write `x => ${n}(x)`") }
+	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return function_named_typed(n) }
 	type = variable_type(n, s, f)
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
