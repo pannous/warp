@@ -8,3 +8,8 @@
 'def twice!(x: int) := x * 2; twice! 4'	8
 'twice!(x: int) := x * 2; twice!(5) + 1'	11
 'y = 3; y!=4'	true
+
+# an_optional_result_or_parameter_unwraps (wiki/optional.md: x! is the value, raising when missing)
+'f(n: int) as int? := if n > 0 then n else ø; f(3)! + 1'	4
+'g(x: int?) := x! * 2; g(5)'	10
+'f(n: int) as int? := if n > 0 then n else ø; y = f(2); y! * 3'	6

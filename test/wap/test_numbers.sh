@@ -42,4 +42,5 @@ check "a character made from its code" "$(ran char_made 'print text(char(97))')"
 check "a character's code, and a float's 64 bits as an int" "$(ran codes "print text(ord('a'))
 print text(float_bits(1.0))")" "97
 4607182418800017408"
+check "a value made into its own type is itself" "$(ran identity 'print text(int(3)) + " " + text(float(2.5)) + " " + text(bool(no)) + " " + text(4 as int) + " " + text("a b" as text)')" "3 2.5 no 4 a b"
 exit $((failures > 0))
