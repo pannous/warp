@@ -15,6 +15,9 @@ class Code {
 	instructions: list = []
 }
 
+# a case's tag, the first field of an enum's struct: its place among the cases, from 0
+TAG_FIELD = field_type(I32, IMMUTABLE)
+
 # the GC type of a text: its UTF-8 bytes
 text_type(m: Module) as int := added_type(m, array_type(field_type(I8, MUTABLE)))
 
@@ -41,8 +44,18 @@ list_index(type: Node, m: Module, records: list) as int? := {
 	item = if item_type(type) == ø then ø else layout_of(item_type(type), m, records)
 	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
 }
-# the GC type of a record: a struct of its fields' layouts, in the order the class writes them
-struct_of(record: Node, m: Module, records: list) as int := added_type(m, struct_type(fields_of(record).map(field => field_type(layout_of(declared_type(field), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))))
+# The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
+# its cases, its tag first; a case with fields extends it with them.
+struct_of(record: Node, m: Module, records: list) as int := {
+	fields = field_layouts(fields_of(record), m, records)
+	if cases_of(record) is empty then added_type(m, struct_type(fields)) else added_type(m, open_type([], struct_type([TAG_FIELD] + fields)))
+}
+field_layouts(fields: list, m: Module, records: list) as list := fields.map(field => field_type(layout_of(declared_type(field), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
+case_struct_of(record: Node, case: Node, m: Module, records: list) as int := {
+	base = struct_of(record, m, records)
+	fields = field_layouts(fields_of(record) + case_fields(case), m, records)
+	added_type(m, open_type([base], struct_type([TAG_FIELD] + fields)))
+}
 
 # a text's bytes kept in a passive segment, copied into a new array where the program meets it
 text_literal(t: text, m: Module) as Code := {

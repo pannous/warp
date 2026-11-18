@@ -136,25 +136,31 @@ condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
 	tested
 }
 # A choice by patterns: each arm's pattern of the subject's type, a name holding the subject; each result expected the
-# Case's type. With a last arm that fits any value the Case has the results' joined type, else none.
+# Case's type. With a last arm that fits any value, or arms naming every case of the subject's enum, the Case has the
+# results' joined type, else none.
 case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	type = value_type(subject) ?? refused(subject, "this gives no value to match")
 	typed = arms.map(arm => arm_typed(arm, type, s, f, expected))
 	results = typed.map(arm => value_type(arm))
-	given = if #arms > 0 and fits_any(pattern_of(arms.last)) then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b)) else ø
+	given = if #arms > 0 and (fits_any(pattern_of(arms.last)) or covers_cases(arms, type, s)) then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b)) else ø
 	with_type_of(refitted(Case(subject, typed), n), given)
 }
 arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
 	Arm(pattern, result) => {
 		if fits_any(pattern) and pattern != symbol(WILDCARD) { remembered(pattern, type, s, f) }
-		tested = if fits_any(pattern) then pattern else typed_form(pattern, s, f, type)
+		tested = if fits_any(pattern) then pattern else if pattern is Call then case_pattern_typed(pattern, s, f) else typed_form(pattern, s, f, type)
 		if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit the subject, whose type is ${type}") }
 		given = typed_form(result, s, f, expected)
 		with_type_of(refitted(Arm(tested, given), arm), value_type(given))
 	}
 }
-# a pattern that fits every value: a name, or _
-fits_any(pattern: Node) as bool := pattern is symbol
+# whether the arms name every case of the subject's enum, so one always fits
+covers_cases(arms: list, type: Node, s: TypingState) as bool := {
+	record = record_named(s.records, type)
+	record != ø and not cases_of(record) is empty and cases_of(record).all(case => arms.any(arm => text(case_name(pattern_of(arm))) == text(case_name(case))))
+}
+# a pattern that fits every value: a name that is no case, or _
+fits_any(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) != symbol(BOUND_CASE)
 pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
 
 # the type of either of two values: the one that finishes, or the common one; ø when they differ
@@ -226,6 +232,7 @@ get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as No
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame) as Node := {
 	binding = text(fact_of(n, BINDING))
+	if binding == BOUND_CASE { return case_typed_as(n, n, [], s) }
 	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY or binding == BOUND_CAPTURE { refused(n, "a function value or a capture comes with closures, not yet") }
 	with_fact(n, TYPE, variable_type(n, s, f) ?? refused(n, "this name is read before any value is given to it"))
 }
@@ -242,9 +249,30 @@ variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := {
 }
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
 
+# A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
+case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+	fields = case_fields(case_named(enum_of(s.records, called), called))
+	if #arguments != #fields { refused(n, "${called} takes ${#fields} values, its fields") }
+	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
+	for at in 1 to #given { if not fits_type(given#at, declared_type(fields#at)) { refused(arguments#at, "this gives ${value_type(given#at) ?? "no value"}, the field holds a ${declared_type(fields#at)}") } }
+	case_typed_as(n, called, given, s)
+}
+case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
+	typed = if given is empty and n === called then n else refitted(Call(called, given), n)
+	with_type_of(typed, symbol(record_name(enum_of(s.records, called))))
+}
+# A case pattern with the names its fields fill, `Circle(r)`: each name a variable of its field's type
+case_pattern_typed(pattern: Node, s: TypingState, f: TypeFrame) as Node := match pattern { Call(called, names) => {
+	fields = case_fields(case_named(enum_of(s.records, called), called))
+	if #names != #fields { refused(pattern, "${called} has ${#fields} fields to name") }
+	for at in 1 to #names { if text(names#at) != WILDCARD { remembered(names#at, declared_type(fields#at), s, f) } }
+	case_typed_as(pattern, called, names, s)
+} }
+
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	if fact_of(called, BINDING) == symbol(BOUND_CASE) { return case_call_typed(n, called, arguments, s, f) }
 	candidates = candidates_of(called).map(definer => definition_at(definer, s))
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(type_given) else arguments.map(argument => ø)

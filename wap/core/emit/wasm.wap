@@ -35,6 +35,8 @@ NULLABLE_REFERENCE = 0x63
 FUNCTION_TYPE = 0x60
 STRUCT_TYPE = 0x5F
 ARRAY_TYPE = 0x5E
+# a type that others may extend, with the types it extends
+SUBTYPE = 0x50
 IMMUTABLE = 0
 MUTABLE = 1
 
@@ -111,6 +113,7 @@ END = [0x0B]
 STRUCT_NEW = [0xFB, 0x00]
 STRUCT_GET = [0xFB, 0x02]
 STRUCT_SET = [0xFB, 0x05]
+REF_CAST_NULL = [0xFB, 0x17]
 ARRAY_NEW_DEFAULT = [0xFB, 0x07]
 ARRAY_NEW_FIXED = [0xFB, 0x08]
 ARRAY_NEW_DATA = [0xFB, 0x09]
@@ -195,6 +198,8 @@ function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + coun
 field_type(storage: list, mutability: int) as list := storage + [mutability]
 struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
 array_type(item: list) as list := [ARRAY_TYPE] + item
+# a type open to subtypes, extending these type indices
+open_type(supertypes: list, type: list) as list := [SUBTYPE] + unsigned(#supertypes) + supertypes.flat_map(unsigned) + type
 
 # The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
 added_type(m: Module, type: list) as int := {

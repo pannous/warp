@@ -107,6 +107,8 @@ BOUND_CAPTURE = "capture"
 BOUND_GLOBAL = "global"
 BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
+# a case of an enum, `Dime`, `Circle` (its Record defines it)
+BOUND_CASE = "case"
 # the pattern of a Case's arm that fits any value and names none
 WILDCARD = "_"
 # on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
@@ -142,6 +144,19 @@ record_named(records: list, type: Node?) as Node? := {
 }
 record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
 fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
+# An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
+cases_of(record: Node) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
+case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
+case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
+# the enum that has a case of this name, among these records, ø when none has
+enum_of(records: list, name: Node) as Node? := {
+	for record in records { if cases_of(record).any(case => text(case_name(case)) == text(name)) { return record } }
+	ø
+}
+# a case's place among its enum's cases, from 0: its tag
+case_tag(record: Node, name: Node) as int := index_where(cases_of(record), case => text(case_name(case)) == text(name)) - 1
+case_named(record: Node, name: Node) as Node := cases_of(record)#(case_tag(record, name) + 1)
+
 # a record's field of this name, ø when it has none
 field_named(record: Node, key: Node) as Node? := {
 	for field in fields_of(record) { if text(declared_name(field)) == text(key) { return field } }

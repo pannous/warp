@@ -232,6 +232,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
 - **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
+- **Enums, the rest of wiki/enum.md:** a case named by its enum (`Coin.Dime`, `Coin::Dime`), `Dime is Coin`, `==`
+  of two cases (their tags), `as index` and `as position`, cases with spellings (`Error = "error"`), `2 as Coin`;
+  and the union of classes `type Shape = Circle | Square` (Record(Shape, [], [Circle, Square])). Built so far:
+  `enum Coin { Penny, Dime }`, cases with fields `Circle(r: int)`, and `match` by case.
 
 ## Debts
 

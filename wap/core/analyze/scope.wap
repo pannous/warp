@@ -64,13 +64,25 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 # An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
 arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
 	Arm(pattern, result) => {
-		inner = pattern_variables(pattern, depth) + scope
-		refitted(Arm(if pattern is symbol and text(pattern) != WILDCARD then resolved(pattern, inner, depth) else pattern, bound(result, inner, depth)), arm)
+		inner = pattern_variables(pattern, scope, depth) + scope
+		refitted(Arm(pattern_bound(pattern, inner, depth), bound(result, inner, depth)), arm)
 	}
 }
+# a pattern's names bound: a case, `Dot`, or a case with the variables its fields fill, `Circle(r)`; `_` names none
+pattern_bound(pattern: Node, scope: list, depth: int) as Node := match pattern {
+	Symbol(name) => if name == WILDCARD then pattern else resolved(pattern, scope, depth)
+	Call(called, fields) => refitted(Call(resolved(called, scope, depth), fields.map(field => pattern_bound(field, scope, depth))), pattern)
+	_ => pattern
+}
+# whether a name means a case of an enum where it stands
+names_case(name: Node, scope: list) as bool := {
+	meant = definitions_meant(text(name), scope)
+	not meant is empty and meant#1.kind == BOUND_CASE
+}
 arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
-pattern_variables(pattern: Node, depth: int) as list := match pattern {
-	Symbol(name) => if name == WILDCARD then [] else [Definition(name, local_kind(depth), pattern, depth)]
+pattern_variables(pattern: Node, scope: list, depth: int) as list := match pattern {
+	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
+	Call(called, fields) => fields.flat_map(field => pattern_variables(field, scope, depth))
 	Number(value) => []
 	Text(value) => []
 	Char(value) => []
@@ -151,6 +163,7 @@ defined_in(statements: list, scope: list, depth: int) as list := {
 }
 definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
+	Record(name, fields, variants) => cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
