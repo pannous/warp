@@ -73,4 +73,16 @@ e: Duo = d
 print(text(match e { Duo(name, items) => name }))')" "duo
 node
 a"
+check "a declared pattern's name after is tests the shape, and the then-arm holds a value of it" "$(ran is_shape 'pattern Duo = (duo $name: Symbol $items: List)
+named(d: Duo) as text := match d { Duo(name, items) => text(name) }
+said(n: Node) as text := if n is Duo then named(n) else "other"
+print(said(Duo(symbol("a"), List([], Bracket.Square, Separator.Comma))))
+print(said(symbol("b")))')" "a
+other"
+check "an arm naming a declared pattern on a Node holds its holes of their types: a match inside it on one is whole" "$(ran arm_holes 'pattern Duo = (duo $name: Symbol $items: List)
+counted(n: Node) as int := match n {
+	Duo(name, items) => match items { List(parts, bracket, separator) => #parts }
+	_ => 0
+}
+print text(counted(Duo(symbol("a"), List([symbol("x"), symbol("y")], Bracket.Square, Separator.Comma))) + counted(symbol("b")))')" "2"
 exit $((failures > 0))

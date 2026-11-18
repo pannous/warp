@@ -21,7 +21,8 @@ FRESH_MARK = "·"
 # it writes, spliced where it stands
 built(language: Language, template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(language, repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(language, template, bindings)
 filled(language: Language, template: Node, bindings: map) as Node := match template {
-	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else symbol(name)
+	# a word the template spells itself is the rule's: a function it names yields to the program's (analyze/calls.wap ranked)
+	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else with_fact(symbol(name), DERIVED, True)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
 		pattern = pattern_called(language, head)
 		if pattern == ø { Key(built(language, head, bindings), Op.None, grown(built_items(language, arguments, bindings), Bracket.Round, separator)) } else { instance(language, pattern, built_items(language, arguments, bindings)) }

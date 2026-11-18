@@ -44,6 +44,11 @@ special case that breaks one of these identities is a bug.
     - TODO: invert mechanism of    show(x: any): text := prim dispatched(x) via compiler:
     - compiler writes match type(x) : text => describe(x as text), int=> describe(x as int) ...
 
+Important: whenever working on a topic, please read the specification under the ~/dev/angles/warp/wiki/...md
+No status on any page! Built, planned and dropped do NOT belong in the wiki but in notes and or on cards
+https://github.com/users/pannous/projects/1  add via `todo` tool
+All changes to the specification must go through the interviewer!
+A missing rule is a question, not a licence
 
 We have one universal construct to hold all data and Code:
 

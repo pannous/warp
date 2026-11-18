@@ -10,6 +10,10 @@
 
 use "stage.wap"
 
+# what a compiler-made form of one shape is, said when another reaches the place that takes it
+NOT_A_FIELD = "a field is written name: value"
+NOT_AN_ENTRY = "a map's entry is written key: value"
+
 refused(code: Node, why: text) := raise place_of(code) + why + ": ${code}"
 
 # `hello.wap line 2:1: `, `line 2:1: ` for code no file holds, or nothing for code without a position

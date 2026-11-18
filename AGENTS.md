@@ -8,6 +8,8 @@ rule blocks a clearly better design, say so with the reason (to warp-interviewer
 breaking it. notes/decisions.md is only an inbox of recent decisions on their way into the wiki: grep it, never read
 it whole.
 
+only write how it should be; if the implementation differs, write a small todo or give it to the interviewer.
+
 warp: a data format and wasm-first language, the successor of wasp (C++, ~/wasp/). Its specification is ./wiki
 (not all built yet). https://github.com/pannous/warp · https://warp.pannous.com/
 - The compiler is written in warp and compiles itself (core/, notes/self_hosting.md): parse to a Node AST, emit wasm
@@ -248,6 +250,8 @@ before asking a question). After a context swap, this file and your role file be
 ## Where to work
 - Notes, docs, wiki, scripts, samples: in /Users/me/dev/angles/warp, on a branch named as the card (a small change needs no worktree); 
 - commit your own paths by name (`git commit -- <paths>`), `source scripts/lib/sync-main.sh; up_to_date_main` (fetches main by name, replays your commits, never stashes) (never `git pull`: it rebases onto FETCH_HEAD, which concurrent fetches rewrite; scripts: scripts/lib/sync-main.sh). Do not push that onto main; hand the commit or patch to the integrator (Handoff, below). Never leave unpushed commits on main.
+- Every wap file has one owner, its expert (notes/wap.md Owners, notes/agents/wap-owner.md): every change to it passes
+  that owner's review.
 - Anything compiled (core/, extensions/): a worktree,
   `cowtree add -b <card> /Volumes/Worktrees/<card> origin/main`, branch named as the card. Never touch
   /Volumes/Worktrees/warp (cowtree's donor) or the Integrator's integrate and integrate2. At most 2 open worktrees per worker (23 were far too

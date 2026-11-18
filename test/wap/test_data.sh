@@ -109,4 +109,17 @@ print(text(q.n))
 r = Q{n: 4}
 print(text(r.o == ø))')" "2
 yes"
+check "a map's own word read as its part is that word, any other name its entry" "$(ran map_word 'M = {"ab": [1], "cd": [2]}
+print(M.keys#2 + "z")
+m = {name: "x", first: "y"}
+print(m.name + m.first)')" "cdz
+xy"
+check "an instance made from a map, each field made into its type" "$(ran from_map 'class person { name: text; age: int }
+print text(person({name: "Ann", age: "40"}).age + 1)
+form = {name: "Bo", age: "7"}
+print(person(form).name)
+class lock { keys: int }
+print text(lock({keys: "3"}).keys)')" "41
+Bo
+3"
 exit $((failures > 0))

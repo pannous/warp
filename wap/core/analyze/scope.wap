@@ -42,6 +42,7 @@ bound_program(program: Block, library: list) as Block := late_reads_checked(boun
 library_words(declaration: Node) as list := match declaration {
 	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH)]
 	Record(name, fields, variants) => definitions_made_by(declaration, [], LIBRARY_DEPTH)
+	_ => refused(declaration, "a library declares names and records")
 }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
@@ -76,7 +77,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
 }
 # An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
-arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
+arm_bound(arm: Arm, scope: list, depth: int) as Node := match arm {
 	Arm(pattern, result) => {
 		inner = pattern_variables(pattern, scope, depth) + scope
 		refitted(Arm(pattern_bound(pattern, inner, depth), bound(result, inner, depth)), arm)
@@ -113,11 +114,12 @@ names_case(name: Node, scope: list) as bool := {
 # whether a name means functions and no type: a type's word is a type test even beside a function of that name,
 # `3 is int` beside int(t: text)
 names_predicate(name: Node, scope: list) as bool := {
-	if TYPE_WORDS.contains(text(name)) { return no }
+	# a type's or a declared pattern's name after `is` is its test, never a call of its builder: `n is Record`
+	if TYPE_WORDS.contains(text(name)) or shape_called(name, scope) { return no }
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
 }
-arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
+arm_result(arm: Arm) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: list, depth: int) as list := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
 	Call(called, fields) => if shape_called(called, scope) then pattern_variables(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth) else fields.flat_map(field => pattern_variables(field, scope, depth))
@@ -146,7 +148,7 @@ type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int)
 argument_bound(argument: Node, scope: list, depth: int) as Node := if is_named(argument) then field_bound(argument, scope, depth) else bound(argument, scope, depth)
 is_named(argument: Node) as bool := match argument { Key(name, Op.Colon, value) => name is symbol; _ => no }
 # an instance's field or a map's entry, `x: 1`: its value bound, its name a word, no variable
-field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field) }
+field_bound(field: Node, scope: list, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field); _ => refused(field, NOT_A_FIELD) }
 block_bound(block: Node, statements: list, scope: list, depth: int) as Node := refitted(Block(all_bound(statements, defined_in(statements, scope, depth) + scope, depth)), block)
 all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bound(form, scope, depth))
 

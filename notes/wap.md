@@ -133,20 +133,26 @@ A rule file is in preload/sugar/ exactly when wap's own source uses its spelling
 
 ## Owners
 
-Owners go by stage (user 2026-11-18, notes/wap_review.md "The workers"). Anyone may edit any wap file on a branch;
-the owner of the file's stage reviews the change before the handoff, and owns the stage's contract: what its output
+Each wap file has one expert owner, whose duties are notes/agents/wap-owner.md (user 2026-11-18); ownership changes
+only through warp-lead, in this table. Owners go by stage (user 2026-11-18, notes/wap_review.md "The workers").
+Anyone may edit any wap file on a branch; the owner of the file's stage reviews the change before the handoff, and owns the stage's contract: what its output
 language is (notes/backbone.md "Stage languages"). Breadth stops until milestone 2: wap gets only what its own
 source uses, and every landing names the functions of wap it turned green (scripts/wap-census.warp). Tests
 (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that blocks wap
 goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new file belongs to the stage of its folder.
 
+Trim before handoff (user 2026-11-18): before handing a branch off, try deleting each of its edits, one at a time, after
+the change is done; every edit whose removal keeps test/wap/run.sh and test/wap/test_guardrails.sh green goes. Only
+deletions, nothing rewritten; the handoff names what was trimmed.
+
 | stage | owner | files (under wap/) |
 |---|---|---|
-| lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap |
-| self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
+| lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap; the test/wap/ scripts no other row names |
+| self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, test/wap/ratchet_census.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
 | front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/format.wap, core/language.wap, preload/ |
 | types: declare, bind, type | warp-wap-binding | core/analyze/, core/paths.wap |
-| back: emitter, runtime | warp-wap-emitter | core/emit/ |
+| back: emitter, runtime | warp-wap-emitter | core/emit/; test/wap/test_guardrails.sh, test/wap/guardrails_allowed.txt |
+| simplification: wap smaller by its Node count (Meta excluded) | warp-simplifier | any file, by review of its stage owner |
 
 ## Rules for every file
 
@@ -193,3 +199,49 @@ does: 705 statements lower, 359 bind, no program file types yet.
 | 4 files' typing | lowering | the range `0 upto width` (wasm.wap) |
 
 Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done`.
+
+## Size
+
+wap's size is the number of nodes its own reader makes of every wap/*.wap file, Meta excluded
+(scripts/wap-size.warp): comments, blank lines, line breaks and the length of names count nothing, so only a real
+simplification makes it smaller. warp-simplifier lowers it; each landing's commit says the count before → after.
+`warp --no-window scripts/wap-size.warp $(git ls-files "wap/*.wap")`
+
+Baseline, origin/main 499e1d6abe (2026-11-18): **82145 nodes**.
+
+| folder | nodes |
+|---|---|
+| . | 113 |
+| core/analyze | 25641 |
+| core/emit | 18791 |
+| core | 5339 |
+| core/parse | 12266 |
+| core/rules | 10114 |
+| kernel | 189 |
+| preload | 8814 |
+| preload/sugar | 878 |
+
+The 20 largest top-level statements:
+
+| file and name | nodes |
+|---|---|
+| wap/core/analyze/scope.wap bound | 717 |
+| wap/preload/nodes.wap text | 625 |
+| wap/core/analyze/calls.wap call_typed | 584 |
+| wap/core/analyze/calls.wap function_typed | 560 |
+| wap/core/rules/lowering.wap lowered_form | 534 |
+| wap/core/analyze/types.wap typed_form | 509 |
+| wap/core/emit/host.wap arguments_function | 478 |
+| wap/core/emit/emitter.wap code | 464 |
+| wap/preload/floats.wap float_digits | 438 |
+| wap/preload/operators.wap operators | 410 |
+| wap/core/parse/atoms.wap quoted | 406 |
+| wap/core/parse/atoms.wap number_read | 390 |
+| wap/core/parse/reader.wap read_token | 390 |
+| wap/core/emit/primitives.wap primitive_code | 359 |
+| wap/core/parse/operators.wap tokens_read | 354 |
+| wap/core/format.wap call_text | 337 |
+| wap/core/emit/primitives.wap int_text_function | 324 |
+| wap/core/analyze/calls.wap chosen_definition | 308 |
+| wap/core/parse/layout.wap indentation | 308 |
+| wap/core/emit/host.wap path_opened | 307 |

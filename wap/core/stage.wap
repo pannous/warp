@@ -22,9 +22,11 @@ staged(n: Node, rewrite: (Node) -> Node) as Node := with_facts_of(placed_like(re
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }
-# (old warp reads `x!` as running x, a host bug; once it reads `x!` as the optional's value, this is
-# Position(line_of(n)!, column_of(n)!) behind its ø check, without the `?? 0`)
-position_of(n: Node) as Position? := if line_of(n) == ø then ø else Position(line_of(n) ?? 0, column_of(n) ?? 0)
+# where a node is written, ø for a node made by the compiler; a node with a line has its column too
+position_of(n: Node) as Position? := {
+	line = line_of(n) ?? return ø
+	Position(line, column_of(n)!)
+}
 # n placed where origin was written, its facts kept; n itself when origin has no position
 positioned_like(n: Node, origin: Node) as Node := {
 	at = position_of(origin) ?? return n
@@ -162,6 +164,12 @@ TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
 # on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
 PREDICATE = "predicate"
+# on code that never finishes, a return, break or continue, a block ending in one, a choice all of whose arms jump, a
+# call of a function that never returns: it has no type, and a join of arms skips it
+JUMPS = "jumps"
+# on a word a rule's template spells itself: a function it names yields to one the program wrote (core/analyze/calls.wap
+# ranked)
+DERIVED = "derived"
 # the pattern of a Case's arm that fits any value and names none
 WILDCARD = "_"
 # A list pattern, `[]`, `[first, ...rest]`: its items' patterns, a last `...name` naming the items after them; ø for
@@ -277,10 +285,10 @@ record_named(records: list, type: Node?) as Node? := {
 	named = records.filter(record => record_name(record) == text(type))
 	if named is empty then ø else named.last
 }
-record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
-fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
+record_name(record: Record) as text := match record { Record(name, fields, variants) => text(name) }
+fields_of(record: Record) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
 # An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
-cases_of(record: Node) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
+cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum

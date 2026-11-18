@@ -231,6 +231,7 @@ groupings_written(language: Language, n: Node) as Node := match n {
 }
 phrase_written(language: Language, phrase: Node) as Node := match phrase {
 	List(items, Bracket.None, Separator.Space) => with_facts_of(with_parts(inner_rewritten(language, language.shape_rules, items, phrase), part => groupings_written(language, part)), phrase)
+	_ => refused(phrase, "only a spaced phrase is written by its rules")
 }
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
