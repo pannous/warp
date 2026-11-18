@@ -79,4 +79,10 @@ said(n: Node) as text := if n is Duo then named(n) else "other"
 print(said(Duo(symbol("a"), List([], Bracket.Square, Separator.Comma))))
 print(said(symbol("b")))')" "a
 other"
+check "an arm naming a declared pattern on a Node holds its holes of their types: a match inside it on one is whole" "$(ran arm_holes 'pattern Duo = (duo $name: Symbol $items: List)
+counted(n: Node) as int := match n {
+	Duo(name, items) => match items { List(parts, bracket, separator) => #parts }
+	_ => 0
+}
+print text(counted(Duo(symbol("a"), List([symbol("x"), symbol("y")], Bracket.Square, Separator.Comma))) + counted(symbol("b")))')" "2"
 exit $((failures > 0))

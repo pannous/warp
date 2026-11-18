@@ -20,7 +20,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 # whole, files, functions typed, functions, places typed any
 files=$(cd "$root" && git ls-files 'wap/*.wap')
 (cd "$root" && echo "$files" | split -l $(( ($(echo "$files" | wc -l) + BATCHES - 1) / BATCHES )) - "$stage/batch.")
-ls "$stage"/batch.* | (cd "$root" && xargs -P "$BATCHES" -I{} sh -c '"$1" --no-window scripts/wap-census.warp $(cat "$2") >"$2.out" 2>&1' _ "$warp" {})
+ls "$stage"/batch.* | (cd "$root" && xargs -P "$BATCHES" -I{} sh -c 'scripts/job-slot.sh "$1" --no-window scripts/wap-census.warp $(cat "$2") >"$2.out" 2>&1' _ "$warp" {})
 total=$(cat "$stage"/batch.*.out | grep '^total' | sed 's/[^0-9]\{1,\}/ /g' |
 	awk '{ for (i = 1; i <= NF; i++) sum[i] += $i } END { if (NR) printf "%d of %d files typed whole, %d of %d functions typed, %d places typed any", sum[1], sum[2], sum[3], sum[4], sum[5] }')
 whole=$(echo "$total" | sed -n 's/^\([0-9]*\) of .* files typed whole.*/\1/p')
