@@ -18,7 +18,7 @@ use "../kernel/forms.wap"
 
 # n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
 # also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
-staged(n: Node, rewrite: function) as Node := with_facts_of(placed_like(rewrite(n), n), n)
+staged(n: Node, rewrite: (Node) -> Node) as Node := with_facts_of(placed_like(rewrite(n), n), n)
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }
@@ -56,7 +56,7 @@ with_facts_of(n: Node, original: Node) as Node := {
 }
 
 # a node with each of its direct parts changed by f
-with_parts(n: Node, f: function) as Node := match n {
+with_parts(n: Node, f: (Node) -> Node) as Node := match n {
 	Key(left, op, right) => Key(f(left), op, f(right))
 	List(items, bracket, separator) => List(items.map(f), bracket, separator)
 	_ => n
