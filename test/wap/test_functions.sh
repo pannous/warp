@@ -90,4 +90,7 @@ print text(f(1) + f(1, 5))
 class P { x: int; tag: text = "?" }
 print P(3).tag + P(3, "a").tag')" "9
 ?a"
+# a function of a bare list parameter is typed when called, for the list given, so one nothing calls is not refused
+check "an uncalled function of a bare list" "$(ran bare_list_uncalled 'first(xs: list) := xs#1
+print "ok"')" "ok"
 exit $((failures > 0))
