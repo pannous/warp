@@ -245,7 +245,7 @@ resolved(name: Node, scope: list, depth: int) as Node := {
 	if innermost.kind == BOUND_CASE { unambiguous_case(name, innermost, scope) }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
 	bound = with_fact(name, BINDING, symbol(kind))
-	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(bound, CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
 }
 # the depths of these definitions, each once, innermost first as they come
 depths_of(definitions: list) as list := {

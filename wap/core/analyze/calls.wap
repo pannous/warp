@@ -12,6 +12,7 @@ use "../../kernel/forms.wap"
 PLACE_WORD = "#"
 # the word that shows a value in warp notation, the program's last value by it (core/analyze/types.wap typed_shown)
 SHOW_WORD = "show"
+PRINT_WORD = "print"
 
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
