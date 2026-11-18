@@ -28,4 +28,9 @@ enum Tone { low high }
 print(text(Color.red == Color.green))
 print(text(Tone.low == Tone.high))')" "yes
 no"
+check "a word the program writes wins over the one a rule writes for the same type: a class's own show" "$(ran own_show 'class P { name: text }
+show(p: P) as text := "P " + p.name
+print(show(P("a")))
+print(show([P("b")]))')" "P a
+[P b]"
 exit $((failures > 0))

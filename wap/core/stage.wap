@@ -162,6 +162,9 @@ TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
 # on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
 PREDICATE = "predicate"
+# on a word a rule's template spells itself: a function it names yields to one the program wrote (core/analyze/calls.wap
+# ranked)
+DERIVED = "derived"
 # the pattern of a Case's arm that fits any value and names none
 WILDCARD = "_"
 # A list pattern, `[]`, `[first, ...rest]`: its items' patterns, a last `...name` naming the items after them; ø for

@@ -182,11 +182,13 @@ with_letters(argument: Node, letters: list) as Node := {
 # `==(a: T, b: T)`; several equally specific are left for the caller to refuse
 most_specific(definitions: list, records: list) as list := {
 	order = ranked(definitions, records)
-	order.filter(definition => typing_weight(definition, records) == typing_weight(order#1, records) and written_structure(definition) == written_structure(order#1))
+	order.filter(definition => typing_weight(definition, records) == typing_weight(order#1, records) and written_structure(definition) == written_structure(order#1) and derived(definition) == derived(order#1))
 }
-# The one ranking of a word's definitions, most specific first, by typing weight, then by written structure: the
-# static choice takes its first that fits, a dynamic call (core/analyze/dispatch.wap) tests them in this order
-ranked(definitions: list, records: list) as list := definitions.sorted(by: definition => -written_structure(definition)).sorted(by: definition => -typing_weight(definition, records))
+# The one ranking of a word's definitions, most specific first, by typing weight, then by written structure, then one
+# the program wrote before one a rule wrote, the class's derived show(self: P) after its own show(p: P): the static
+# choice takes its first that fits, a dynamic call (core/analyze/dispatch.wap) tests them in this order
+ranked(definitions: list, records: list) as list := definitions.sorted(by: derived).sorted(by: definition => -written_structure(definition)).sorted(by: definition => -typing_weight(definition, records))
+derived(definition: Node) as int := if has_fact(declared_name(written_name(definition)), DERIVED) then 1 else 0
 # how much structure a definition's parameter types write: each `?`, `list<…>`, `map<…>` or `(…) -> …` one more
 written_structure(definition: Node) as int := parameters_in(definition).map(parameter => structure(type_given(parameter))).sum()
 structure(type: Node?) as int := {
