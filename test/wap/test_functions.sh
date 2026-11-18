@@ -148,4 +148,20 @@ listed(n: Node) as list? := match n {
 print(text(#items_of(symbol("a"))))
 print(text(listed(symbol("a")) == ø))')" "1
 yes"
+check "a function value given to map over a list is typed by the list's items" "$(ran map_lambda_items 'named(n: text): text := n + "!"
+xs: list<text> = ["a", "b"]
+print(xs.map(item => named(item)).join(" "))
+outer(n: text): text := shown(n, part => named(part))
+shown(n: text, f: (text) -> text): text := [n].map(f).join("")
+print(outer("c"))')" "a! b!
+c!"
+check "an early return of ø in a function giving an optional" "$(ran early_return_empty 'class P { a: int }
+f(n: int) as P? := {
+	m = if n > 0 then n else ø
+	k = m ?? return ø
+	P(k)
+}
+print(text((f(3) ?? P(0)).a))
+print(text(f(-1) == ø))')" "3
+yes"
 exit $((failures > 0))

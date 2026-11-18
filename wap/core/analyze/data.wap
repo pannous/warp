@@ -20,9 +20,18 @@ SLICE = "slice"
 # type is the record's name
 instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
 	record = record_named(s.records, head) ?? refused(head, "no class has this name")
-	given = items.map(item => field_typed(item, record, s, f))
-	for field in fields_of(record) { if not items.any(item => text(declared_name(item)) == text(declared_name(field))) { refused(n, "this ${head} gives no value to its field ${declared_name(field)}") } }
+	written = items.map(item => field_typed(item, record, s, f))
+	# a field left out is given the default its constructor's parameter gives it, `indented: bool = no` (notes/kernel.md
+	# "Record": the constructor is a Define); one without is refused
+	left = fields_of(record).filter(field => not items.any(item => text(declared_name(item)) == text(declared_name(field))))
+	defaults = left.map(field => field_typed(placed_like(Key(declared_name(field), Op.Colon, fact_of(defaulting(record, field, s) ?? refused(n, "this ${head} gives no value to its field ${declared_name(field)}"), DEFAULT)), n), record, s, f))
+	given = written + defaults
 	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
+}
+# the constructor's parameter that gives a field its default, ø when none does
+defaulting(record: Node, field: Node, s: TypingState) as Node? := {
+	named = definitions_named(record_name(record), s).flat_map(definition => parameters_in(definition)).filter(parameter => text(declared_name(parameter)) == text(declared_name(field)) and defaulted(parameter))
+	if named is empty then ø else named#1
 }
 field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
 	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
@@ -69,9 +78,9 @@ common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	types.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s))
 }
 # a value as the type its place holds reads it: a char beside texts its text, a function value where a function type is
-read_as(value: Node, type: Node, s: TypingState) as Node := if reads_as(type, value_type(value)) then as_text(value, s) else as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")
+read_as(value: Node, type: Node, s: TypingState) as Node := as_function_type(value, type, s) ?? converted(value, type, s, value, "the others are of type")
 # each value fits the wanted type, settling the unknowns it holds: `[]` fits list<int>
-all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => conversion(value_type(value), wanted, s) in STATIC_CONVERSIONS + [Conversion.Settled] or reads_as(wanted, value_type(value)) or as_function_type(value, wanted, s) != ø)
+all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value => conversion(value_type(value), wanted, s) in STATIC_CONVERSIONS + [Conversion.Settled] or as_function_type(value, wanted, s) != ø)
 
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
 # place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>

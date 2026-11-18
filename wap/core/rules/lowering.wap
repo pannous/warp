@@ -36,6 +36,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "patterns.wap"
+use "../language.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"

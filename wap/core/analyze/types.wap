@@ -182,8 +182,10 @@ function_key_of(definition: Node) as text := place_key(declared_name(written_nam
 
 # The function left with a value, expected the function's written result type; the code after it never runs
 return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
-	given = typed_form(value, s, f, f.result)
-	f.returns += [if value is Empty then ø else value_type(given)]
+	typed = typed_form(value, s, f, f.result)
+	# a value returned is of the written result, as the body's is: `return ø` a P? of a function giving P?
+	given = if f.result == ø then typed else converted(typed, f.result, s, value, "the function says it gives a")
+	f.returns += [value_type(given)]
 	with_type(refitted(Return(given), n), NEVER_TYPE)
 }
 
