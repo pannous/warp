@@ -29,6 +29,7 @@ use "fits.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "letters.wap"
 
 # the types of the literals, as a program writes them
 INT_TYPE = "int"

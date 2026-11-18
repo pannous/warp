@@ -65,4 +65,5 @@ check "a list sorted by a key named by" "$(ran sorted_by_named 'print show(["ccc
 check "a list's items spread into another list" "$(ran spread 'xs = [1, 2]
 ys = [0, ...xs, 4, ...xs]
 print text(#ys) + " " + text(ys#5)')" "6 1"
+check "a list's last item" "$(ran last 'print "wap/core/x.wap".split("/").last')" "x.wap"
 exit $((failures > 0))

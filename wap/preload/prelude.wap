@@ -7,6 +7,10 @@ use "floats.wap"
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+# a text written to the standard error, then a line end; the program goes on
+eprint(t: text) := prim error_text(t)
+# a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
+hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
 read(path: text): text := prim read_text(path)
 # the program stopped with a message on the standard error, then a line end; it never finishes
@@ -99,6 +103,9 @@ LAST_INT := 0x7FFFFFFFFFFFFFFF
 # the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]
 slice(xs: list<T>, r: Range): list<T> := prim array_slice(xs, r.from, (if r.last < #xs then r.last + 1 else #xs) - r.from)
 
+# a float's 64 bits as an int, and a character's code: `ord('a')` is 97
+float_bits(x: float): int := prim i64_reinterpret_f64(x)
+ord(c: char): int := prim i64_extend_i32_u(c)
 # a float's sign turned, its whole parts, an int as a float
 -(x: float): float := prim f64_neg(x)
 floor(x: float): float := prim f64_floor(x)
