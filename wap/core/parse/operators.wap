@@ -5,6 +5,7 @@
 #   x ≤ y              → (Call <= x y)                every alias by its canonical word
 #   a -b   a - b  a-b  → [a, (Call - b)]  (Call - a b)  (Call - a b)     the one minus rule, by spacing
 #   print 1 + 2        → [print, (Call + 1 2)]        juxtaposition stays a phrase: stage 2 decides it
+#   x += 1             → (Call = x (Call + x 1))      a compound assignment of the table, its spelling a fact
 #
 # Reads: notation, whose phrases are space lists and glued runs (separator None) with operators as Symbols. Writes:
 # the same notation with each operator application a Call of its canonical spelling. An unrelated mix, a chain of a
@@ -13,6 +14,10 @@
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+
+# the assignment a compound one means, `+=` is `=` of `+`; the fact keeping the compound's written spelling
+ASSIGNMENT = "="
+COMPOUND = "compound"
 use "../../preload/operators.wap"
 
 # ---- the table, checked when it is read
@@ -140,11 +145,11 @@ discouraged_alias(spelling: text) as Alias? := {
 
 # `+=` of the infix `+`: an infix operator's spelling followed by `=`, unless the table knows the spelling itself
 compound_assignment(spelling: text) as text := {
-	if not spelling.ends_with("=") or #spelling < 2 or operator_spelled(spelling) != ø { return "" }
+	if not spelling.ends_with(ASSIGNMENT) or #spelling < 2 or operator_spelled(spelling) != ø { return "" }
 	inner = canonical(spelling[0 .. #spelling - 1], Fixity.Infix)
 	operator = operator_spelled(inner)
 	if operator == ø or operator.infix == "" { return "" }
-	inner + "="
+	inner + ASSIGNMENT
 }
 
 # the operator of that canonical spelling, ø when there is none
@@ -196,7 +201,14 @@ operated_form(n: Node) as Node := match n {
 key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
 	use = reading_as(placed_like(symbol(spelling), n), Fixity.Infix)
 	if use == ø { refused(n, "no infix operator " + spelling + " in the operator table") }
-	Call(symbol(use.spelling), [operated(left), operated(right)])
+	infix_call(use.spelling, operated(left), operated(right))
+}
+
+# An infix operator applied: (Call + a b). A compound assignment of the table, `x += 1`, is the assignment it means,
+# x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
+infix_call(spelling: text, left: Node, right: Node) as Node := {
+	if compound_assignment(spelling) != spelling { return Call(symbol(spelling), [left, right]) }
+	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
 }
 
 # a word standing alone, by its canonical spelling
@@ -386,7 +398,7 @@ applied(use: Use, operands: list) := {
 	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), [right]), use.written)); return }
 	left = operands.pop()
 	if use.spelling == "" { operands.add(juxtaposed(left, right, separator_of(use))); return }
-	operands.add(placed_like(Call(symbol(use.spelling), [left, right]), use.written))
+	operands.add(placed_like(infix_call(use.spelling, left, right), use.written))
 }
 
 separator_of(use: Use) as Separator := if use.group == glue_group then Separator.None else Separator.Space
