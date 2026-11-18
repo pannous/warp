@@ -12,7 +12,7 @@ use "../errors.wap"
 
 # DONE: Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
 # TODO: what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
-# TODO: link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
+# DONE: link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if valued_type(a) and valued_type(b) { settles(a, b, s) }
@@ -40,6 +40,8 @@ type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) ==
 same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
 # a value given to a field as the field's type has it, refused when it cannot get there; value is the code that gave it
 field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, declared_type(field), s, value, "the field holds a")
+# What `x as T` does where nothing is written (wiki/conversion.md "Fitting" and "Repacking"): checked is the cast,
+# every other way repacks; written, `x as T` is the maker T(x) ("Making").
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
 # function value where a bare `function` is, an enum where a bare `enum` is, or code that never finishes; boxed, into
 # any or a number; read, a character as its text, where a text or a text? is (wiki/char.md, 'a' == "a"); wrapped, a T
