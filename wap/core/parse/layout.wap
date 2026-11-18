@@ -124,7 +124,8 @@ indentation(r: Reader) := {
 	outer = indent_level(r)
 	if depth > outer {
 		r.indents += [depth]
-		r.blank = no
+		# glued to the line before, but a key's value after `:=`, `:` or `=` at the line's end, as if written after a blank
+		r.blank = last_token(r) != ø and last_token(r).kind == LexemeKind.Key
 		bracket_opened(r, "{", 0)
 		last_of(r.tokens).indented = yes
 		return ø

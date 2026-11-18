@@ -66,4 +66,6 @@ format_check 'sample: int := 7' 'sample: int := 7'
 format_check $'blah a b c # note\ny/* c */=0 // c' $'blah a b c\ny = 0'
 # a glyph run takes the `=`s glued after it: `!==` is one operator, not `!=` then a key
 format_check '1 !== 2' '1 !== 2'
+# a block indented after a key at the line's end is the key's value: a definition's body on the next line
+format_check $'f(x: int): int :=\n\tx + 1' 'f(x: int) as int := {x + 1}'
 exit $((failures > 0))
