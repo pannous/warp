@@ -28,4 +28,10 @@ enum Tone { low high }
 print(text(Color.red == Color.green))
 print(text(Tone.low == Tone.high))')" "yes
 no"
+check "a word with several results gives the one that is wanted" "$(ran wanted_result 'hi() as int := 42
+hi() as text := "fourtytwo"
+t = hi() as int
+print text(t)
+print(hi() as text)')" "42
+fourtytwo"
 exit $((failures > 0))
