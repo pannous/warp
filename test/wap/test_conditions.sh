@@ -66,4 +66,6 @@ xs = [1]
 if not c then xs[0] = 5 else xs.add(2)
 print text(xs[0])')" "2
 5"
+check "an if as a list's one item" "$(ran list_if 'xs = [1] + [if no then 2 else 3]
+print(text(xs#2))')" "3"
 exit $((failures > 0))
