@@ -36,4 +36,7 @@ print text(score(Two(Circle(5), 0)))
 score(Two(Circle(2), 4))')" "3
 5
 8"
+check "a field's pattern may be a value" "$(ran field_value 'enum Shape { Circle(r: int), Dot }
+size(s: Shape): int := match s { Circle(1) => 10; Circle(r) => r; Dot => 0 }
+size(Circle(1)) + size(Circle(7))')" "17"
 exit $((failures > 0))

@@ -146,13 +146,15 @@ condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {
 	tested
 }
 # A choice by patterns: each arm's pattern of the subject's type, a name holding the subject; each result expected the
-# Case's type. With a last arm that fits any value, or arms naming every case of the subject's enum, the Case has the
+# Case's type. When the arms fit every value of the subject's type (exhaustive), the Case has the
 # results' joined type, else none.
 case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	type = value_type(subject) ?? refused(subject, "this gives no value to match")
 	typed = arms.map(arm => arm_typed(arm, type, s, f, expected))
 	results = typed.map(arm => value_type(arm))
-	given = if #arms > 0 and (fits_any(pattern_of(arms.last)) or covers_cases(arms, type, s)) then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b)) else ø
+	covered = exhaustive(arms.map(arm => [pattern_of(arm)]), [type], s)
+	if not covered and expected != ø { refused(n, "these arms miss some values of type ${type}: add an arm for them, or `_`") }
+	given = if covered then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b)) else ø
 	with_type_of(refitted(Case(subject, typed), n), given)
 }
 arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
@@ -173,11 +175,17 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 	if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit a value of type ${type}") }
 	tested
 }
-# whether the arms name every case of the subject's enum, so one always fits
-covers_cases(arms: list, type: Node, s: TypingState) as bool := {
-	record = record_named(s.records, type)
-	record != ø and not cases_of(record) is empty and cases_of(record).all(case => arms.any(arm => text(case_name(pattern_of(arm))) == text(case_name(case))))
+# Whether some arm fits every value of the subject: the classic check over rows of patterns, one for each of these
+# types. Where a column holds a case, its enum's values are split by case, each case's fields joining the patterns;
+# any other column keeps only the rows whose pattern there fits any value.
+exhaustive(rows: list, types: list, s: TypingState) as bool := {
+	if types is empty { return not rows is empty }
+	record = record_named(s.records, types#1)
+	if record == ø or cases_of(record) is empty or rows.all(row => fits_any(row#1)) { return exhaustive(rows.filter(row => fits_any(row#1)).map(row => row[1 ..]), types[1 ..], s) }
+	cases_of(record).all(case => exhaustive(rows.filter(row => fits_any(row#1) or text(case_name(row#1)) == text(case_name(case))).map(row => opened(row, case)), case_fields(case).map(declared_type) + types[1 ..], s))
 }
+# a row with its first pattern opened into patterns of the case's fields: a name, `_` or a bare case fits each
+opened(row: list, case: Node) as list := (if row#1 is symbol then case_fields(case).map(field => symbol(WILDCARD)) else case_fields(row#1)) + row[1 ..]
 # a pattern that fits every value: a name that is no case, or _
 fits_any(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) != symbol(BOUND_CASE)
 # a case's bare name: as a pattern it fits the case whatever its fields hold
