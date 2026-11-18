@@ -1,6 +1,7 @@
 # The road to self-build, measured (notes/wap.md "Road to self-build"): the compiler's own stages (wap/core/pipeline.wap)
-# run on one wap source file, statement by statement where a stage allows, every refusal printed as: stage <tab> message.
-#   for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done
+# run on wap source files, statement by statement where a stage allows, every refusal printed as: stage <tab> message;
+# typing also function by function, so one refusal hides no other; a total line at the end (test/wap/test_census.sh).
+#   warp --no-window scripts/wap-census.warp $(git ls-files "wap/*.wap")
 use "../wap/core/pipeline.wap"
 use "../wap/core/emit/emitter.wap"
 use "../wap/core/language.wap"
@@ -8,6 +9,7 @@ use "../wap/core/language.wap"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
 library_scope = declarations_of(preload).flat_map(library_words)
+library = statements_in(library_code_of(language, preload))
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
@@ -27,13 +29,13 @@ statements_of_line(line: Node) as list := {
 	operated = operated_program(language, line)
 	if sequence_rule(operated) != operated then [line] else top_level_statements(line)
 }
-probe(file: text) := {
+probe(file: text) as Tally := {
 	statements = []
 	try statements = lines_of(read_notation(file)).flat_map(statements_of_line).filter(statement => not is_use(operated_program(language, statement))) catch e { report("read", e.message) }
 	used = used_scope(file)
 	lowered_ok = []
 	for statement in statements {
-		try { lowered_ok = lowered_ok + statements_in(lowered_program(declared_code(language, statement))) } catch e { report("lower", e.message) }
+		try { lowered_ok = lowered_ok + statements_in(lowered_program(language, declared_code(language, statement))) } catch e { report("lower", e.message) }
 	}
 	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used + library_scope
 	bound_ok = []
@@ -50,5 +52,81 @@ probe(file: text) := {
 		emitted_ok = yes
 	} catch e { report(if typed then "emit" else "type", e.message) }
 	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, typed: ${typed}, emitted: ${emitted_ok}"
+	counted = functions_probe(file)
+	Tally(1, if typed then 1 else 0, counted.functions, counted.typed, counted.anys)
 }
-probe(args#1)
+
+# the files probed, those typed whole, the functions found, those typed alone, and the places in them typed any
+class Tally { files: int = 0, whole: int = 0, functions: int = 0, typed: int = 0, anys: int = 0 }
+added(a: Tally, b: Tally) as Tally := Tally(a.files + b.files, a.whole + b.whole, a.functions + b.functions, a.typed + b.typed, a.anys + b.anys)
+
+# The compiler's own source stays fully typed (any is for programs): the places of typed code whose type holds any
+anys_in(n: Node) as int := (if holds_any(fact_of(n, TYPE)) then 1 else 0) + parts_of(n).map(anys_in).sum()
+holds_any(type: Node?) as bool := type == symbol(ANY_TYPE) or (type_parts(type) ?? []).any(holds_any)
+parts_of(n: Node) as list := match n { Key(left, op, right) => [left, right]; List(items, bracket, separator) => items; _ => [] }
+
+# Each function of the file whose parameters are typed, typed alone, as the compiler types it in its block
+# (core/analyze/types.wap block_typed), in a copy of the typing state after the program's top-level statements, so a
+# refusal names its function and hides no other; a function of letters or untyped parameters is typed by its calls
+functions_probe(file: text) as Tally := {
+	modules = []
+	try modules = declared_modules(language, file) catch e { report("declare", e.message); return Tally() }
+	prepared_modules = []
+	try prepared_modules = modules.map(module => statements_in(prepared(module, modules, preload))) catch e { report("bind", e.message); return Tally() }
+	program = prepared_modules.flat_map(statements => statements)
+	own = prepared_modules.last.filter(statement => statement is Define)
+	typed_alone = 0
+	by_calls = 0
+	anys = 0
+	base = typing_state(library, program)
+	for definition in own {
+		s = copied(base)
+		if not all_typed(definition, s.records) { by_calls += 1 } else {
+			try {
+				typed = function_typed(definition, written_types(definition), s, definition)
+				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
+				# the other functions that fill it, as the whole program types it
+				found = anys_in(typed.define)
+				all_settled(s)
+				typed_alone += 1
+				if found > 0 { report("any", "${declared_name(written_name(definition))}: ${found} places typed any") }
+				anys += found
+			} catch e { report("type", "${declared_name(written_name(definition))}: " + e.message) }
+		}
+	}
+	print "functions\ttyped ${typed_alone} of ${#own - by_calls} functions (${by_calls} typed by their calls), ${anys} places typed any"
+	Tally(0, 0, #own - by_calls, typed_alone, anys)
+}
+# a typing state that knows the library's and the program's definitions and records, the program's top-level values
+# typed as far as they go
+typing_state(library: list, program: list) as TypingState := {
+	s = TypingState()
+	s.definitions = (library + program).filter(statement => statement is Define)
+	s.records = (library + program).filter(statement => statement is Record)
+	frame = TypeFrame()
+	for statement in program.filter(statement => not (statement is Define) and not (statement is Record)) {
+		try typed_form(statement, s, frame, ø) catch e { }
+	}
+	s
+}
+# a typing state that starts where another stands, its lists its own: what one function's typing adds stays its own
+copied(base: TypingState) as TypingState := {
+	s = TypingState()
+	s.definitions = base.definitions + []
+	s.records = base.records + []
+	s.functions = base.functions + []
+	s.globals = base.globals + []
+	s.lambdas = base.lambdas + []
+	s.captured = base.captured + []
+	s.unknowns = base.unknowns
+	s.settled = base.settled + []
+	s.deferred = base.deferred + []
+	s
+}
+
+total = Tally()
+for file in args {
+	print "== ${file}"
+	total = added(total, probe(file))
+}
+print "total\t${total.whole} of ${total.files} files typed whole, ${total.typed} of ${total.functions} functions typed, ${total.anys} places typed any"

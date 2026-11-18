@@ -15,6 +15,8 @@ contains(xs: list<T>, item: T): bool := xs.any(x => x == item)
 # whether a list holds an item, the operator's reading: `x in xs` is xs.contains(x)
 in(x: T, xs: list<T>): bool := xs.contains(x)
 
+# how many items a list holds: `xs.count`, also written `xs.length` or `xs.size`
+count(xs: list<T>): int := #xs
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
 +(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
 # an item put at the end of a list, which grows in place: every name holding it sees the item
@@ -26,6 +28,12 @@ pop(xs: list<T>): T := prim list_pop(xs)
 map(xs: list<T>, f: (T) -> U): list<U> := {
 	out: list<U> = []
 	for x in xs { out = out + [f(x)] }
+	out
+}
+# each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
+map(r: Range, f: (int) -> U): list<U> := {
+	out: list<U> = []
+	for at in r { out.add(f(at)) }
 	out
 }
 # the items that fit a test, in order

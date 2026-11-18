@@ -17,4 +17,5 @@ print show(xs[.. 2])
 print show(xs[1 .. 3])')" "[3, 4]
 [1, 2]
 [2, 3]"
+check "a range mapped, each int's result in order" "$(ran range_map 'print text((0 upto 3).map(at => at * 2)) + " " + text((0 upto 3).map(at => at * 2)#2)')" "[0, 2, 4] 2"
 exit $((failures > 0))

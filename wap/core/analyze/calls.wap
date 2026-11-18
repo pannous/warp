@@ -297,10 +297,6 @@ with_signature(name: Node, types: list, result: Node?) as Node := with_name_fact
 # the parts of a Define, its parameters as a list of none or more
 written_name(definition: Node) as Node := match definition { Define(name, parameters, body) => name }
 parameters_in(definition: Node) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
-items_of(n: Node) as list := match n {
-	List(items, bracket, separator) => items
-	_ => []
-}
 with_items(n: Node, items: list) as Node := match n {
 	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
 	_ => n

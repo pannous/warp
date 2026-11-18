@@ -76,4 +76,6 @@ check "a list's text is its items' texts in brackets" "$(ran list_text 'xs = [1,
 print(text(xs))
 print(text([[1], [2, 3]]))')" "[1, 2, 3]
 [[1], [2, 3]]"
+check "a list's count, also written length or size" "$(ran count 'xs = [4, 5, 6]
+print text(xs.count) + " " + text(xs.length) + " " + text([1].size)')" "3 3 1"
 exit $((failures > 0))

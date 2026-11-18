@@ -85,7 +85,7 @@ arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
 # a pattern's names bound: a case, `Dot`, or a case with the variables its fields fill, `Circle(r)`; `_` names none
 pattern_bound(pattern: Node, scope: list, depth: int) as Node := match pattern {
 	Symbol(name) => if name == WILDCARD then pattern else pattern_name_bound(pattern, scope, depth)
-	Call(called, fields) => if shape_called(called, scope) then pattern_bound(pattern_taken(called, fields), scope, depth) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
+	Call(called, fields) => if shape_called(called, scope) then pattern_bound(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
 	List(items, Bracket.Square, separator) => refitted(List(items.map(item => pattern_bound(item, scope, depth)), Bracket.Square, separator), pattern)
 	Get(subject, key) => bound(pattern, scope, depth)
 	_ => pattern
@@ -97,7 +97,14 @@ pattern_name_bound(name: Node, scope: list, depth: int) as Node := {
 	with_fact(with_fact(name, BINDING, symbol(BOUND_CASE)), DEFINED_AT, definitions_meant(text(name), scope)#1.definer)
 }
 # whether an arm's call is a declared pattern's, `Call(f, args)` of a pattern Call: its builder the name means, no case
-shape_called(called: Node, scope: list) as bool := called is symbol and not names_case(called, scope) and pattern_called(called) != ø and not definitions_meant(text(called), scope) is empty
+shape_called(called: Node, scope: list) as bool := pattern_builder_meant(called, scope) != ø
+# the name of the pattern builder a call means, which carries the pattern (core/rules/patterns.wap pattern_builder)
+pattern_builder_meant(called: Node, scope: list) as Node? := {
+	if not called is symbol or names_case(called, scope) { return ø }
+	meant = definitions_meant(text(called), scope)
+	if meant is empty or fact_of(meant#1.definer, PATTERN_TAKEN) == ø { return ø }
+	meant#1.definer
+}
 # whether a name means a case of an enum where it stands
 names_case(name: Node, scope: list) as bool := {
 	meant = definitions_meant(text(name), scope)
@@ -113,7 +120,7 @@ names_predicate(name: Node, scope: list) as bool := {
 arm_result(arm: Node) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: list, depth: int) as list := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
-	Call(called, fields) => if shape_called(called, scope) then pattern_variables(pattern_taken(called, fields), scope, depth) else fields.flat_map(field => pattern_variables(field, scope, depth))
+	Call(called, fields) => if shape_called(called, scope) then pattern_variables(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth) else fields.flat_map(field => pattern_variables(field, scope, depth))
 	List(items, Bracket.Square, separator) => items.flat_map(item => pattern_variables(item, scope, depth))
 	Get(subject, key) => []
 	Number(value) => []
