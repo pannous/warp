@@ -12,7 +12,7 @@ use "analyze/types.wap"
 use "rules/typed.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
-RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/calls.wap"]
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/ranges.wap", "core/sugar/calls.wap"]
 # the standard language every program gets, as definitions: the prelude and the word files beside it
 PRELOAD_FILES = ["preload/prelude.wap", "preload/lists.wap"]
 
