@@ -14,6 +14,7 @@ format_check 'yes and true' 'yes and yes'
 format_check 'x += 1' 'x += 1'
 format_check 'f = x => x' 'f = x => x'
 format_check 'f: (int)->int' 'f: (int) -> int'
+format_check 'x  +=1' 'x += 1'
 format_check 'not a and b' 'not a and b'
 # the minus rule: spacing decides prefix or infix, and format spells the reading out
 format_check '[a -1]' '[a, -1]'

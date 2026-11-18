@@ -262,6 +262,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
+- **`wap format` does not spell out a rule head's grouping inside a phrase**: `print if c then a else b` is read as
+  `print (if c then a else b)` by the shape stage (core/rules/stages.wap inner_rewritten), but format prints it as
+  written. Bends "a reading decided by spacing or position is printed explicitly", as `print -x` is. Reason: format
+  runs before the shape rules. Paid off when format reads the rules' groupings.
 - **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
   gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
   wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.

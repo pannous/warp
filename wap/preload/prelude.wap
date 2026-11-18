@@ -5,6 +5,8 @@
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+# the text of the file at a path, relative to the current folder or from the root (/…)
+read(path: text): text := prim read_text(path)
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)
 

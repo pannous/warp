@@ -25,4 +25,6 @@ print greet("warp")')" "hello, self
 hello, warp"
 check "no arm fits: nothing runs" "$(ran none 'match 5 { 1 => print "one" }
 print "after"')" "after"
+check "a match later in a phrase is the earlier word's argument" "$(ran inner_match 'x = 2
+print match x { 1 => "one"; _ => "other" }')" "other"
 exit $((failures > 0))

@@ -52,6 +52,7 @@ tight_key_text(key: Node, value: Node) as text :=
 
 # an operator call in its notation; a call of anything else as `f(a, b)`
 call_text(call: Node, called: Node, arguments: list) as text := {
+	if fact_of(call, COMPOUND) != ø { return compound_text(call, arguments) }
 	spelling = formatted(called)
 	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
 		left = if spelling == DEFINE_SPELLING then definition_head_text(arguments#1) else operand_text(arguments#1, call, Side.Left)
@@ -63,6 +64,11 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 	}
 	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + spelling }
 	spelling + "(" + arguments.map(formatted).join(", ") + ")"
+}
+
+# `x += 1` as written: the assignment x = x + 1 the operator stage read it as, its right side's right operand
+compound_text(call: Node, arguments: list) as text := match arguments#2 {
+	Call(operator, operands) => formatted(arguments#1) + " " + formatted(fact_of(call, COMPOUND)) + " " + formatted(operands#2)
 }
 
 enum Side { Left, Right }
