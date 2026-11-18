@@ -13,16 +13,17 @@ use "../analyze/types.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../language.wap"
 
 # how often the typed rules may fire again on their own output before the program is refused
 ROUNDS_LIMIT = 100
 
 # the typed program with the typed rules applied until none fires, bound inside the library and typed after each
 # round; the preload's functions come anew from the preload
-typed_by_rules(typed: Block, library: list, preload: Block) as Block := {
+typed_by_rules(language: Language, typed: Block, library: list, preload: Block) as Block := {
 	code = typed
 	for round in 1 to ROUNDS_LIMIT {
-		after = rewritten_by(typed_rules, code)
+		after = rewritten_by(language, language.typed_rules, code)
 		if not after.fired { return code }
 		code = typed_program(bound_program(own_statements(after.code, preload), library), preload)
 	}

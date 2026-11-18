@@ -4,19 +4,20 @@ use "patterns.wap"
 use "../parse/operators.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "../language.wap"
 
 # the words of a phrase, a single code its one word
 phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
 
 # the items of a list, a block's lines continued
-lines_of(items: list, separator: Separator) as list := if STATEMENT_SEPARATORS.contains(separator) then lines_continued(items) else items
+lines_of(language: Language, items: list, separator: Separator) as list := if STATEMENT_SEPARATORS.contains(separator) then lines_continued(language, items) else items
 
 # A line that starts with a word rules spell inside their phrases but start none with continues the statement before
 # it: `if c {a}⏎else {b}` is one if, so is a `then` or `else` at a line's start
-lines_continued(statements: list) as list := {
+lines_continued(language: Language, statements: list) as list := {
 	joined = []
 	for statement in statements {
-		if joined is not empty and continues(statement) { joined[#joined - 1] = staged(joined.last, line => List(phrase_items(line) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
+		if joined is not empty and continues(language, statement) { joined[#joined - 1] = staged(joined.last, line => List(phrase_items(line) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
 	}
 	joined
 }
@@ -24,11 +25,11 @@ lines_continued(statements: list) as list := {
 # continue it when they start with such a word, `x = if c then 1⏎	else 2` is `x = if c then 1 else 2`; otherwise the
 # block is the phrase's last part, `if c⏎	print "a"` is `if c {print "a"}`. A block glued on its line, `Point{x: 1}`,
 # stays its word's.
-unglued(n: Node) as Node := match n {
+unglued(language: Language, n: Node) as Node := match n {
 	List(items, Bracket.None, Separator.Space) => {
 		split = block_split(items.last)
 		if split == ø { return n }
-		taken = block_taken(split#2)
+		taken = block_taken(language, split#2)
 		if taken == ø then n else staged(n, phrase => List(items[.. #items - 1] + [split#1] + taken, Bracket.None, Separator.Space))
 	}
 	_ => n
@@ -45,14 +46,14 @@ block_split(n: Node) as list? := match n {
 }
 is_braced(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 # the parts a glued block gives the phrase it ends, ø where it stays glued
-block_taken(block: Node) as list? := match block {
+block_taken(language: Language, block: Node) as list? := match block {
 	List(lines, Bracket.Curly, separator) => {
-		continued = lines_continued(if STATEMENT_SEPARATORS.contains(separator) then lines else [List(lines, Bracket.None, separator)])
-		if #continued == 1 and continues(continued#1) then phrase_items(continued#1) else if fact_of(block, INDENTED) != ø then [block] else ø
+		continued = lines_continued(language, if STATEMENT_SEPARATORS.contains(separator) then lines else [List(lines, Bracket.None, separator)])
+		if #continued == 1 and continues(language, continued#1) then phrase_items(continued#1) else if fact_of(block, INDENTED) != ø then [block] else ø
 	}
 	_ => ø
 }
-continues(statement: Node) as bool := {
+continues(language: Language, statement: Node) as bool := {
 	first = phrase_items(statement)#1
-	first is symbol and continuation_word(spelling_written(first))
+	first is symbol and continuation_word(language, spelling_written(first))
 }

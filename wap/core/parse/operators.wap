@@ -17,6 +17,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
+use "../language.wap"
 
 # the fact keeping a compound assignment's written spelling
 COMPOUND = "compound"
@@ -27,27 +28,27 @@ OPEN_SIDE = "ø"
 
 # the program with its operator phrases read, after its own declarations joined the table (core/parse/operator_table.wap),
 # wherever they stand
-operated_program(program: Node) as Node := {
+operated_program(language: Language, program: Node) as Node := {
 	placements = []
-	operators_declared(program, placements)
-	for placement in placements { placed(placement) }
-	related_groups()
-	operated(program)
+	operators_declared(language, program, placements)
+	for placement in placements { placed(language, placement) }
+	related_groups(language)
+	operated(language, program)
 }
 
 # ---- reading a phrase
 
 
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
-operated(n: Node) as Node := staged(n, operated_form)
-operated_form(n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.None) => phrase_read(glued_tokens(items))
-	List(items, bracket, Separator.Space) => in_brackets(phrase_read(tokens_of(items)), bracket)
-	List(items, bracket, separator) => List(items.map(operated), bracket, separator)
-	Key(left, Op.Colon, right) => chosen(operated(left), operated(right))
-	Key(left, Op.None, right) => Key(operated(left), Op.None, operated(right))
-	Key(left, op, right) => key_read(n, left, op as text, right)
-	Symbol(spelling) => word_read(n, spelling)
+operated(language: Language, n: Node) as Node := staged(n, form => operated_form(language, form))
+operated_form(language: Language, n: Node) as Node := match n {
+	List(items, Bracket.None, Separator.None) => phrase_read(language, glued_tokens(language, items))
+	List(items, bracket, Separator.Space) => in_brackets(phrase_read(language, tokens_of(language, items)), bracket)
+	List(items, bracket, separator) => List(items.map(item => operated(language, item)), bracket, separator)
+	Key(left, Op.Colon, right) => chosen(operated(language, left), operated(language, right))
+	Key(left, Op.None, right) => Key(operated(language, left), Op.None, operated(language, right))
+	Key(left, op, right) => key_read(language, n, left, op as text, right)
+	Symbol(spelling) => word_read(language, n, spelling)
 	_ => n
 }
 
@@ -61,53 +62,53 @@ chosen(left: Node, right: Node) as Node := match left {
 open_choice(n: Node) as bool := match n { Call(called, arguments) => spelling_written(called) == CHOICE and #arguments == 2; _ => no }
 
 # a key the reader built by an operator (`a = 1`, the colon's rules) applied as that infix operator: (Call = a 1)
-key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
-	use = reading_as(placed_like(symbol(spelling), n), Fixity.Infix)
+key_read(language: Language, n: Node, left: Node, spelling: text, right: Node) as Node := {
+	use = reading_as(language, placed_like(symbol(spelling), n), Fixity.Infix)
 	if use == ø { refused(n, "no infix operator " + spelling + " in the operator table") }
-	infix_call(use.spelling, operated(left), operated(right))
+	infix_call(language, use.spelling, operated(language, left), operated(language, right))
 }
 
 # An infix operator applied: (Call + a b). A compound assignment of the table, `x += 1`, is the assignment it means,
 # x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
-infix_call(spelling: text, left: Node, right: Node) as Node := {
-	if is_assignment(spelling) and arrow_parts(left) != ø { return arrow_assigned(spelling, left, right) }
-	if is_assignment(spelling) and rule_phrase(left) != ø { return phrase_assigned(spelling, rule_phrase(left), right) }
-	if compound_assignment(spelling) != spelling { return Call(symbol(spelling), [left, right]) }
+infix_call(language: Language, spelling: text, left: Node, right: Node) as Node := {
+	if is_assignment(language, spelling) and arrow_parts(language, left) != ø { return arrow_assigned(language, spelling, left, right) }
+	if is_assignment(language, spelling) and rule_phrase(language, left) != ø { return phrase_assigned(language, spelling, rule_phrase(language, left), right) }
+	if compound_assignment(language, spelling) != spelling { return Call(symbol(spelling), [left, right]) }
 	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
 }
 
-is_assignment(spelling: text) as bool := spelling == ASSIGNMENT or compound_assignment(spelling) == spelling
+is_assignment(language: Language, spelling: text) as bool := spelling == ASSIGNMENT or compound_assignment(language, spelling) == spelling
 
 # A rule's phrase is no place to assign to either: `if c then xs[0] = 5 else xs.add(2)` assigns to its last word, the
 # value running to the next word the rule's phrase continues with, `if c then (xs[0] = 5) else xs.add(2)`; so does
 # `… else x = 2`
-phrase_assigned(spelling: text, words: list, value: Node) as Node := {
+phrase_assigned(language: Language, spelling: text, words: list, value: Node) as Node := {
 	after = match value { List(items, Bracket.None, Separator.Space) => items; _ => [value] }
 	cut = 0
-	while cut < #after and not (after#(cut + 1) is symbol and continuation_word(spelling_written(after#(cut + 1)))) { cut = cut + 1 }
+	while cut < #after and not (after#(cut + 1) is symbol and continuation_word(language, spelling_written(after#(cut + 1)))) { cut = cut + 1 }
 	given = if cut == 1 then after#1 else List(after[.. cut], Bracket.None, Separator.Space)
-	List(words[.. #words - 1] + [infix_call(spelling, words.last, given)] + after[cut ..], Bracket.None, Separator.Space)
+	List(words[.. #words - 1] + [infix_call(language, spelling, words.last, given)] + after[cut ..], Bracket.None, Separator.Space)
 }
 # the words of a phrase that holds a word of a rule's phrase, `if`, `else`, ø for any other code
-rule_phrase(n: Node) as list? := match n {
-	List(items, Bracket.None, Separator.Space) => if items.filter(rule_word) is not empty then items else ø
+rule_phrase(language: Language, n: Node) as list? := match n {
+	List(items, Bracket.None, Separator.Space) => if items.filter(item => rule_word(language, item)) is not empty then items else ø
 	_ => ø
 }
-rule_word(n: Node) as bool := n is symbol and (phrase_words.leading.has(spelling_written(n)) or phrase_words.inner.has(spelling_written(n)))
+rule_word(language: Language, n: Node) as bool := n is symbol and (language.phrase_words.leading.has(spelling_written(n)) or language.phrase_words.inner.has(spelling_written(n)))
 
 # An arrow is no place to assign to: `1 => y = 2` assigns in the arrow's result, `1 => (y = 2)`, as a match arm or a
 # function's body means it
-arrow_assigned(spelling: text, arrow: Node, value: Node) as Node := match arrow {
-	Call(called, parts) => with_facts_of(Call(called, [parts#1, infix_call(spelling, parts#2, value)]), arrow)
+arrow_assigned(language: Language, spelling: text, arrow: Node, value: Node) as Node := match arrow {
+	Call(called, parts) => with_facts_of(Call(called, [parts#1, infix_call(language, spelling, parts#2, value)]), arrow)
 }
-arrow_parts(n: Node) as list? := match n {
-	Call(called, parts) => if #parts == 2 and group_of(spelling_written(called), Fixity.Infix) == parameters_group then parts else ø
+arrow_parts(language: Language, n: Node) as list? := match n {
+	Call(called, parts) => if #parts == 2 and group_of(language, spelling_written(called), Fixity.Infix) == parameters_group then parts else ø
 	_ => ø
 }
 
 # a word standing alone, by its canonical spelling
-word_read(n: Node, spelling: text) as Node := {
-	word = canonical(spelling, Fixity.Anywhere)
+word_read(language: Language, n: Node, spelling: text) as Node := {
+	word = canonical(language, spelling, Fixity.Anywhere)
 	note_discouraged(n, spelling)
 	if word == spelling { n } else { placed_like(symbol(word), n) }
 }
@@ -120,8 +121,8 @@ note_discouraged(written: Node, spelling: text) := {
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
 # spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
-phrase_read(written: list) as Node := tokens_read(operators_called(written))
-tokens_read(tokens: list) as Node := {
+phrase_read(language: Language, written: list) as Node := tokens_read(language, operators_called(language, written))
+tokens_read(language: Language, tokens: list) as Node := {
 	operands = []
 	pending = []
 	expecting_operand = yes
@@ -130,16 +131,16 @@ tokens_read(tokens: list) as Node := {
 		token = tokens#i
 		next = if i < #tokens then tokens#(i + 1) else ø
 		if expecting_operand {
-			prefix = if operand_follows(next) then reading_as(token.item, Fixity.Prefix) else ø
-			if prefix == ø and called_after_infix(token, next, pending) {
+			prefix = if operand_follows(language, next) then reading_as(language, token.item, Fixity.Prefix) else ø
+			if prefix == ø and called_after_infix(language, token, next, pending) {
 				last = i + 1
-				takes_block = phrase_words.leading[spelling_written(token.item)] == yes
+				takes_block = language.phrase_words.leading[spelling_written(token.item)] == yes
 				while last < #tokens and (takes_block or not is_block(tokens#(last + 1).item)) { last = last + 1 }
-				operands.add(tokens_read(tokens[i - 1 .. last]))
+				operands.add(tokens_read(language, tokens[i - 1 .. last]))
 				expecting_operand = no
 				i = last
 			} else if prefix == ø {
-				operands.add(operated(token.item))
+				operands.add(operated(language, token.item))
 				expecting_operand = no
 			} else {
 				note_discouraged(token.item, spelling_written(token.item))
@@ -147,21 +148,21 @@ tokens_read(tokens: list) as Node := {
 			}
 			i = i + 1
 		} else {
-			use = operator_after_operand(token, next)
+			use = operator_after_operand(language, token, next)
 			if use == ø {
 				juxtaposition = juxtaposition_before(token)
-				arrive(juxtaposition, operands, pending)
+				arrive(language, juxtaposition, operands, pending)
 				pending.add(juxtaposition)
 				expecting_operand = yes
 			} else {
 				note_discouraged(token.item, spelling_written(token.item))
-				arrive(use, operands, pending)
-				if use.fixity == Fixity.Postfix { applied(use, operands) } else { pending.add(use); expecting_operand = yes }
+				arrive(language, use, operands, pending)
+				if use.fixity == Fixity.Postfix { applied(language, use, operands) } else { pending.add(use); expecting_operand = yes }
 				i = i + 1
 			}
 		}
 	}
-	while pending is not empty { applied(pending.pop(), operands) }
+	while pending is not empty { applied(language, pending.pop(), operands) }
 	operands#1
 }
 
@@ -169,28 +170,23 @@ tokens_read(tokens: list) as Node := {
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
-called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
-# The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
-# its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules: rules/ uses
-# this stage, so it cannot ask rules/ itself.
-class PhraseWords { leading: map, inner: map }
-phrase_words = PhraseWords({}, {})
+called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(language, next) and not is_block(next.item)
 # a word rules use only inside their phrases, which continues the code before it: `else`
-continuation_word(word: text) as bool := phrase_words.inner.has(word) and not phrase_words.leading.has(word)
+continuation_word(language: Language, word: text) as bool := language.phrase_words.inner.has(word) and not language.phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
 # whether the token can start an operand: a word, a literal, a group, or a prefix operator; ø ends the phrase
-operand_follows(next: Spaced?) as bool := next != ø and (reading_as(next.item, Fixity.Prefix) != ø or reading_as(next.item, Fixity.Infix) == ø and reading_as(next.item, Fixity.Postfix) == ø)
+operand_follows(language: Language, next: Spaced?) as bool := next != ø and (reading_as(language, next.item, Fixity.Prefix) != ø or reading_as(language, next.item, Fixity.Infix) == ø and reading_as(language, next.item, Fixity.Postfix) == ø)
 
 # after an operand, the token as an infix or postfix operator, by the minus rule (notes/backbone.md "Minus"): spaced
 # on both sides or on neither it is infix; attached only to what follows it is prefix, so juxtaposition comes first
 # (ø here), and so is one glued to brackets, a call of it like any `f(x)` (`⊕(a, b)`); attached only to what
 # precedes it is postfix where it has a postfix, else infix. Infix and prefix need an operand after them.
-operator_after_operand(token: Spaced, next: Spaced?) as Use? := {
-	followed = operand_follows(next)
-	infix = if followed then reading_as(token.item, Fixity.Infix) else ø
-	postfix = reading_as(token.item, Fixity.Postfix)
-	if token.glued_after and not token.glued_before and followed and (reading_as(token.item, Fixity.Prefix) != ø or is_bracketed(next.item)) { return ø }
+operator_after_operand(language: Language, token: Spaced, next: Spaced?) as Use? := {
+	followed = operand_follows(language, next)
+	infix = if followed then reading_as(language, token.item, Fixity.Infix) else ø
+	postfix = reading_as(language, token.item, Fixity.Postfix)
+	if token.glued_after and not token.glued_before and followed and (reading_as(language, token.item, Fixity.Prefix) != ø or is_bracketed(next.item)) { return ø }
 	if token.glued_before and not token.glued_after and postfix != ø { return postfix }
 	if infix != ø { return infix }
 	postfix
@@ -214,20 +210,20 @@ spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => 
 
 # Before an incoming operator waits, every pending one that binds tighter is applied. Two of one group apply by its
 # grouping; two groups with no relation are refused, as is a chain of a group that refuses chaining.
-arrive(incoming: Use, operands: list, pending: list) := {
-	while pending is not empty and applies_first(pending.last, incoming) { applied(pending.pop(), operands) }
+arrive(language: Language, incoming: Use, operands: list, pending: list) := {
+	while pending is not empty and applies_first(language, pending.last, incoming) { applied(language, pending.pop(), operands) }
 }
 
-applies_first(waiting: Use, incoming: Use) as bool := {
+applies_first(language: Language, waiting: Use, incoming: Use) as bool := {
 	if waiting.fixity == Fixity.Prefix and incoming.fixity == Fixity.Prefix { return no }
 	if waiting.group == incoming.group {
 		if waiting.fixity == Fixity.Prefix { return yes }
-		grouping = group_named(waiting.group).grouping
+		grouping = group_named(language, waiting.group).grouping
 		if grouping == Grouping.Refused { refused(incoming.written, "chained " + shown(waiting) + " and " + shown(incoming) + " read two ways: add brackets") }
 		return grouping == Grouping.Left
 	}
-	if binds_tighter(waiting.group, incoming.group) { return yes }
-	if binds_tighter(incoming.group, waiting.group) { return no }
+	if binds_tighter(language, waiting.group, incoming.group) { return yes }
+	if binds_tighter(language, incoming.group, waiting.group) { return no }
 	refused(incoming.written, shown(waiting) + " and " + shown(incoming) + " have no precedence between them: add brackets")
 }
 
@@ -235,18 +231,18 @@ shown(use: Use) as text := if use.spelling == "" then "juxtaposition" else use.s
 
 # A spelling read both before and after one operand, `.. 3` and `2 ..`, tells the two by its position only: the absent
 # side is written ø, (Call .. ø 3) and (Call .. 2 ø); one reading alone, `-x`, `x!`, keeps its one operand
-one_sided(use: Use, operand: Node) as list := {
-	if group_of(use.spelling, Fixity.Prefix) == "" or group_of(use.spelling, Fixity.Postfix) == "" { return [operand] }
+one_sided(language: Language, use: Use, operand: Node) as list := {
+	if group_of(language, use.spelling, Fixity.Prefix) == "" or group_of(language, use.spelling, Fixity.Postfix) == "" { return [operand] }
 	if use.fixity == Fixity.Prefix then [symbol(OPEN_SIDE), operand] else [operand, symbol(OPEN_SIDE)]
 }
 
 # the operator applied to its operands on the stack: a Call of its canonical spelling, or a phrase for juxtaposition
-applied(use: Use, operands: list) := {
+applied(language: Language, use: Use, operands: list) := {
 	right = operands.pop()
-	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), one_sided(use, right)), use.written)); return }
+	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), one_sided(language, use, right)), use.written)); return }
 	left = operands.pop()
 	if use.spelling == "" { operands.add(juxtaposed(left, right, separator_of(use))); return }
-	operands.add(placed_like(infix_call(use.spelling, left, right), use.written))
+	operands.add(placed_like(infix_call(language, use.spelling, left, right), use.written))
 }
 
 separator_of(use: Use) as Separator := if use.group == glue_group then Separator.None else Separator.Space

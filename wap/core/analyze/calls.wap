@@ -153,11 +153,20 @@ with_letters(argument: Node, letters: list) as Node := {
 	if type == value_type(argument) then argument else with_type_of(argument, type)
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
-# type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
-most_specific(definitions: list, records: list) as list := {
-	weights = definitions.map(definition => typing_weight(definition, records))
+# type, `===(a: T, b: T)` beats `===(a, b)`; of those, more written structure beats less, `==(a: T?, b: T?)` beats
+# `==(a: T, b: T)`; several equally specific are left for the caller to refuse
+most_specific(definitions: list, records: list) as list := heaviest(heaviest(definitions, definition => typing_weight(definition, records)), written_structure)
+# the definitions of the greatest weight
+heaviest(definitions: list, weight: function) as list := {
+	weights = definitions.map(weight)
 	best = weights.fold(0, (a, b) -> if a > b then a else b)
 	(1 to #definitions).filter(at => weights#at == best).map(at => definitions#at)
+}
+# how much structure a definition's parameter types write: each `?`, `list<…>`, `map<…>` or `(…) -> …` one more
+written_structure(definition: Node) as int := parameters_in(definition).map(parameter => structure(type_given(parameter))).sum()
+structure(type: Node?) as int := {
+	parts = type_parts(type) ?? return 0
+	1 + parts[1 ..].map(structure).sum()
 }
 # of equally specific definitions, those of the innermost scope: a program's `===(a: T, b: T)` hides the library's
 innermost(definitions: list, scopes: list) as list := {
@@ -228,7 +237,8 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
-	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
+	# a written result is the result, which each returned value fits: `return x` of an int in a function giving int?
+	result = frame.result ?? (if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type)
 	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and type_fits(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }
@@ -256,7 +266,7 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	frame.variables += captured_by(definition, types)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(value_type(typed_body), frame, name)
-	if typed.result != ø and (given == ø or not type_fits(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
+	if typed.result != ø and not gives_fitting(typed_body, typed.result) { refused(body, "this gives ${value_type(typed_body) ?? "no value"}, the function says it gives a ${typed.result}") }
 	typed.result = typed.result ?? given
 	typed.signed = with_signature(name, types, typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)

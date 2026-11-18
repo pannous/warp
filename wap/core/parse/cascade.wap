@@ -34,6 +34,7 @@ body_read(tokens: list<Lexeme>, at: int) as Body := {
 # a bracket's list: its items split by the loosest separator inside; duplicate keys in `{…}` warned of (Q12)
 bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	items = level_items(parts)
+	if items is empty and opener.bracket == Bracket.Curly { return placed(Symbol(EMPTY_BRACES), opener.line, opener.column) }
 	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
 	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
 	if opener.written != "" { written = with_fact(written, WRITTEN, Text(opener.written)) }

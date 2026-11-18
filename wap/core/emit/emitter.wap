@@ -57,15 +57,14 @@ emitted(program: Block) as Module := {
 
 # the host functions the primitives of a program call, each once, in the order met
 host_calls(program: Node) as list := {
-	names = []
+	names = RAISING_CALLS.map(name => name)
 	for operation in primitives_in(program).filter(operation => HOST_CALLS.has(operation)) { for name in HOST_CALLS[operation] { if not names.contains(name) { names.add(name) } } }
 	names
 }
 primitives_in(n: Node) as list := match n {
 	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
-	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) != ø then [MAP_GET] else if item_type(fact_of(subject, TYPE)) != ø then [LIST_ITEM] else []) + primitives_in(subject) + primitives_in(key)
-	# a list pattern's rest is a slice of the list
-	List(items, bracket, separator) => (if items.any(item => rest_named(item) != ø) then [LIST_SLICE] else []) + items.flat_map(primitives_in)
+	Get(subject, key) => primitives_in(subject) + primitives_in(key)
+	List(items, bracket, separator) => items.flat_map(primitives_in)
 	Key(left, op, right) => primitives_in(left) + primitives_in(right)
 	_ => []
 }
@@ -121,6 +120,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
+	EmptyMap() => map_code(form, [], p, f)
 	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items_fitted(item_type(fact_of(form, TYPE)), items, p, f), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
@@ -156,7 +156,7 @@ arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitte
 # a part's value made to fit its choice's type, an If's or a Case's: 3 in `if b then 3 else ø`, an int?, is boxed
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
-	if wanted == ø then given else fitted(given, wanted, part, p.m)
+	if wanted == ø then given else fitted(given, wanted, part, p)
 }
 # the type of either of two values: the one that finishes, or the common one; none when they differ
 joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
@@ -183,9 +183,45 @@ return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 }
 
 # the code of items made to fit the type a list or a map holds: `[1, "a"]` as a list<any> boxes the 1
-items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p.m))
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): `fitted` is a second answer to "does it fit", on wasm
+# layouts. Its last case turns an any given where a reference is wanted into ø (DROP + null_of): the program goes on
+# with a missing value. That place is exactly where dynamic typing needs its checked cast (ref.test, else raise
+# naming both types and the place). Once typing writes every conversion into the kernel (core/analyze/fits.wap),
+# the emitter only emits the conversion it is handed and this function goes.
+# DONE: the checked cast (wap-any-cast); the rest stands.
+# A value given where a type is wanted, made to fit it: a plain value boxed for its optional or for `any`, any
+# reference taken as itself where `any` is wanted, an `any` cast to the wanted reference type (checked_cast); any
+# other value as it is, for its taker to check. `form` is the value's code, whose type picks a plain value's box.
+fitted(given: Code, wanted: list, form: Node, p: Program) as Code := {
+	m = p.m
+	if given.type == wanted { return given }
+	if given.type in PLAIN_VALUES and is_reference(wanted) {
+		box = box_index(m, plain_word(form))
+		if wanted in [nullable(box), ANYREF] { return Code(wanted, given.instructions + instruction(STRUCT_NEW, [box])) }
+	}
+	if wanted == ANYREF and is_reference(given.type) { return Code(wanted, given.instructions) }
+	if given.type == ANYREF and is_reference(wanted) { return Code(wanted, given.instructions + cast_called(wanted, "one", form, p)) }
+	given
+}
+# The helper casting an `any` to a type: the value when it holds one of that type, a plain value taken out of its box,
+# a reference type taking ø too; else a raise naming the type and the place that wanted it. `form` is the code
+# wanting it, whose type names a plain value's box; `name` the type's name. Its locals: 0 the value, 1 the place.
+ANY_OF_ANOTHER_TYPE = "this any holds a value of another type than the"
+checked_cast(p: Program, wanted: list, name: text, form: Node) as int := {
+	plain = wanted in PLAIN_VALUES
+	box = if plain then box_index(p.m, plain_word(form)) else 0
+	test = if plain then heap_instruction(REF_TEST, box) else REF_TEST_NULL + heap_of(wanted)
+	taken = if plain then heap_instruction(REF_CAST, box) + instruction(STRUCT_GET, [box, 0]) else REF_CAST_NULL + heap_of(wanted)
+	fits = local_get(0) + test + IF + VOID_BLOCK + local_get(0) + taken + RETURN + END
+	added_function(p.m, [ANYREF, nullable(text_type(p.m))], [wanted], [], fits + raised_with("${ANY_OF_ANOTHER_TYPE} ${name} wanted at ", local_get(1), p))
+}
+# a casting helper's call given the place, one helper for each type, the type's name for the raise
+cast_called(wanted: list, name: text, form: Node, p: Program) as list := text_literal(place_of_code(form), p.m).instructions + instruction(CALL, [helper(p, "cast to ${wanted} ${name}", q => checked_cast(q, wanted, name, form))])
+# where code was written, file:line:column
+place_of_code(form: Node) as text := "${file_of(form)}:${line_of(form)}:${column_of(form)}"
+items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p))
 # a function's value made to fit its signed result, a frame without one leaving it as it is
-signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p.m) else given
+signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p) else given
 # code emitted inside wasm's structured instructions, which open these labels
 labelled(f: Frame, labels: list, emit: function) as Code := {
 	f.labels += labels

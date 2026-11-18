@@ -136,6 +136,8 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
+	# `{}`: the map its place wants, else a map of texts to an unknown type its first entry settles, as `[]`
+	EmptyMap() => with_type_of(n, if key_type(expected) != ø then expected else map_type(symbol(TEXT_TYPE), unknown_type(s)))
 	Record(name, fields, variants) => n
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
@@ -212,7 +214,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
 	given = typed_form(value, s, f, wanted)
-	if not gives_fitting(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
+	if not gives_fitting(given, wanted) and not (value_type(given) != ø and settles(value_type(given), wanted, s)) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
 }
 

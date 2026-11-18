@@ -52,6 +52,8 @@ HELPERS = {"print_text": printing_function, "error_text": error_writing_function
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
 
+# `prim cast(x)`, x an any: its value as the Prim's type, checked, raising with the place when it holds another type
+CHECKED_CAST = "cast"
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
@@ -62,6 +64,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
+	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
 	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
 	if name == DISPATCHED { return finished(Code(given_layout(form, p), operands + dispatched_code(form, p))) }

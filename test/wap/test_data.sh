@@ -86,4 +86,18 @@ check "an entry set by a key a call gives" "$(ran key_called 'm = {"a": 1}
 f(k: text) := k + "b"
 m[f("a")] = 2
 print text(m["ab"])')" "2"
+check "an empty map takes its entries' type from the first one given" "$(ran empty_map_settled 'm = {}
+m["a"] = 1
+print(text(m["a"]))')" "1"
+check "an empty map of the type its place wants" "$(ran empty_map_wanted 't: map<text, text> = {}
+t["k"] = "v"
+print(t["k"])
+class G { names: map<text, int> = {} }
+n = G().names
+n["b"] = 2
+print(text(n["b"]))
+count(m: map<text, int>) as int := 7
+print(text(count({})))')" "v
+2
+7"
 exit $((failures > 0))

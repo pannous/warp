@@ -12,6 +12,7 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 use "patterns.wap"
 use "places.wap"
+use "function_values.wap"
 
 # the function a name defines, its body emitted now if it waits
 pending_function(p: Program, called: Node) as Placed? := waiting_function(p, defining_key(called))
@@ -52,35 +53,8 @@ signed_result(name: Node, p: Program) as list := {
 	result = (function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS))#2
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
-EMPTY_TYPE_WORD = "ø"
 # the items of a list node: a definition's parameters, a fact's list
 listed(n: Node) as list := match n { List(items, bracket, separator) => items }
-# A function value's function starts by taking its captures out of its first parameter, the value, into variables of
-# its own, which its body reads as any local; a function that captures nothing takes none
-captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list := {
-	captures = captures_of(form)
-	value = if parameters is empty then ø else declared_name(parameters#1)
-	parts = if value == ø then ø else function_value_parts(fact_of(value, TYPE))
-	if captures is empty or parts == ø { return [] }
-	closure = closure_of(value, p)
-	loads = []
-	for at in 1 to #captures {
-		f.slots += [Placed(place_key(captures#at), #f.slots, layout_of(parts#(at + 1), p.m, p.records), [], yes)]
-		loads += instruction(LOCAL_GET, [0]) + instruction(STRUCT_GET, [closure, at - 1]) + instruction(LOCAL_SET, [f.slots.last.index])
-	}
-	loads
-}
-# a function value, a struct of what it captures; a function's name as a value captures nothing
-function_value_code(form: Node, p: Program, f: Frame) as Code := {
-	Code(layout(form, p), captures_code(form, f) + instruction(STRUCT_NEW, [closure_of(form, p)]))
-}
-# the values a function value captures, read from the variables they are where it is made
-captures_code(form: Node, f: Frame) as list := {
-	captures_of(form).flat_map(definer => fetched(captured_variable(definer, f)))
-}
-captured_variable(definer: Node, f: Frame) as Placed := {
-	placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value")
-}
 # A value of a type where any holds it: [the GC type it is held as, a plain value's box or its own reference type,
 # the instructions that take the value out once cast]; at is the code that asks
 held_in_any(type: Node, at: Node, p: Program) as list := {
@@ -95,8 +69,6 @@ held_value(type: Node, at: Node, p: Program) as list := {
 	held = held_in_any(type, at, p)
 	heap_instruction(REF_CAST, held#1) + held#2
 }
-# the GC struct of a typed function value
-closure_of(n: Node, p: Program) as int := function_value_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no function value")
 # The type a function gives back: its body's value and every return's, all of one type
 result_type(name: Node, body: Code, f: Frame) as list := {
 	result = if body.type == NEVER then (if f.returns is empty then NEVER else f.returns#1) else body.type
@@ -114,9 +86,10 @@ parameter_type(parameter: Node, p: Program) as list := layout(declared_name(para
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
+	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and function_type_parts(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
-	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p.m))
+	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
 	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at, p.m)) { refused(form, "the arguments are not of the parameters' types") }
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
 }

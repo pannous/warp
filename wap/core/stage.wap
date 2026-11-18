@@ -76,6 +76,8 @@ SOURCE_FILE = "file"
 WRITTEN = "written"
 # a `{…}` the reader built from a block indented below its line, not one written there: `if c⏎\tbody`, not `Point{x: 1}`
 INDENTED = "indented"
+# empty braces as the reader reads them, one word: the host keeps no empty curly group, so `{}` could carry no facts
+EMPTY_BRACES = "{}"
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø
@@ -163,6 +165,9 @@ VARIABLES = "variables"
 CANDIDATES = "candidates"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
+# a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
+# as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
+FUNCTION_VALUE = "function_value"
 captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
 	List(items, bracket, separator) => items
 	_ => []
