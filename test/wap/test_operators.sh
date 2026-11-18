@@ -58,4 +58,6 @@ z = f(0) ?? if 2 > 1 {7} else {8}
 print text(z)')" "7"
 format_check 'x = if c then 1
 	else 2' 'x = if c then 1 else 2'
+format_check 'if c
+	print "a"' 'if c {print "a"}'
 exit $((failures > 0))
