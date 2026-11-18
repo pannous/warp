@@ -71,4 +71,15 @@ print text(m.has("zz"))
 print text(#m.keys())')" "yes
 no
 3"
+check "a map's entry removed, the others kept in their order" "$(ran map_remove 'remove(m: map<text, int>, key: text) := prim map_remove(m, key)
+m = {aa: 1, bb: 2, cc: 3}
+m.remove("bb")
+m.remove("zz")
+m.dd = 4
+print text(m.aa + m.cc + m.dd)')" "8"
+check "remove takes a key out of a map" "$(ran map_remove_word 'm = {aa: 1, bb: 2}
+m.remove("aa")
+print text(#m.keys())
+print text(m.has("aa"))')" "1
+no"
 exit $((failures > 0))

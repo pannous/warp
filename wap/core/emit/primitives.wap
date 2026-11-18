@@ -59,7 +59,7 @@ INSTRUCTIONS = {
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
 # primitives call, before any function of its own.
-HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "dispatched": ["fd_write", "proc_exit"], "map_keys": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "dispatched": ["fd_write", "proc_exit"], "map_keys": ["fd_write", "proc_exit"], "map_remove": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
 # each host function's parameter and result types
 HOST_FUNCTIONS = {
 	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
