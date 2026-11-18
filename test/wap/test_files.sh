@@ -13,7 +13,15 @@ check "the command line, the program first" "$(ran command_line 'arguments(): li
 for each in arguments() { print each }' >/dev/null; $warp "$stage/command_line.wasm" a "b c")" "$stage/command_line.wasm
 a
 b c"
+check "bytes written to a file, made or emptied first" "$(ran bytes_written "write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
+write_bytes(\"$stage/written.bin\", [104, 105, 33])
+print read(\"$stage/written.bin\")
+write_bytes(\"$stage/written.bin\", [111, 107])
+print read(\"$stage/written.bin\")")" "hi!
+ok"
 check "args are the command line after the program's file, program its file and folder" "$(printf '%s\n' 'print text(#args)' 'print args#2' 'print program.folder' > "$stage/program_words.wap" && $warp "$compiler" "$stage/program_words.wap" "$stage/program_words.wasm" 2>&1 && $warp "$stage/program_words.wasm" a "b c" 2>&1)" "2
 b c
 $stage"
+check "write_bytes writes a file's bytes, read gives them back" "$(ran bytes_file "write_bytes(\"$stage/out.bin\", [104, 105])
+print read(\"$stage/out.bin\")")" "hi"
 exit $((failures > 0))
