@@ -143,7 +143,7 @@ cycle_refused(rules: Rules, head: text, path: list) := {
 	if path.contains(head) {
 		closing = path[path.index_of(head) ..] + [head]
 		growing = rules_on(rules, closing).filter(rule => not shrinking(rule))
-		if #growing > 0 { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
+		if growing is not empty { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
 		return
 	}
 	if not rules.by_head.has(head) { return }
@@ -232,7 +232,7 @@ lines_of(rules: Rules, items: list, separator: Separator) as list := if STATEMEN
 lines_continued(rules: Rules, statements: list) as list := {
 	joined = []
 	for statement in statements {
-		if #joined > 0 and continues(rules, statement) { joined[#joined - 1] = with_facts_of(List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space), joined.last) } else { joined.add(statement) }
+		if joined is not empty and continues(rules, statement) { joined[#joined - 1] = with_facts_of(List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space), joined.last) } else { joined.add(statement) }
 	}
 	joined
 }
@@ -262,9 +262,10 @@ spread_items(result: Node) as list? := match result {
 	List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) or separator == Separator.Comma and fact_of(result, RULE) != ø then items.map(item => with_rule_of(item, result)) else ø
 	_ => ø
 }
-# a group of one phrase keeps its brackets around what the phrase became, unless that is a row or nothing, which the
-# list around the group takes in its place: `[(both a), c]`
-group_kept(result: Node, bracket: Bracket) as Node := if result is Empty or spread_items(result) != ø then result else List([result], bracket, Separator.None)
+# a group of one phrase keeps its brackets only around a phrase it became, whose words they hold together; any other
+# result, a key, a call, a row or nothing, takes the group's place: `[(both a), c]`, `{(sub $x)...}`
+group_kept(result: Node, bracket: Bracket) as Node := if is_phrase(result) and spread_items(result) == ø then List([result], bracket, Separator.None) else result
+is_phrase(n: Node) as bool := match n { List(items, Bracket.None, Separator.Space) => yes; _ => no }
 # a spliced item keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
 with_rule_of(item: Node, sequence: Node) as Node := if fact_of(sequence, RULE) == ø then item else with_fact(item, RULE, fact_of(sequence, RULE))
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
@@ -272,7 +273,7 @@ one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
 	current = n
 	steps = rule_applied(rules, current)
-	while #steps > 0 {
+	while steps is not empty {
 		fired[0] = yes
 		if steps#1 is Empty { return steps#1 }
 		current = staged(current, code => steps#1)
