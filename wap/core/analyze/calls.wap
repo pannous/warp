@@ -35,6 +35,8 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	by_count = candidates.filter(definition => takes_count(definition, #arguments))
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
+	known = candidates.map(function_key_of)
+	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(function_key_of(definition)))]
 	meant = chosen_definition(n, called, scopes, given, expected, s)
 	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
@@ -117,6 +119,16 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
+# A type's own words travel with it: the definitions of a called name that the module of an argument's record declares
+# taking a value of that record, so a library's `show(xs#at)` finds a program's show(p: P), in the one ranking
+own_words(called: Node, given: list, s: TypingState) as list := {
+	records = given.map(argument => record_named(s.records, base_or_self(value_type(argument)))).filter(record => record != ø)
+	definitions_named(text(called), s).filter(definition => records.any(record => file_of(declared_name(written_name(definition))) == file_of(record) and parameters_in(definition).any(parameter => takes_record(parameter, record))))
+}
+takes_record(parameter: Node, record: Node) as bool := {
+	type = type_given(parameter) ?? return no
+	text(base_or_self(type)) == record_name(record)
+}
 # the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
 # its candidates
 candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
