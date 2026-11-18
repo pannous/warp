@@ -71,8 +71,19 @@ key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
 # An infix operator applied: (Call + a b). A compound assignment of the table, `x += 1`, is the assignment it means,
 # x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
 infix_call(spelling: text, left: Node, right: Node) as Node := {
+	if (spelling == ASSIGNMENT or compound_assignment(spelling) == spelling) and arrow_parts(left) != ø { return arrow_assigned(spelling, left, right) }
 	if compound_assignment(spelling) != spelling { return Call(symbol(spelling), [left, right]) }
 	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
+}
+
+# An arrow is no place to assign to: `1 => y = 2` assigns in the arrow's result, `1 => (y = 2)`, as a match arm or a
+# function's body means it
+arrow_assigned(spelling: text, arrow: Node, value: Node) as Node := match arrow {
+	Call(called, parts) => with_facts_of(Call(called, [parts#1, infix_call(spelling, parts#2, value)]), arrow)
+}
+arrow_parts(n: Node) as list? := match n {
+	Call(called, parts) => if #parts == 2 and group_of(spelling_written(called), Fixity.Infix) == parameters_group then parts else ø
+	_ => ø
 }
 
 # a word standing alone, by its canonical spelling
@@ -142,8 +153,8 @@ known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #ali
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
 # spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
-phrase_read(written: list) as Node := {
-	tokens = operators_called(written)
+phrase_read(written: list) as Node := tokens_read(operators_called(written))
+tokens_read(tokens: list) as Node := {
 	operands = []
 	pending = []
 	expecting_operand = yes
@@ -153,7 +164,14 @@ phrase_read(written: list) as Node := {
 		next = if i < #tokens then tokens#(i + 1) else ø
 		if expecting_operand {
 			prefix = if operand_follows(next) then reading_as(token.item, Fixity.Prefix) else ø
-			if prefix == ø {
+			if prefix == ø and called_after_infix(token, next, pending) {
+				last = i + 1
+				takes_block = phrase_words.leading[spelling_written(token.item)] == yes
+				while last < #tokens and (takes_block or not is_block(tokens#(last + 1).item)) { last = last + 1 }
+				operands.add(tokens_read(tokens[i - 1 .. last]))
+				expecting_operand = no
+				i = last
+			} else if prefix == ø {
 				operands.add(operated(token.item))
 				expecting_operand = no
 			} else {
@@ -197,6 +215,17 @@ operators_called(tokens: list) as list := {
 	}
 	called
 }
+
+# A word that leads a rule's phrase after an infix operator, with more operands after it, takes the rest of the phrase
+# as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
+# block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
+# (`0 - step else step`).
+called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := #pending > 0 and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
+# The words rules' phrases start with, `return` of `rule return $value... => …`, each with whether one of its rules
+# takes a block. The rule stage tells them as it loads rules: rules/ uses this stage, so it cannot ask rules/ itself.
+class PhraseWords { leading: map }
+phrase_words = PhraseWords({})
+is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
 # a symbol the table reads as an operator in any fixity
 is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø

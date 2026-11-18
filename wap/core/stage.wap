@@ -242,3 +242,6 @@ DECLARES = "declares"
 DECLARATIONS = "declarations"
 # on a program, the files it USES (`use "path"`), each a Text of the path resolved against the program's own folder
 USES = "uses"
+
+# A line's comma row in braces stands for its items, `{a: 1, b: 2⏎c: 3}`; any other item for itself
+row_items(item: Node) as list := match item { List(row, Bracket.None, Separator.Comma) => row; _ => [item] }
