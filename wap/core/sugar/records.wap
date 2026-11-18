@@ -1,8 +1,9 @@
 # Types declared other ways, as Record (notes/kernel.md "Record"; wiki/class.md): the spellings wap's own source uses.
 
 # a class, its fields typed names, then its methods; the rule writes its constructor, the instance as data, and each
-# method as a function whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too
-rule class $name { ($field: $type)... ($method($parameters...) := $body)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}; ($method(self: $name, $parameters...) := $body)...
+# method as a function whose first parameter, self, is the instance, so `p.size()` calls size(p) and `p.size` too; and
+# show, the instance in its constructor form, `P{x: 3}`, each field shown by its own type's show
+rule class $name { ($field: $type)... ($method($parameters...) := $body)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}; ($method(self: $name, $parameters...) := $body)...; show(self: $name): text := "$name{" + join([("$field: " + show(self.$field))...], ", ") + "}"
 
 # an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's type
 rule enum $name { $cases... } => Record($name, [], [$cases...])
