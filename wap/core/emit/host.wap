@@ -1,0 +1,153 @@
+# The primitives that ask the host (WASI): printing, raising, reading and writing files, the command line. Each is a
+# helper function of the module, built here from WASI's calls on the module's memory; primitives.wap names them.
+
+use "lists.wap"
+use "values.wap"
+use "wasm.wap"
+use "opcodes.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "primitives.wap"
+
+# print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
+# answer. Its memory: the iovec [address, length] at 0, the count written at 8, the text's bytes from 16.
+STDOUT = 1
+STDERR = 2
+# the status a program that raised exits with
+RAISED_STATUS = 1
+NEWLINE = 10
+IOVEC_ADDRESS = 0
+WRITTEN_ADDRESS = 8
+BYTES_ADDRESS = 16
+# read_text's memory: the file's size from fd_seek at 0, the opened file and the count read at 8
+SIZE_ADDRESS = 0
+OPENED_ADDRESS = 8
+# WASI: the folders the host opens for a program, the current one and the root (core/native/driver.warp), so a path
+# starting with / opens in the second; links followed; the rights to read and seek; seek from the start or the end
+CURRENT_FOLDER = 3
+FOLLOW_LINKS = 1
+READ_AND_SEEK = 6
+# WASI: open flags to create a missing file and empty one that is there; the right to write
+CREATED_OR_EMPTIED = 9
+WRITE_RIGHT = 64
+FROM_START = 0
+FROM_END = 2
+SLASH = 47
+
+# The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
+# primitives call, before any function of its own.
+HOST_CALLS = {"print_text": ["fd_write"], "error_text": ["fd_write"], "arguments": ["args_sizes_get", "args_get"], "bytes_written": ["path_open", "fd_write", "fd_close", "proc_exit"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "dispatched": ["fd_write", "proc_exit"], "map_keys": ["fd_write", "proc_exit"], "map_remove": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+# each host function's parameter and result types
+HOST_FUNCTIONS = {
+	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
+	"fd_seek": [[I32, I64, I32, I32], [I32]], "fd_close": [[I32], [I32]],
+	"args_sizes_get": [[I32, I32], [I32]], "args_get": [[I32, I32], [I32]],
+	"path_open": [[I32, I32, I32, I32, I32, I64, I64, I32, I32], [I32]]
+}
+# the index of a host function the module imported
+host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
+
+printing_function(p: Program) as int := writing_function(p, STDOUT, [])
+error_writing_function(p: Program) as int := writing_function(p, STDERR, [])
+raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
+# a raise of a message from inside a helper
+raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+# The helper of print_text, error_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
+# written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
+writing_function(p: Program, file: int, after: list) as int := {
+	text_type_index = text_type(p.m)
+	the_text = instruction(LOCAL_GET, [0])
+	length = instruction(LOCAL_GET, [1])
+	count = instruction(LOCAL_GET, [2])
+	byte_at_count = i32_const(BYTES_ADDRESS) + count + I32_ADD
+	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
+	grown = memory_grown(length, 2)
+	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
+	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
+	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")]) + DROP
+	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written + after)
+}
+
+# the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
+# short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
+memory_grown(length: list, scratch: int) as list := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + instruction(LOCAL_GET, [scratch]) + instruction(MEMORY_GROW, [0]) + DROP + END
+
+# The helper of read_text: the file at a path, its bytes as a text; a path it cannot open raises "cannot read …".
+# Its locals: 0 the path, 1 to 4 the opening's (path_opened), 5 the file's size, 6 the text made, 7 the bytes read so
+# far.
+reading_function(p: Program) as int := {
+	type = text_type(p.m)
+	value_of = local => instruction(LOCAL_GET, [local])
+	kept_in = local => instruction(LOCAL_SET, [local])
+	opened = path_opened(1, 0, READ_AND_SEEK, "cannot read ", p)
+	seek = (whence) => value_of(4) + i64_const(0) + i32_const(whence) + i32_const(SIZE_ADDRESS) + instruction(CALL, [host(p, "fd_seek")]) + DROP
+	sized = seek(FROM_END) + i32_const(SIZE_ADDRESS) + instruction(I64_LOAD, [3, 0]) + I32_WRAP_I64 + kept_in(5) + seek(FROM_START) + memory_grown(value_of(5), 3)
+	read = transferred("fd_read", value_of(4), value_of(5), 7, p)
+	closed = value_of(4) + instruction(CALL, [host(p, "fd_close")]) + DROP
+	made = value_of(7) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(3, value_of(7), value_of(6) + value_of(3) + i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + instruction(I32_LOAD8_U, [0, 0]) + instruction(ARRAY_SET, [type]))
+	added_function(p.m, [nullable(type)], [nullable(type)], [I32, I32, I32, I32, I32, nullable(type), I32], opened + sized + read + closed + made + value_of(6))
+}
+
+# The helper of arguments: the command line as a list<text>, its first the program as the host names it. WASI's
+# args_sizes_get puts the count at 0 and the bytes' size at 4; args_get puts the arguments' addresses from
+# BYTES_ADDRESS and their zero-ended bytes after them. Its locals: 0 the count, 1 the size, 2 an argument's place,
+# 3 its address, 4 its length, 5 the texts, 6 a text, 7 a byte's place.
+arguments_function(p: Program) as int := {
+	type = text_type(p.m)
+	texts = list_type(symbol("text"))
+	value_of = local => instruction(LOCAL_GET, [local])
+	kept_in = local => instruction(LOCAL_SET, [local])
+	loaded = address => i32_const(address) + instruction(I32_LOAD, [2, 0])
+	addresses_size = value_of(0) + i32_const(4) + I32_MUL
+	sized = i32_const(0) + i32_const(4) + instruction(CALL, [host(p, "args_sizes_get")]) + DROP + loaded(0) + kept_in(0) + loaded(4) + kept_in(1)
+	got = memory_grown(addresses_size + value_of(1) + I32_ADD, 2) + i32_const(BYTES_ADDRESS) + i32_const(BYTES_ADDRESS) + addresses_size + I32_ADD + instruction(CALL, [host(p, "args_get")]) + DROP
+	byte = at => value_of(3) + at + I32_ADD + instruction(I32_LOAD8_U, [0, 0])
+	addressed = i32_const(BYTES_ADDRESS) + value_of(2) + i32_const(4) + I32_MUL + I32_ADD + instruction(I32_LOAD, [2, 0]) + kept_in(3)
+	measured = i32_const(0) + kept_in(4) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + byte(value_of(4)) + I32_EQZ + instruction(BRANCH_IF, [1]) + value_of(4) + i32_const(1) + I32_ADD + kept_in(4) + instruction(BRANCH, [0]) + END + END
+	copied = value_of(4) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(7, value_of(4), value_of(6) + value_of(7) + byte(value_of(7)) + instruction(ARRAY_SET, [type]))
+	each = counted(2, value_of(0), addressed + measured + copied + value_of(5) + value_of(2) + value_of(6) + instruction(ARRAY_SET, [items_array(texts, p)]))
+	made = value_of(0) + instruction(ARRAY_NEW_DEFAULT, [items_array(texts, p)]) + kept_in(5) + each + value_of(0) + value_of(5) + instruction(STRUCT_NEW, [list_struct(texts, p)])
+	added_function(p.m, [], [list_layout(texts, p)], [I32, I32, I32, I32, I32, nullable(items_array(texts, p)), nullable(type), I32], sized + got + made)
+}
+
+# The code that opens the file at the path in local 0 with these open flags and rights, its descriptor left in the
+# local `first` + 3, raising the refusal and the path when it cannot. Its locals from `first`: whether the path starts
+# with / (1 or 0), the path's length after that, a count, the opened file.
+path_opened(first: int, open_flags: int, rights: int, refusal: text, p: Program) as list := {
+	type = text_type(p.m)
+	value_of = at => instruction(LOCAL_GET, [first + at])
+	kept_in = at => instruction(LOCAL_SET, [first + at])
+	path = local_get(0)
+	rooted = path + ARRAY_LEN + I32_EQZ + IF + I32 + i32_const(0) + ELSE + path + i32_const(0) + instruction(ARRAY_GET_U, [type]) + i32_const(SLASH) + I32_EQ + END + kept_in(0)
+	length = path + ARRAY_LEN + value_of(0) + I32_SUB + kept_in(1)
+	copied = memory_grown(value_of(1), first + 2) + counted(first + 2, value_of(1), i32_const(BYTES_ADDRESS) + value_of(2) + I32_ADD + path + value_of(2) + value_of(0) + I32_ADD + instruction(ARRAY_GET_U, [type]) + instruction(I32_STORE8, [0, 0]))
+	refused_open = text_literal(refusal, p.m).instructions + path + instruction(CALL, [helper(p, "text_joined", joining_function)]) + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+	opened = i32_const(CURRENT_FOLDER) + value_of(0) + I32_ADD + i32_const(FOLLOW_LINKS) + i32_const(BYTES_ADDRESS) + value_of(1) + i32_const(open_flags) + i64_const(rights) + i64_const(0) + i32_const(0) + i32_const(OPENED_ADDRESS) + instruction(CALL, [host(p, "path_open")]) + IF + VOID_BLOCK + refused_open + END + i32_const(OPENED_ADDRESS) + instruction(I32_LOAD, [2, 0]) + kept_in(3)
+	rooted + length + copied + opened
+}
+
+# The helper of bytes_written: a list<int>'s items, each a byte, written to the file at a path, made or emptied first;
+# a path it cannot open raises "write: cannot open …". Its locals: 0 the path, 1 the bytes, 2 to 5 the opening's
+# (path_opened), 6 the bytes written so far.
+bytes_writing_function(p: Program) as int := {
+	ints = list_type(symbol("int"))
+	value_of = local => instruction(LOCAL_GET, [local])
+	kept_in = local => instruction(LOCAL_SET, [local])
+	file = value_of(5)
+	opened = path_opened(2, CREATED_OR_EMPTIED, WRITE_RIGHT, "write: cannot open ", p)
+	placed = memory_grown(count_in(ints, 1, p), 4) + counted(4, count_in(ints, 1, p), i32_const(BYTES_ADDRESS) + value_of(4) + I32_ADD + items_in(ints, 1, p) + value_of(4) + instruction(ARRAY_GET, [items_array(ints, p)]) + I32_WRAP_I64 + instruction(I32_STORE8, [0, 0]))
+	written = transferred("fd_write", file, count_in(ints, 1, p), 6, p)
+	closed = file + instruction(CALL, [host(p, "fd_close")]) + DROP
+	added_function(p.m, [nullable(text_type(p.m)), list_layout(ints, p)], [], [I32, I32, I32, I32, I32], opened + placed + written + closed)
+}
+
+# The code that reads or writes (fd_read or fd_write) a file's bytes from BYTES_ADDRESS until the total is moved or
+# the file moves none, the count moved so far in the local `done`: iovec [bytes + done, total - done], then done +=
+# the count the call moved
+transferred(call: text, file: list, total: list, done: int, p: Program) as list := {
+	moved = i32_const(WRITTEN_ADDRESS) + instruction(I32_LOAD, [2, 0])
+	so_far = instruction(LOCAL_GET, [done])
+	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + so_far + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + total + so_far + I32_SUB + instruction(I32_STORE, [2, 0])
+	i32_const(0) + instruction(LOCAL_SET, [done]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + so_far + total + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + file + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, call)]) + DROP + moved + I32_EQZ + instruction(BRANCH_IF, [1]) + so_far + moved + I32_ADD + instruction(LOCAL_SET, [done]) + instruction(BRANCH, [0]) + END + END
+}
