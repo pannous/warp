@@ -54,7 +54,8 @@ probe(file: text) as Tally := {
 			emitted_ok = yes
 		} catch e { report(if typed then "emit" else "type", e.message) }
 	}
-	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, typed: ${typed}, emitted: ${emitted_ok}"
+	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${typed}, emitted: ${emitted_ok}"
+	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, " + whole
 	counted = functions_probe(file)
 	Tally(1, if typed then 1 else 0, counted.functions, counted.typed, counted.anys)
 }
