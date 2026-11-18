@@ -24,8 +24,6 @@ use "../../kernel/forms.wap"
 PROGRAM_DEPTH = 0
 # depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
 LIBRARY_DEPTH = -1
-# the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it
-TYPE_TEST_WORD = "is"
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 class Definition { name: text; kind: text; definer: Node; depth: int }

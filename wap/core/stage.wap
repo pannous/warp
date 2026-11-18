@@ -112,6 +112,8 @@ BOUND_FUNCTION = "function"
 BOUND_LIBRARY = "library"
 # a case of an enum, `Dime`, `Circle` (its Record defines it)
 BOUND_CASE = "case"
+# the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it (core/analyze/scope.wap)
+TYPE_TEST_WORD = "is"
 # the pattern of a Case's arm that fits any value and names none
 WILDCARD = "_"
 # on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
