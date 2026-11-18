@@ -37,3 +37,15 @@ join(texts: list<text>, separator: text): text := {
 	for at in 1 to #texts { out = out + (if at > 1 then separator else "") + texts#at }
 	out
 }
+
+# the position of an item, counted from 1, 0 when the list holds none: `[10, 20].index_of(20)` is 2 (wiki/indexing.md)
+index_of(xs: list, item) := xs.index_where(x => x == item)
+# the position of the first item that fits a test, 0 when none does
+index_where(xs: list, fits) := {
+	at = 0
+	while at < #xs {
+		at += 1
+		if fits(xs#at) { return at }
+	}
+	0
+}

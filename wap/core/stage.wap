@@ -122,8 +122,8 @@ ASSIGNS = "assigns"
 # on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
 # program's in the whole block, `let x` a new one of the block's
 VARIABLES = "variables"
-# a name of several overloads gets CANDIDATES, their defining names innermost first, instead of DEFINED_AT; the typing
-# stage picks one and sets DEFINED_AT
+# a name of several overloads gets CANDIDATES, their defining names in a list per scope, innermost first, instead of
+# DEFINED_AT; the typing stage picks one and sets DEFINED_AT
 CANDIDATES = "candidates"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
