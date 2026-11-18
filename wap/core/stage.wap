@@ -204,10 +204,9 @@ record_named(records: list, type: Node?) as Node? := {
 }
 record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
 fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
-# An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`,
-# lowered or, in a used module's declarations, as read
+# An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
 cases_of(record: Node) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
-case_name(case: Node) as Node := match case { Call(called, fields) => called; Key(called, Op.None, fields) => called; _ => case }
+case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
 # the enum that has a case of this name, among these records, ø when none has
 enum_of(records: list, name: Node) as Node? := {

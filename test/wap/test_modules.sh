@@ -41,4 +41,7 @@ print text(b.n + 3)')" "5"
 check "a program's own case hides the module's" "$(ran use_hidden_case 'use "trees.wap"
 enum Side { Leaf, Root }
 print text(Side.Leaf == Leaf)')" "yes"
+check "a used module's case matched with its field" "$(ran use_case_field 'use "trees.wap"
+leaf = Leaf(3)
+print match leaf { Leaf(v) => text(v + 1); _ => "o" }')" "4"
 exit $((failures > 0))

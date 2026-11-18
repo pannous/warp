@@ -84,12 +84,14 @@ declared_statement(statement: Node) as Node := {
 }
 
 # name: signature of a definition, ø of any other statement: `f(a, b) := …`, `n := 1`, `x = 1` as operated code reads
-# them, (Call := f(a, b) …), (Call = x 1)
+# them, (Call := f(a, b) …), (Call = x 1); a class or an enum declares itself, its cases as lowering writes them
 declaration_of(statement: Node) as Node? := match statement {
-	Record(name, fields, variants) => statement
+	Record(name, fields, variants) => match variants { List(cases, bracket, separator) => Record(name, fields, List(cases.map(case_lowered), bracket, separator)) }
 	Call(called, arguments) => if text(called) == ":=" then signature_of(arguments#1) else if text(called) == "=" then value_named(arguments#1) else ø
 	_ => ø
 }
+# an enum's case as lowering writes it: `Leaf(value: int)` a call of its name with its fields, a bare name as it is
+case_lowered(case: Node) as Node := match case { Key(name, Op.None, group) => Call(name, arguments_of(group)); _ => case }
 # what `f(a, b)` or `n` before := declares: a function with its parameters, or a value; a written result type,
 # `f(a): int`, is not declared yet
 signature_of(head: Node) as Node? := match head {
