@@ -3,15 +3,15 @@
 # variable, bound by the call: map's U is f's result for an item.
 
 # whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
-all(xs, fits) := {
+all(xs: list, fits) := {
 	for x in xs { if not fits(x) { return no } }
 	yes
 }
-any(xs, fits) := {
+any(xs: list, fits) := {
 	for x in xs { if fits(x) { return yes } }
 	no
 }
-contains(xs, item) := xs.any(x => x == item)
+contains(xs: list, item) := xs.any(x => x == item)
 
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
