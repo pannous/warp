@@ -414,9 +414,9 @@ None has a test; each fix is a few lines; each needs one check line in test/wap.
 - **Dead or stale:** `retyped` (core/analyze/types.wap:98) and `I32_NE` (core/emit/opcodes.wap:80) are never
   used; comments doubled or parted from their function at core/analyze/letters.wap:74-76,
   core/analyze/calls.wap:221-223 and core/emit/places.wap:14-15; stale ones at core/emit/functions.wap:127 and
-  core/parse/reader.wap:9; `# todo:
-  rename to Lambda` (wap/kernel/forms.wap:27); two bare `raise` (core/parse/operator_table.wap:18, :24) against
-  core/errors.wap:3; the fact name `"meta"` as a bare text (core/format.wap:32).
+  core/parse/reader.wap:9; `# todo: rename to Lambda` (wap/kernel/forms.wap:27); two bare `raise`
+  (core/parse/operator_table.wap:18, :24) against core/errors.wap:3; the fact name `"meta"` as a bare text
+  (core/format.wap:32).
 - **Messages show the kernel, not the program:** "this holds a nothing, no function to call: (Call pick yes)",
   "the field holds a (Call -> (int) bool)", "no map takes (list<Node>, fn<"p15.wap:1:43 λ">): map: list<U>(xs:
   list<T>, f: (Call -> (T) U))". The user wrote `pick(yes)` and `(int) -> bool`. A refusal should quote the
@@ -527,10 +527,10 @@ systems.
 2. Fix 1: the gauge. Half a day, and it makes every later step measurable.
 3. Fix 2 and the missing words of the preload. A day; wap's most basic helpers then type.
 4. Compile wap with wap from the leaves of the use graph upward: opcodes.wap (done) → wasm.wap → errors.wap and
-   stage.wap → lexemes.wap → the rest of parse/ → rules/ → analyze/ → emit/. Per file: add its `use` lines, write
-   the types decision 1 asks for, compile, compare what the file's functions give under both compilers, add its
-   line to test_self.sh. Files that use each other in a circle count as one step, which is one more reason for
-   the layering rule of fix 11.
+   stage.wap → lexemes.wap → the rest of parse/ → rules/ → analyze/ → emit/. Per file: add its `use` lines,
+   write the types decision 1 asks for, compile, compare what the file's functions give under both compilers,
+   add its line to test_self.sh. Files that use each other in a circle count as one step, which is one more
+   reason for the layering rule of fix 11.
 5. In parallel, fix 3 (function values): needed from stage.wap on, since every stage walks nodes with a function.
 6. Fix 4's fit relation before analyze/ and emit/ reach themselves: there is no point in writing types into
    fifteen functions that are about to become one. Fix 5 while the emitter's files are being typed anyway.
