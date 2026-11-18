@@ -37,8 +37,6 @@ operated_program(program: Node) as Node := {
 
 # ---- reading a phrase
 
-# an operator as it is applied: its canonical spelling, fixity and group, and the item that wrote it (for its place)
-class Use { spelling: text, fixity: Fixity, group: text, written: Node }
 
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
 operated(n: Node) as Node := staged(n, operated_form)
