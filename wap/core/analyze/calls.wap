@@ -13,6 +13,7 @@ use "fits.wap"
 use "conditions.wap"
 use "scope.wap"
 use "dispatch.wap"
+use "shapes.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
@@ -35,6 +36,9 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	by_count = candidates.filter(definition => takes_count(definition, #arguments))
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
+	# `n is symbol` on a Node tests the kind even beside a maker symbol(name) (core/analyze/shapes.wap kind_named)
+	kind = if fact_of(n, PREDICATE) == ø then ø else kind_named(called, value_type(given#1), s)
+	if kind != ø { return typed_form(shape_test(arguments#1, kind, n, s), s, f, ø) }
 	known = candidates.map(function_key_of)
 	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(function_key_of(definition)))]
 	meant = chosen_definition(n, called, scopes, given, expected, s)
