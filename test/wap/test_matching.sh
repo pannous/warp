@@ -56,4 +56,11 @@ print text(f(Dot))
 print text(f(ø))')" "3
 0
 -1"
+check "a declared pattern is a type: a match naming its shape fits every value of it, its holes of their types" "$(ran pattern_type 'pattern Duo = (duo $name: Symbol $items: List)
+named(d: Duo) as text := match d { Duo(name, items) => text(name) }
+counted(d: Duo) as int := match d { Duo(name, items) => match items { List(parts, bracket, separator) => #parts } }
+n: Node = Duo(symbol("a"), List([symbol("x"), symbol("y")], Bracket.Square, Separator.Comma))
+print(named(n))
+print(text(counted(n)))')" "a
+2"
 exit $((failures > 0))

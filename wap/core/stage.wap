@@ -232,6 +232,11 @@ items_or_one(n: Node) as list := match n { List(items, bracket, separator) => it
 OPTIONAL_MARK = "?"
 # the dynamic type, which holds any value, ø too: an any? is an any
 ANY_TYPE = "any"
+# the type of code as data, the preload's enum Node; a case of it or a declared pattern names a shape of it
+NODE_TYPE = "Node"
+# the fact of a shape's type, `Record`, naming the type it narrows (core/analyze/shapes.wap): its values are of that
+# type, laid out as it is
+NARROWS = "narrows"
 # an optional's value type, any other type itself: int of int? and of int
 base_or_self(type: Node?) as Node? := base_of_optional(type) ?? type
 optional_type(base: Node) as Node := if base_of_optional(base) != ø or base == symbol(ANY_TYPE) then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
