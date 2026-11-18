@@ -42,8 +42,8 @@ TEXT_FUNCTION = "text"
 EMPTY_TYPE = "ø"
 # the type of code that never finishes, a return, break or continue: it fits wherever any type is expected
 NEVER_TYPE = "never"
-# any holds every value, number an int or a float, each boxed as a T? holds its value (core/emit/values.wap)
-ANY_TYPE = "any"
+# number holds an int or a float, as any (core/stage.wap) holds every value, each boxed as a T? holds its value
+# (core/emit/values.wap)
 NUMBER_TYPE = "number"
 # the type words a type test may name besides records and letters
 TYPE_WORDS = [INT_TYPE, FLOAT_TYPE, TEXT_TYPE, CHAR_TYPE, BOOL_TYPE, ANY_TYPE, NUMBER_TYPE, LIST_TYPE, MAP_TYPE, ENUM_TYPE]
@@ -58,6 +58,8 @@ class TypingState {
 	globals: list = []
 	# the functions of the function values met, and the keys of the variables they capture
 	lambdas: list = []
+	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
+	dispatchers: list = []
 	captured: list = []
 	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
 	unknowns: int = 0
@@ -111,10 +113,11 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	}
 	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
-	library_keys = (defines + s.lambdas).map(function_key_of)
+	written = defines + s.lambdas + s.dispatchers
+	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
 	late = s.functions.drop(typed_before).filter(each => not (each.key in library_keys)).map(each => each.define)
-	whole = refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + late + statements), typed)
+	whole = refitted(Block(s.records + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # whether a typed form gives a value: not none, not a jump that never comes back
@@ -202,7 +205,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	# a name given only ø so far holds an optional of a type its uses settle
 	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
-	if wanted != ø and not type_fits(type, wanted) and not settles(type, wanted, s) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
+	if wanted != ø { given = converted(given, wanted, s, n, "the name holds a") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	# the name keeps the type it holds, `found: Node? = ø` a Node? whatever it is given
 	held = wanted ?? type
@@ -214,8 +217,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
 	given = typed_form(value, s, f, wanted)
-	if not gives_fitting(given, wanted) and not (value_type(given) != ø and settles(value_type(given), wanted, s)) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
-	refitted(Set(place, given), n)
+	refitted(Set(place, converted(given, wanted, s, n, "the place holds a")), n)
 }
 
 # a name's value: a parameter, local or global, of the type given to it
@@ -253,8 +255,7 @@ is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
-	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
-	for at in 1 to #given { field_checked(given#at, fields#at, arguments#at) }
+	given = (1 to #arguments).map(at => field_checked(typed_form(arguments#at, s, f, declared_type(fields#at)), fields#at, arguments#at, s))
 	case_typed_as(n, called, given, s)
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
@@ -263,26 +264,6 @@ case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 }
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
-	typed = with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), f.result)
-	if text(operation) != DISPATCHED { return typed }
-	function = f.function ?? refused(n, "a dispatch is the body of a function of an any, `f(x: any) := prim dispatched(x)`")
-	with_fact(typed, OVERLOADS, List(dispatched_overloads(function, s), Bracket.Square, Separator.Comma))
+	# a primitive the typing stage wrote, a test or a checked cast, keeps its type
+	with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), fact_of(n, TYPE) ?? f.result)
 }
-# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this is the seed of calls on dynamic values, but written
-# by hand per word (`show(x: any) := prim dispatched(x)`), for one parameter, with its own fact and emitter code.
-# General form: when a call's arguments hold an any and no overload takes any there, typing itself writes the
-# instance `f(any)` once, as plain kernel: `if x is int then f(x as int) else if x is text … else raise "no f takes
-# a …"`, the overloads in the order the static choice ranks them (one ordering function for both). `is` tests and
-# checked conversions exist already, so the emitter needs nothing; `dispatched`, OVERLOADS and the hand-assembled
-# any_equality_function (core/emit/equality.wap) then fall out of the general rule.
-# the overloads of a function a dispatch may call, typed, records first: those of one parameter of a written type
-# other than any, one a concrete type has: no generic letters, no bare list or enum
-dispatched_overloads(function: Node, s: TypingState) as list := {
-	overloads = definitions_named(text(function), s).filter(definition => #parameters_in(definition) == 1 and dispatchable(taken_type(definition), s.records))
-	records_first = overloads.filter(definition => takes_record(definition, s)) + overloads.filter(definition => not takes_record(definition, s))
-	records_first.map(definition => declared_name(function_typed(definition, [taken_type(definition)], s, definition).signed))
-}
-# the written type of a function's one parameter, and whether it is a record's
-taken_type(definition: Node) as Node? := type_given(parameters_in(definition)#1)
-takes_record(definition: Node, s: TypingState) as bool := record_named(s.records, taken_type(definition)) != ø
-dispatchable(type: Node?, records: list) as bool := type != ø and type != symbol(ANY_TYPE) and not has_letters(type, records) and not takes_own_type(type, records)
