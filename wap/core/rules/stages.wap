@@ -43,10 +43,13 @@ class Fired { code: Node, fired: bool }
 # A side of a rule may stand in brackets to keep its keys and operators inside: `rule ($h as $t := $b) => ($h: $t := $b)`.
 # Only a pattern's holes take a type (`$c: Node`); in a template `$h: $t` is the key it writes.
 
-# the rules and patterns of loaded code taken in, the code without them returned
+# the rules and patterns of loaded code taken in, the code returned with each pattern's builder in its place
 rules_loaded(code: Node) as Node := match code {
-	List(items, Bracket.None, Separator.Newline) => List(items.filter(item => not taken_in(sequence_rule(item))), Bracket.None, Separator.Newline)
-	_ => if taken_in(sequence_rule(code)) then Empty else code
+	List(items, Bracket.None, Separator.Newline) => List(items.flat_map(item => left_by(sequence_rule(item)) ?? [item]), Bracket.None, Separator.Newline)
+	_ => {
+		left = left_by(sequence_rule(code))
+		if left == ø then code else if left is empty then Empty else List(left, Bracket.None, Separator.Newline)
+	}
 }
 
 # `rule P => A; B` writes both statements: the `;` binds looser than `=>`, so the line is a sequence whose first
@@ -59,20 +62,24 @@ sequence_rule(statement: Node) as Node := match statement {
 	_ => statement
 }
 
-# a rule or pattern statement taken in (yes), or any other statement left (no)
-taken_in(statement: Node) as bool := match statement {
+# a rule or pattern statement taken in, what it leaves in the code: a pattern its builder, a rule nothing; ø for any
+# other statement
+left_by(statement: Node) as list? := match statement {
 	Call(called, arguments) => declaration_taken(spelling_written(called), arguments)
-	_ => no
+	_ => ø
 }
 
-declaration_taken(called: text, arguments: list) as bool := {
-	if #arguments != 2 { return no }
+declaration_taken(called: text, arguments: list) as list? := {
+	if #arguments != 2 { return ø }
 	words = phrase_items(arguments#1)
-	if #words < 2 or not (words#1 is symbol) { return no }
+	if #words < 2 or not (words#1 is symbol) { return ø }
 	keyword = spelling_written(words#1)
-	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { declare_pattern(words#2, arguments#2); return yes }
-	if called == RULE_ARROW and keyword == RULE_WORD { rule_added(arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2); return yes }
-	no
+	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { return top_level_statements(pattern_builder(declare_pattern(words#2, arguments#2))) }
+	if called == RULE_ARROW and keyword == RULE_WORD {
+		rule_added(arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2)
+		return []
+	}
+	ø
 }
 
 phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }

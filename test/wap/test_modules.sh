@@ -44,4 +44,11 @@ print text(Side.Leaf == Leaf)')" "yes"
 check "a used module's case matched with its field" "$(ran use_case_field 'use "trees.wap"
 leaf = Leaf(3)
 print match leaf { Leaf(v) => text(v + 1); _ => "o" }')" "4"
+printf '%s\n' 'pattern Pair = (Pair $left: Node $right: Node)' >"$stage/pairs.wap"
+check "a used module's pattern builds its shape" "$(ran use_pattern 'use "pairs.wap"
+n = Pair(Text("a"), Number(1))
+print text(match n { List(items, bracket, separator) => #items; _ => 0 })')" "3"
+check "a pattern builds its shape, a rest hole taking a list" "$(ran pattern_rest 'pattern Run = (Run $first: Node $rest...: Node)
+n = Run(Text("a"), [Text("b"), Text("c")])
+print text(match n { List(items, bracket, separator) => #items; _ => 0 })')" "4"
 exit $((failures > 0))
