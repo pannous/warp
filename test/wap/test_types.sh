@@ -112,4 +112,12 @@ print text(f(3))
 print text(f(2.5))')" "4
 0"
 check "a value as a type is the type's function of it" "$(ran as_type 'print (97 as codepoint as text) + (Op.Add as text) + (3 as text)')" "a+3"
+check "two lists and two instances are equal by their parts" "$(ran equal_parts 'class P { x: int }
+print text([1, 2] == [1, 2])
+print text([1, 2] == [1, 3])
+print text(P(1) == P(1))
+print text(P(1) != P(2))')" "yes
+no
+yes
+yes"
 exit $((failures > 0))
