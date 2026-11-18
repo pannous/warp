@@ -8,7 +8,7 @@ use "../stage.wap"
 enum LexemeKind { Atom, Open, Close, Separator, Key }
 class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon; written: text = "" }
 
-class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty; angle_closers: list<int> = [] }
+class Reader { code: list<text>; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list<int> = []; margin: int = -1; indent_char: text = ""; comments: list<text> = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty; angle_closers: list<int> = [] }
 
 # the character `ahead` of the reader's place, a newline past the end
 peek(r: Reader, ahead: int) as text := peek_at(r, r.at + ahead)
@@ -57,6 +57,5 @@ commented(n: Node, comments: list) as Node := {
 	with_fact(n, "comment", Text(all.join("\n")))
 }
 
-# a node placed where it was written, when that is known; an empty `{}` or `()` is Empty in warp's Node and carries
-# no metadata
-placed(n: Node, line: int?, column: int?) as Node := if n == ø or line == ø then n else positioned(n, line, column)
+# a node placed where it was written; an empty `{}` or `()` is Empty in warp's Node and carries no metadata
+placed(n: Node, line: int, column: int) as Node := if n == ø then n else positioned(n, line, column)
