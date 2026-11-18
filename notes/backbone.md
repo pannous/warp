@@ -312,3 +312,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `receiver_fields`): a method of a preload or used module's class still writes `self.c`, and a function value inside
   a method that reads a bare field is not given self as a capture. Paid off when the binding sees the library's
   Records beside its declarations, and a field's capture captures its receiver.
+- **Decimal literals are floats, not exact** (wap/core/parse/atoms.wap number_read, wap/preload/floats.wap): `0.1 + 0.2`
+  shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
+  Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
+  Nothing pins the float digits.

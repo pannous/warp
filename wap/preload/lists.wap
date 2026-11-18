@@ -49,3 +49,10 @@ index_where(xs: list, fits) := {
 	}
 	0
 }
+
+# a list in warp notation, each item shown by its own show: `show([1, 2])` is [1, 2]
+show(xs: list): text := {
+	out = ""
+	for at in 1 to #xs { out = out + (if at > 1 then ", " else "") + show(xs#at) }
+	"[" + out + "]"
+}
