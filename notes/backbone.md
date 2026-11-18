@@ -270,10 +270,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `print (if c then a else b)` by the shape stage (core/rules/stages.wap inner_rewritten), but format prints it as
   written. Bends "a reading decided by spacing or position is printed explicitly", as `print -x` is. Reason: format
   runs before the shape rules. Paid off when format reads the rules' groupings.
-- **`wap format` leaves `f(x): T := …` as written instead of `f(x) as T := …`** (wap/core/format.wap). Bends
-  "everything warp prints uses the canonical word": wiki/function.md names `as` canonical and `:` its alias. Reason:
-  internally the typed head `f(x): T` is the one shape (core/sugar/definitions.wap rewrites `as` into it). Paid off
-  when format prints a typed definition head with `as`.
 - **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
   gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
   wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.
@@ -292,3 +288,5 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/core/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
   anywhere and refuses it. Paid off when a lone word is its own head.
+- **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
+  the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.

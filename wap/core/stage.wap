@@ -71,6 +71,9 @@ fact_of(n: Node, name: text) as Node? := {
 # Where a node was written: line_of and column_of its position, file_of the file the reader read it from (ø for a
 # node no file holds), a fact SOURCE_FILE the reader gives every node with a position
 SOURCE_FILE = "file"
+# the spelling a program wrote for code the reader gave another shape, which `wap format` prints back: the text
+# `"a ${x} b"` read as ("a " + text(x) + " b")
+WRITTEN = "written"
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø

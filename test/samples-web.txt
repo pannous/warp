@@ -1,4 +1,4 @@
-# 70f09a1581 2026-11-17 03:29 288/292 98.6%
+# 7cf23f6e43 2026-11-18 03:31 292/295 99.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -129,7 +129,7 @@ ok   samples/graphics/meshlet_grid.warp
 ok   samples/graphics/million_trees.warp
 ok   samples/graphics/paint_function.warp
 ok   samples/graphics/paint_text.warp
-FAIL samples/graphics/paint_text_gpu.warp
+ok   samples/graphics/paint_text_gpu.warp
 ok   samples/graphics/plot_siren.warp
 ok   samples/graphics/postcard.warp
 drew samples/graphics/raylib_circle.warp
@@ -149,7 +149,7 @@ ok   samples/hello/natural.warp
 ok   samples/hello/phrases.warp
 ok   samples/hello/sample.warp
 ok   samples/laws/basic_laws.warp
-DIFF samples/laws/kitchensink.warp
+ok   samples/laws/kitchensink.warp
 ok   samples/laws/project_laws.warp
 ok   samples/lists/dot.warp
 ok   samples/lists/primes.warp
@@ -172,7 +172,7 @@ ok   samples/matching/tree_patterns.warp
 ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
-FAIL samples/modules/free_slots.warp
+ok   samples/modules/free_slots.warp
 ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
@@ -216,7 +216,9 @@ ok   samples/objects/json_parser.warp
 ok   samples/objects/mixins.warp
 ok   samples/objects/references.warp
 ok   samples/objects/ring_log.warp
-ok   samples/objects/sorted_leaderboard.warp
+FAIL samples/objects/sorted_leaderboard.warp
+ok   samples/physics/usd_bodies.warp
+ok   samples/physics/usd_collisions.warp
 ok   samples/python/numpy_matrix.warp
 ok   samples/python/python_modules.warp
 ran  samples/servers/hosting.warp
@@ -264,6 +266,7 @@ ok   samples/text/uniscript_text.warp
 ok   samples/text/word_count.warp
 ok   samples/text/word_lengths.warp
 ok   samples/types/dispatch.warp
+ok   samples/types/pattern_types.warp
 ok   samples/types/polymorphism.warp
 ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
@@ -290,4 +293,4 @@ ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 ran  samples/world/polymarket_odds.warp
-ran  samples/world/strong_quakes.warp
+TIME samples/world/strong_quakes.warp

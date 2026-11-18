@@ -7,7 +7,12 @@ use "stage.wap"
 use "../kernel/forms.wap"
 use "../preload/operators.wap"
 
-formatted(n: Node) as text := annotations_text(n) + written(n)
+# the operator that defines, whose left side is a definition's head
+DEFINE_SPELLING = ":="
+
+formatted(n: Node) as text := annotations_text(n) + (text_written(n) ?? written(n))
+# the spelling the program wrote, where the reader gave its code another shape (core/stage.wap WRITTEN)
+text_written(n: Node) as text? := match fact_of(n, WRITTEN) { Text(spelling) => spelling; _ => ø }
 
 written(n: Node) as text := match n {
 	Call(called, arguments) => call_text(n, called, arguments)
@@ -28,6 +33,14 @@ annotations_text(n: Node) as text := {
 	annotations.map(annotation => "@" + formatted(annotation) + " ").join("")
 }
 
+# a definition's head, a function's written result type after `as`, the canonical word (wiki/function.md):
+# `f(x): int` prints as `f(x) as int`; a typed name keeps its `:`, `x: int`
+definition_head_text(head: Node) as text := match head {
+	Key(name, Op.Colon, type) => if is_call_head(name) then formatted(name) + " as " + formatted(type) else formatted(head)
+	_ => formatted(head)
+}
+is_call_head(n: Node) as bool := match n { Key(called, Op.None, group) => yes; _ => no }
+
 # A key in brackets when it is a phrase or an operator call: `(a b): c`, `(a - b): 2`; `a b: c` would key only b
 key_text(key: Node) as text := if is_loose(key) then "(" + formatted(key) + ")" else formatted(key)
 # code that blanks or an operator hold together, which a `:` beside it would split
@@ -42,7 +55,8 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 	if fact_of(call, COMPOUND) != ø { return compound_text(call, arguments) }
 	spelling = formatted(called)
 	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
-		return operand_text(arguments#1, call, Side.Left) + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
+		left = if spelling == DEFINE_SPELLING then definition_head_text(arguments#1) else operand_text(arguments#1, call, Side.Left)
+		return left + " " + spelling + " " + operand_text(arguments#2, call, Side.Right)
 	}
 	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" {
 		gap = if is_word(spelling) then " " else ""
