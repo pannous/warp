@@ -286,3 +286,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   anywhere and refuses it. Paid off when a lone word is its own head.
 - **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
   the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
+- **A module's rules reach files that don't `use` it** (wap/core/rules/stages.wap `shape_rules`). All loaded rules go
+  into one table, so once a module is shaped its rules also apply to every file shaped after it, the preload's and
+  the census's included. Bends "use builds the language the program is written in": the scope should follow `use`.
+  Paid off by a rule table per program, the language's rules plus those of the modules it uses.
