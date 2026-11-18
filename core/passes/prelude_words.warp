@@ -316,7 +316,8 @@ time_test_types = ["time", "duration", "date", "instant"]
 emitted_modules(program: Node) as list := if time_operation_word in time_literal_words(program) or #time_test_words(program) > 0 then [time_module] else []
 time_module = "time"
 
-# the names of the functions with_reached brought from the prelude and the modules, of the compile at hand
+# the names of the functions with_reached brought from the prelude and the modules, of the compile at hand, each with
+# the parameter types of every definition brought
 global brought_names = {}
 # the names of the values it brought, `m = Unit("m")` of lib/units, which go in front of the program
 global brought_value_names = {}
@@ -507,7 +508,8 @@ with_reached(program: Node, module: text, in_front: bool, files: list = [], link
 	}
 	for statement in functions {
 		name = declared_name(statement)
-		if name != ø { brought_names[name] = yes }
+		call = definition_call(statement)
+		if name != ø { brought_names[name] = (brought_names.get(name) ?? []) + (if call != ø then [parameter_types(call)] else []) }
 	}
 	own_statements = statements_in(program)
 	parts = if in_front then values + functions + own_statements else values + own_statements + functions
