@@ -10,9 +10,9 @@ use "shapes.wap"
 use "dispatch.wap"
 use "../errors.wap"
 
-# DONE: Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
+# DONE (1c61026ce9): Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
 # TODO: what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
-# DONE: link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
+# DONE (bd6311b8df): link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if valued_type(a) and valued_type(b) { settles(a, b, s) }
