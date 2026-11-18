@@ -72,4 +72,8 @@ yes"
 check "an empty list beside lists of ints is one too" "$(ran empty_item 'xs = [[1], []]
 ys = xs#2 + [5]
 print(text(ys#1 + xs#1#1))')" "6"
+check "a list's text is its items' texts in brackets" "$(ran list_text 'xs = [1, 2, 3]
+print(text(xs))
+print(text([[1], [2, 3]]))')" "[1, 2, 3]
+[[1], [2, 3]]"
 exit $((failures > 0))
