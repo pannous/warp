@@ -90,8 +90,8 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 takes(definition: Node, given: list, records: list, fit: function) as bool := {
 	parameters = parameters_in(definition)
 	if #parameters != #given { return no }
-	if parameters.any(parameter => has_letters(type_given(parameter), records)) { return letters_bound(definition, given.map(value_type), records) != ø }
-	(1 to #given).all(at => fit(given#at, type_given(parameters#at)))
+	letters = if parameters.any(parameter => has_letters(type_given(parameter), records)) then letters_bound(definition, given.map(value_type), records) else []
+	letters != ø and (1 to #given).all(at => fit(given#at, substituted(type_given(parameters#at), letters)))
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
@@ -149,8 +149,9 @@ substituted(type: Node?, bound: list) as Node? := {
 	if parts == ø { return type }
 	type_built(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
 }
-fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted)
-fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or type_fits(value_type(argument), wanted) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
+# whether an argument fits a parameter, exactly or by a conversion: a char read as its text, a T or ø as a T?
+fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted) or type_fits(value_type(argument), wanted)
+fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
 # a bare `list` wanted, which every list<T> fits
 any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
 # a bare `enum` wanted, which any enum fits: tag_equal compares tags, then a case's fields
