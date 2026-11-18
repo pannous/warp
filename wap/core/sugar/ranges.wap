@@ -1,0 +1,4 @@
+# Ranges written with their operators, as the preload's Range (wiki/range.md): `a to b` (`…`, `...` its aliases)
+# includes b, `a .. b` (upto) stops before it. A for loop over `a to b` counts without one (core/sugar/loops.wap).
+rule $from to $last => Range($from, $last)
+rule $from .. $end => Range($from, $end - 1)
