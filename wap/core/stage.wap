@@ -148,10 +148,14 @@ parts_of_type(word: text, type: Node?) as list? := match type {
 	_ => ø
 }
 # any type's word and parts, `list` and `int` of `list<int>`; ø for a type without parts
-type_parts(type: Node?) as list? := if base_of_optional(type) != ø then [symbol(OPTIONAL_MARK), base_of_optional(type)] else match type {
-	Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
-	Call(called, items) => if text(called) == FUNCTION_ARROW and #items == 2 then [called] + items_or_one(items#1) + [items#2] else ø
-	_ => ø
+type_parts(type: Node?) as list? := {
+	if base_of_optional(type) != ø { return [symbol(OPTIONAL_MARK), base_of_optional(type)] }
+	function = function_type_parts(type)
+	if function != ø { return [symbol(FUNCTION_ARROW)] + function#1 + [function#2] }
+	match type {
+		Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
+		_ => ø
+	}
 }
 # a type built back from its word and parts, as type_parts gives them
 type_built(word: text, parts: list) as Node := if word == OPTIONAL_MARK then optional_type(parts#1) else if word == FUNCTION_ARROW then function_type_of(parts.take(#parts - 1), parts.last) else generic_type(word, parts)
