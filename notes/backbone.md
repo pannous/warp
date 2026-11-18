@@ -237,6 +237,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **An empty group loses its bracket** (EMPTY_GROUPS, wap/core/rules/patterns.wap): the reader gives `()` and `{}`
+  as Empty, so a rule written `f($xs...)` also fits `f{}` and one written `f{$xs...}` also fits `f()`. Paid off when
+  the reader gives an empty group as List([], bracket); EMPTY_GROUPS leaves with it.
+
 - **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
   program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
   example the preload's `slice` taking a Range and raising when it does not fit.
