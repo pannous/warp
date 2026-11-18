@@ -317,8 +317,8 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	# a bare `list` (or `list?`) written takes the body's own type, as a bare list parameter takes its argument's
 	typed.jumps = written == symbol(NEVER_RESULT)
 	typed.result = if names_bare_kind(written) or typed.jumps then ø else written
-	# a built-in that never returns keeps its written `never`, which the emitter lays out
-	typed.signed = with_signature(name, types, if typed.jumps then written else typed.result)
+	# a function that never returns says so in its signature, as a built-in writes it, `never`, which the emitter lays out
+	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
 	s.functions += [typed]
 	frame = TypeFrame()
 	frame.result = typed.result
@@ -329,9 +329,9 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(typed_body, frame, name, s)
 	typed.jumps = typed.jumps or jumps(typed_body) and frame.returns is empty
-	if written != ø { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
+	if written != ø and not typed.jumps { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
-	typed.signed = with_signature(name, types, if typed.jumps and typed.result == ø then written else typed.result)
+	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
 	typed.late = frame.late
 	typed.done = yes

@@ -181,4 +181,14 @@ check "a λ of a signature keeps what the λ around it captured" "$(ran signatur
 	inner
 }]
 print text(((made(1)#1)(2)#1)(3))')" "6"
+check "code that never finishes adds nothing to a join: an arm that returns, raises or calls a function that always raises" "$(ran jumps 'f(n: int) as int := if n > 0 then n else raise("negative")
+g(n: int) := { if n > 2 { return n * 10 }; n }
+fail() := raise("always")
+y = if f(3) > 9 then fail() else g(5) + g(1)
+print text(y)
+h(x: int) as text := match x { 1 => "one"; _ => raise("other") }
+print(h(1))
+print text(f(-1))')" "51
+one
+negative"
 exit $((failures > 0))
