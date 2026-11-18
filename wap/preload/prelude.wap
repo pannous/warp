@@ -50,6 +50,11 @@ raise(message: text): never := prim raise_text(message)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
+# a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
+keys(m: map<K, V>): list<K> := prim map_keys(m)
+# whether a map holds a key
+has(m: map<K, V>, key: K): bool := m.keys().contains(key)
+
 # the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
 int(t: text): int := {
 	negative = byte_count(t) > 1 and byte_at(t, 0) == MINUS_BYTE

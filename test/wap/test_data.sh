@@ -64,4 +64,11 @@ ks.add("zz")
 print show(ks)
 print text(#keys(m))')" "[\"a\", \"b\", \"zz\"]
 2"
+check "a map's keys in the order set, and whether it has a key" "$(ran map_has 'm = {ab: 1, b: 2}
+m.cd = 3
+print text(m.has("cd"))
+print text(m.has("zz"))
+print text(#m.keys())')" "yes
+no
+3"
 exit $((failures > 0))
