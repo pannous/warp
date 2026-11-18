@@ -58,7 +58,7 @@ arranged(definition: Node, arguments: list) as list? := {
 	placed = positional
 	for parameter in parameters.drop(#positional) {
 		given = named.filter(argument => text(declared_name(argument)) == text(declared_name(parameter)))
-		placed = placed + [if given then named_value(given#1) else fact_of(parameter, DEFAULT) ?? return ø]
+		placed = placed + [if given then named_value(given#1) else if defaulted(parameter) then fact_of(parameter, DEFAULT) else return ø]
 	}
 	placed
 }
@@ -66,8 +66,9 @@ named_value(argument: Node) as Node := match argument { Key(name, Op.Colon, valu
 # whether a definition takes this many arguments: one for each parameter, those with defaults at the end left out or not
 takes_count(definition: Node, count: int) as bool := {
 	parameters = parameters_in(definition)
-	count <= #parameters and parameters.drop(count).all(parameter => fact_of(parameter, DEFAULT) != ø)
+	count <= #parameters and parameters.drop(count).all(defaulted)
 }
+defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
 # the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
 defaults_given(definition: Node, count: int, s: TypingState, f: TypeFrame) as list := {
 	parameters_in(definition).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
@@ -163,7 +164,8 @@ with_letters(argument: Node, letters: list) as Node := {
 	type = substituted(value_type(argument), letters)
 	if type == value_type(argument) then argument else with_type_of(argument, type)
 }
-# Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
+# Among several definitions that fit, the most specific: a written type beats a bare kind, `==(a: Node, b: Node)`
+# beats `==(a: enum, b: enum)`, a kind beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; of those, more written structure beats less, `==(a: T?, b: T?)` beats
 # `==(a: T, b: T)`; several equally specific are left for the caller to refuse
 most_specific(definitions: list, records: list) as list := {
@@ -187,7 +189,9 @@ innermost(definitions: list, scopes: list) as list := {
 	}
 	definitions
 }
-typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter), records) or protocol_named(records, type_given(parameter)) != ø then 1 else 2).fold(0, (a, b) -> a + b)
+typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => type_weight(type_given(parameter), records)).sum()
+# how much a parameter's type says of its argument: nothing, a letter or a protocol, a kind, a type
+type_weight(type: Node?, records: list) as int := if type == ø then 0 else if has_letters(type, records) or protocol_named(records, type) != ø then 1 else if names_bare_kind(type) then 2 else 3
 
 # Protocols (wiki/trait.md, decision traits-are-protocols): a type of words a value can do, `trait shape { area() }`,
 # a Record of function-typed fields and no cases. A value fits one when for each word a function of that name takes

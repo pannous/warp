@@ -22,4 +22,10 @@ x: int? = 3
 print(same(x, x))
 print(same(1, 2))')" "optional
 any"
+check "a definition for a named enum wins over one for any enum" "$(ran named_enum_wins 'enum Color { red green }
+enum Tone { low high }
+==(a: Color, b: Color): bool := yes
+print(text(Color.red == Color.green))
+print(text(Tone.low == Tone.high))')" "yes
+no"
 exit $((failures > 0))
