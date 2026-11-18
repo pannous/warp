@@ -46,4 +46,14 @@ format_check 'rule show { ($k: $v)... } => 1' 'rule show {($k: $v)...} => 1'
 # an optional's value, `x!` (wiki/optional.md), beside the prefix `!x` for not
 format_check 'y = x!' 'y = x!'
 format_check 'z = !x' 'z = not x'
+# a word leading a rule's phrase after an infix takes the rest of the phrase, as at a phrase's start; other words stay operands
+format_check 'x = f(a) ?? return ø' 'x = f(a) ?? (return ø)'
+format_check 'n = if s < 0 then 0 - s else s' 'n = if s < 0 then 0 - s else s'
+format_check 'z = a ?? if c {1} else {2}' 'z = a ?? (if c {1} else {2})'
+check "a match after an assignment keeps its arms" "$(ran assigned_match 'x = 2
+y = match x { 1 => "a"; _ => "b" }
+print y')" "b"
+check "an if after ?? takes its blocks" "$(ran default_if 'f(n: int) as int? := if n > 0 then n else ø
+z = f(0) ?? if 2 > 1 {7} else {8}
+print text(z)')" "7"
 exit $((failures > 0))
