@@ -13,4 +13,8 @@ positive(-1)')" "ok
 not positive"
 check "the value when raise does not run" "$(ran not_raised 'positive(x: int): int := if x > 0 then x else raise "not positive"
 positive(5)')" "5"
+check "an error line, and the program runs on" "$(ran error_line 'note(t: text) := prim error_text(t)
+note("careful")
+print "still running"')" "careful
+still running"
 exit $((failures > 0))
