@@ -123,7 +123,7 @@ block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: N
 	s.definitions = s.definitions + statements.filter(statement => statement is Define)
 	s.records = s.records + statements.filter(statement => statement is Record)
 	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
-	for statement in statements { if statement is Define and all_typed(statement) { function_typed(statement, written_types(statement), s, statement) } }
+	for statement in statements { if statement is Define and all_typed(statement, s.records) { function_typed(statement, written_types(statement), s, statement) } }
 	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
 	if typed is empty then block else with_type_of(block, value_type(typed.last))
 }

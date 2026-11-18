@@ -16,7 +16,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
 	candidates = candidates_of(called).map(definer => definition_at(definer, s))
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)
-	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter)) then ø else type_given(parameter)) else arguments.map(argument => ø)
+	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
 	meant = chosen_definition(n, called, candidates, given, expected, s)
 	wanted = parameters_in(meant).map(type_given)
@@ -61,10 +61,10 @@ definition_keyed(key: text, s: TypingState) as Node? := {
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
 chosen_definition(n: Node, called: Node, candidates: list, given: list, expected: Node?, s: TypingState) as Node := {
 	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
-	fitting = candidates.filter(definition => takes(definition, given, (argument, wanted) -> fits(argument, wanted, s.records)))
-	exact = fitting.filter(definition => takes(definition, given, (argument, wanted) -> fits_exactly(argument, wanted, s.records)))
+	fitting = candidates.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits(argument, wanted, s.records)))
+	exact = fitting.filter(definition => takes(definition, given, s.records, (argument, wanted) -> fits_exactly(argument, wanted, s.records)))
 	if #fitting > 1 and exact is not empty { fitting = exact }
-	if #fitting > 1 { fitting = most_specific(fitting) }
+	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
 	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
@@ -73,62 +73,58 @@ chosen_definition(n: Node, called: Node, candidates: list, given: list, expected
 # whether a definition takes these arguments, each one fitting its parameter; a definition they fit exactly wins over
 # one they fit only by a conversion (`text('é')` is text(c: char), not text(t: text))
 # (a parameter typed by generic letters takes an argument whose type binds them alike, see letters_bound)
-takes(definition: Node, given: list, fit: function) as bool := {
+takes(definition: Node, given: list, records: list, fit: function) as bool := {
 	parameters = parameters_in(definition)
 	if #parameters != #given { return no }
-	if parameters.any(parameter => has_letters(type_given(parameter))) { return letters_bound(definition, given.map(value_type)) != ø }
+	if parameters.any(parameter => has_letters(type_given(parameter), records)) { return letters_bound(definition, given.map(value_type), records) != ø }
 	(1 to #given).all(at => fit(given#at, type_given(parameters#at)))
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
-most_specific(definitions: list) as list := {
-	best = definitions.map(typing_weight).fold(0, (a, b) -> if a > b then a else b)
-	definitions.filter(definition => typing_weight(definition) == best)
+most_specific(definitions: list, records: list) as list := {
+	weights = definitions.map(definition => typing_weight(definition, records))
+	best = weights.fold(0, (a, b) -> if a > b then a else b)
+	(1 to #definitions).filter(at => weights#at == best).map(at => definitions#at)
 }
-typing_weight(definition: Node) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter)) then 1 else 2).fold(0, (a, b) -> a + b)
+typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter), records) then 1 else 2).fold(0, (a, b) -> a + b)
 
 # Generic letters (wiki/type.md "Foreign type names and generic letters"): a one-letter type name, `f(x: T)`, stands
-# for the type its argument gives, every T of one signature the same; `list<T>` takes a list of any one item type.
+# for the type its argument gives, every T of one signature the same; `list<T>` takes a list of any one item type. A
+# letter the program declares as a class or an enum is that type.
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-is_letter(type: Node?) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type))
-has_letters(type: Node?) as bool := is_letter(type) or (type_parts(type) ?? []).any(has_letters)
-# a type's parts, `list` and `int` of `list<int>`; ø for a type of none
-type_parts(type: Node?) as list? := match type {
-	Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
-	_ => ø
-}
+is_letter(type: Node?, records: list) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type)) and record_named(records, type) == ø
+has_letters(type: Node?, records: list) as bool := is_letter(type, records) or (type_parts(type) ?? []).any(part => has_letters(part, records))
 # The letters a definition's parameters bind for these argument types, each [letter, type]; ø when the arguments don't
 # fit them (a T bound to two types)
-letters_bound(definition: Node, types: list) as list? := {
+letters_bound(definition: Node, types: list, records: list) as list? := {
 	bound = []
 	parameters = parameters_in(definition)
 	for at in 1 to #parameters {
 		wanted = type_given(parameters#at)
-		if wanted != ø and has_letters(wanted) { bound = unified(wanted, types#at, bound) ?? return ø }
+		if wanted != ø and has_letters(wanted, records) { bound = unified(wanted, types#at, bound, records) ?? return ø }
 	}
 	bound
 }
 # the letters bound so far with those a wanted type binds against a given one, ø when they don't fit
-unified(wanted: Node, given: Node?, bound: list) as list? := {
+unified(wanted: Node, given: Node?, bound: list, records: list) as list? := {
 	if given == ø { return ø }
-	if is_letter(wanted) {
+	if is_letter(wanted, records) {
 		held = type_keyed(text(wanted), bound)
 		return if held == ø then bound + [[text(wanted), given]] else if same_type(held, given) then bound else ø
 	}
 	wanted_parts = type_parts(wanted)
 	given_parts = type_parts(given)
 	if wanted_parts == ø or given_parts == ø or #wanted_parts != #given_parts { return if same_type(given, wanted) then bound else ø }
-	for at in 1 to #wanted_parts { bound = unified(wanted_parts#at, given_parts#at, bound) ?? return ø }
+	for at in 1 to #wanted_parts { bound = unified(wanted_parts#at, given_parts#at, bound, records) ?? return ø }
 	bound
 }
 # a type with its letters replaced by the types they are bound to
 substituted(type: Node?, bound: list) as Node? := {
 	if type == ø or bound is empty { return type }
-	if is_letter(type) { return type_keyed(text(type), bound) ?? type }
-	match type {
-		Key(name, Op.None, List(items, Bracket.Less, separator)) => Key(name, Op.None, List(items.map(item => substituted(item, bound)), Bracket.Less, separator))
-		_ => type
-	}
+	if type is symbol { return type_keyed(text(type), bound) ?? type }
+	parts = type_parts(type)
+	if parts == ø { return type }
+	generic_type(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
 }
 fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted)
 fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
@@ -162,7 +158,7 @@ function_typed(definition: Node, types: list, s: TypingState, at: Node) as Typed
 		}
 	}
 	typed = TypedFunction(key, types)
-	letters = if parameters_in(definition).any(parameter => has_letters(type_given(parameter))) then letters_bound(definition, types) ?? [] else []
+	letters = if parameters_in(definition).any(parameter => has_letters(type_given(parameter), s.records)) then letters_bound(definition, types, s.records) ?? [] else []
 	typed.result = substituted(declared_type(name), letters)
 	typed.signed = with_signature(name, types, typed.result)
 	s.functions += [typed]
@@ -199,7 +195,7 @@ with_items(n: Node, items: list) as Node := match n {
 	_ => n
 }
 # whether a definition's parameters all have their types, none a generic letter: typed even when nothing calls it
-all_typed(definition: Node) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter)))
+all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records))
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)

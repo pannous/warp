@@ -40,4 +40,7 @@ no
 yes
 8
 x"
+check "a one-letter name the program declares is that type, not a generic letter" "$(ran declared_letter 'class P { x: int }
+f(p: P) := p.x
+print text(f(P(4)) + 1)')" "5"
 exit $((failures > 0))
