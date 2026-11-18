@@ -144,7 +144,7 @@ goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new fil
 |---|---|---|
 | lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap |
 | self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
-| front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/sugar/, core/format.wap, preload/ |
+| front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/sugar/, core/format.wap, core/language.wap, preload/ |
 | types: declare, bind, type | warp-wap-binding | core/analyze/, core/paths.wap |
 | back: emitter, runtime | warp-wap-emitter | core/emit/ |
 
