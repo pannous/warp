@@ -132,6 +132,7 @@ unified(wanted: Node, given: Node?, bound: list, records: list) as list? := {
 		held = type_keyed(text(wanted), bound)
 		return if held == ø then bound + [[text(wanted), given]] else if same_type(held, given) then bound else ø
 	}
+	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, records) }
 	wanted_parts = type_parts(wanted)
 	given_parts = type_parts(given)
 	if wanted_parts == ø or given_parts == ø or #wanted_parts != #given_parts { return if same_type(given, wanted) then bound else ø }
@@ -144,10 +145,10 @@ substituted(type: Node?, bound: list) as Node? := {
 	if type is symbol { return type_keyed(text(type), bound) ?? type }
 	parts = type_parts(type)
 	if parts == ø { return type }
-	generic_type(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
+	type_built(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
 }
 fits(argument: Node, wanted: Node?, records: list) as bool := fits_exactly(argument, wanted, records) or reads_as_text(argument, wanted)
-fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
+fits_exactly(argument: Node, wanted: Node?, records: list) as bool := wanted == ø or type_fits(value_type(argument), wanted) or any_list(wanted, value_type(argument)) or any_enum(wanted, value_type(argument), records)
 # a bare `list` wanted, which every list<T> fits
 any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
 # a bare `enum` wanted, which any enum fits: tag_equal compares tags, then a case's fields
@@ -165,7 +166,7 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
-	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and same_type(returned, result)) { refused(name, "this function gives back values of different types") } }
+	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and type_fits(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }
 function_typed(definition: Node, types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
@@ -188,7 +189,7 @@ function_typed(definition: Node, types: list, s: TypingState, at: Node) as Typed
 	frame.variables += captured_by(definition, types)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(value_type(typed_body), frame, name)
-	if typed.result != ø and (given == ø or not same_type(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
+	if typed.result != ø and (given == ø or not type_fits(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
 	typed.result = given
 	typed.signed = with_signature(name, types, given)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
