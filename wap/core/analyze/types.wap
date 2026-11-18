@@ -315,7 +315,7 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 }
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
 case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
-	fields = case_fields(case_named(enum_of_case(s, called), called))
+	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, declared_type(fields#at)))
 	for at in 1 to #given { if not fits_type(given#at, declared_type(fields#at)) { refused(arguments#at, "this gives ${value_type(given#at) ?? "no value"}, the field holds a ${declared_type(fields#at)}") } }
@@ -323,7 +323,7 @@ case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeF
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 	typed = if given is empty and n === called then n else refitted(Call(called, given), n)
-	with_type_of(typed, symbol(record_name(enum_of_case(s, called))))
+	with_type_of(typed, symbol(record_name(enum_declaring(s.records, called))))
 }
 # a case pattern's name, the case of that name in the subject's enum when it has one (two enums may share the name)
 in_enum(name: Node, type: Node, s: TypingState) as Node := {
@@ -333,17 +333,11 @@ in_enum(name: Node, type: Node, s: TypingState) as Node := {
 	name
 }
 case_in_enum_typed(name: Node, s: TypingState) as Node := case_typed_as(name, name, [], s)
-# the enum of a bound case: the one whose case defined it, so cases of two enums with one name stay apart
-enum_of_case(s: TypingState, name: Node) as Node := {
-	definer = fact_of(name, DEFINED_AT)
-	for record in s.records { if definer != ø and cases_of(record).any(case => place_key(case_name(case)) == place_key(definer)) { return record } }
-	enum_of(s.records, name) ?? refused(name, "no enum has this case")
-}
 field_names(fields: list) as text := fields.map(field => text(declared_name(field))).join(", ")
 # A case pattern, `Circle(r)`: a pattern for each of its fields, of the field's type
 case_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := match pattern { Call(written, parts) => {
 	called = in_enum(written, type, s)
-	fields = case_fields(case_named(enum_of_case(s, called), called))
+	fields = case_fields(case_declaring(s.records, called))
 	if #parts != #fields { refused(pattern, "${called} names each of its fields: ${field_names(fields)}") }
 	case_typed_as(pattern, called, (1 to #parts).map(at => pattern_typed(parts#at, declared_type(fields#at), s, f)), s)
 } }
