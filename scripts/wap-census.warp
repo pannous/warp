@@ -58,6 +58,26 @@ typing_joined(modules: list) := {
 		}
 	}
 }
+# How a file's program fared typed and emitted whole: the first refusal stops both, as in the compiler
+class Whole { typed: bool = no, emitted: bool = no, refusal: text = "" }
+whole_typed(file: text) as Whole := {
+	outcome = Whole()
+	try {
+		code = typed_whole(file)
+		outcome.typed = yes
+		emitted(code)
+		outcome.emitted = yes
+	} catch e { outcome.refusal = e.message }
+	outcome
+}
+# The files of one use closure, a cycle of modules that use each other, make one program: typed once a run
+closures: map = {}
+whole_once(file: text) as Whole := {
+	global closures
+	key = modules_of(file).map(module => file_of(module) ?? "").sorted().join(" ")
+	if not closures.has(key) { closures[key] = whole_typed(file) }
+	closures[key]
+}
 # the file typed whole with the modules it uses, as typed_file types it
 typed_whole(file: text) as Block := {
 	modules = modules_of(file)
@@ -98,17 +118,10 @@ probe(file: text) as Tally := {
 	}
 	# typing and emitting run on the whole file, as the compiler runs them: the first refusal stops them; a preload
 	# file is no program of its own but every program's library, typed function by function below
-	typed = no
-	emitted_ok = no
-	if not in_preload(file) {
-		try {
-			code = typed_whole(file)
-			typed = yes
-			emitted(code)
-			emitted_ok = yes
-		} catch e { report(if typed then "emit" else "type", e.message) }
-	}
-	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${typed}, emitted: ${emitted_ok}"
+	outcome = if in_preload(file) then Whole() else whole_once(file)
+	if outcome.refusal != "" { report(if outcome.typed then "emit" else "type", outcome.refusal) }
+	typed = outcome.typed
+	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${typed}, emitted: ${outcome.emitted}"
 	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, " + whole
 	counted = functions_probe(file)
 	Tally(1, if typed then 1 else 0, counted.functions, counted.typed, counted.anys)
@@ -133,7 +146,6 @@ functions_probe(file: text) as Tally := {
 	try modules = modules_of(file) catch e { report("declare", e.message); return Tally() }
 	prepared_modules = []
 	try prepared_modules = modules.map(module => prepared_once(module, modules)) catch e { report("bind", e.message); return Tally() }
-	program = prepared_modules.flat_map(statements => statements)
 	own = if in_preload(file) then library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":")) else prepared_modules.last.filter(statement => statement is Define)
 	typed_alone = 0
 	by_calls = 0
