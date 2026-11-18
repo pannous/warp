@@ -54,4 +54,6 @@ check "an optional int takes an int or ø, its value read where a condition foun
 print text(f(4) + f(ø))
 print text(ø ?? 3)')" "5
 3"
+check "codepoint is another name of the char type" "$(ran codepoint 'first(c: codepoint): char := c
+print text(first('"'"'a'"'"'))')" "a"
 exit $((failures > 0))
