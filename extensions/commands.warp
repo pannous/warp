@@ -4,3 +4,4 @@
 use "commands/commands.warp"
 use "commands/build.warp"
 use "commands/tests.warp"
+use "commands/kernel.warp"
