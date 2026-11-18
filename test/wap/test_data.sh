@@ -34,4 +34,6 @@ xs = [1, 2] + [3]
 print text(#xs)
 xs#3')" "3
 3"
+check "a map written as data, read by its key" "$(ran map_read 'NAMES = {yes: 1, no: 0}
+print text(NAMES.yes)')" "1"
 exit $((failures > 0))
