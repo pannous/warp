@@ -490,7 +490,7 @@ shared_names(statements: list) := {
 # the name a statement `global name = value` or `global name` declares, else ø
 declared_global_name(s: Node) as text? := {
 	declaration = if is_group(s) and bracket_of(s) == "" and #s == 2 and s#1 == symbol("global") then s#2 else if is_key(s, Op.Colon) and key_of(s) == symbol("global") then value_of(s) else ø
-	if declaration is symbol then name_of(declaration) else if is_key(declaration, Op.Assign) and key_of(declaration) is symbol then name_of(key_of(declaration)) else ø
+	if declaration is symbol then name_of(declaration) else if is_key(declaration, Op.Assign) and assigned_variable(key_of(declaration)) is symbol then name_of(assigned_variable(key_of(declaration))) else ø
 }
 # the names among `wanted` a walk found symbols of, each once, as mentions finds one
 class Mentions { wanted: any; found: map = {} }
@@ -844,6 +844,7 @@ statements_block(n: Node) as any := if is_curly_list(n) then separated(n, ";") e
 program_global_prefix = "program·"
 global_key(body: Body, name: text) as text := if body.intrinsics then name else program_global_prefix + name
 is_global(body: Body, name: text) as bool := name not in body.names and global_key(body, name) in module.globals
+changes_global(body: Body, name: text) as bool := body.intrinsics or body.function.name == "main" or name in module.main_globals or name in body.globals
 # a built-in type's name, `type` or a declared class's
 names_a_type_value(name: text) as bool := is_tested_type_word(name) or name == "type" or name in module.classes
 # a name with its first letter capitalized, `later` → Later, the case a lowercase bare name may mean
@@ -945,7 +946,9 @@ def assignment(body: Body, target: Node, value: TypedCode) as TypedCode {
 	# (a global main declares, assigned by a function compiled first: task_stepped's running_task, never a local)
 	if name in module.main_globals { declared_before_main(body, name) }
 	if name not in body.names and is_shared and body.function.name == "main" { return declare_global(global_key(body, name), value) }
-	if is_global(body, name) and not is_shared { return global_assignment(global_key(body, name), value) }
+	# another function's assignment changes a main-level variable only where it is declared `global`: a used module's
+	# plain `arguments = args` stays read-only to the program's functions, whose fresh `arguments = …` is their own
+	if is_global(body, name) and not is_shared and changes_global(body, name) { return global_assignment(global_key(body, name), value) }
 	if name not in body.names and name in body.function.widened { kind = body.function.widened[name] }
 	# analyzer.warp's kind of the local, unless a value not held as that kind widened it (`x = 10.0; x = floor(2.5)`);
 	# a node stays one where the analyzer found a list: a $List holds no bracket or separator (bracketed(xs, "("))
