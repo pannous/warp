@@ -1,0 +1,89 @@
+# Where values live: the layout of a typed form, a record's field or a list's item
+# reached, read and written, and the variables a bound name refers to.
+
+use "emitter.wap"
+use "primitives.wap"
+use "values.wap"
+use "wasm.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the layout of a typed form's value
+layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for this type yet")
+# the GC array type of a typed list
+list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no list")
+# The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
+# reads it and the one that writes it
+class Place { reached: list; read: list; written: list }
+place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
+	record = record_named(p.records, fact_of(subject, TYPE))
+	if record != ø {
+		at = [struct_of(record, p.m, p.records), index_where(fields_of(record), field => text(declared_name(field)) == text(key)) - 1]
+		return Place(code(subject, p, f).instructions, instruction(STRUCT_GET, at), instruction(STRUCT_SET, at))
+	}
+	Place(item_reached(subject, key, p, f), instruction(ARRAY_GET, [list_of(subject, p)]), instruction(ARRAY_SET, [list_of(subject, p)]))
+}
+read_code(type: list, place: Place) as Code := Code(type, place.reached + place.read)
+written_code(place: Place, value: Code) as Code := Code([], place.reached + value.instructions + place.written)
+
+# An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
+instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Code := {
+	values = fields_of(record).map(field => items.filter(item => text(declared_name(item)) == text(declared_name(field)))#1)
+	Code(layout(form, p), values.flat_map(item => code(given_value(item), p, f).instructions) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
+}
+given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
+# a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
+item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
+
+# A value given to a place: a name, which then has that value, or a list's item, which leaves none
+assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
+	Get(subject, key) => written_code(place_of(subject, key, p, f), code(value, p, f))
+	_ => set_code(form, declared_name(place), code(value, p, f), p, f)
+}
+
+# A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
+set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
+	if not valued(value.type) { refused(form, "this gives no value to set") }
+	held = variable_of(place, p, f) ?? added_variable(place, value.type, p, f)
+	if held.type != value.type { refused(form, "this name held another kind of value before") }
+	Code(value.type, value.instructions + kept(held))
+}
+
+# a name's value: a parameter, local, capture or global, or a function's name as a value (an empty struct)
+name_code(name: Node, p: Program, f: Frame) as Code := {
+	if is_case(name) { return case_value_code(name, name, [], p, f) }
+	if binding_of(name) in [BOUND_FUNCTION, BOUND_LIBRARY] { return function_value_code(name, p, f) }
+	held = variable_of(name, p, f) ?? refused(name, "this name is read before any value is given to it; a global is read only after the statement that sets it, until the typing stage")
+	Code(held.type, fetched(held))
+}
+
+# The variable a bound name refers to, ø while nothing has given it a value: a local or parameter lives in the
+# frame, a global in the module
+variable_of(name: Node, p: Program, f: Frame) as Placed? := {
+	binding = binding_of(name)
+	if binding in FRAME_BINDINGS { return placed_for(f.slots, name) }
+	if binding == BOUND_GLOBAL { return placed_for(p.globals, name) }
+	refused(name, "the emitter reads and sets parameters, locals and globals, not a ${binding} yet")
+}
+added_variable(name: Node, type: list, p: Program, f: Frame) as Placed := {
+	if binding_of(name) == BOUND_GLOBAL {
+		p.globals += [Placed(defining_key(name), added_global(p.m, type, MUTABLE, default_of(type)), type)]
+		return p.globals.last
+	}
+	f.slots += [Placed(defining_key(name), #f.slots, type, [], yes)]
+	f.slots.last
+}
+fetched(held: Placed) as list := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
+# a value stored, and left on the stack
+kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
+# what a bound name refers to: local, parameter, capture, global, function or library
+binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
+# the definition a bound name refers to, among those placed so far
+placed_for(placed: list, name: Node) as Placed? := placed_by_key(placed, defining_key(name))
+placed_by_key(placed: list, key: text) as Placed? := {
+	for each in placed { if each.key == key { return each } }
+	ø
+}
+# a bound name's definition, by its key
+defining_key(name: Node) as text := place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the emitter without its definition"))
