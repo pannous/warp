@@ -78,6 +78,15 @@ WRITTEN = "written"
 INDENTED = "indented"
 # empty braces as the reader reads them, one word: the host keeps no empty curly group, so `{}` could carry no facts
 EMPTY_BRACES = "{}"
+# what a declared pattern's builder carries on its name, so that binding finds the pattern through scope: its holes
+# in order, the Node pattern that takes it apart in an arm
+PATTERN_HOLES = "pattern_holes"
+PATTERN_TAKEN = "pattern_taken"
+# a list's items, none of any other node
+items_of(n: Node) as list := match n {
+	List(items, bracket, separator) => items
+	_ => []
+}
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø
