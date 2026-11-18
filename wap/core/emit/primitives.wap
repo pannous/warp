@@ -58,7 +58,7 @@ INSTRUCTIONS = {
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
 # primitives call, before any function of its own.
-HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
 # each host function's parameter and result types
 HOST_FUNCTIONS = {
 	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
@@ -77,6 +77,11 @@ HELPERS = {"print_text": printing_function, "raise_text": raising_function, "rea
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
+# The operations on a map, of the map type their first operand has: a key's value, read or set
+MAP_GET = "map_get"
+MAP_SET = "map_set"
+MAP_HELPERS = {"map_get": map_reading_function, "map_set": map_setting_function}
+NO_SUCH_KEY = "this map has no such key"
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -87,6 +92,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(given_layout(form, p), p)) }
 	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
+	if MAP_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + map_helper_called(name, match form { Prim(op, given) => fact_of(given#1, TYPE) }, p))) }
 	if ARRAY_HELPERS.has(name) {
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
@@ -104,6 +110,8 @@ unsigned_item(form: Node, array: int, p: Program) as list := {
 	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
 	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
 }
+# a call of a map's helper, one for each map type
+map_helper_called(operation: text, map: Node, p: Program) as list := instruction(CALL, [helper(p, "${operation} ${map}", q => MAP_HELPERS[operation](q, map))])
 # the code of a primitive its helper function performs
 helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the instructions that compare two values of one type on the stack, giving yes or no
@@ -188,6 +196,32 @@ text_equality_function(p: Program) as int := {
 	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
 	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
 }
+
+# The helpers of map_get and map_set. Their locals: 0 the map, 1 the key, then for map_set 2 the value; the count
+# after them. A map's keys are searched in order, by their type's equality; map_set sets the value of a key it finds,
+# and adds the key and value at the end otherwise.
+map_reading_function(p: Program, map: Node) as int := {
+	found = map_part(MAP_VALUES, map, p) + instruction(LOCAL_GET, [2]) + instruction(ARRAY_GET, [map_array(MAP_VALUES, map, p)]) + RETURN
+	raised = text_literal(NO_SUCH_KEY, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+	added_function(p.m, [map_layout(map, p), map_layouts(map, p)#1], [map_layouts(map, p)#2], [I32], key_searched(2, found, map, p) + raised)
+}
+map_setting_function(p: Program, map: Node) as int := {
+	found = map_part(MAP_VALUES, map, p) + instruction(LOCAL_GET, [3]) + instruction(LOCAL_GET, [2]) + instruction(ARRAY_SET, [map_array(MAP_VALUES, map, p)]) + RETURN
+	grown = (at, local) => instruction(LOCAL_GET, [0]) + map_part(at, map, p) + instruction(LOCAL_GET, [local]) + instruction(ARRAY_NEW_FIXED, [map_array(at, map, p), 1]) + instruction(CALL, [helper(p, "array_joined ${map_array(at, map, p)}", q => arrays_joining_function(q, map_array(at, map, p)))]) + instruction(STRUCT_SET, [map_index(map, p.m, p.records), at])
+	added_function(p.m, [map_layout(map, p)] + map_layouts(map, p), [], [I32], key_searched(3, found, map, p) + grown(MAP_KEYS, 1) + grown(MAP_VALUES, 2))
+}
+# the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
+key_searched(count: int, found: list, map: Node, p: Program) as list := {
+	keys = map_part(MAP_KEYS, map, p)
+	equal = keys + instruction(LOCAL_GET, [count]) + instruction(ARRAY_GET, [map_array(MAP_KEYS, map, p)]) + instruction(LOCAL_GET, [1]) + equality(map_layouts(map, p)#1, p)
+	counted(count, keys + ARRAY_LEN, equal + IF + VOID_BLOCK + found + END)
+}
+# a map's wasm types: the struct, the array of its keys or values, the layouts of a key and a value
+map_layout(map: Node, p: Program) as list := nullable(map_index(map, p.m, p.records))
+map_array(at: int, map: Node, p: Program) as int := list_index(list_type(map_parts(map)#(at + 1)), p.m, p.records) ?? refused(map, "the emitter has no value layout for this map's keys or values yet")
+map_layouts(map: Node, p: Program) as list := map_parts(map).map(part => layout_of(part, p.m, p.records))
+# the keys' or the values' array of the map in local 0
+map_part(at: int, map: Node, p: Program) as list := instruction(LOCAL_GET, [0]) + instruction(STRUCT_GET, [map_index(map, p.m, p.records), at])
 
 # The helper of tag_equal: yes when two cases have one tag and, for a case with fields, equal fields. Tags count the
 # cases of every enum, so one helper serves them all. Its locals: 0 and 1 the cases.
