@@ -6,3 +6,7 @@
 'sin(x: f64) := x * 2; sin(3)'	6
 # a local variable of a definition shadows a global function taking a class, called by its name (card local-shadowing)
 'class P { x: int }; named(p: P): int := p.x; g() := { named = (m => [m]); named("a") }; g()'	['a']
+# a function with a result type keeps its parameters and locals to itself too: they never hide a used module's word
+# elsewhere (card lambda-parameter)
+'use file; f(n: int) as int := { program = n; program }; f(5); program.folder != ø'	yes
+'use file; call(g: function) as int := g(1); f(n: int) as int := call(program => program + n); f(5); program.folder != ø'	yes

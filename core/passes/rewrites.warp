@@ -1694,8 +1694,6 @@ bound_by_definition(definition: Node) as list := {
 	}
 	declared_within(value_of(definition), names)
 }
-# the call `f(x)` of a definition's head `f(x): T` typing its result, else the head
-untyped_head(head: Node) as Node := if is_key(head, Op.Colon) then key_of(head) else head
 # the names the statements of a body declare, those of its nested blocks too (an if's branch, the block `the result:
 # T = {…}` of a typed result), added to `names`; not inside a definition of its own, which binds its names itself
 declared_within(code: Node, names: list) as list := {

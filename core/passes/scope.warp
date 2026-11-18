@@ -70,8 +70,9 @@ function_meanings(head: Node) as list := {
 }
 
 # `x = v`, `f(a) = …`, `f := …`: a variable, or a function when v is a lambda or the head a call
-assignment_meanings(op: Op, target: Node, value: Node) as list := {
-	if is_round(target) and #items_of(target) > 0 { return function_meanings(target) }
+assignment_meanings(op: Op, typed_target: Node, value: Node) as list := {
+	target = untyped_head(typed_target)
+	if is_call_head(target) { return function_meanings(target) }
 	# a write of a field or an item, `database.score = 42`, `local["name"] = "Ada"`, binds no name
 	if is_key(target, Op.Dot) or is_key(target, Op.Hash) { return [] }
 	[[binding_name(target), if op == Op.Define or is_lambda(value) then Meaning.Function else Meaning.Variable]]
@@ -188,9 +189,13 @@ names_seen(scope: map, nodes: list) as map := {
 
 # `f(a) := …`, `f(a) = …`: a function's definition, whose parameters and locals no other function sees
 is_function_definition(n: Node) as bool := match n {
-	Key(target, op, value): (op == Op.Assign or op == Op.Define) and is_round(target) and #items_of(target) > 0
+	Key(target, op, value): (op == Op.Assign or op == Op.Define) and is_call_head(untyped_head(target))
 	_: no
 }
+# the call `f(x)` of a definition's head `f(x): T` typing its result (`f(x) as T := …`), else the head
+untyped_head(head: Node) as Node := if is_key(head, Op.Colon) then key_of(head) else head
+# `f(a)`, a function's head, not `()`
+is_call_head(head: Node) as bool := is_round(head) and #items_of(head) > 0
 
 # the nodes outside the bodies of functions, whose names every function sees
 outer_nodes_in(top: Node) as list := nodes_kept(top, n => not is_function_definition(n))
