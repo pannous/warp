@@ -19,4 +19,5 @@ check "is_letter is another name of is_alpha" "$(ran is_letter 'print text(is_le
 check "a text's characters from one place to another, counted from 0" "$(ran text_slice 'print "warp"[1 .. 3] + " " + "warp"[1 ..] + " " + "aé€x"[1 to 2]')" "ar arp é€"
 check "a text's characters as codes, decoded from UTF-8" "$(ran codepoints 's = "aé€x"
 print text(#s.codepoints) + " " + text(ord(s.codepoints#3)) + " " + text(s.codepoints#2)')" "4 8364 é"
+check "a text's UTF-8 bytes" "$(ran text_bytes 'print text("aé".bytes) + " " + text(#"".bytes)')" "[97, 195, 169] 0"
 exit $((failures > 0))

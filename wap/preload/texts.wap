@@ -42,6 +42,8 @@ character_offset(t: text, index: int): int := {
 
 # the characters from one place to another, counted from 0 as a list's: `"warp"[1 .. 3]` is "ar"
 slice(t: text, r: Range): text := bytes_between(t, character_offset(t, r.from + 1), character_offset(t, min(r.last, #t) + 2))
+# a text's UTF-8 bytes: `"aé".bytes` is [97, 195, 169]
+bytes(t: text): list<int> := (0 upto byte_count(t)).map(at => byte_at(t, at))
 # a text's characters, decoded from its UTF-8 bytes: `"aé".codepoints` is ['a', 'é']
 codepoints(t: text): list<char> := {
 	out: list<char> = []
