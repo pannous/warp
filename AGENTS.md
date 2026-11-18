@@ -8,6 +8,8 @@ rule blocks a clearly better design, say so with the reason (to warp-interviewer
 breaking it. notes/decisions.md is only an inbox of recent decisions on their way into the wiki: grep it, never read
 it whole.
 
+only write how it should be; if the implementation differs, write a small todo or give it to the interviewer.
+
 warp: a data format and wasm-first language, the successor of wasp (C++, ~/wasp/). Its specification is ./wiki
 (not all built yet). https://github.com/pannous/warp · https://warp.pannous.com/
 - The compiler is written in warp and compiles itself (core/, notes/self_hosting.md): parse to a Node AST, emit wasm
