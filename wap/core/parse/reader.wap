@@ -58,7 +58,7 @@ HASH_COMMENT_FOLLOWERS = " \t\n!#"
 # a token: an atom (its node; a bracket's list has its bracket), an opening or closing bracket, a separator or a key's
 # `:` or `=` (its op), with the blank before it
 enum LexemeKind { Atom, Open, Close, Separator, Key }
-class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon }
+class Lexeme { kind: LexemeKind; node: Node; bracket: Bracket; separator: Separator; glued: bool; line: int; column: int; indented: bool = no; op: Op = Op.Colon; written: text = "" }
 
 class Reader { code: list; n: int; at: int = 0; line: int = 1; line_start: int = 0; blank: bool = yes; tokens: list<Lexeme> = []; opened: list<Lexeme> = []; indents: list = []; margin: int = -1; indent_char: text = ""; comments: list = []; line_atom: Lexeme? = ø; error: text = ""; failure: Node = Empty; angle_closers: list<int> = [] }
 
@@ -444,6 +444,7 @@ whole(written: text) as number := if written.length > 18 then number(written) el
 # `("a " + text(x) + " b")`, so every later stage reads the hole as the code it is (notes/reader.md Q8)
 quoted(r: Reader, quote: text) := {
 	closer = QUOTE_CLOSERS[QUOTES.find(quote) - 1]
+	start = r.at
 	start_line = r.line
 	start_column = column(r)
 	at = r.at + 1
@@ -476,6 +477,7 @@ quoted(r: Reader, quote: text) := {
 	if at >= r.n { return failed_at(r, "this text is never closed", start_line, start_column) }
 	content = (parts + [slice_of(r, copied, at)]).join("")
 	if pieces >= 0 {
+		last_of(r.opened).written = slice_of(r, start, at + 1)
 		r.at = at
 		piece_added(r, Text(content), pieces)
 		return bracket_closed(r, ")")
@@ -584,6 +586,7 @@ bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	items = level_items(parts)
 	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
 	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
+	if opener.written != "" { written = with_fact(written, WRITTEN, Text(opener.written)) }
 	if opener.bracket == Bracket.Curly then with_duplicates_warned(written, items) else written
 }
 

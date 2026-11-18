@@ -282,5 +282,3 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   anywhere and refuses it. Paid off when a lone word is its own head.
 - **A float has no text yet** (wap/preload/prelude.wap `text`): `"${0.5}"` is refused, no text takes a float. Reason:
   the shortest digits that read back as the same float need their own algorithm. Paid off with a float_text helper.
-- **`wap format` prints a text with holes as its pieces joined** (wap/core/format.wap): the reader gives
-  `"a ${x} b"` as `("a " + text(x) + " b")`. Paid off when format prints such a sum back as a text with holes.

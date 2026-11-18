@@ -10,7 +10,9 @@ use "../preload/operators.wap"
 # the operator that defines, whose left side is a definition's head
 DEFINE_SPELLING = ":="
 
-formatted(n: Node) as text := annotations_text(n) + written(n)
+formatted(n: Node) as text := annotations_text(n) + (text_written(n) ?? written(n))
+# the spelling the program wrote, where the reader gave its code another shape (core/stage.wap WRITTEN)
+text_written(n: Node) as text? := match fact_of(n, WRITTEN) { Text(spelling) => spelling; _ => ø }
 
 written(n: Node) as text := match n {
 	Call(called, arguments) => call_text(n, called, arguments)
