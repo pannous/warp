@@ -37,7 +37,7 @@ use "core/emit/emitter.wap"
 use "core/emit/primitives.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
-RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/calls.wap"]
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/calls.wap"]
 rule_file(name: text) as text := program.folder + "/" + name
 for file in RULE_FILES { rules_loaded(operated_program(notation(read(rule_file(file)), rule_file(file)))) }
 

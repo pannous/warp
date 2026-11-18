@@ -44,6 +44,7 @@ emitted(program: Block) as Module := {
 	m = Module()
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
+	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
 	f = Frame()
 	body = code(program, p, f)
 	shown = if body.type in SHOWN_BY_HOST then Code(body.type, body.instructions) else Code([], dropped(body))
@@ -77,6 +78,8 @@ class Program {
 	pending: list = []
 	# the helper functions primitives call, each [operation, index]
 	helpers: list = []
+	# the Records the program declares, which lay out their instances
+	records: list = []
 }
 # The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
 class Frame {
@@ -112,7 +115,9 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(items, Bracket.Square, separator) => Code(layout(form, p), items.flat_map(item => code(item, p, f).instructions) + instruction(ARRAY_NEW_FIXED, [list_of(form, p), #items]))
-	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else Code(layout(form, p), item_reached(subject, key, p, f) + instruction(ARRAY_GET, [list_of(subject, p)]))
+	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
+	Record(name, fields, variants) => Code([], [])
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => refused(form, "the emitter takes function values with closures, not yet")
 	Symbol(name) => name_code(form, p, f)
@@ -255,15 +260,35 @@ function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
 # a parameter's type, as the typing stage gives it
 parameter_type(parameter: Node, p: Program) as list := layout(declared_name(parameter), p)
 # the layout of a typed form's value
-layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m) ?? refused(n, "the emitter has no value layout for this type yet")
+layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for this type yet")
 # the GC array type of a typed list
-list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m) ?? refused(n, "this is no list")
+list_of(n: Node, p: Program) as int := list_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no list")
+# The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
+# reads it and the one that writes it
+class Place { reached: list; read: list; written: list }
+place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
+	record = record_named(p.records, fact_of(subject, TYPE))
+	if record != ø {
+		at = [struct_of(record, p.m, p.records), index_where(fields_of(record), field => text(declared_name(field)) == text(key)) - 1]
+		return Place(code(subject, p, f).instructions, instruction(STRUCT_GET, at), instruction(STRUCT_SET, at))
+	}
+	Place(item_reached(subject, key, p, f), instruction(ARRAY_GET, [list_of(subject, p)]), instruction(ARRAY_SET, [list_of(subject, p)]))
+}
+read_code(type: list, place: Place) as Code := Code(type, place.reached + place.read)
+written_code(place: Place, value: Code) as Code := Code([], place.reached + value.instructions + place.written)
+
+# An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
+instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Code := {
+	values = fields_of(record).map(field => items.filter(item => text(declared_name(item)) == text(declared_name(field)))#1)
+	Code(layout(form, p), values.flat_map(item => code(given_value(item), p, f).instructions) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
+}
+given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
 item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
 
 # A value given to a place: a name, which then has that value, or a list's item, which leaves none
 assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
-	Get(subject, key) => Code([], item_reached(subject, key, p, f) + code(value, p, f).instructions + instruction(ARRAY_SET, [list_of(subject, p)]))
+	Get(subject, key) => written_code(place_of(subject, key, p, f), code(value, p, f))
 	_ => set_code(form, declared_name(place), code(value, p, f), p, f)
 }
 
