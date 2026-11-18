@@ -58,4 +58,12 @@ print text(g(-1))')" "6
 check "a block indented below an if is its body" "$(ran if_indented 'c = yes
 if c
 	print "body"')" "body"
+check "an assignment in a then or else part assigns there" "$(ran assign_in_if 'c = no
+x = 0
+if c then x = 1 else x = 2
+print text(x)
+xs = [1]
+if not c then xs[0] = 5 else xs.add(2)
+print text(xs[0])')" "2
+5"
 exit $((failures > 0))

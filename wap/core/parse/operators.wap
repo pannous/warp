@@ -73,10 +73,30 @@ key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
 # An infix operator applied: (Call + a b). A compound assignment of the table, `x += 1`, is the assignment it means,
 # x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
 infix_call(spelling: text, left: Node, right: Node) as Node := {
-	if (spelling == ASSIGNMENT or compound_assignment(spelling) == spelling) and arrow_parts(left) != ø { return arrow_assigned(spelling, left, right) }
+	if is_assignment(spelling) and arrow_parts(left) != ø { return arrow_assigned(spelling, left, right) }
+	if is_assignment(spelling) and rule_phrase(left) != ø { return phrase_assigned(spelling, rule_phrase(left), right) }
 	if compound_assignment(spelling) != spelling { return Call(symbol(spelling), [left, right]) }
 	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
 }
+
+is_assignment(spelling: text) as bool := spelling == ASSIGNMENT or compound_assignment(spelling) == spelling
+
+# A rule's phrase is no place to assign to either: `if c then xs[0] = 5 else xs.add(2)` assigns to its last word, the
+# value running to the next word the rule's phrase continues with, `if c then (xs[0] = 5) else xs.add(2)`; so does
+# `… else x = 2`
+phrase_assigned(spelling: text, words: list, value: Node) as Node := {
+	after = match value { List(items, Bracket.None, Separator.Space) => items; _ => [value] }
+	cut = 0
+	while cut < #after and not (after#(cut + 1) is symbol and continuation_word(spelling_written(after#(cut + 1)))) { cut = cut + 1 }
+	given = if cut == 1 then after#1 else List(after[.. cut], Bracket.None, Separator.Space)
+	List(words[.. #words - 1] + [infix_call(spelling, words.last, given)] + after[cut ..], Bracket.None, Separator.Space)
+}
+# the words of a phrase that holds a word of a rule's phrase, `if`, `else`, ø for any other code
+rule_phrase(n: Node) as list? := match n {
+	List(items, Bracket.None, Separator.Space) => if items.filter(rule_word) is not empty then items else ø
+	_ => ø
+}
+rule_word(n: Node) as bool := n is symbol and (phrase_words.leading.has(spelling_written(n)) or phrase_words.inner.has(spelling_written(n)))
 
 # An arrow is no place to assign to: `1 => y = 2` assigns in the arrow's result, `1 => (y = 2)`, as a match arm or a
 # function's body means it
@@ -223,10 +243,13 @@ operators_called(tokens: list) as list := {
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
 called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
-# The words rules' phrases start with, `return` of `rule return $value... => …`, each with whether one of its rules
-# takes a block. The rule stage tells them as it loads rules: rules/ uses this stage, so it cannot ask rules/ itself.
-class PhraseWords { leading: map }
-phrase_words = PhraseWords({})
+# The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
+# its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules: rules/ uses
+# this stage, so it cannot ask rules/ itself.
+class PhraseWords { leading: map, inner: map }
+phrase_words = PhraseWords({}, {})
+# a word rules use only inside their phrases, which continues the code before it: `else`
+continuation_word(word: text) as bool := phrase_words.inner.has(word) and not phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
 # a symbol the table reads as an operator in any fixity
