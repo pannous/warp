@@ -171,8 +171,10 @@ result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and type_fits(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }
-function_typed(definition: Node, types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+function_typed(definition: Node, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	key = place_key(declared_name(name))
+	letters = if parameters_in(definition).any(parameter => has_letters(type_given(parameter), s.records)) then letters_bound(definition, argument_types, s.records) ?? [] else []
+	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), argument_types#place, letters))
 	for typed in s.functions {
 		if typed.key == key and same_types(typed.arguments, types) {
 			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }
@@ -180,7 +182,6 @@ function_typed(definition: Node, types: list, s: TypingState, at: Node) as Typed
 		}
 	}
 	typed = TypedFunction(key, types)
-	letters = if parameters_in(definition).any(parameter => has_letters(type_given(parameter), s.records)) then letters_bound(definition, types, s.records) ?? [] else []
 	typed.result = substituted(declared_type(name), letters)
 	typed.signed = with_signature(name, types, typed.result)
 	s.functions += [typed]
@@ -198,6 +199,9 @@ function_typed(definition: Node, types: list, s: TypingState, at: Node) as Typed
 	typed.done = yes
 	typed
 } }
+# A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
+# int?; none written, or a bare `list` or `enum`, which take any list or enum, it is of the argument's type
+parameter_type(written: Node?, given: Node, letters: list) as Node := if written == ø or written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) then given else substituted(written, letters)
 parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 	frame.variables += [[place_key(declared_name(parameter)), type]]
 	with_name_fact(parameter, TYPE, type)
