@@ -230,8 +230,8 @@ reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_ty
 types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
-# A function typed for these argument types, once per tuple: its parameters, then its body, its result written or
-# its body's type. A call inside its own body finds it typed but without a result unless one is written.
+# A function typed for these argument types, once per tuple: its parameters, then its body, its result the written
+# one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
@@ -260,8 +260,8 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(value_type(typed_body), frame, name)
 	if typed.result != ø and (given == ø or not type_fits(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
-	typed.result = given
-	typed.signed = with_signature(name, types, given)
+	typed.result = typed.result ?? given
+	typed.signed = with_signature(name, types, typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
 	typed.done = yes
 	typed
