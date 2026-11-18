@@ -50,8 +50,8 @@ rules_loaded(code: Node) as Node := match code {
 # `rule P => A; B` writes both statements: the `;` binds looser than `=>`, so the line is a sequence whose first
 # statement is the rule; the rule takes the rest as its template's further statements
 sequence_rule(statement: Node) as Node := match statement {
-	List(items, Bracket.None, Separator.Semicolon) => match items#1 {
-		Call(called, arguments) => if spelling_written(called) == RULE_ARROW and #arguments == 2 then Call(called, [arguments#1, List([arguments#2] + items[1 ..], Bracket.None, Separator.Semicolon)]) else statement
+	List(items, Bracket.None, separator) => if separator != Separator.Semicolon and separator != Separator.Comma then statement else match items#1 {
+		Call(called, arguments) => if spelling_written(called) == RULE_ARROW and #arguments == 2 then Call(called, [arguments#1, List([arguments#2] + items[1 ..], Bracket.None, separator)]) else statement
 		_ => statement
 	}
 	_ => statement
@@ -182,8 +182,8 @@ rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(ru
 # is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 	List(items, Bracket.None, Separator.Space) => with_parts(inner_rewritten(rules, items, whole), part => rules_applied(rules, part, fired))
-	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then List([rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired)], bracket, Separator.None) else with_parts(whole, part => rules_applied(rules, part, fired))
-	List(items, bracket, separator) => if separator == Separator.Newline or separator == Separator.Semicolon then List(spliced(items.map(part => rules_applied(rules, part, fired))), bracket, separator) else with_parts(whole, part => rules_applied(rules, part, fired))
+	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then group_kept(rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired), bracket) else with_parts(whole, part => rules_applied(rules, part, fired))
+	List(items, bracket, separator) => with_facts_of(List(items.flat_map(part => spread(rules_applied(rules, part, fired), part)), bracket, separator), whole)
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
 # A phrase no rule fits whole, whose later word heads a rule that fits from there on, `print match x {…}`: that part
@@ -192,7 +192,7 @@ parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 inner_rewritten(rules: Rules, items: list, whole: Node) as Node := {
 	for at in 2 to #items {
 		part = items[at - 1 ..]
-		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and rule_applied(rules, phrase_placed(part, Bracket.None, whole)) != ø {
+		if items#at is symbol and rules.by_head.has(spelling_written(items#at)) and #rule_applied(rules, phrase_placed(part, Bracket.None, whole)) > 0 {
 			return List(items[.. at - 1] + [phrase_placed(part, Bracket.Round, whole)], Bracket.None, Separator.Space)
 		}
 	}
@@ -210,25 +210,37 @@ groupings_written(n: Node) as Node := match n {
 }
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
-# statements with each statement sequence among them, one a rule wrote, `A; B`, joined in its place
-spliced(statements: list) as list := statements.flat_map(statement => match statement { List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) then items.map(item => with_rule_of(item, statement)) else [statement]; _ => [statement] })
-# a spliced statement keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
+# A rule's result as the items it stands for in its list or block: a statement sequence, `A; B`, its statements; a row a
+# rule wrote, `$a, $rest...`, its items; nothing for a rule that wrote nothing, `()`, where something was. Each item keeps
+# the rule that wrote it.
+spread(result: Node, written: Node) as list := if result is Empty and not (written is Empty) then [] else spread_items(result) ?? [result]
+# the items a rule's sequence or row stands for, ø for any other result
+spread_items(result: Node) as list? := match result {
+	List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) or separator == Separator.Comma and fact_of(result, RULE) != ø then items.map(item => with_rule_of(item, result)) else ø
+	_ => ø
+}
+# a group of one phrase keeps its brackets around what the phrase became, unless that is a row or nothing, which the
+# list around the group takes in its place: `[(both a), c]`
+group_kept(result: Node, bracket: Bracket) as Node := if result is Empty or spread_items(result) != ø then result else List([result], bracket, Separator.None)
+# a spliced item keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
 with_rule_of(item: Node, sequence: Node) as Node := if fact_of(sequence, RULE) == ø then item else with_fact(item, RULE, fact_of(sequence, RULE))
 one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(items#1) == ø
 
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
 	current = n
-	step = rule_applied(rules, current)
-	while step != ø {
+	steps = rule_applied(rules, current)
+	while #steps > 0 {
 		fired[0] = yes
-		current = staged(current, code => step)
-		step = rule_applied(rules, current)
+		if steps#1 is Empty { return steps#1 }
+		current = staged(current, code => steps#1)
+		steps = rule_applied(rules, current)
 	}
 	current
 }
 
-# the code the most specific fitting rule builds from it, ø when none fits; two equally specific ones are refused
-rule_applied(rules: Rules, n: Node) as Node? := {
+# the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits (a rule may
+# write nothing, `()`, which is ø itself); two equally specific ones are refused
+rule_applied(rules: Rules, n: Node) as list := {
 	best: Rule? = ø
 	best_bindings = {}
 	for head in heads_of(n) {
@@ -242,7 +254,8 @@ rule_applied(rules: Rules, n: Node) as Node? := {
 			}
 		}
 	}
-	if best == ø { return ø }
+	if best == ø { return [] }
 	if refusal_of(best.template) != ø { refused(n, refusal_of(best.template)) }
-	with_fact(built(best.template, with_fresh_names(best_bindings, best.fresh)), RULE, best.written)
+	result = built(best.template, with_fresh_names(best_bindings, best.fresh))
+	[if result is Empty then result else with_fact(result, RULE, best.written)]
 }
