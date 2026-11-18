@@ -256,3 +256,9 @@ juxtaposed(left: Node, right: Node, separator: Separator) as Node := match left 
 	List(items, Bracket.None, joined) => if joined == separator then List(items + [right], Bracket.None, separator) else List([left, right], Bracket.None, separator)
 	_ => List([left, right], Bracket.None, separator)
 }
+
+# what round brackets around one item group, the item itself
+ungrouped(n: Node) as Node := match n {
+	List(items, Bracket.Round, separator) => if #items == 1 then ungrouped(items#1) else n
+	_ => n
+}

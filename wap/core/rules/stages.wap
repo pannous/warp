@@ -20,6 +20,7 @@ use "../../kernel/forms.wap"
 use "../parse/atoms.wap"
 use "../analyze/declarations.wap"
 use "lines.wap"
+use "../analyze/declarations.wap"
 
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"
@@ -199,10 +200,16 @@ rewritten_by(rules: Rules, code: Node) as Fired := {
 rules_applied(rules: Rules, n: Node, fired: list) as Node := staged(rewritten(rules, unglued(n), fired), whole => parts_applied(rules, whole, fired))
 
 # A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
-# is that phrase, rewritten as one. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
+# is that phrase, rewritten as one. A list whose words start with a rule's word, `[if c then a else b]`, holds
+# that phrase as its one item; `[a b c]` holds three. A kernel form, `(If c a b)`, is its parts; square brackets hold items.
 parts_applied(rules: Rules, whole: Node, fired: list) as Node := match whole {
 	List(items, Bracket.None, Separator.Space) => with_parts(inner_rewritten(rules, items, whole), part => rules_applied(rules, part, fired))
-	List(items, bracket, Separator.Space) => if one_phrase(items, bracket) then group_kept(rules_applied(rules, with_facts_of(List(items, Bracket.None, Separator.Space), whole), fired), bracket) else with_parts(whole, part => rules_applied(rules, part, fired))
+	List(items, bracket, Separator.Space) => {
+		phrase = with_facts_of(List(items, Bracket.None, Separator.Space), whole)
+		if one_phrase(items, bracket) then group_kept(rules_applied(rules, phrase, fired), bracket)
+		else if bracket == Bracket.Square and items#1 is symbol and phrase_words.leading.has(spelling_written(items#1)) then List([rules_applied(rules, phrase, fired)], bracket, Separator.None)
+		else with_parts(whole, part => rules_applied(rules, part, fired))
+	}
 	List(items, bracket, separator) => with_facts_of(List(lines_of(items, separator).flat_map(part => spread(rules_applied(rules, part, fired), part)), bracket, separator), whole)
 	_ => with_parts(whole, part => rules_applied(rules, part, fired))
 }
