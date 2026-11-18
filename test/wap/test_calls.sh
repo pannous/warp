@@ -28,4 +28,11 @@ enum Tone { low high }
 print(text(Color.red == Color.green))
 print(text(Tone.low == Tone.high))')" "yes
 no"
+check "a type's words travel with it: a library's show of a list finds each record's own show" "$(ran own_words 'class P { name: text }
+print(show([P("a"), P("b")]))')" '[P{name: "a"}, P{name: "b"}]'
+check "a word the program writes wins over the one a rule writes for the same type: a class's own show" "$(ran own_show 'class P { name: text }
+show(p: P) as text := "P " + p.name
+print(show(P("a")))
+print(show([P("b")]))')" "P a
+[P b]"
 exit $((failures > 0))
