@@ -15,8 +15,8 @@ contains(xs: list<T>, item: T): bool := xs.any(x => x == item)
 # whether a list holds an item, the operator's reading: `x in xs` is xs.contains(x)
 in(x: T, xs: list<T>): bool := xs.contains(x)
 
-# how many items a list holds: `xs.count`, also written `xs.length` or `xs.size`
-count(xs: list<T>): int := #xs
+# how many a list, a text or a range holds, what # counts: `xs.count`, also written `xs.length` or `xs.size`
+count(x: T): int := #x
 # two lists are equal when their items are, in order, each pair by its own type's ==
 ==(xs: list<T>, ys: list<T>): bool := {
 	if #xs != #ys { return no }
