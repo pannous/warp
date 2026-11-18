@@ -71,8 +71,19 @@ key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
 # An infix operator applied: (Call + a b). A compound assignment of the table, `x += 1`, is the assignment it means,
 # x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
 infix_call(spelling: text, left: Node, right: Node) as Node := {
+	if (spelling == ASSIGNMENT or compound_assignment(spelling) == spelling) and arrow_parts(left) != ø { return arrow_assigned(spelling, left, right) }
 	if compound_assignment(spelling) != spelling { return Call(symbol(spelling), [left, right]) }
 	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
+}
+
+# An arrow is no place to assign to: `1 => y = 2` assigns in the arrow's result, `1 => (y = 2)`, as a match arm or a
+# function's body means it
+arrow_assigned(spelling: text, arrow: Node, value: Node) as Node := match arrow {
+	Call(called, parts) => with_facts_of(Call(called, [parts#1, infix_call(spelling, parts#2, value)]), arrow)
+}
+arrow_parts(n: Node) as list? := match n {
+	Call(called, parts) => if #parts == 2 and group_of(spelling_written(called), Fixity.Infix) == parameters_group then parts else ø
+	_ => ø
 }
 
 # a word standing alone, by its canonical spelling
