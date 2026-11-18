@@ -164,4 +164,9 @@ f(n: int) as P? := {
 print(text((f(3) ?? P(0)).a))
 print(text(f(-1) == ø))')" "3
 yes"
+check "a function taken as a value reads a global set after it when it is called" "$(ran late_global 'H = {"a": f}
+X = 1
+f(n: int) as int := X + n
+g = H["a"]
+print(text(g(2)))')" "3"
 exit $((failures > 0))
