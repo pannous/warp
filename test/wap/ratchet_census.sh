@@ -4,7 +4,8 @@
 # Raise a floor by hand when the census's total line shows more. The compiler's own source stays fully typed (dynamic
 # typing, any, is for programs; user decision via warp-lead, 2026-11-18): no place of it is typed any, outside the
 # preload, the language programs get.
-# Run it with bash test/wap/test_census.sh; the warp under test is WARP (default the warp on PATH)
+# Run it with bash test/wap/ratchet_census.sh (or test/wap/run.sh --wait test/wap/ratchet_census.sh, never in run.sh's
+# default set: about 4 min, the rest about 1); the warp under test is WARP (default the warp on PATH)
 FILES_TYPED_WHOLE=18
 FUNCTIONS_TYPED=316
 # the census runs in this many batches at once, each loading the preload once (one batch of all files: 10 min)
