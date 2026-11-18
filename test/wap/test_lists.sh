@@ -66,4 +66,7 @@ check "a list's items spread into another list" "$(ran spread 'xs = [1, 2]
 ys = [0, ...xs, 4, ...xs]
 print text(#ys) + " " + text(ys#5)')" "6 1"
 check "a list's last item" "$(ran last 'print "wap/core/x.wap".split("/").last')" "x.wap"
+check "a list of lists shown and searched, each word typed for its item type" "$(ran nested 'print show([[1, 2], [3]])
+print text([["ab"], ["cd", "ef"]].any(row => row.contains("ef")))')" "[[1, 2], [3]]
+yes"
 exit $((failures > 0))
