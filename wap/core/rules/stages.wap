@@ -143,7 +143,7 @@ cycle_refused(rules: Rules, head: text, path: list) := {
 	if path.contains(head) {
 		closing = path[path.index_of(head) ..] + [head]
 		growing = rules_on(rules, closing).filter(rule => not shrinking(rule))
-		if #growing > 0 { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
+		if growing is not empty { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
 		return
 	}
 	if not rules.by_head.has(head) { return }
@@ -232,7 +232,7 @@ lines_of(rules: Rules, items: list, separator: Separator) as list := if STATEMEN
 lines_continued(rules: Rules, statements: list) as list := {
 	joined = []
 	for statement in statements {
-		if #joined > 0 and continues(rules, statement) { joined[#joined - 1] = with_facts_of(List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space), joined.last) } else { joined.add(statement) }
+		if joined is not empty and continues(rules, statement) { joined[#joined - 1] = with_facts_of(List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space), joined.last) } else { joined.add(statement) }
 	}
 	joined
 }
@@ -272,7 +272,7 @@ one_phrase(items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or
 rewritten(rules: Rules, n: Node, fired: list) as Node := {
 	current = n
 	steps = rule_applied(rules, current)
-	while #steps > 0 {
+	while steps is not empty {
 		fired[0] = yes
 		if steps#1 is Empty { return steps#1 }
 		current = staged(current, code => steps#1)

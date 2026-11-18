@@ -162,7 +162,7 @@ separators_fit(wanted: Separator, given: Separator) as bool := wanted == given o
 parts_match(parts: list, items: list, bindings: map) as bool := {
 	if parts is empty { return items is empty }
 	part = parts#1
-	if not part.rest { return #items > 0 and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
+	if not part.rest { return items is not empty and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
 	known = bindings.keys
 	for taken in 0 to #items {
 		if taken_by(part, items[.. taken], bindings) and parts_match(parts[1 ..], items[taken ..], bindings) { return yes }

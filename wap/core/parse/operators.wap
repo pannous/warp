@@ -194,7 +194,7 @@ tokens_read(tokens: list) as Node := {
 			}
 		}
 	}
-	while #pending > 0 { applied(pending.pop(), operands) }
+	while pending is not empty { applied(pending.pop(), operands) }
 	operands#1
 }
 
@@ -220,7 +220,7 @@ operators_called(tokens: list) as list := {
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
-called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := #pending > 0 and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
+called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
 # The words rules' phrases start with, `return` of `rule return $value... => …`, each with whether one of its rules
 # takes a block. The rule stage tells them as it loads rules: rules/ uses this stage, so it cannot ask rules/ itself.
 class PhraseWords { leading: map }
@@ -267,7 +267,7 @@ spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => 
 # Before an incoming operator waits, every pending one that binds tighter is applied. Two of one group apply by its
 # grouping; two groups with no relation are refused, as is a chain of a group that refuses chaining.
 arrive(incoming: Use, operands: list, pending: list) := {
-	while #pending > 0 and applies_first(pending.last, incoming) { applied(pending.pop(), operands) }
+	while pending is not empty and applies_first(pending.last, incoming) { applied(pending.pop(), operands) }
 }
 
 applies_first(waiting: Use, incoming: Use) as bool := {
