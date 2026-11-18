@@ -51,9 +51,11 @@ present_tested(condition: Node, s: TypingState, f: TypeFrame) as list? := match 
 	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then [place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))] else ø
 	_ => ø
 }
-# the variable a typed condition finds of a type, [its key, the then-arm, the type]: `x is int` of a number x
+# the variable a typed condition finds of a type, [its key, the then-arm, the type]: `x is int` of a number x, a
+# shape's test of a Node (core/analyze/shapes.wap shape_test)
 type_tested(tested: Node) as list? := match tested {
 	Prim(operation, arguments) => if text(operation) == BOXED_TEST and is_variable(arguments#1) then [place_key(defined_at(arguments#1)), 1, fact_of(tested, TESTED)] else ø
+	Case(subject, arms) => if fact_of(tested, TESTED) != ø and is_variable(subject) then [place_key(defined_at(subject)), 1, fact_of(tested, TESTED)] else ø
 	_ => ø
 }
 is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø

@@ -61,7 +61,7 @@ hole_type(n: Node) as Node := {
 # whether a type is a shape: none, Node, a case of Node or a declared pattern; any other type is a value type
 is_shape(language: Language, type: Node) as bool := match type {
 	Empty => yes
-	Symbol(name) => name == "Node" or SHAPES.contains(name) or language.patterns.has(name)
+	Symbol(name) => name == NODE_TYPE or SHAPES.contains(name) or language.patterns.has(name)
 	_ => no
 }
 
@@ -118,10 +118,12 @@ bound_in_order(holes: list, parts: list) as map := {
 }
 
 # the holes of a normalized pattern in the order they are written
-holes_in(n: Node) as list := match n {
-	Symbol(name) => if is_hole(n) then [hole_key(n)] else []
-	List(items, bracket, separator) => items.map(holes_in).fold([], (a, b) -> a + b)
-	Key(left, op, right) => holes_in(left) + holes_in(right)
+holes_in(n: Node) as list := hole_nodes(n).map(hole_key)
+# the holes themselves, each with its type as a fact
+hole_nodes(n: Node) as list := match n {
+	Symbol(name) => if is_hole(n) then [n] else []
+	List(items, bracket, separator) => items.flat_map(item => hole_nodes(item))
+	Key(left, op, right) => hole_nodes(left) + hole_nodes(right)
 	_ => []
 }
 
@@ -136,12 +138,13 @@ declare_pattern(language: Language, name: Node, shape: Node) as Declared := {
 	declared
 }
 
-# A declared pattern's builder, a function of its name taking its holes in order, a rest hole as a list, that gives
-# its shape with them at their places: `pattern Call = (Call $called: Node $arguments...: Node)` declares
-# Call(called: Node, arguments: list<Node>): Node := List([Symbol("Call"), called, ...arguments], Bracket.Round,
+# A declared pattern's builder, a function of its name taking its holes in order, each of its type, a rest hole as a
+# list, that gives its shape with them at their places, a value of the pattern's type (wiki/pattern-matching.md "Named
+# patterns as types"): `pattern Call = (Call $called: Node $arguments...: Node)` declares
+# Call(called: Node, arguments: list<Node>): Call := List([Symbol("Call"), called, ...arguments], Bracket.Round,
 # Separator.Space), so Call(f, [x]) is (Call f x)
 pattern_builder(language: Language, pattern: Declared) as Node := {
-	builder = top_level_statements(operated_program(language, notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name)))#1
+	builder = top_level_statements(operated_program(language, notation("${pattern.name}(${hole_nodes(pattern.shape).map(hole_parameter).join(", ")}): ${pattern.name} := ${shape_text(pattern.shape, hole_variable)}", pattern.name)))#1
 	leftmost_marked(leftmost_marked(builder, PATTERN_HOLES, List(pattern.holes.map(hole => symbol(hole_variable(hole))), Bracket.Square, Separator.Comma)), PATTERN_TAKEN, pattern.taken)
 }
 # n with a fact on its leftmost word, the name a definition `f(x): T := body` defines; an operator's leftmost word is
@@ -152,7 +155,8 @@ leftmost_marked(n: Node, name: text, value: Node) as Node := match n {
 	Key(left, op, right) => staged(n, whole => Key(leftmost_marked(left, name, value), op, right))
 	_ => n
 }
-hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(REST_MARK) then ": list<Node>" else ": Node")
+# a hole as its builder's parameter: of its type, Node when it has none, a rest hole a list<Node>
+hole_parameter(hole: Node) as text := hole_variable(hole_key(hole)) + (if is_rest_hole(hole) then ": list<Node>" else ": " + text(if hole_type(hole) is Empty then symbol(NODE_TYPE) else hole_type(hole)))
 hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
 # A declared pattern's shape as the Node pattern that takes it apart, its holes those its call's parts fill:
 # `Call(f, args)` in an arm is List([Symbol("Call"), f, ...args], Bracket.Round, Separator.Space)
@@ -273,7 +277,7 @@ of_shape(m: Matcher, n: Node) as bool := {
 	if not m.shaped { return fits_type(n, m.type) }
 	if m.pattern != ø { return matches(m.pattern.matcher, n, {}) }
 	type = spelling_written(m.type)
-	if m.type == Empty or type == "Node" { return yes }
+	if m.type == Empty or type == NODE_TYPE { return yes }
 	match type {
 		"Symbol" => n is symbol
 		"List" => match n { List(items, bracket, separator) => yes; _ => no }
@@ -291,6 +295,6 @@ asks_value_type(m: Matcher) as bool := m.test == Test.Hole and not m.shaped or #
 # how many literal parts a pattern names: the more, the more specific
 specificity(m: Matcher) as int := match m.test {
 	Test.Literal => 1
-	Test.Hole => if m.type == Empty or spelling_written(m.type) == "Node" then 0 else 1
+	Test.Hole => if m.type == Empty or spelling_written(m.type) == NODE_TYPE then 0 else 1
 	_ => 1 + m.parts.map(specificity).fold(0, (a, b) -> a + b)
 }

@@ -99,7 +99,11 @@ MINUS_BYTE := 45
 ZERO_BYTE := 48
 
 # a value's text, as a text's holes show it: `"n is ${n}"`
+# a value made into its own type is itself (wiki/conversion.md: T(x) makes a T), so `x as int` of an int is x
 text(t: text): text := t
+int(n: int): int := n
+float(x: float): float := x
+bool(b: bool): bool := b
 text(n: int): text := prim int_text(n)
 text(c: char): text := prim char_text(c)
 text(b: bool): text := if b then "yes" else "no"

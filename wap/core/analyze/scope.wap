@@ -85,7 +85,7 @@ arm_bound(arm: Node, scope: list, depth: int) as Node := match arm {
 # a pattern's names bound: a case, `Dot`, or a case with the variables its fields fill, `Circle(r)`; `_` names none
 pattern_bound(pattern: Node, scope: list, depth: int) as Node := match pattern {
 	Symbol(name) => if name == WILDCARD then pattern else pattern_name_bound(pattern, scope, depth)
-	Call(called, fields) => if shape_called(called, scope) then pattern_bound(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
+	Call(called, fields) => if shape_called(called, scope) then with_fact(pattern_bound(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth), SHAPE_OF, called) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
 	List(items, Bracket.Square, separator) => refitted(List(items.map(item => pattern_bound(item, scope, depth)), Bracket.Square, separator), pattern)
 	Get(subject, key) => bound(pattern, scope, depth)
 	_ => pattern
