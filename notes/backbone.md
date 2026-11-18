@@ -237,6 +237,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
+  program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
+  example the preload's `slice` taking a Range and raising when it does not fit.
+
 - **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the

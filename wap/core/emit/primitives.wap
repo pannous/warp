@@ -66,6 +66,8 @@ host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the 
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
 HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+# the operations giving a list whose helper works on that list's type: one helper for each list type
+LIST_HELPERS = {"array_slice": slicing_function}
 
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
@@ -73,9 +75,15 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	name = text(operation)
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
-	if HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, name, HELPERS[name])]))) }
+	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
+	if LIST_HELPERS.has(name) {
+		list = list_index(fact_of(form, TYPE), p.m, p.records) ?? refused(form, "this primitive gives a list")
+		return helper_called(form, operands, "${name} ${list}", q => LIST_HELPERS[name](q, list), p)
+	}
 	refused(form, "no primitive of this name")
 }
+# the code of a primitive its helper function performs
+helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the instructions that compare two values of one type on the stack, giving yes or no
 equality(type: list, p: Program) as list := {
 	if type == I64 { return I64_EQ }
@@ -168,6 +176,17 @@ joining_function(p: Program) as int := {
 	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + bytes_in(local) + instruction(ARRAY_COPY, [type, type])
 	made = bytes_in(0) + bytes_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
 	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(bytes_in(0), 1) + joined)
+}
+
+# The helper of array_slice(xs, from, count): a new list of count items of xs, from the place `from` counting from 0.
+# Its locals: 0 the list, 1 from, 2 count, 3 the new list. A slice past the end traps.
+slicing_function(p: Program, type: int) as int := {
+	given = nullable(type)
+	place = local => instruction(LOCAL_GET, [local]) + I32_WRAP_I64
+	sliced = instruction(LOCAL_GET, [3])
+	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [3])
+	copied = sliced + i32_const(0) + instruction(LOCAL_GET, [0]) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
+	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
 }
 
 # The helper of int_text: an int's digits, written from the last into a buffer, then copied into a text of their
