@@ -22,6 +22,8 @@ staged(n: Node, rewrite: (Node) -> Node) as Node := with_facts_of(placed_like(re
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }
+# (old warp reads `x!` as running x, a host bug; once it reads `x!` as the optional's value, this is
+# Position(line_of(n)!, column_of(n)!) behind its ø check, without the `?? 0`)
 position_of(n: Node) as Position? := if line_of(n) == ø then ø else Position(line_of(n) ?? 0, column_of(n) ?? 0)
 # n placed where origin was written, its facts kept; n itself when origin has no position
 positioned_like(n: Node, origin: Node) as Node := {
