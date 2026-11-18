@@ -41,4 +41,9 @@ item(2 to 5, 3)')" "5
 5"
 check "a map written as data, read by its key" "$(ran map_read 'NAMES = {yes: 1, no: 0}
 print text(NAMES.yes)')" "1"
+check "an item counted from 0 is a place" "$(ran item_place 'xs = [1, 2]
+xs[0] = 5
+print text(xs[0] + xs[1])')" "7"
+check "a text's character counted from 0" "$(ran text_item 't = "abc"
+print t[2]')" "c"
 exit $((failures > 0))
