@@ -86,7 +86,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => with_type(n, NEVER_TYPE)
 	Continue() => with_type(n, NEVER_TYPE)
-	Get(subject, key) => get_typed(n, subject, key, s, f)
+	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
 	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => refused(n, "a function value comes with closures, not yet")
 	Symbol(name) => name_typed(n, s, f)
@@ -234,6 +234,16 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
+# A value's part by a text key, `x.f`: a field of x's record type, else the function f that takes x alone, which the
+# Get then calls (records and maps come with Record and Map)
+part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	typed = typed_form(subject, s, f, ø)
+	named = s.definitions.filter(definition => text(declared_name(written_name(definition))) == text(key))
+	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
+	chosen = function_typed(chosen_definition(n, key, named, [typed], expected), [value_type(typed)], s, n)
+	called = with_fact(with_fact(refitted(Get(typed, key), n), BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
+	with_type_of(called, chosen.result)
+}
 # the definitions a called name may mean: the one it was bound or typed to, else its candidates
 candidates_of(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [defined_at(called)] else match fact_of(called, CANDIDATES) {
 	List(items, bracket, separator) => items
@@ -259,7 +269,9 @@ takes(definition: Node, given: list) as bool := {
 	parameters = parameters_in(definition)
 	#parameters == #given and (1 to #given).all(at => fits(given#at, type_given(parameters#at)))
 }
-fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+fits(argument: Node, wanted: Node?) as bool := wanted == ø or same_type(wanted, value_type(argument)) or any_list(wanted, value_type(argument)) or reads_as_text(argument, wanted)
+# a bare `list` wanted, which every list<T> fits
+any_list(wanted: Node, given: Node?) as bool := wanted == symbol(LIST_TYPE) and item_type(given) != ø
 # a one-character text literal, typed a char, where a text is wanted
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE) and argument is Char
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
@@ -268,7 +280,7 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 # its body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
-	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then ø else frame.returns#1) else body_type
+	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
 	for returned in frame.returns { if not (returned == result or returned != ø and result != ø and same_type(returned, result)) { refused(name, "this function gives back values of different types") } }
 	result
 }
