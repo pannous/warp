@@ -1,7 +1,7 @@
 # `x!` of an optional (decision x-unwrap, wiki/optional.md): `x: int? = 5; x! * 2` is 10, and `x!` of an x holding ø
 # raises "x is missing". What the program declares optional unwraps as `x ?? raise "x is missing"`: a variable
 # `name: T? = …`, a parameter `name: T?`, and a call of a function declaring an optional result, `f(n) as int? := …`
-# (`f(3)!`); any other `x!` keeps its meaning (a value itself, a block run).
+# (`f(3)!`), and a variable it is assigned to; any other `x!` keeps its meaning (a value itself, a block run).
 optional_unwraps_extension = Extension{name: "optional_unwraps", passes_before: {"rules_rewritten": optional_unwraps}}
 
 OPTIONAL_MARK = "?"
@@ -10,6 +10,7 @@ MISSING = " is missing"
 optional_unwraps(program: Node) as Node := {
 	optionals = OptionalNames()
 	bottom_up(program, n => noted_optional(n, optionals))
+	if #optionals.functions > 0 { bottom_up(program, n => noted_holder(n, optionals)) }
 	if #optionals.names == 0 and #optionals.functions == 0 { return program }
 	bottom_up(program, n => unwrapped_optional(n, optionals))
 }
@@ -32,6 +33,12 @@ noted_optional(n: Node, optionals: OptionalNames) as Node := {
 	}
 	n
 }
+# notes `y = f(3)` of a function declaring an optional result: y holds an optional
+noted_holder(n: Node, optionals: OptionalNames) as Node := {
+	if is_key(n, Op.Assign) and key_of(n) is symbol and is_optional_call(value_of(n), optionals) { optionals.names[name_of(key_of(n))] = yes }
+	n
+}
+is_optional_call(n: Node, optionals: OptionalNames) as bool := is_call(n) and n#1 is symbol and optionals.functions.has(name_of(n#1))
 # notes the name of `name: T?`
 noted_name(declared: Node, names: map) := {
 	if is_key(declared, Op.Colon) and key_of(declared) is symbol and is_optional_type(value_of(declared)) { names[name_of(key_of(declared))] = yes }
@@ -42,7 +49,7 @@ is_optional_type(type: Node) as bool := type is symbol and name_of(type).ends_wi
 unwrapped_optional(n: Node, optionals: OptionalNames) as Node := {
 	if not (is_group(n) and bracket_of(n) == "(" and #n == 2 and n#1 == symbol(unwrap_word)) { return n }
 	x = n#2
-	declared = if x is symbol then optionals.names.has(name_of(x)) else is_call(x) and x#1 is symbol and optionals.functions.has(name_of(x#1))
+	declared = if x is symbol then optionals.names.has(name_of(x)) else is_optional_call(x, optionals)
 	if not declared { return n }
 	Key(x, Op.Coalesce, List([symbol("raise"), "${x}" + MISSING], Bracket.None, Separator.Space))
 }
