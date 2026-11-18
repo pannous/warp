@@ -61,6 +61,7 @@ WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: 
 WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree")  # wap/ and the census script of main's tip, extracted to run them
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 WAP_CENSUS_JOBS = 4  # census runs at once, niced: each takes ~25 s
+WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
 # warp caches a program file's compile by its path (~/Library/Caches/warp/compiled, flattened path in the name): a copy of
@@ -68,7 +69,8 @@ WAP_HELLO_SOURCE = 'print "Hello"\n'
 WARP_COMPILE_CACHE = os.path.expanduser("~/Library/Caches/warp/compiled")
 WAP_TESTS_SUMMARY = os.path.join(REPO, "data/wap-tests/summary.txt")  # written by test/wap/run.sh
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
-CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound, typed: (\w+), emitted: (\w+)")
+CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound(?:, typed: (\w+), emitted: (\w+))?")  # a preload file has no typed/emitted: it is typed by function
+CENSUS_TOTAL = re.compile(r"(\d+) of (\d+) files typed whole, (\d+) of (\d+) functions typed")
 REFUSAL_POSITION = re.compile(r"^\S+ line \d+:\d+: ")  # the file and place a refusal names, which differ per use
 
 
@@ -517,22 +519,28 @@ def wap_sizes():
 
 def wap_census(files):
     """The census (notes/wap.md "Road to self-build") of each of <files> in WAP_TREE, niced WAP_CENSUS_JOBS at a time, summed:
-    statements, lowered, bound, files typed and emitted, and the WAP_BLOCKERS most frequent refusals [stage, message, count]"""
+    statements, lowered, bound, files typed whole and emitted, functions typed, and the WAP_BLOCKERS most frequent refusals [stage, message, count]"""
     def run(file):
-        return subprocess.run(["nice", "-n", "19", WARP, "--no-window", WAP_CENSUS, file], capture_output=True,
-                              text=True, cwd=WAP_TREE, env={**os.environ, "WARP_WINDOW": "0"}).stdout
+        try:
+            return subprocess.run(["nice", "-n", "19", WARP, "--no-window", WAP_CENSUS, file], capture_output=True, text=True,
+                                  cwd=WAP_TREE, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS).stdout
+        except subprocess.TimeoutExpired:
+            return f"timeout\tafter {WAP_CENSUS_FILE_SECONDS} s"
     with concurrent.futures.ThreadPoolExecutor(WAP_CENSUS_JOBS) as pool:
         outputs = list(pool.map(run, files))
     sums, blockers = collections.Counter(files=len(files)), collections.Counter()
     for file, output in zip(files, outputs):
         for line in output.splitlines():
             stage, _, message = line.partition("\t")
-            if match := CENSUS_LINE.search(message) if stage == "ok" else None:
-                statements, lowered, bound, typed, emitted = match.groups()
-                sums.update(statements=int(statements), lowered=int(lowered), bound=int(bound), typed=typed == "yes", emitted=emitted == "yes")
+            if stage == "ok" and (match := CENSUS_LINE.search(message)):
+                statements, lowered, bound, _, emitted = match.groups()
+                sums.update(statements=int(statements), lowered=int(lowered), bound=int(bound), emitted=emitted == "yes")
+            elif stage == "total" and (match := CENSUS_TOTAL.search(message)):
+                sums.update(typed=int(match[1]), functions=int(match[4]), functions_typed=int(match[3]))
             elif stage in ("read", "declare", "lower", "bind", "type", "emit"):
                 blockers[stage, REFUSAL_POSITION.sub("", message)] += 1
         if "ok\t" not in output:
+            sums.update(missing=1)
             print(f"vitals: wap census of {file} gave no result: {output.strip()[-200:]}", file=sys.stderr)
     return {**sums, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
 
