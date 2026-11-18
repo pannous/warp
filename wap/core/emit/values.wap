@@ -75,6 +75,11 @@ plain_word(form: Node) as text := {
 	type = fact_of(form, TYPE)
 	if type is symbol and WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES then text(type) else refused(form, "this plain value reached the emitter without its type")
 }
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): `fitted` is a second answer to "does it fit", on wasm
+# layouts. Its last case turns an any given where a reference is wanted into ø (DROP + null_of): the program goes on
+# with a missing value. That place is exactly where dynamic typing needs its checked cast (ref.test, else raise
+# naming both types and the place). Once typing writes every conversion into the kernel (core/analyze/fits.wap),
+# the emitter only emits the conversion it is handed and this function goes.
 # A value given where a type is wanted, made to fit it: a plain value boxed for its optional or for `any`, any
 # reference taken as itself where `any` is wanted, ø a null of the wanted reference type; any other value as it is,
 # for its taker to check. `form` is the value's code, whose type picks a plain value's box.

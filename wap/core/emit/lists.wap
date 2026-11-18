@@ -123,6 +123,11 @@ map_made(map: Node, keys: list, values: list, p: Program) as list := list_made(k
 
 # the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
 list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): one layout per item type (an array of i64 for list<int>,
+# of references for list<Node>) means a list<int> can never stand where a list of anything is wanted without a copy,
+# and lists are shared, so a copy changes meaning. Proposal: every list and map holds references (small ints as
+# i31, others boxed); `list<int>` is then a promise typing checks, with a cast at the read. Any list fits a bare
+# `list`, the list words exist once instead of once per item type, and wap's own lists (Nodes, texts) pay nothing.
 list_layout(type: Node, p: Program) as list := nullable(list_struct(type, p))
 items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
 item_layout(type: Node, p: Program) as list := layout_of(item_type(type), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
