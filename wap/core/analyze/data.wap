@@ -9,12 +9,15 @@ use "calls.wap"
 use "fits.wap"
 use "letters.wap"
 use "function_values.wap"
+use "dispatch.wap"
 
 # the counting from 0 that `x[k]` writes, as the place k + 1
 PLUS = "+"
 # a range as an item key takes the items in it, `xs[1 .. 3]`, `xs[2 ..]`: the preload's slice
 RANGE_TYPE = "Range"
 SLICE = "slice"
+# the function that makes a record's instance from a map, `from_map(person)`, written once for each record
+FROM_MAP_WORD = "from_map"
 
 # An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
 # type is the record's name
@@ -27,6 +30,24 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 	defaults = left.map(field => field_typed(placed_like(Key(declared_name(field), Op.Colon, fact_of(defaulting(record, field, s) ?? refused(n, "this ${head} gives no value to its field ${declared_name(field)}"), DEFAULT)), n), record, s, f))
 	given = written + defaults
 	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
+}
+# An instance made from a map, built field by field, each field made into its type (wiki/conversion.md "Made from a
+# map"): `person({name: "Ann", age: "40"})` calls the function the typing stage writes once for the record,
+# from_map(person)(m) := person{name: text(m["name"]), age: int(m["age"])}, so the map is read once, each field its
+# entry, `keys` too
+instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
+	name = placed_like(symbol("${FROM_MAP_WORD}(${record_name(record)})"), n)
+	if definitions_named(text(name), s) is empty {
+		reads = parameters_of(name, [value_type(map)])
+		fields = fields_of(record).map(field => placed_like(Key(declared_name(field), Op.Colon, field_made(field, placed_like(Item(reads#1, Text(text(declared_name(field)))), n), s)), n))
+		dispatcher_made(name, reads, placed_like(Key(symbol(record_name(record)), Op.None, List(fields, Bracket.Curly, Separator.Comma)), n), [symbol(record_name(record))], s)
+	}
+	word_called(n, text(name), [map], symbol(record_name(record)), s)
+}
+# a field's value made into the field's type by that type's maker, `int(m["age"])`
+field_made(field: Node, value: Node, s: TypingState) as Node := {
+	maker = text((type_parts(declared_type(field)) ?? [declared_type(field)])#1)
+	named_call(maker, definitions_named(maker, s), [value], value)
 }
 # the constructor's parameter that gives a field its default, ø when none does
 defaulting(record: Node, field: Node, s: TypingState) as Node? := {
