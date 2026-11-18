@@ -1,9 +1,9 @@
 # wap: an independent review (2026-11-18)
 
 Reviewer: warp-architect-review, a one-off session with no stake in the design. Subject: the new compiler in wap/,
-read at bc30daa9c8 and 6fa64cf537. While the report was written main moved on to bafe539ae6 (two features and
+read at bc30daa9c8 and 6fa64cf537. While the report was written main moved on to 73b39f4ad5 (two features and
 three commits that split the largest files), so every `file:line`, every count, the census and all the programs
-were taken again there: `file:line` refers to bafe539ae6. Nothing in wap/ or test/ was changed.
+were taken again there: `file:line` refers to 73b39f4ad5. Nothing in wap/ or test/ was changed.
 
 ## Verdict
 
@@ -71,8 +71,8 @@ Each names its options with their cost in core lines, my recommendation first, a
 
 ### Decision 1. What does a bare `list`, `map` or `function` mean as a type, and so how is wap's own source written?
 
-wap's source is written in the old compiler's loose dialect: 318 parameters and fields typed bare `list`, 178
-results written `as list`, about 40 class fields `xs: list`, 9 parameters typed `function`, 4 tables of functions,
+wap's source is written in the old compiler's loose dialect: 334 parameters and fields typed bare `list` (49 of
+them class fields, `xs: list`), 187 results written `as list`, 9 parameters typed `function`, 4 tables of functions,
 10 places that build `[key, value]` pairs of two types, 5 global tables starting as `{}`. wap's type system is
 static: every list has one item type, a function is typed once per tuple of argument types. It accepts a bare
 `list` only at a parameter ("takes its argument's own type", core/analyze/calls.wap:262-265). Everything else is
@@ -94,7 +94,7 @@ notes/wap.md:175-192 lists missing library words as the blockers.
 - **A (recommended): wap stays static, and a type written without its parts takes the type of the value given.**
   That is today's rule for parameters, extended to results and variables: `as list` means "a list, of whatever
   items the body gives". A class field and the result of a function that calls itself need the full type and are
-  refused with that fix-it. wap's source then changes in about 40 fields (`indents: list<int>`), 10 pair lists
+  refused with that fix-it. wap's source then changes in about 50 fields (`indents: list<int>`), 10 pair lists
   that become small classes (better code: `entry.key` instead of `entry#1`), and the missing `use` lines. Tables
   of functions, empty maps and `function` parameters are compiler fixes, not source edits (fixes 2 and 3).
   Core cost: about 10 lines (core/analyze/calls.wap:253 and :265, one message). The old compiler accepts the
@@ -103,8 +103,8 @@ notes/wap.md:175-192 lists missing library words as the blockers.
   backbone.md:333). wap's source compiles nearly as it is. Core cost: several hundred lines (a checked downcast
   wherever an `any` meets a typed place, in typing and emitter), every byte list of the emitter boxed, type
   errors moved to run time, and the language gets two regimes side by side.
-- **C: every type written out in wap's source, no new rule.** Core cost 0; about 220 more source edits than A
-  (the 178 results); the most explicit source.
+- **C: every type written out in wap's source, no new rule.** Core cost 0; about 190 more source edits than A
+  (the 187 results); the most explicit source.
 - **Park:** continue file by file. Cost: the distance to self-build stays unmeasured.
 
 Why A: it is the rule wap already has, said once instead of at parameters only; it keeps every type error at
@@ -228,7 +228,7 @@ None has a test; each fix is a few lines; each needs one check line in test/wap.
 2. **An early `return` in a function whose written result is optional is refused.**
    `first_big(xs: list<int>) as int? := { for x in xs { if x > 1 { return x } }; ø }` → "this function gives back
    values of different types" (probes q03, q04, p16). core/analyze/calls.wap:224-228 compares each returned type
-   with the body's last value, never with the written result (known at :242). 29 of wap's 34 functions with an
+   with the body's last value, never with the written result (known at :242). 31 of wap's 37 functions with an
    optional result and a block body return early. Do: where a result type is written, every returned value must
    fit it, and it is the result.
 3. **`{}` cannot be an empty map.** `m: map<text, int> = {}` → "this gives a ø, the name holds a map<text, int>";
@@ -260,8 +260,8 @@ wap's source is written so at core/rules/patterns.wap:148. Do: lower the index o
 - **Why it matters now:** a list or a map of function values, a field holding one, an `if` choosing between two
   are all refused (probes p05-p08, q07, q08). wap's source has 4 tables of functions (core/emit/primitives.wap:78,
   :81, :82, core/emit/lists.wap:26) and 9 `function` parameters, among them the two walkers every stage calls
-  (core/stage.wap:21, :49). And size: wap's source gives a function to a list word 281 times (`map` 143, `filter`
-  57, `flat_map` 41, `all` 15, `any` 13, `fold` 12); each is its own copy of that word today.
+  (core/stage.wap:21, :49). And size: wap's source gives a function to a list word 304 times (`map` 153, `filter`
+  63, `flat_map` 43, `any` 16, `all` 15, `fold` 14); each is its own copy of that word today.
 - **Do:** a function value is one struct holding a function reference and its captures; its type is its
   signature, `(T) -> U` (a base struct per signature, a capturing value a subtype adding its fields, a call a
   `call_ref`). `(T) -> U` and bare `function` are ordinary types, `map` is typed once per (T, U). The `fn<…>`
@@ -450,7 +450,7 @@ wap's source is written so at core/rules/patterns.wap:148. Do: lower the index o
 - **Measured:** a program of N functions, each calling the one before (`f2(x: int): int := f1(x) + 1`): 200 take
   1.5 s, 400 take 3.7 s, 800 take 11.3 s: three times the time for twice the functions. N plain statements stay
   flat (1 s up to 400).
-- **Why it matters:** wap has about 770 functions; with one copy of a list word per function value (fix 3) and one
+- **Why it matters:** wap has about 780 functions; with one copy of a list word per function value (fix 3) and one
   per tuple of types, well over a thousand instances. On that curve a build of wap by wap is half a minute before
   any body costs anything, and every worker's loop is that build.
 - **Likely causes, all lookups in lists:** `fact_of` walks a node's attributes on every question
@@ -603,7 +603,7 @@ What I would change:
 ## Limits of this review
 
 The old compiler was not reviewed. The old test corpus was not run under wap. Timings were taken once, at
-bc30daa9c8, on a Mac that other sessions were using. The programs and the census are those of bafe539ae6;
+bc30daa9c8, on a Mac that other sessions were using. The programs and the census are those of 73b39f4ad5;
 programs p to u ran before at bc30daa9c8 or 6fa64cf537 with the same results, t01 to t06 written anew for the
 second run. test/wap/run.sh was run at bc30daa9c8 only. The causes named in fix 13 are read from the code, not
 profiled.
@@ -677,7 +677,7 @@ Under the old compiler: `apply(f: (int) -> int, x: int)` runs (h01); typed lists
 []`, `as int?` with an early return and `as list<int>` run (h02); `class Test { fit: (int) -> bool }` with `tests =
 [Test(x => x > 1), Test(x => x < 1)]` is refused, "an instance of Test given more values than fields" (h03).
 
-## Appendix B: the census at bafe539ae6
+## Appendix B: the census at 73b39f4ad5
 
 `warp scripts/wap-census.warp <file>` on each of the 50 files.
 
