@@ -140,21 +140,21 @@ Next, in order:
 
 ## Road to self-build
 
-Measured 2026-11-18 (main 7c849b6b0b) by scripts/wap-census.warp, which runs the compiler's own stages
-(wap/core/pipeline.wap, the shape rules included) on each of wap's 21 program files (721 top-level statements; the 8
+Measured 2026-11-18 (main 05ae82852f) by scripts/wap-census.warp, which runs the compiler's own stages
+(wap/core/pipeline.wap, the shape rules included) on each of wap's 21 program files (762 top-level statements; the 8
 rule files, kernel/forms.wap and core/sugar/, pass every stage). Lowering and binding run statement by statement, each
 file bound with the names its `use`d modules define; a statement stops at its first refusal, so each row counts the
 statements a missing piece blocks first. Typing and emitting run on the whole file with its modules, as the compiler
-does: 659 statements lower, 314 bind, no program file types yet.
+does: 705 statements lower, 359 bind, no program file types yet.
 
 | blocks first | stage that should handle it | what is missing |
 |---|---|---|
-| 15 of 21 files' typing | lowering | a text with `${…}` parts: errors.wap's `refused`, used by every stage, so it stops them all |
-| ~90 statements | kernel + binding | a match arm of a constructor: `List(items, bracket, separator)` (39), `Symbol(name)` (16), `Key(…)` (14), Define, Call, Block, Arm, Get |
+| 15 of 21 files' typing | preload functions | the runtime's word `line_of`: errors.wap's `refused`, used by every stage, so it stops them all |
+| ~90 statements | kernel + binding | a match arm of a constructor: `List(items, bracket, separator)` (39), `Symbol(name)` (16), `Key(…)` (16), Define, Call, Block, Arm, Get |
 | ~75 | kernel | Record: enums (`Fixity`, `LexemeKind`, `Separator`, `Bracket`) and their cases `a, b`, class fields `name: text`, constructors `Code`, `Block`, `Text`, `Key` |
-| ~60 | preload functions | operators `+=` (25), `is` (14), `??` (14), `..`, `===` |
-| ~55 | preload + closures | list words taking a function: `map` (14), `filter`, `contains`, `has`, `all`, `add`, `flat_map`, `find`, `ends_with` |
-| ~30 | preload functions | the runtime's words: `text` (10), `symbol` (9), `line_of`, `attributes_of`, `positioned`, `is_digit`, `is_alpha`, `args` |
+| ~40 | preload functions | operators `??` (19), `is` (17), `..`, `===` |
+| ~55 | preload + closures | list words taking a function: `map` (14), `filter` (10), `contains` (10), `has`, `all`, `add`, `flat_map`, `find`, `ends_with` |
+| ~30 | preload functions | the runtime's words: `symbol` (10), `text`, `line_of` (6), `attributes_of`, `positioned`, `is_digit`, `is_alpha`, `args` |
 | 4 files' typing | lowering | the range `0 upto width` (wasm.wap) |
 
 Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done`.
