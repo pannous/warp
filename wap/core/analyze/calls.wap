@@ -41,6 +41,8 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	if kind != ø { return typed_form(shape_test(arguments#1, kind, n, s), s, f, ø) }
 	known = candidates.map(function_key_of)
 	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(function_key_of(definition)))]
+	made = made_from_map(n, called, candidates, given, s)
+	if made != ø { return typed_form(made, s, f, expected) }
 	meant = chosen_definition(n, called, scopes, given, expected, s)
 	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
@@ -141,6 +143,13 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
+# a class's maker given one map that none of its definitions takes, `person({name: "Ann"})`: the instance made from it
+# field by field (core/analyze/data.wap instance_from_map); ø for any other call
+made_from_map(n: Node, called: Node, candidates: list, given: list, s: TypingState) as Node? := {
+	record = record_named(s.records, called)
+	if record == ø or #given != 1 or key_type(value_type(given#1)) == ø or candidates.any(definition => takes(definition, given, s, (argument, wanted) -> fits(argument, wanted, s))) { return ø }
+	instance_from_map(n, record, given#1, s)
+}
 # A type's own words travel with it: the definitions of a called name that the module of an argument's record declares
 # taking a value of that record, so a library's `show(xs#at)` finds a program's show(p: P), in the one ranking
 own_words(called: Node, given: list, s: TypingState) as list := {
