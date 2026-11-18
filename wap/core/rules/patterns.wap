@@ -106,7 +106,7 @@ pattern_called(language: Language, head: Node) as Declared? := match head {
 }
 
 # a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
-instance(language: Language, pattern: Declared, parts: list) as Node := with_fact(built(language, pattern.shape, bound_in_order(pattern.holes, parts)), BUILT_FORM, True)
+instance(language: Language, pattern: Declared, parts: list) as Node := built(language, pattern.shape, bound_in_order(pattern.holes, parts))
 
 bound_in_order(holes: list, parts: list) as map := {
 	bindings = {}
@@ -156,7 +156,7 @@ hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(R
 hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
 # A declared pattern's shape as the Node pattern that takes it apart, its holes those its call's parts fill:
 # `Call(f, args)` in an arm is List([Symbol("Call"), f, ...args], Bracket.Round, Separator.Space)
-shape_taken(language: Language, pattern: Declared) as Node := lowered(top_level_statements(shaped_program(language, operated_program(language, notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
+shape_taken(language: Language, pattern: Declared) as Node := lowered(language, top_level_statements(shaped_program(language, operated_program(language, notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
 # A declared pattern's call in an arm, its parts at its holes in order, by the facts its builder's name carries
 pattern_taken(called: Node, parts: list, builder: Node) as Node := {
 	holes = items_of(fact_of(builder, PATTERN_HOLES))

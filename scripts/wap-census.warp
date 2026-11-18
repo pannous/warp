@@ -33,7 +33,7 @@ probe(file: text) := {
 	used = used_scope(file)
 	lowered_ok = []
 	for statement in statements {
-		try { lowered_ok = lowered_ok + statements_in(lowered_program(declared_code(language, statement))) } catch e { report("lower", e.message) }
+		try { lowered_ok = lowered_ok + statements_in(lowered_program(language, declared_code(language, statement))) } catch e { report("lower", e.message) }
 	}
 	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used + library_scope
 	bound_ok = []

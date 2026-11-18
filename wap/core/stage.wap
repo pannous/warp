@@ -78,8 +78,6 @@ WRITTEN = "written"
 INDENTED = "indented"
 # empty braces as the reader reads them, one word: the host keeps no empty curly group, so `{}` could carry no facts
 EMPTY_BRACES = "{}"
-# a kernel form a rule's template built, `(If c a b)` of `If($c, $a, $b)`: lowering keeps its shape and lowers its parts
-BUILT_FORM = "built_form"
 # what a declared pattern's builder carries on its name, so that binding finds the pattern through scope: its holes
 # in order, the Node pattern that takes it apart in an arm
 PATTERN_HOLES = "pattern_holes"

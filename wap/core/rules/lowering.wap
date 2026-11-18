@@ -48,13 +48,13 @@ WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
 
 # the program as one Block of its statements
-lowered_program(program: Node) as Block := staged(program, whole => lowered_block(statements_of(whole)))
+lowered_program(language: Language, program: Node) as Block := staged(program, whole => lowered_block(language, statements_of(whole)))
 
 # Statements as one Block. A statement naming a variable without a value, `global x` or `let x`, is no code: it says
 # which variable x is in the whole block, the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
-lowered_block(statements: list) as Node := {
+lowered_block(language: Language, statements: list) as Node := {
 	named = statements.filter(names_a_variable)
-	block = Block(statements.filter(statement => not names_a_variable(statement) and not is_use(statement)).map(lowered))
+	block = Block(statements.filter(statement => not names_a_variable(statement) and not is_use(statement)).map(item => lowered(language, item)))
 	if named is empty then block else with_fact(block, VARIABLES, List(named.map(variable_named), Bracket.Square, Separator.Comma))
 }
 names_a_variable(statement: Node) as bool := match statement {
@@ -64,8 +64,8 @@ names_a_variable(statement: Node) as bool := match statement {
 variable_named(statement: Node) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
 
 # code as a kernel form, placed where the code was written (core/stage.wap)
-lowered(n: Node) as Node := staged(n, lowered_form)
-lowered_form(n: Node) as Node := match n {
+lowered(language: Language, n: Node) as Node := staged(n, form => lowered_form(language, form))
+lowered_form(language: Language, n: Node) as Node := match n {
 	Text(value) => n
 	Number(value) => n
 	Char(value) => n
@@ -73,64 +73,64 @@ lowered_form(n: Node) as Node := match n {
 	False => n
 	Empty => n
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
-	Call(called, arguments) => operator_lowered(n, text(called), arguments)
-	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
+	Call(called, arguments) => operator_lowered(language, n, text(called), arguments)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(language, items, separator, n)) else not_lowered(n)
 	# a type written with its parts, `list<Node>`, stays as written: a named argument's or a case's field's type
 	Key(head, Op.None, List(items, Bracket.Less, separator)) => n
-	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(argument_lowered))
+	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(language, head), arguments_of(group).map(item => argument_lowered(language, item)))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
-	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
-	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
-	List(items, Bracket.None, Separator.Comma) => List(items.map(lowered), Bracket.Square, Separator.Comma)
-	List(items, Bracket.Round, Separator.Space) => if fact_of(n, BUILT_FORM) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
-	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
-	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
+	List(items, Bracket.Square, separator) => List(items.map(item => lowered(language, item)), Bracket.Square, separator)
+	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(language, items, separator, n) else lowered_block(language, statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.None, Separator.Comma) => List(items.map(item => lowered(language, item)), Bracket.Square, Separator.Comma)
+	List(items, Bracket.Round, Separator.Space) => if pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, Separator.Space) else grouped(language, statements_of(List(items, Bracket.None, Separator.Space)))
+	List(items, Bracket.Round, separator) => grouped(language, statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.None, Separator.Space) => phrase_lowered(language, items, n)
 	# a word written against what follows it, `...rest`, as a phrase
-	List(items, Bracket.None, Separator.None) => phrase_lowered(items, n)
+	List(items, Bracket.None, Separator.None) => phrase_lowered(language, items, n)
 	_ => not_lowered(n)
 }
 
 # an operator call: the defining operators as their kernel forms, any other a call of the operator's function
-operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spelling {
-	"=" => assigned(arguments#1, lowered(arguments#2), n)
-	":=" => defined(n, arguments#1, lowered(arguments#2))
-	"=>" => function_value(arguments)
-	"->" => function_value(arguments)
-	_ => Call(symbol(spelling), arguments.map(lowered))
+operator_lowered(language: Language, n: Node, spelling: text, arguments: list) as Node := match spelling {
+	"=" => assigned(language, arguments#1, lowered(language, arguments#2), n)
+	":=" => defined(language, n, arguments#1, lowered(language, arguments#2))
+	"=>" => function_value(language, arguments)
+	"->" => function_value(language, arguments)
+	_ => Call(symbol(spelling), arguments.map(item => lowered(language, item)))
 }
 
-function_value(arguments: list) as Node := Fn(parameter_list(arguments#1), lowered(arguments#2))
+function_value(language: Language, arguments: list) as Node := Fn(parameter_list(language, arguments#1), lowered(language, arguments#2))
 
 # a phrase headed by a word: a built-in's primitive body, `prim print_text(t)`, or a call of the word
-phrase_lowered(items: list, n: Node) as Node := {
+phrase_lowered(language: Language, items: list, n: Node) as Node := {
 	if not items#1 is symbol { return not_lowered(n) }
-	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(items#2, n) }
-	Call(items#1, items[1 ..].map(lowered))
+	if #items == 2 and items#1 == symbol(PRIMITIVE_WORD) { return primitive_of(language, items#2, n) }
+	Call(items#1, items[1 ..].map(item => lowered(language, item)))
 }
-primitive_of(operation: Node, n: Node) as Node := match operation {
-	Key(name, Op.None, group) => if name is symbol then Prim(name, arguments_of(group).map(lowered)) else not_lowered(n)
+primitive_of(language: Language, operation: Node, n: Node) as Node := match operation {
+	Key(name, Op.None, group) => if name is symbol then Prim(name, arguments_of(group).map(item => lowered(language, item))) else not_lowered(n)
 	_ => not_lowered(n)
 }
 
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
-assigned(place: Node, value: Node, n: Node) as Node := match place {
+assigned(language: Language, place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
-	_ => Set(lowered(place), value)
+	_ => Set(lowered(language, place), value)
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 
 # `f(x) := body` defines a function, `n := 1` a constant; `f(x): int := body` names its result type with the name
-defined(n: Node, head: Node, body: Node) as Node := match head {
-	Key(signature, Op.Colon, result) => with_result(defined(n, signature, body), result)
-	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(group), body) else not_lowered(n)
-	Symbol(name) => Define(head, parameter_list(Empty), body)
+defined(language: Language, n: Node, head: Node, body: Node) as Node := match head {
+	Key(signature, Op.Colon, result) => with_result(defined(language, n, signature, body), result)
+	Key(name, Op.None, group) => if name is symbol then Define(name, parameter_list(language, group), body) else not_lowered(n)
+	Symbol(name) => Define(head, parameter_list(language, Empty), body)
 	_ => not_lowered(n)
 }
 with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
 # a map's or an instance's fields, `{a: 1, b: 2}`, each value lowered: data, not a block (notes/kernel.md Data)
-fields_lowered(items: list, separator: Separator, n: Node) as Node := List(items.flat_map(row_items).map(field => field_lowered(field, n)), Bracket.Curly, separator)
+fields_lowered(language: Language, items: list, separator: Separator, n: Node) as Node := List(items.flat_map(row_items).map(field => field_lowered(language, field, n)), Bracket.Curly, separator)
 # a key, or a row of keys
 is_fields(item: Node) as bool := match item {
 	Key(name, Op.Colon, value) => yes
@@ -139,12 +139,12 @@ is_fields(item: Node) as bool := match item {
 }
 # an instance's field, `x: 1`, its value lowered
 # a call's argument lowered: a named one, `by: f`, its value
-argument_lowered(argument: Node) as Node := match argument {
-	Key(name, Op.Colon, value) => if name is symbol then field_lowered(argument, argument) else lowered(argument)
-	_ => lowered(argument)
+argument_lowered(language: Language, argument: Node) as Node := match argument {
+	Key(name, Op.Colon, value) => if name is symbol then field_lowered(language, argument, argument) else lowered(language, argument)
+	_ => lowered(language, argument)
 }
-field_lowered(field: Node, n: Node) as Node := match field {
-	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(name), Op.Colon, lowered(value)), field)
+field_lowered(language: Language, field: Node, n: Node) as Node := match field {
+	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(language, name), Op.Colon, lowered(language, value)), field)
 	_ => not_lowered(n)
 }
 arguments_of(group: Node) as list := match group {
@@ -155,15 +155,15 @@ arguments_of(group: Node) as list := match group {
 }
 
 # the parameters a definition or a function value names, as the one list Define and Fn take
-parameter_list(written: Node) as Node := List(arguments_of(written).map(parameter_lowered), Bracket.Round, Separator.Comma)
+parameter_list(language: Language, written: Node) as Node := List(arguments_of(written).map(item => parameter_lowered(language, item)), Bracket.Round, Separator.Comma)
 # a parameter as written; one with a default, `y: int = 2`, is the parameter with the default as its fact DEFAULT
-parameter_lowered(parameter: Node) as Node := match parameter {
-	Call(called, arguments) => if text(called) == "=" and #arguments == 2 then with_fact(arguments#1, DEFAULT, lowered(arguments#2)) else parameter
+parameter_lowered(language: Language, parameter: Node) as Node := match parameter {
+	Call(called, arguments) => if text(called) == "=" and #arguments == 2 then with_fact(arguments#1, DEFAULT, lowered(language, arguments#2)) else parameter
 	_ => parameter
 }
 
 # round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
-grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else lowered_block(statements)
+grouped(language: Language, statements: list) as Node := if #statements == 1 then lowered(language, statements#1) else lowered_block(language, statements)
 
 # a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
 # one statement

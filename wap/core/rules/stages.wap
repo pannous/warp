@@ -86,7 +86,7 @@ rule_added(language: Language, written: Node, pattern: Node, template: Node) := 
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	typed = asks_value_type(compiled_pattern(language, normal))
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
-	if typed { normal = lowered(normal); output = lowered(output) }
+	if typed { normal = lowered(language, normal); output = lowered(language, output) }
 	matcher = compiled_pattern(language, normal)
 	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher))
 	rules = if typed then language.typed_rules else language.shape_rules
