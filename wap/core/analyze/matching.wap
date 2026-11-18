@@ -6,6 +6,7 @@ use "calls.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "fits.wap"
 
 # A choice by patterns: each arm's pattern of the subject's type, a name holding the subject; each result expected the
 # Case's type. When the arms fit every value of the subject's type, the Case has the results' joined type; a match on
