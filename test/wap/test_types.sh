@@ -65,6 +65,11 @@ h(x: int?) := 1
 print text(missing(f(1)))
 print text(h(f(1)))')" "yes
 1"
+check "a value in an any shows itself by its own type's show" "$(ran shown_any 's(x: any): text := show(x)
+class Box { n: int }
+print s(1) + " " + s(2.5) + " " + s("ab") + " " + s(yes) + " " + s(Box(3))')" "1 2.5 \"ab\" yes Box{n: 3}"
+check "a case with an any field shows it" "$(ran held_any 'enum Holder { Held(value: any) }
+print show(Held(3))')" "Held(3)"
 # a name given only ø holds an optional whose type its uses settle; a generic function given a type not settled yet is
 # typed once it is
 check "a name given only ø is an optional of the type its uses give" "$(ran missing_name 'held = ø

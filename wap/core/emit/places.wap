@@ -40,10 +40,13 @@ map_code(form: Node, entries: list, p: Program, f: Frame) as Code := {
 # An instance, `Point{x: 1, y: 2}`: its fields' values in the order its record writes them, a new struct
 instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Code := {
 	values = fields_of(record).map(field => items.filter(item => text(declared_name(item)) == text(declared_name(field)))#1)
-	Code(layout(form, p), (1 to #values).flat_map(at => field_filled(fields_of(record)#at, code(given_value(values#at), p, f), p)) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
+	Code(layout(form, p), (1 to #values).flat_map(at => field_filled(fields_of(record)#at, given_value(values#at), p, f)) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
 }
 # the instructions of a value given to a field, made to fit the field's type
-field_filled(field: Node, value: Code, p: Program) as list := fitted(value, layout_of(declared_type(field), p.m, p.records) ?? value.type, p.m).instructions
+field_filled(field: Node, value: Node, p: Program, f: Frame) as list := {
+	given = code(value, p, f)
+	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p.m).instructions
+}
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
 item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
@@ -51,13 +54,14 @@ item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(sub
 # A value given to a place: a name, which then has that value, or a list's item, which leaves none
 assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
 	Get(subject, key) => written_code(place_of(subject, key, p, f), code(value, p, f))
-	_ => set_code(form, declared_name(place), code(value, p, f), p, f)
+	_ => set_code(form, declared_name(place), value, p, f)
 }
 
 # A value given to a name, and that value again, as `x = 3` has the value 3. The first value given decides the type.
-set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := {
+set_code(form: Node, place: Node, given: Node, p: Program, f: Frame) as Code := {
+	value = code(given, p, f)
 	held = variable_of(place, p, f) ?? added_variable(place, typed_layout(place, p) ?? value.type, p, f)
-	value = fitted(value, held.type, p.m)
+	value = fitted(value, held.type, given, p.m)
 	if not valued(value.type) { refused(form, "this gives no value to set") }
 	if held.type != value.type { refused(form, "this name held another kind of value before") }
 	Code(value.type, value.instructions + kept(held))
