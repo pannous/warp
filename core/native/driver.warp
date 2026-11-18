@@ -1264,7 +1264,8 @@ raised_message(caller: handle, context: handle, instance: pointer, failed: point
 }
 
 # `driver app.warp args…`: warp.wasm compiles the file as the native warp has it compile, then the module runs with the arguments
-compiled_and_run(compiler: text, given: text, first: int) as nothing := {
+compiled_and_run(compiler: text, written: text, first: int) as nothing := {
+	given = downloaded(written)
 	file = reachable_path(given)
 	library = library_folder()
 	output = compiled_path()
@@ -1276,6 +1277,36 @@ compiled_and_run(compiler: text, given: text, first: int) as nothing := {
 	added(compiling, joined(library, "/runtime.wasm"))
 	file_ran(compiler, compiling)
 	written_run(output, given, first)
+}
+# a program given as a URL (`warp https://host/a.warp`): fetched by curl, run by its argument vector, into the cache
+# folder under the whole URL, and run from there; any other word as it is. A fetch that fails stops with curl's reason
+downloaded(word: text) as text := {
+	if not is_url(word) { return word }
+	file = joined(cache_folder(), flattened(word))
+	words = arguments()
+	added(words, "curl")
+	added(words, "-sSfL")
+	added(words, "-o")
+	added(words, file)
+	added(words, word)
+	if spawned_status("curl", words) != 0 {
+		complain(joined("cannot download ", word))
+		exit(1)
+	}
+	file
+}
+is_url(word: text) as bool := starts_with(word, "https://") or starts_with(word, "http://")
+# a command run by its argument vector, without a shell, waited for: its exit status, 127 when it can't start
+spawned_status(command: text, words: Arguments) as i32 := {
+	actions = allocate(SPAWN_ACTIONS_BYTES)
+	posix_spawn_file_actions_init(actions)
+	child_at = allocate(4)
+	failed = posix_spawnp(child_at, c_string(command), actions, 0, words.pointers, process_environment())
+	posix_spawn_file_actions_destroy(actions)
+	if failed != 0 { return 127 }
+	status = allocate(4)
+	waitpid(word_at(child_at).value as i32, status, 0)
+	(word_at(status).value as i32) / 256
 }
 # the path absolute, its links resolved (lib/compiler links to core): a compile's folder is the real one, and a file
 # above the current folder (`../a.warp`) is one the module reaches through the preopened root
