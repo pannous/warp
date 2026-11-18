@@ -65,4 +65,8 @@ print show(Pair(1, 2))
 print show(Dot)')" "Circle(3)
 Pair(1, 2)
 Dot"
+check "cases holding cases compare by their parts" "$(ran tree_equal 'enum Tree { Leaf(n: int), Pair(a: Tree, b: Tree) }
+print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(2)))
+print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(3)))')" "yes
+no"
 exit $((failures > 0))

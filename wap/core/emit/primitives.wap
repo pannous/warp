@@ -6,6 +6,7 @@
 # function of the module, emitted once.
 
 use "emitter.wap"
+use "equality.wap"
 use "lists.wap"
 use "patterns.wap"
 use "values.wap"
@@ -73,12 +74,14 @@ host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the 
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function, "tag_equal": tag_equality_function}
+HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
 
+# two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
+TAG_EQUAL = "tag_equal"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
@@ -87,6 +90,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
+	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
 	if name == DISPATCHED { return finished(Code(given_layout(form, p), operands + dispatched_code(form, p))) }
 	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
 	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
@@ -116,15 +120,6 @@ unsigned_item(form: Node, array: int, p: Program) as list := {
 }
 # the code of a primitive its helper function performs
 helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
-# the instructions that compare two values of one type on the stack, giving yes or no
-equality(type: list, p: Program) as list := {
-	if type == I64 { return I64_EQ }
-	if type == F64 { return F64_EQ }
-	if type == I32 { return I32_EQ }
-	if type == nullable(text_type(p.m)) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
-	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
-}
-
 # the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
 given_layout(form: Node, p: Program) as list := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
 # the helper function of an operation, added by `build` the first time
@@ -188,35 +183,6 @@ reading_function(p: Program) as int := {
 counted(local: int, limit: list, body: list) as list := {
 	count = instruction(LOCAL_GET, [local])
 	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
-}
-
-# The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
-# count.
-text_equality_function(p: Program) as int := {
-	type = text_type(p.m)
-	no_unless_equal = I32_EQ + NO_UNLESS_YES
-	byte = local => instruction(LOCAL_GET, [local]) + instruction(LOCAL_GET, [3]) + instruction(ARRAY_GET_U, [type])
-	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
-	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
-	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
-}
-
-# The helper of tag_equal: yes when two cases have one tag and, for a case with fields, equal fields. Tags count the
-# cases of every enum, so one helper serves them all. Its locals: 0 and 1 the cases.
-tag_equality_function(p: Program) as int := {
-	base = nullable(enum_base(p.m))
-	tags = tag_in(0, p) + tag_in(1, p) + I32_EQ + NO_UNLESS_YES
-	fields = p.records.flat_map(record => cases_of(record).filter(case => case_fields(case) is not empty).flat_map(case => fields_compared(record, case, p)))
-	added_function(p.m, [base, base], [I32], [], tags + fields + i32_const(1))
-}
-tag_in(local: int, p: Program) as list := instruction(LOCAL_GET, [local]) + tagged(p.m)
-# When both cases are this one, each of its fields of the two compared by the field's equality
-fields_compared(record: Node, case: Node, p: Program) as list := {
-	cast = case_struct_of(record, case, p.m, p.records)
-	field = (local, at) => instruction(LOCAL_GET, [local]) + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
-	fields = case_fields(case)
-	compared = (1 to #fields).flat_map(at => field(0, at) + field(1, at) + equality(layout_of(declared_type(fields#at), p.m, p.records), p) + NO_UNLESS_YES)
-	tag_in(0, p) + i32_const(declared_tag(case, p)) + I32_EQ + IF + VOID_BLOCK + compared + END
 }
 
 # The helper of text_joined: a new text of the first's bytes, then the second's
