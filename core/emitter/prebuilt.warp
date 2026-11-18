@@ -405,12 +405,6 @@ def runtime_fingerprint() as int {
 	fingerprint_read = uleb_read(module.runtime_image.wasm, place#1)#1
 	fingerprint_read
 }
-def folded_bytes(bytes: list) as int {
-	folded = 0
-	# `part`, not `byte`: `for byte in xs` walks xs.bytes (decision text-unit-plurals)
-	for part in bytes { folded = (folded * 257 + part) % 1000000007 }
-	folded
-}
 
 ## a program linked to prebuilt library modules (card modules-prebuilt, notes/runtime_linking.md "Library modules"):
 ## each module's own functions, types, globals and texts appended behind the runtime's in the order given, its operands

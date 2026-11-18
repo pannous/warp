@@ -32,4 +32,25 @@ Box(2, 3).scaled(10)')" "20"
 check "a method without parentheses is called too" "$(ran method_read 'class Box { w: int; h: int; area() := self.w * self.h }
 b = Box(2, 3)
 b.area')" "6"
+check "a method reads and sets its receiver's fields by their bare names, a parameter hiding one" "$(ran bare_fields 'class Counter { c: int
+inc() := { c = c + 1; c }
+}
+print text(Counter(4).inc())
+k = Counter(1)
+k.inc()
+k.inc()
+print text(k.c)
+class Box { w: int
+h: int
+area() := w * h
+scaled(w) := w * h
+}
+b = Box(2, 3)
+print text(b.area())
+b.scaled(10)')" "5
+3
+6
+30"
+check "a class of one field" "$(ran one_field 'class P { x: int }
+P(3).x')" "3"
 exit $((failures > 0))
