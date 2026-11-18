@@ -10,3 +10,6 @@
 # elsewhere (card lambda-parameter)
 'use file; f(n: int) as int := { program = n; program }; f(5); program.folder != ø'	yes
 'use file; call(g: function) as int := g(1); f(n: int) as int := call(program => program + n); f(5); program.folder != ø'	yes
+# a function's loop variable named like a declaration word is its own there: `for val in xs` loops
+'f(xs: list) := { s = 0; for val in xs { s += val }; s }; f([1, 2])'	3
+'f(xs: list) as int := { s = 0; for constant in xs { s += constant }; s }; f([1, 2])'	3

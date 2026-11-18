@@ -276,7 +276,8 @@ own_rules_applied(program: Node, source: text) as Node := {
 	rule_types = ø
 	raw_rules = []
 	for index in 0 ..< #rules { if symbol(raw_word) in rules[index].conditions { raw_rules += [[rules[index], origins[index]]] } }
-	program = placed_map_scoped(program, n => rule_rewritten(n, rules, origins), map_names_of(program))
+	maps = map_names_of(program)
+	program = if is_statement_sequence(program) then children(program, statement => statement_rewritten(statement, rules, origins, maps)) else statement_rewritten(program, rules, origins, maps)
 	raw_rules = []
 	program = with_program_rules(program, rules, origins)
 	uses = []
@@ -286,6 +287,16 @@ own_rules_applied(program: Node, source: text) as Node := {
 	}
 	if #uses == 0 then program else separated(bracketed(uses + statements_in(program), ""), ";")
 }
+
+# the statement rewritten by the rules none of whose words it binds itself: a function's loop variable `val` keeps
+# its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
+statement_rewritten(statement: Node, rules: list, origins: list, maps: map) as Node := {
+	bindings = statement_bindings(statement)
+	kept = (0 ..< #rules).filter(index => is_unbound(rules[index], bindings))
+	placed_map_scoped(statement, n => rule_rewritten(n, kept.map(index => rules[index]), kept.map(index => origins[index])), maps)
+}
+# what a statement binds itself, as unbound_rules reads a program's bindings
+statement_bindings(statement: Node) as list := [scope_with({}, nodes_in(statement)), {}]
 
 # each plain store `x ← v` (the parser's store·value(x, v)) the assignment `x = v`, once the rules of a step ran: a
 # rule's template stores without its own pattern taking the store for an assignment again (notify in extensions/sugar/signals)
@@ -383,7 +394,7 @@ sugar_walked(program: Node, rules: list) as Node := {
 	# own: a function's local `type` keeps its `type in xs` from the rule `type $x` there only; the program's runs
 	# with them all
 	index = rule_index(rules)
-	walked = children(program, statement => sugared_statement(statement, rules_unbound_by(rules_reaching(index, statement), [scope_with({}, nodes_in(statement)), {}]), maps))
+	walked = children(program, statement => sugared_statement(statement, rules_unbound_by(rules_reaching(index, statement), statement_bindings(statement)), maps))
 	rule_maps = maps
 	sugared_node(walked, rules)
 }
