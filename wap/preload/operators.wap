@@ -69,6 +69,8 @@ operators = [
 	Operator("...", "repeated", postfix: "superscript"),
 	Operator("²", "square", postfix: "superscript"),
 	Operator("³", "cube", postfix: "superscript"),
+	# an optional's value, raising when it is missing: `x!` is required(x) (wiki/optional.md)
+	Operator("!", "required", postfix: "superscript"),
 	Operator("#", "count", prefix: "count", infix: "access"),
 	Operator("^", "power", infix: "power"),
 	Operator("↑", "arrow_up", infix: "power"),
