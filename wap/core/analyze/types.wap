@@ -21,6 +21,7 @@
 # written: `f(n: int): int := …`. The result is the program, the preload's functions it calls first.
 
 use "calls.wap"
+use "data.wap"
 use "function_values.wap"
 use "../errors.wap"
 use "../stage.wap"
@@ -112,6 +113,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
 	List(items, Bracket.Square, separator) => list_typed(n, items, separator, s, f, expected)
+	List(items, Bracket.Curly, separator) => map_typed(n, items, separator, s, f, expected)
 	Fn(parameters, body) => function_value_typed(n, parameters, body, s, f)
 	Symbol(name) => name_typed(n, s, f)
 	Char(value) => if expected == symbol(TEXT_TYPE) then with_type(refitted(Text(text(n)), n), TEXT_TYPE) else with_type(n, CHAR_TYPE)
@@ -261,30 +263,6 @@ item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	given = typed_form(value, s, f, wanted)
 	if not fits_type(given, wanted) { refused(n, "this gives ${value_type(given) ?? "no value"}, the place holds ${wanted}") }
 	refitted(Set(place, given), n)
-}
-
-# An instance written as data, `Point{x: 1, y: 2}`: each field of its record given a value of the field's type; its
-# type is the record's name
-instance_typed(n: Node, head: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame) as Node := {
-	record = record_named(s.records, head) ?? refused(head, "no class has this name")
-	given = items.map(item => field_typed(item, record, s, f))
-	for field in fields_of(record) { if not items.any(item => text(declared_name(item)) == text(declared_name(field))) { refused(n, "this ${head} gives no value to its field ${declared_name(field)}") } }
-	with_type_of(refitted(Key(head, Op.None, List(given, Bracket.Curly, separator)), n), symbol(record_name(record)))
-}
-field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {
-	field = field_named(record, name) ?? refused(name, "${record_name(record)} has no field of this name")
-	typed = typed_form(value, s, f, declared_type(field))
-	if not fits_type(typed, declared_type(field)) { refused(value, "this gives ${value_type(typed) ?? "no value"}, the field holds a ${declared_type(field)}") }
-	refitted(Key(name, Op.Colon, typed), item)
-} }
-
-# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
-# list takes the type its place wants.
-list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
-	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
-	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
-	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
 }
 
 # A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
