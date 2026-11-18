@@ -5,6 +5,8 @@
 # spellings the milestones need are lowered here by hand, one arm per form:
 #   print "Hello"            a phrase, a word then its arguments → Call(print, ["Hello"])
 #   f(1, 2)                  a head glued to its arguments, Key(f, Op.None, (1, 2)) → Call(f, [1, 2])
+#   Point{x: 1, y: 2}        an instance, data as the reader reads it, its fields' values lowered
+#   x: int                   a typed name, a record's field or a parameter, as written
 #   a + b                    an operator call, (Call + a b) → Call(+, [a, b])
 #   x = 1                    (Call = x 1) → Set(x, 1)
 #   let x = 1, global x = 1  (Call = (let x) 1) → Set(x, 1) with the fact which variable it assigns: a new one here,
@@ -66,7 +68,9 @@ lowered_form(n: Node) as Node := match n {
 	Empty => n
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, List(items.map(field => field_lowered(field, n)), Bracket.Curly, separator)) else not_lowered(n)
 	Key(head, Op.None, group) => if head is symbol then Call(head, arguments_of(group).map(lowered)) else not_lowered(n)
+	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
@@ -112,6 +116,11 @@ defined(n: Node, head: Node, body: Node) as Node := match head {
 with_result(definition: Define, result: Node) as Node := match definition { Define(name, parameters, body) => Define(Key(name, Op.Colon, result), parameters, body) }
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
+# an instance's field, `x: 1`, its value lowered
+field_lowered(field: Node, n: Node) as Node := match field {
+	Key(name, Op.Colon, value) => if name is symbol then refitted(Key(name, Op.Colon, lowered(value)), field) else not_lowered(n)
+	_ => not_lowered(n)
+}
 arguments_of(group: Node) as list := match group {
 	Empty => []
 	List(items, Bracket.Round, Separator.Comma) => items
@@ -125,11 +134,10 @@ parameter_list(written: Node) as Node := List(arguments_of(written), Bracket.Rou
 # round brackets group: one statement is itself, `(x + 1)`, several a Block, `(a; b)`
 grouped(statements: list) as Node := if #statements == 1 then lowered(statements#1) else lowered_block(statements)
 
-# a sequence of statements gives each, a group of one its item, any other node is the one statement
+# a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
+# one statement
 statements_of(n: Node) as list := match n {
-	List(items, Bracket.None, Separator.Newline) => items
-	List(items, Bracket.None, Separator.Semicolon) => items
-	List(items, Bracket.None, separator) => if #items == 1 then items else [n]
+	List(items, Bracket.None, separator) => if #items == 1 then statements_of(items#1) else top_level_statements(n)
 	_ => [n]
 }
 

@@ -18,6 +18,8 @@ use "../../kernel/forms.wap"
 # the assignment a compound one means, `+=` is `=` of `+`; the fact keeping the compound's written spelling
 ASSIGNMENT = "="
 COMPOUND = "compound"
+# the operator a colon closes: c ? a : b
+CHOICE = "?"
 use "../../preload/operators.wap"
 
 # ---- the table, checked when it is read
@@ -190,12 +192,21 @@ operated_form(n: Node) as Node := match n {
 	List(items, Bracket.None, Separator.None) => phrase_read(glued_tokens(items))
 	List(items, bracket, Separator.Space) => in_brackets(phrase_read(tokens_of(items)), bracket)
 	List(items, bracket, separator) => List(items.map(operated), bracket, separator)
-	Key(left, Op.Colon, right) => Key(operated(left), Op.Colon, operated(right))
+	Key(left, Op.Colon, right) => chosen(operated(left), operated(right))
 	Key(left, Op.None, right) => Key(operated(left), Op.None, operated(right))
 	Key(left, op, right) => key_read(n, left, op as text, right)
 	Symbol(spelling) => word_read(n, spelling)
 	_ => n
 }
+
+# `c ? a : b`: the reader keys `c ? a` with b; the colon closes the choice left open at the key's end, (Call ? c a b),
+# also as a phrase's last argument, `print c ? a : b`; any other colon key stays a key
+chosen(left: Node, right: Node) as Node := match left {
+	Call(called, arguments) => if open_choice(left) then Call(called, arguments + [right]) else Key(left, Op.Colon, right)
+	List(items, Bracket.None, Separator.Space) => if open_choice(items.last) then List(items[.. #items - 1] + [chosen(items.last, right)], Bracket.None, Separator.Space) else Key(left, Op.Colon, right)
+	_ => Key(left, Op.Colon, right)
+}
+open_choice(n: Node) as bool := match n { Call(called, arguments) => spelling_written(called) == CHOICE and #arguments == 2; _ => no }
 
 # a key the reader built by an operator (`a = 1`, the colon's rules) applied as that infix operator: (Call = a 1)
 key_read(n: Node, left: Node, spelling: text, right: Node) as Node := {
