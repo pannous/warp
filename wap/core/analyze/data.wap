@@ -32,6 +32,7 @@ field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := m
 # fitting the item type its place wants, `[1, "a"]` a list<any>. An empty list takes the type its place wants, else an
 # unknown item type the first use that adds to it settles.
 list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	if items.any(item => rest_named(item) != ø) { return spread_typed(n, items, separator, s, f, expected) }
 	wanted = item_type(expected)
 	typed = items.map(item => typed_form(item, s, f, wanted))
 	item = if items is empty then wanted ?? unknown_type(s) else common_type(typed, wanted)
@@ -39,6 +40,23 @@ list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFr
 	with_type_of(refitted(List(typed.map(value => read_as(value, item, s)), Bracket.Square, separator), n), list_type(item))
 }
 
+# A list with the items of other lists spread in it, `[...xs, 4]`: its runs of items as lists, joined with the spread
+# lists in order by +
+spread_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	parts = []
+	run = []
+	for item in items {
+		spread = rest_named(item)
+		if spread == ø { run += [item] } else {
+			if run { parts += [placed_like(List(run, Bracket.Square, separator), n)] }
+			run = []
+			parts += [spread]
+		}
+	}
+	if run { parts += [placed_like(List(run, Bracket.Square, separator), n)] }
+	typed = parts.map(part => typed_form(part, s, f, expected))
+	typed[1 ..].fold(typed#1, (joined, part) => word_called(n, PLUS, [joined, part], ø, s))
+}
 # the type that typed values share: the wanted one when each fits it, else the first of theirs each fits, a char read
 # as its text beside texts, `["ab", "c"]` a list<text>
 common_type(values: list, wanted: Node?) as Node? := {
