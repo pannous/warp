@@ -24,4 +24,12 @@ printf '%s\n' 'class Point { x: int; y: int }' >"$stage/points.wap"
 check "a used module's class" "$(ran module_class 'use "points.wap"
 p = Point(4, 5)
 p.y')" "5"
+check "a method reads its instance through self" "$(ran method 'class Box { w: int; h: int; area() := self.w * self.h }
+b = Box(2, 3)
+b.area()')" "6"
+check "a method's parameters follow self" "$(ran method_parameters 'class Box { w: int; h: int; scaled(k: int) := self.w * k }
+Box(2, 3).scaled(10)')" "20"
+check "a method without parentheses is called too" "$(ran method_read 'class Box { w: int; h: int; area() := self.w * self.h }
+b = Box(2, 3)
+b.area')" "6"
 exit $((failures > 0))
