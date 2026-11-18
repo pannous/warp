@@ -76,4 +76,8 @@ twice(x: int) := x * 2
 print text(n + 1)
 print text(twice(n))')" "6
 10"
+# code that never finishes, a return, fits any parameter
+check "a return given as an argument" "$(ran never_fits 'pick(a: int, b: int) as int := a
+g(a: int) as int := pick(a, return 7)
+print text(g(1))')" "7"
 exit $((failures > 0))
