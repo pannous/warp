@@ -13,4 +13,5 @@ check "the kinds of characters" "$(ran kinds 'print text(is_digit("7") and is_al
 check "a text's character at a place" "$(ran place 'print "héllo"#2')" "é"
 check "each place of a part replaced" "$(ran replace 'print "a-b--c".replace("-", "+") + " " + "x".replace("y", "z")')" "a+b++c x"
 check "a text trimmed of blanks at both ends" "$(ran trim 'print "[" + "  a b\t\n".trim() + "]" + "[" + "   ".trim() + "]"')" "[a b][]"
+check "a text in lower case" "$(ran lower 'print "Hé ABC".lower()')" "hé abc"
 exit $((failures > 0))

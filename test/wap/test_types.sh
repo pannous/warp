@@ -111,4 +111,5 @@ check "a number tested for int is an int where the test holds" "$(ran number_nar
 print text(f(3))
 print text(f(2.5))')" "4
 0"
+check "a value as a type is the type's function of it" "$(ran as_type 'print (97 as codepoint as text) + (Op.Add as text) + (3 as text)')" "a+3"
 exit $((failures > 0))

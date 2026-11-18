@@ -1,5 +1,12 @@
 # The preload's number words (notes/wap.md "Layers"): plain warp over the prelude's comparisons.
 
+# the bytes a decimal number's text holds beside its digits
+PLUS_BYTE := 43
+DOT_BYTE := 46
+EXPONENT_BYTES := [69, 101]
+# the digits a float reads exactly into an int before the rest only scale it
+MANTISSA_LIMIT := 100000000000000000
+
 # the smaller and the larger of two ints: `min(3, 2)` is 2
 min(a: int, b: int): int := if a < b then a else b
 max(a: int, b: int): int := if a > b then a else b
@@ -8,3 +15,33 @@ max(a: int, b: int): int := if a > b then a else b
 show(n: int): text := text(n)
 show(x: float): text := text(x)
 show(b: bool): text := text(b)
+
+# the float a decimal text writes, a sign, a fraction and an exponent allowed: `float("-2.5e3")` is -2500.0; any other
+# text raises
+float(t: text): float := {
+	n = byte_count(t)
+	at = if n > 0 and (byte_at(t, 0) == MINUS_BYTE or byte_at(t, 0) == PLUS_BYTE) then 1 else 0
+	mantissa = 0
+	scale = 0
+	fraction = no
+	while at < n and (is_digit_byte(byte_at(t, at)) or (byte_at(t, at) == DOT_BYTE and not fraction)) {
+		if byte_at(t, at) == DOT_BYTE {
+			fraction = yes
+		} else if mantissa < MANTISSA_LIMIT {
+			mantissa = mantissa * 10 + byte_at(t, at) - ZERO_BYTE
+			if fraction { scale -= 1 }
+		} else if not fraction {
+			scale += 1
+		}
+		at += 1
+	}
+	if at < n and byte_at(t, at) in EXPONENT_BYTES { scale += int(bytes_between(t, at + 1, n).replace("+", "")); at = n }
+	if at < n or n == 0 { raise("float: " + t + " is no decimal number") }
+	value = float(mantissa) * 10.0 ^ scale
+	if n > 0 and byte_at(t, 0) == MINUS_BYTE then -value else value
+}
+is_digit_byte(b: int): bool := b >= ZERO_BYTE and b < ZERO_BYTE + 10
+# the number a decimal text writes: an int beyond an int's range as a float until exact numbers
+number(t: text): number := float(t)
+# the character of a code: `char(97)` is 'a'
+char(code: int): char := prim i32_wrap_i64(code)

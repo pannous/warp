@@ -20,7 +20,7 @@ enum Node {
 }
 
 # The operators a node carries, each its own value:
-# `Op.Add as text` is "+", `"+" as Op` is Add
+# `Op.Add as text` is "+" (text(op) below)
 enum Op {
 	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
 	Add, Sub, Mul, Div, FloorDiv, Mod, Rem /*todo (card remainder-as-mod-alias) map Remainder to mod at alias level and get rid of it*/, Pow, LogBase, LogOf, Shl, Shr
@@ -48,6 +48,8 @@ META_COLUMN := 2
 META_FACTS := 3
 # a node marked with facts but written nowhere has line 0, so no position
 NO_LINE := 0
+# the text of the case Other, which no node carries: it stands for every spelling no other case has, `⊕`
+OTHER_SPELLING := "·other"
 
 # the symbol of a name: `symbol("x")` is the word x
 symbol(name: text): Node := Symbol(name)
@@ -93,3 +95,76 @@ unwrapped(n: Node): Node := match n {
 	_ => n
 }
 meta_data(line: int, column: int, facts: list<Node>): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
+
+# the text a node carries for an operator, `Op.Add as text` is "+" (core/passes/node_cases.warp node_spellings, case
+# for case)
+text(op: Op): text := match op {
+	Op.Colon => ":"
+	Op.Dot => "."
+	Op.SafeDot => "?."
+	Op.Coalesce => "??"
+	Op.Scope => "::"
+	Op.Define => ":="
+	Op.Assign => "="
+	Op.Arrow => "->"
+	Op.ArrowUp => "↑"
+	Op.ArrowDown => "↓"
+	Op.Add => "+"
+	Op.Sub => "-"
+	Op.Mul => "*"
+	Op.Div => "/"
+	Op.FloorDiv => "÷"
+	Op.Mod => "%"
+	Op.Rem => "rem"
+	Op.Pow => "^"
+	Op.LogBase => "⌞"
+	Op.LogOf => "⌟"
+	Op.Shl => "<<"
+	Op.Shr => ">>"
+	Op.AddAssign => "+="
+	Op.SubAssign => "-="
+	Op.MulAssign => "*="
+	Op.DivAssign => "/="
+	Op.FloorDivAssign => "÷="
+	Op.ModAssign => "%="
+	Op.PowAssign => "^="
+	Op.AndAssign => "&&="
+	Op.OrAssign => "||="
+	Op.XorAssign => "^^="
+	Op.Lt => "<"
+	Op.Gt => ">"
+	Op.Le => "<="
+	Op.Ge => ">="
+	Op.Eq => "=="
+	Op.Is => "is"
+	Op.Ne => "!="
+	Op.Identical => "==="
+	Op.NotIdentical => "!=="
+	Op.Similar => "≈"
+	Op.Rough => "~"
+	Op.And => "and"
+	Op.Or => "or"
+	Op.Xor => "xor"
+	Op.Not => "not"
+	Op.BitAnd => "&"
+	Op.BitOr => "|"
+	Op.Neg => "-"
+	Op.Sqrt => "√"
+	Op.Cbrt => "∛"
+	Op.Abs => "‖"
+	Op.Inc => "++"
+	Op.Dec => "--"
+	Op.Question => "?"
+	Op.If => "if"
+	Op.Then => "then"
+	Op.Else => "else"
+	Op.While => "while"
+	Op.Do => "do"
+	Op.Hash => "#"
+	Op.Range => ".."
+	Op.To => "to"
+	Op.As => "as"
+	Op.PlusMinus => "±"
+	Op.None => ""
+	Op.Other => OTHER_SPELLING
+}
