@@ -41,4 +41,8 @@ both {
 x
 q
 p"
+check "two repeated groups in a row" "$(ran two_repeats 'rule klass $name { ($field: $type)... ($m := $b)... } => print "two"
+klass P { x: int; y: int }
+klass Q { x: int; f := 1 }')" "two
+two"
 exit $((failures > 0))

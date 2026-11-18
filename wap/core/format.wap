@@ -89,6 +89,8 @@ ungrouped(n: Node) as Node := match n {
 }
 
 needs_brackets(operand: Node, call: Node, side: Side) as bool := {
+	# a key binds looser than every operator, the reader keys before the table applies: `($field: $type)...`
+	match operand { Key(left, op, right) => if op != Op.None { return yes }; _ => ø }
 	inner = group_written(operand)
 	outer = group_written(call)
 	if inner == "" { return no }

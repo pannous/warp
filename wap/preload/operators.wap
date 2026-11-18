@@ -65,6 +65,8 @@ precedence_groups = [
 operators = [
 	Operator(".", "dot", infix: "access"),
 	Operator("?.", "safe_dot", infix: "access"),
+	# what repeats or is the rest, `$p...`, `number...` (wiki/signature.md); between two operands `...` is `to`
+	Operator("...", "repeated", postfix: "superscript"),
 	Operator("²", "square", postfix: "superscript"),
 	Operator("³", "cube", postfix: "superscript"),
 	Operator("#", "count", prefix: "count", infix: "access"),
@@ -136,7 +138,7 @@ aliases = [
 	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
 	Alias("‐", "-"), Alias("‑", "-"), Alias("‒", "-"), Alias("–", "-"), Alias("—", "-"), Alias("―", "-"),
 	Alias("≤", "<="), Alias("≥", ">="), Alias("≠", "!="),
-	Alias("...", "to"), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),
+	Alias("...", "to", Fixity.Infix), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),
 	Alias("~~", "~"), Alias("^^", "xor"), Alias("!", "not", Fixity.Prefix), Alias("¬", "not"),
 	Alias("&&", "and", discouraged: yes), Alias("||", "or", discouraged: yes),
 	# words written between operands

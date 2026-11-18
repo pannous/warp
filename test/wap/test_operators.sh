@@ -41,4 +41,5 @@ format_check 'x: int := 3' 'x: int := 3'
 # a case named by its enum, either way (wiki/enum.md)
 format_check 'Coin::Dime' 'Coin.Dime'
 format_check 'x = p . x+1' 'x = p.x + 1'
+format_check 'rule show { ($k: $v)... } => 1' 'rule show {($k: $v)...} => 1'
 exit $((failures > 0))
