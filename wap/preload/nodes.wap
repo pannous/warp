@@ -228,3 +228,48 @@ separator_text(separator: Separator): text := match separator {
 	Separator.Tab => "\t"
 	Separator.None => ""
 }
+
+# Two nodes are equal when their code is, wherever it was written and whatever facts it carries: a Meta is
+# transparent, as in warp, at every depth, since a key's and a list's parts compare by this same ==
+==(a: Node, b: Node): bool := same_code(unwrapped(a), unwrapped(b))
+!=(a: Node, b: Node): bool := not(a == b)
+same_code(a: Node, b: Node): bool := match a {
+	Number(value) => match b {
+		Number(other) => value == other
+		_ => no
+	}
+	Char(value) => match b {
+		Char(other) => value == other
+		_ => no
+	}
+	Text(value) => match b {
+		Text(other) => value == other
+		_ => no
+	}
+	Symbol(name) => match b {
+		Symbol(other) => name == other
+		_ => no
+	}
+	Error(node) => match b {
+		Error(other) => node == other
+		_ => no
+	}
+	Key(left, op, right) => match b {
+		Key(other_left, other_op, other_right) => op == other_op and left == other_left and right == other_right
+		_ => no
+	}
+	List(items, bracket, separator) => match b {
+		List(other_items, other_bracket, other_separator) => bracket == other_bracket and separator == other_separator and same_items(items, other_items)
+		_ => no
+	}
+	Type(name, body) => match b {
+		Type(other_name, other_body) => name == other_name and body == other_body
+		_ => no
+	}
+	_ => prim tag_equal(a, b)
+}
+same_items(xs: list<Node>, ys: list<Node>): bool := {
+	if #xs != #ys { return no }
+	for at in 1 to #xs { if xs#at != ys#at { return no } }
+	yes
+}
