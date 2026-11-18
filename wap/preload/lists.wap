@@ -30,6 +30,12 @@ map(xs: list<T>, f: (T) -> U): list<U> := {
 	for x in xs { out = out + [f(x)] }
 	out
 }
+# each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
+map(r: Range, f: (int) -> U): list<U> := {
+	out: list<U> = []
+	for at in r { out.add(f(at)) }
+	out
+}
 # the items that fit a test, in order
 filter(xs: list<T>, fits: (T) -> bool): list<T> := {
 	out: list<T> = []
