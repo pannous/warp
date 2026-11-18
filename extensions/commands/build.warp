@@ -40,7 +40,7 @@ build_native(source_file: text, library: text, options: list) := {
 	source = read(source_file)
 	if not is_primitive_file(source) { raise "warp build native builds a primitive file, whose leading header holds `@primitive` (notes/primitive.md)" }
 	emitting_file(working_relative(source_file))
-	program = source_file.remove_suffix(".warp")
+	program = built_stem(source_file)
 	system = native_system()
 	executable = program + system.ending
 	stem = program + ".native"
@@ -149,7 +149,7 @@ build(words: list) := {
 	target = targets#1
 	is_file = exists(target)
 	source = if is_file then read(target) else target
-	stem = if is_file then target.remove_suffix(".warp") else INLINE_STEM
+	stem = if is_file then built_stem(target) else INLINE_STEM
 	if is_file { emitting_file(working_relative(target)) }
 	if MODULE_ONLY in options { return own_module_built(target, stem) }
 	if is_file and is_primitive_file(source) { return if WASM_ONLY in options then compile_written(source, stem + ".wasm", source_folder(target)) else build_native(target, library_folder, options) }
@@ -160,7 +160,7 @@ build(words: list) := {
 	# a primitive module imports no runtime: its separate form is itself
 	write_bytes(stem + ".mod.wasm", if is_primitive_file(source) then read_bytes(stem + ".full.wasm") else linked_bytes(module.order))
 	trim(stem + ".full.wasm", stem + ".wasm", option_of(options, "trim") ?? (if build_mode == "small" then "small" else DEFAULT_TRIM))
-	modules = [stem + ".full.wasm", stem + ".mod.wasm", stem + ".wasm"]
+	modules = BUILT_MODULE_ENDINGS.map(ending => stem + ending)
 	if wagi { return wagi_built(stem, modules) }
 	if not (WASM_ONLY in options) {
 		write_executable(stem + ".wasm", stem + native_system().ending)
@@ -172,6 +172,18 @@ build(words: list) := {
 		shell("rm -f " + modules.map(quoted_path).join(" "))
 	}
 	ø
+}
+# the modules a build writes beside the program before its executable carries the last
+BUILT_MODULE_ENDINGS = [".full.wasm", ".mod.wasm", ".wasm"]
+# what a build names the files it writes by: the program file's path without its last file ending, whatever it is
+# (compiler.wap builds compiler); refused when one of those files would be the program file itself, which it would
+# replace: a file without an ending, `app`, or `app.wasm`
+built_stem(file: text) as text := {
+	parts = file.split("/").last().split(".")
+	stem = if #parts > 1 then file.remove_suffix("." + parts.last()) else file
+	written = [stem + native_system().ending] + BUILT_MODULE_ENDINGS.map(ending => stem + ending)
+	if file in written { raise "warp build would write over " + file + ", the program it builds: give it the ending .warp" }
+	stem
 }
 # `warp build --module shapes.warp`: shapes.wasm, the file compiled as a standard module is, behind runtime.wasm with its
 # warp.signature, which `import shapes` of a program beside it links (decision samples-modules-wasm; notes/import_compiled.md)
