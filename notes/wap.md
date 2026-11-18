@@ -64,6 +64,7 @@ wap/
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
     format.wap                code → canonical warp text (`format`): operators in their notation, spacing spelled out
+    paths.wap                 a used file's path beside the file using it, `.` and `..` resolved
 
     parse/                    text → notation
       reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
@@ -143,7 +144,7 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 | warp-wap-reader | core/parse/ (reader, lexemes, atoms, layout, cascade), core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap, preload/lists.wap, preload/nodes.wap, preload/texts.wap, preload/numbers.wap |
 | warp-wap-operators | core/parse/operators.wap, core/parse/operator_table.wap, core/parse/tokens.wap, core/analyze/data.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/lines.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
 | warp-wap-emitter | core/emit/ (emitter, functions, patterns, places, values, primitives, lists, equality, wasm, opcodes), core/sugar/records.wap, core/sugar/data.wap |
-| warp-wap-binding | core/analyze/ (scope, variables, declarations, types, calls, letters, conditions, matching, fits, function_values; not data.wap) |
+| warp-wap-binding | core/analyze/ (scope, variables, declarations, types, calls, letters, conditions, matching, fits, function_values; not data.wap), core/paths.wap |
 
 ## Rules for every file
 
