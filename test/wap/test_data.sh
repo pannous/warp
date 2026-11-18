@@ -100,4 +100,7 @@ count(m: map<text, int>) as int := 7
 print(text(count({})))')" "v
 2
 7"
+check "an instance written without a field takes the field's default" "$(ran instance_default 'class P { a: int; b: int = 2 }
+p = P{a: 1}
+print(text(p.a + p.b))')" "3"
 exit $((failures > 0))

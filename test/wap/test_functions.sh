@@ -148,4 +148,11 @@ listed(n: Node) as list? := match n {
 print(text(#items_of(symbol("a"))))
 print(text(listed(symbol("a")) == ø))')" "1
 yes"
+check "a function value given to map over a list is typed by the list's items" "$(ran map_lambda_items 'named(n: text): text := n + "!"
+xs: list<text> = ["a", "b"]
+print(xs.map(item => named(item)).join(" "))
+outer(n: text): text := shown(n, part => named(part))
+shown(n: text, f: (text) -> text): text := [n].map(f).join("")
+print(outer("c"))')" "a! b!
+c!"
 exit $((failures > 0))
