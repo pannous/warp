@@ -70,4 +70,9 @@ class Box { n: int }
 print s(1) + " " + s(2.5) + " " + s("ab") + " " + s(yes) + " " + s(Box(3))')" "1 2.5 \"ab\" yes Box{n: 3}"
 check "a case with an any field shows it" "$(ran held_any 'enum Holder { Held(value: any) }
 print show(Held(3))')" "Held(3)"
+check "a list of any holds values of several types" "$(ran any_list 'xs: list<any> = [1, 2.5, "a b", yes]
+for x in xs { print show(x) }')" "1
+2.5
+\"a b\"
+yes"
 exit $((failures > 0))
