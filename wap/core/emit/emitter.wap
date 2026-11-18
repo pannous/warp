@@ -60,7 +60,7 @@ host_calls(program: Node) as list := {
 	names
 }
 primitives_in(n: Node) as list := match n {
-	Prim(operation, arguments) => [text(operation)] + arguments.flat_map(primitives_in)
+	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
 	Get(subject, key) => (if key_type(fact_of(subject, TYPE)) != ø then [MAP_GET] else if item_type(fact_of(subject, TYPE)) != ø then [LIST_ITEM] else []) + primitives_in(subject) + primitives_in(key)
 	List(items, bracket, separator) => items.flat_map(primitives_in)
 	Key(left, op, right) => primitives_in(left) + primitives_in(right)

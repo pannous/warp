@@ -59,7 +59,7 @@ INSTRUCTIONS = {
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
 # primitives call, before any function of its own.
-HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
 # each host function's parameter and result types
 HOST_FUNCTIONS = {
 	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
@@ -82,7 +82,7 @@ ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
-	name = if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation)
+	name = operation_of(form)
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
@@ -97,7 +97,9 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	refused(form, "no primitive of this name")
 }
 # an array's operations given a list work on its items: operation → the list's
-ON_LISTS = {"array_len": LIST_COUNT, "array_joined": "list_joined"}
+ON_LISTS = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
+# the operation a primitive performs: the one it names, or the list's for an array's operation given a list
+operation_of(form: Node) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
 first_operand_type(form: Node) as Node? := match form { Prim(operation, given) => if given is empty then ø else fact_of(given#1, TYPE) }
 is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIST_TYPE)
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a

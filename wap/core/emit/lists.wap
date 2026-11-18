@@ -13,6 +13,7 @@ use "../stage.wap"
 # a full list's array grows to twice its places and this many more
 GROWTH = 4
 NO_SUCH_ITEM = "this list has no item at this place"
+POPPED_EMPTY = "pop of an empty list"
 NO_SUCH_KEY = "this map has no such key"
 LIST_ITEM = "list_item"
 LIST_SET = "list_set"
@@ -23,7 +24,7 @@ MAP_SET = "map_set"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
-	"list_pop": popping_function, "list_joined": lists_joining_function,
+	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function,
 	"map_get": map_reading_function, "map_set": map_setting_function
 }
 # a call of the helper of an operation on a value of this type
@@ -49,12 +50,20 @@ adding_function(p: Program, type: Node) as int := {
 	put = items_in(type, 0, p) + count_in(type, 0, p) + local_get(1) + instruction(ARRAY_SET, [array])
 	added_function(p.m, [list_layout(type, p), item_layout(type, p)], [], [nullable(array)], full + IF + VOID_BLOCK + grown + END + put + counted_by(type, 1, p))
 }
-# The helper of list_pop: the last item taken off, as a T?, ø for an empty list. Its local: 0 the list.
+# The helper of list_pop: the last item taken off; an empty list raises. Its local: 0 the list.
 popping_function(p: Program, type: Node) as int := {
-	optional = layout_of(optional_type(item_type(type)), p.m, p.records)
-	none_left = count_in(type, 0, p) + I32_EQZ + IF + VOID_BLOCK + null_of(heap_of(optional)) + RETURN + END
-	last = Code(item_layout(type, p), items_in(type, 0, p) + count_in(type, 0, p) + instruction(ARRAY_GET, [items_array(type, p)]))
-	added_function(p.m, [list_layout(type, p)], [optional], [], none_left + counted_by(type, -1, p) + fitted(last, optional, p.m).instructions)
+	none_left = count_in(type, 0, p) + I32_EQZ + IF + VOID_BLOCK + raised(POPPED_EMPTY, p) + END
+	last = items_in(type, 0, p) + count_in(type, 0, p) + instruction(ARRAY_GET, [items_array(type, p)])
+	added_function(p.m, [list_layout(type, p)], [item_layout(type, p)], [], none_left + counted_by(type, -1, p) + last)
+}
+# The helper of array_slice given a list: a new list of `count` items from the place `from`, counted from 0. Its
+# locals: 0 the list, 1 from, 2 count, 3 the new array. A slice past the count raises.
+list_slicing_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	place = slot => local_get(slot) + I32_WRAP_I64
+	checked = count_in(type, 0, p) + place(1) + place(2) + I32_ADD + I32_LT_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
+	copied = place(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [3]) + local_get(3) + i32_const(0) + items_in(type, 0, p) + place(1) + place(2) + instruction(ARRAY_COPY, [array, array])
+	added_function(p.m, [list_layout(type, p), I64, I64], [list_layout(type, p)], [nullable(array)], checked + copied + place(2) + local_get(3) + instruction(STRUCT_NEW, [list_struct(type, p)]))
 }
 # The helper of list_joined: a new list of the first's items, then the second's. Its locals: 0 and 1 the lists, 2 the
 # new array.
