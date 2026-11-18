@@ -28,4 +28,26 @@ print text(no == no)')" "yes
 yes
 no
 yes"
+check "a one-letter type is generic, every T of a signature the same, the more specific overload wins" "$(ran letters '===(a: T, b: T) := a == b
+===(a, b) := no
+first(xs: list<T>): T := xs#1
+print text(1 === 1)
+print text(0 === false)
+print text("ab" === "ab")
+print text(first([7, 8]) + 1)
+print first(["x", "y"])')" "yes
+no
+yes
+8
+x"
+check "a one-letter name the program declares is that type, not a generic letter" "$(ran declared_letter 'class P { x: int }
+f(p: P) := p.x
+print text(f(P(4)) + 1)')" "5"
+check "=== is equal and of one type" "$(ran identical 'print text(1 === 1)
+print text(0 === no)
+print text("ab" === "ab")
+print text(1 !== 2)')" "yes
+no
+yes
+yes"
 exit $((failures > 0))

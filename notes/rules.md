@@ -51,5 +51,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
+- A for loop over a Range held in a name, `r = 1 to 3; for i in r {…}`: the list for rule takes it first; needs a
+  rule chosen by the value's type (stage 3) or Range read by position. Slices (`xs#(2 to 3)`, `xs[1 ..]`) wait for a
+  primitive that makes a list (asked of warp-wap-emitter).
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
