@@ -10,6 +10,8 @@ use "../../kernel/forms.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
+# the word that shows a value in warp notation, the program's last value by it (core/analyze/types.wap typed_shown)
+SHOW_WORD = "show"
 
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types

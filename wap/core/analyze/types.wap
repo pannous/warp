@@ -71,18 +71,28 @@ class TypeFrame {
 }
 
 # the program typed, after the preload's functions it calls
-typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload))
+typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), no)
+# the whole program typed, its value shown: a last statement that gives one is `show(it)`, by the show its type has,
+# as every program value shows itself
+typed_shown(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), yes)
 # A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
-retyped(program: Block) as Block := typed_among(program, [])
+retyped(program: Block) as Block := typed_among(program, [], no)
 # the program typed, after the library's records and those of its definitions it calls
-typed_among(program: Block, library: list) as Block := {
+typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines
 	s.records = library.filter(statement => statement is Record)
 	typed = typed_form(program, s, TypeFrame(), ø)
-	refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements_in(typed)), typed)
+	statements = statements_in(typed)
+	if shown and statements and gives_value(statements.last) {
+		statements = statements.take(#statements - 1) + [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)]
+		typed = with_type_of(typed, value_type(statements.last))
+	}
+	refitted(Block(s.records + functions_typed_from(defines + s.lambdas, s) + statements), typed)
 }
+# whether a typed form gives a value: not none, not a jump that never comes back
+gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and value_type(n) != symbol(NEVER_TYPE) and value_type(n) != symbol(EMPTY_TYPE)
 statements_in(block: Block) as list := match block { Block(statements) => statements }
 
 # a kernel form with the types it learned, expected the type its place wants, ø for any
