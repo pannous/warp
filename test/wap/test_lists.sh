@@ -69,4 +69,7 @@ check "a list's last item" "$(ran last 'print "wap/core/x.wap".split("/").last')
 check "a list of lists shown and searched, each word typed for its item type" "$(ran nested 'print show([[1, 2], [3]])
 print text([["ab"], ["cd", "ef"]].any(row => row.contains("ef")))')" "[[1, 2], [3]]
 yes"
+check "an empty list beside lists of ints is one too" "$(ran empty_item 'xs = [[1], []]
+ys = xs#2 + [5]
+print(text(ys#1 + xs#1#1))')" "6"
 exit $((failures > 0))
