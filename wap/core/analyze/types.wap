@@ -217,7 +217,15 @@ is_case_name(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BI
 pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
 
 # the type of either of two values: the one that finishes, or the common one; ø when they differ
-joined_type(a: Node?, b: Node?) as Node? := if a == symbol(NEVER_TYPE) then b else if b == symbol(NEVER_TYPE) then a else if a != ø and b != ø and same_type(a, b) then a else ø
+# the type that holds both: either when they are one, `T?` for a T and ø (or a T?), ø when none does
+joined_type(a: Node?, b: Node?) as Node? := {
+	if a == symbol(NEVER_TYPE) { return b }
+	if b == symbol(NEVER_TYPE) or a == ø or b == ø { return if b == symbol(NEVER_TYPE) then a else ø }
+	if same_type(a, b) { return a }
+	if a == symbol(EMPTY_TYPE) { return optional_type(b) }
+	if b == symbol(EMPTY_TYPE) or type_fits(b, a) { return optional_type(a) }
+	if type_fits(a, b) then b else ø
+}
 
 # The function left with a value, expected the function's written result type; the code after it never runs
 return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
@@ -242,7 +250,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
-	if wanted != ø and not same_type(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
+	if wanted != ø and not type_fits(type, wanted) { refused(n, "this gives a ${type}, the name holds a ${wanted}") }
 	if changes_capture(name, s) { refused(n, "a function value made before reads ${name}, which this changes") }
 	remembered(name, type, s, f)
 	with_fact(refitted(Set(with_name_fact(place, TYPE, type), given), n), TYPE, type)
@@ -334,6 +342,8 @@ fits_type(n: Node, wanted: Node) as bool := {
 fit_each(items: list, wanted: Node) as bool := items.all(item => fits_type(item, wanted))
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
 same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
+# whether a value of the given type may stand where the wanted one is: the same type, or a T or ø where T? is
+type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name
