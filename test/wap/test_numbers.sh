@@ -22,4 +22,5 @@ check "the largest int is an int" "$(ran largest 'print "${9223372036854775807} 
 check "the texts of floats" "$(ran float_texts 'print "${0.1} ${1.5} ${1.0e21} ${-0.0} ${1.0 / 3.0} ${0.1 + 0.2} ${2.5e-5} ${0.000001} ${-2.5}"
 print "${5e-324} ${1.0 / 0.0} ${-1.0 / 0.0} ${0.0 / 0.0} ${trunc(2.7)} ${floor(-2.5)} ${ceil(2.1)}"')" "0.1 1.5 1e21 0 0.3333333333333333 0.30000000000000004 0.000025 1e-6 -2.5
 5e-324 ∞ -∞ NaN 2 -3 3"
+check "the smaller and the larger of two ints" "$(ran min_max 'print text(min(3, 2)) + " " + text(max(3, 2))')" "2 3"
 exit $((failures > 0))
