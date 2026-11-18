@@ -140,6 +140,10 @@ source uses, and every landing names the functions of wap it turned green (scrip
 (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that blocks wap
 goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new file belongs to the stage of its folder.
 
+Trim before handoff (user 2026-11-18): before handing a branch off, try deleting each of its edits, one at a time, after
+the change is done; every edit whose removal keeps test/wap/run.sh and test/wap/test_guardrails.sh green goes. Only
+deletions, nothing rewritten; the handoff names what was trimmed.
+
 | stage | owner | files (under wap/) |
 |---|---|---|
 | lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap |
