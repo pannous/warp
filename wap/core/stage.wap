@@ -277,10 +277,10 @@ record_named(records: list, type: Node?) as Node? := {
 	named = records.filter(record => record_name(record) == text(type))
 	if named is empty then ø else named.last
 }
-record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
-fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
+record_name(record: Record) as text := match record { Record(name, fields, variants) => text(name) }
+fields_of(record: Record) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
 # An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
-cases_of(record: Node) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
+cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
