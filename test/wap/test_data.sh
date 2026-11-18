@@ -82,4 +82,8 @@ m.remove("aa")
 print text(#m.keys())
 print text(m.has("aa"))')" "1
 no"
+check "an entry set by a key a call gives" "$(ran key_called 'm = {"a": 1}
+f(k: text) := k + "b"
+m[f("a")] = 2
+print text(m["ab"])')" "2"
 exit $((failures > 0))

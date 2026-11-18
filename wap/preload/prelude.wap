@@ -7,6 +7,10 @@ use "floats.wap"
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
+# a text written to the standard error, then a line end; the program goes on
+eprint(t: text) := prim error_text(t)
+# a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
+hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
 read(path: text): text := prim read_text(path)
 # the program stopped with a message on the standard error, then a line end; it never finishes

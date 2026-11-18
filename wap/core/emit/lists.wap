@@ -7,6 +7,8 @@ use "emitter.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "equality.wap"
+use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
 
