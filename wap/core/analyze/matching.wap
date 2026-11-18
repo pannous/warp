@@ -19,7 +19,7 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 	witness = missing(arms.map(arm => [pattern_of(arm)]), [type], s)
 	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
 	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`") }
-	given = if witness == ø then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_type(a, b, s)) else ø
+	given = if witness == ø then results.fold(symbol(NEVER_TYPE), (a, b) -> joined_settling(a, b, s)) else ø
 	with_type_of(refitted(Case(subject, typed), n), given)
 }
 arm_typed(arm: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {

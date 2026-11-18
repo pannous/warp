@@ -54,7 +54,10 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
 	if same_type(given, wanted) or given == symbol(NEVER_TYPE) or bare_fit(given, wanted, s.records) { return Conversion.Same }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
-	if base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted))) { return Conversion.Wrapped }
+	optional = base_of_optional(wanted)
+	# an optional where one is wanted whose value is as it is: a list<int>? where a list? is
+	if optional != ø and base_of_optional(given) != ø and conversion(base_of_optional(given), optional, s) == Conversion.Same { return Conversion.Same }
+	if optional != ø and (given == symbol(EMPTY_TYPE) or conversion(given, optional, s) == Conversion.Same) { return Conversion.Wrapped }
 	if (has_unknowns(given) or has_unknowns(wanted)) and unified(wanted, given, [], s) != ø { return Conversion.Settled }
 	if given == symbol(ANY_TYPE) then Conversion.Checked else ø
 }

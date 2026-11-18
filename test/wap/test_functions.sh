@@ -136,4 +136,16 @@ check "an early return of an int in a function giving int?" "$(ran early_optiona
 print(text(first_big([1, 5, 2])))
 print(text(first_big([1])))')" "5
 ø"
+check "a result written bare list takes the body's own list type" "$(ran bare_list_result 'items_of(n: Node) as list := match n {
+	List(items, bracket, separator) => items
+	Empty => []
+	_ => [n]
+}
+listed(n: Node) as list? := match n {
+	List(items, bracket, separator) => items
+	_ => ø
+}
+print(text(#items_of(symbol("a"))))
+print(text(listed(symbol("a")) == ø))')" "1
+yes"
 exit $((failures > 0))

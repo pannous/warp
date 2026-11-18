@@ -217,6 +217,8 @@ items_or_one(n: Node) as list := match n { List(items, bracket, separator) => it
 OPTIONAL_MARK = "?"
 # the dynamic type, which holds any value, ø too: an any? is an any
 ANY_TYPE = "any"
+# an optional's value type, any other type itself: int of int? and of int
+base_or_self(type: Node?) as Node? := base_of_optional(type) ?? type
 optional_type(base: Node) as Node := if base_of_optional(base) != ø or base == symbol(ANY_TYPE) then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
 base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
