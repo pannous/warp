@@ -20,7 +20,7 @@ group_named(name: text) as Group := {
 }
 
 # every group the named one binds tighter than, directly or through others; `path` names a cycle when it closes
-looser_groups(name: text, path: list) as list := {
+looser_groups(name: text, path: list<text>) as list<text> := {
 	if path.contains(name) { raise "operator table: the precedence groups form a cycle: " + (path + [name]).join(" > ") }
 	found = []
 	for looser in group_named(name).tighter_than { found = found + [looser] + looser_groups(looser, path + [name]) }
