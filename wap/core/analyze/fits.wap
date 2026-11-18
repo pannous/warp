@@ -1,5 +1,5 @@
-# How types meet (core/analyze/types.wap): whether a value of one type may stand where another is wanted, two types
-# written alike, and the type that holds the values of two.
+# How types meet (core/analyze/types.wap; wiki/conversion.md "Fitting" and "Repacking"): whether a value of one type
+# may stand where another is wanted, two types written alike, and the type that holds the values of two.
 
 use "types.wap"
 use "calls.wap"
@@ -10,16 +10,9 @@ use "shapes.wap"
 use "dispatch.wap"
 use "../errors.wap"
 
-# TODO: Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
+# DONE: Get rid of all this REVIEW CLUTTER and ONLY Link to the wiki specification. If absent, bring it to the interviewer!
 # TODO: what is symbol(NEVER_TYPE) ?? We don't have this ugly thing in Warp. Wap must be a more beautiful compiler 
 # TODO: link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
-# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this file should hold the one relation between types,
-# `conversion(given, wanted) as Conversion?`, answering how a value gets there: as it is, boxed into any, wrapped
-# into T?, checked out of any (a cast that raises with the place), or not at all. Typing writes that conversion into
-# the kernel once; arguments, results, fields, items, variables and joined branches all ask it, and the relatives in
-# calls.wap (conforms, fits, fits_exactly, any_list, any_enum), letters.wap, data.wap and the emitter's `fitted` go.
-# Dynamic typing is then two lines here, not a second system: joined_type gives `any` where it gives ø today (so
-# `["a", 1]` is a list<any>), and `any` given where a T is wanted is the checked conversion, not a refusal.
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if valued_type(a) and valued_type(b) { settles(a, b, s) }
