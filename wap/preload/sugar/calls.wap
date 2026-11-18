@@ -1,4 +1,4 @@
-# Calls written other ways (notes/wap.md core/sugar/): `x.f(y)` is f(x, y), any function on any value, and `x.f` is
+# Calls written other ways (notes/wap.md preload/sugar/): `x.f(y)` is f(x, y), any function on any value, and `x.f` is
 # x's part named f, a field or else f(x) (kernel/forms.wap Get), so a chain reads in order: `xs.map(f).sum`
 rule $x.$f($arguments...) => $f($x, $arguments...)
 # a part's item, `g.names["b"]`, is the part taken first, then its item: the reader glued the brackets to the name

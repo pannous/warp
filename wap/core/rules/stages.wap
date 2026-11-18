@@ -1,5 +1,5 @@
 # Shape rules (stage 1): operated → surface (notes/backbone.md "Stage languages"). Rules and patterns are data, read
-# by wap's own reader and operator stage from kernel/forms.wap, core/sugar/ and the program itself, and compiled to
+# by wap's own reader and operator stage from kernel/forms.wap, preload/sugar/ and the program itself, and compiled to
 # matchers when they are loaded:
 #
 #   pattern If = (If $condition: Node $then: Node $else: Node)      a pattern every rule may name
