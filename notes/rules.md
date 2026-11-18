@@ -14,6 +14,11 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   each hole to the sequence of its matches, under the rest key `$p...`; in a template `$p...` splices them and
   `Arm($p, $r)...` writes one Arm per match. A bracketed template list that grows takes its natural separator
   (block statements one a line, else commas).
+- **Several statements:** `rule P => A; B` writes both (the `;` is looser than `=>`, so the rule takes the rest of
+  its line); a statement sequence standing as a statement joins the enclosing statements, wherever it comes from.
+  Braces keep meaning a Block. A repeated key `($field: $type)...` is a key of two holes, not a typed hole.
+- **Heads of glued calls:** `f(x)` is indexed under `f Round`, then `glued Round`; a template's glued call of a kernel
+  form, `Get($xs, $i)`, counts under the form's name, as `(Get …)` does.
 - **Refusals are rules too:** `rule P => refuse "fix-it"` refuses what P matches, by the usual specificity: the
   dangling else `if a then if b then x else y` (core/sugar/conditions.wap).
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one

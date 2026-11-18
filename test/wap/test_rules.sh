@@ -20,4 +20,14 @@ hail ann bob')" "hi ann and bob"
 check "a repeated part matched and written once per match" "$(ran repeat 'rule show { ($k => $v)... } => { print($v)... }
 show { 1 => "a"; 2 => "b" }')" "a
 b"
+check "a repeated key" "$(ran repeat_key 'rule show { ($k: $v)... } => { print($v)... }
+show { a: "x"; b: "y" }')" "x
+y"
+check "a rule writing two statements" "$(ran sequence 'rule both $a $b => print($b); greet() := $a
+both "first" "second"
+print greet()')" "second
+first"
+check "a glued pattern rule writing a glued kernel form" "$(ran glued 'rule shout($x) => Block(print($x), print($x))
+shout("hi")')" "hi
+hi"
 exit $((failures > 0))
