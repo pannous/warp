@@ -39,4 +39,7 @@ check "a float read from its text" "$(ran float_read 'print text(float("2.5") + 
 check "a number read from a text beyond an int's range" "$(ran number_read 'f(x: number) := if x is float then "float" else "int"
 print f(number("99999999999999999999"))')" "float"
 check "a character made from its code" "$(ran char_made 'print text(char(97))')" "a"
+check "a character's code, and a float's 64 bits as an int" "$(ran codes "print text(ord('a'))
+print text(float_bits(1.0))")" "97
+4607182418800017408"
 exit $((failures > 0))
