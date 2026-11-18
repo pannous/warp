@@ -27,6 +27,8 @@ TEXT_WORD = "text"
 OTHER_GLYPHS = "¬±×÷·‖…′″"
 # operator glyph ranges beyond ASCII: superscripts and subscripts, arrows, math operators, technical
 GLYPH_RANGES = [['⁰', '₟'], ['←', '⇿'], ['∀', '∃'], ['∆', '∝'], ['∟', '⌙'], ['¹', '¹'], ['²', '³']]
+# the largest int, whose digits an int's never pass
+LARGEST_INT = "9223372036854775807"
 # what starts a hole, `$c`
 HOLE_SIGN = "$"
 # what ends a rest hole, `$items...` (first_principles.md "Holes")
@@ -108,8 +110,11 @@ hex_read(r: Reader, sign: text, from: int) := {
 	token(r, LexemeKind.Atom, Number(if sign == '-' then 0 - value else value), end - r.at)
 }
 
-# an int as written, a float beyond the range of an int
-whole(written: text) as number := if written.length > 18 then number(written) else int(written)
+# an int as written, a float beyond the range of an int: past the largest int's digits, compared as texts of one length
+whole(written: text) as number := {
+	digits = written.replace("-", "").replace("+", "")
+	if digits.length < LARGEST_INT.length or (digits.length == LARGEST_INT.length and digits <= LARGEST_INT) then int(written) else number(written)
+}
 
 # A text in quotes, its escapes read (`«…»` holds everything as written); one character is a Char. In a text that
 # takes holes, each hole is code the reader reads in place, and the text is its pieces joined: `"a ${x} b"` reads as

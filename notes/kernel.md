@@ -67,7 +67,7 @@ Three details:
 | Get | `place`: a name, `x.f` or `xs#i` | `p.x`, `xs#1` |
 | Set | `place value` | `x = 1`, `p.x = 2`, `xs#1 = 3`, `x += 1` |
 | Fn | `parameters body` | `x => x + 1`, `{ it * 2 }`, `\|x\| …` |
-| Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x` |
+| Call | `called arguments` | `f(1, 2)`, `x.f(y)`, `a + b`, `print x`, `make(1)(2)` (called: a name or code giving a function value) |
 | Prim | `operation arguments` | nothing directly: library bodies (below) |
 | If | `cond then_part else_part` | `if/unless/?:/then-else`, `a if c` |
 | Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
