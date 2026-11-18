@@ -233,38 +233,16 @@ separator_text(separator: Separator): text := match separator {
 # transparent, as in warp, at every depth, since a key's and a list's parts compare by this same ==
 ==(a: Node, b: Node): bool := same_code(unwrapped(a), unwrapped(b))
 !=(a: Node, b: Node): bool := not(a == b)
-same_code(a: Node, b: Node): bool := match a {
-	Number(value) => match b {
-		Number(other) => value == other
-		_ => no
-	}
-	Char(value) => match b {
-		Char(other) => value == other
-		_ => no
-	}
-	Text(value) => match b {
-		Text(other) => value == other
-		_ => no
-	}
-	Symbol(name) => match b {
-		Symbol(other) => name == other
-		_ => no
-	}
-	Error(node) => match b {
-		Error(other) => node == other
-		_ => no
-	}
-	Key(left, op, right) => match b {
-		Key(other_left, other_op, other_right) => op == other_op and left == other_left and right == other_right
-		_ => no
-	}
-	List(items, bracket, separator) => match b {
-		List(other_items, other_bracket, other_separator) => bracket == other_bracket and separator == other_separator and items == other_items
-		_ => no
-	}
-	Type(name, body) => match b {
-		Type(other_name, other_body) => name == other_name and body == other_body
-		_ => no
-	}
+# the two nodes' cases matched as a pair; nodes of two different cases, or of one case without parts, are equal as
+# their tags are
+same_code(a: Node, b: Node): bool := match [a, b] {
+	[Number(x), Number(y)] => x == y
+	[Char(x), Char(y)] => x == y
+	[Text(x), Text(y)] => x == y
+	[Symbol(x), Symbol(y)] => x == y
+	[Error(x), Error(y)] => x == y
+	[Key(left, op, right), Key(other_left, other_op, other_right)] => op == other_op and left == other_left and right == other_right
+	[List(items, bracket, separator), List(other_items, other_bracket, other_separator)] => bracket == other_bracket and separator == other_separator and items == other_items
+	[Type(name, body), Type(other_name, other_body)] => name == other_name and body == other_body
 	_ => prim tag_equal(a, b)
 }
