@@ -41,7 +41,7 @@ prepared(code: Node, modules: list, preload: Node) as Block := bound_program(low
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
 # the preload's code with the modules it uses, whose words only the preload sees
 library_code_of(preload: Node) as Block := {
-	modules = modules_used(preload, declared) + [preload]
+	modules = modules_used(preload, operated_file).map(declared_operated) + [preload]
 	Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
 }
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
