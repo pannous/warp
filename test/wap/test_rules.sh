@@ -45,4 +45,10 @@ check "two repeated groups in a row" "$(ran two_repeats 'rule klass $name { ($fi
 klass P { x: int; y: int }
 klass Q { x: int; f := 1 }')" "two
 two"
+check "a repetition that takes nothing writes nothing" "$(ran empty_repeat 'rule klass $name { ($field: $type)... ($m := $b)... } => print "fields"; ($m := $b)...
+klass P { x: int; y: int }
+klass Q { x: int; g := "q" }
+print g()')" "fields
+fields
+q"
 exit $((failures > 0))

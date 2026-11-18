@@ -20,8 +20,9 @@ use "../../kernel/forms.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
-# the groups that are Empty when they hold nothing, `()` and `{}` (wiki/Footguns.md: `()` stays ø, which doubles as
-# the empty list): a rule's group of no items fits either
+# the groups that are Empty when they hold nothing, `()` and `{}`: the host collapses empty round and curly groups to
+# ø; only their falsiness is pinned, so wap may keep the bracket once it reads its own Nodes. A rule's group of no
+# items fits either
 EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 # the separators that end a statement, one for matching: a block's statements fit a pattern whether `;` or line ends
 # part them, and a pattern that parts them by spaces, `{ $a... $b... }`, fits either
@@ -171,6 +172,8 @@ taken_by(m: Matcher, items: list, bindings: map) as bool := if m.test == Test.Re
 # each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
 repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 	met = {}
+	# none taken binds each name to the empty sequence, so a template writes the part no times
+	for name in names_bound(part) { met[name] = [] }
 	for item in items {
 		own = {}
 		if not matches(part, item, own) { return no }
@@ -178,6 +181,13 @@ repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 	}
 	for name in met.keys { bindings[name + REST_MARK] = List(met[name], Bracket.None, Separator.Space) }
 	yes
+}
+
+# the names a matcher binds when it fits: its holes, a repetition's under `$p...`
+names_bound(m: Matcher) as list := match m.test {
+	Test.Hole => [m.name]
+	Test.Repeat => names_bound(m.parts#1).map(name => name + REST_MARK)
+	_ => m.parts.flat_map(names_bound)
 }
 
 rest_matches(m: Matcher, items: list, bindings: map) as bool := {
