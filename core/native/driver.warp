@@ -1271,7 +1271,7 @@ compiled_and_run(compiler: text, written: text, first: int) as nothing := {
 	given = downloaded(written)
 	file = reachable_path(given)
 	library = library_folder()
-	cached = cached_module(compiler, file, library)
+	cached = cached_module(file)
 	# (a compile writes beside the cached module, then renames it over: a run beside this one never reads half of one)
 	output = if cached.length == 0 then compiled_path() else joined(joined(cached, "."), text_of(getpid()))
 	compiling = compiler_arguments(compiler)
@@ -1281,6 +1281,7 @@ compiled_and_run(compiler: text, written: text, first: int) as nothing := {
 	added(compiling, library)
 	added(compiling, joined(library, "/runtime.wasm"))
 	option_given("cache", cached)
+	option_given("cache-key", text_of(fingerprint_of(joined(text_of(fingerprint_of(read_file(compiler))), library))))
 	file_ran(compiler, compiling)
 	# (the program asks the host its own questions, unrecorded)
 	option_given("cache", "")
@@ -1289,15 +1290,15 @@ compiled_and_run(compiler: text, written: text, first: int) as nothing := {
 	if access(c_string(output), EXISTING) == 0 { rename(c_string(output), c_string(cached)) }
 	file_ran(cached, program_arguments(given, first))
 }
-# where the module of the file compiled by this compiler with this lib/ is cached: in the cache folder, named by the
-# file and the fingerprint of both; "" without a cache folder
-cached_module(compiler: text, file: text, library: text) as text := {
+# where the module of the file is cached: in the cache folder, named by the file alone, so a compile by another
+# compiler or lib/ replaces it, whose key (the run option cache-key, a fingerprint of both) the module keeps among its
+# questions (compiler.warp compile_file); "" without a cache folder
+cached_module(file: text) as text := {
 	cache = cache_folder()
 	if cache.length == 0 { return cache }
 	folder = joined(cache, "compiled")
 	mkdir(c_string(folder), FOLDER_MODE)
-	identity = text_of(fingerprint_of(joined(text_of(fingerprint_of(read_file(compiler))), library)))
-	joined(joined(joined(joined(joined(folder, "/"), flattened(resolved_path(file))), "."), identity), ".wasm")
+	joined(joined(joined(folder, "/"), flattened(resolved_path(file))), ".wasm")
 }
 # a program given as a URL (`warp https://host/a.warp`): fetched by curl, run by its argument vector, into the cache
 # folder under the whole URL, and run from there; any other word as it is. A fetch that fails stops with curl's reason

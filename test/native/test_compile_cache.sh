@@ -21,4 +21,13 @@ printf 'x = 7//2; x\n' >"$folder/warns.warp"
 first=$(ran warns.warp | grep '^warning:')
 check "a warning said" "$( [ -n "$first" ] && echo said)" "said"
 check "the same warning said again from the cache" "$(ran warns.warp | grep '^warning:')" "$first"
+
+# one cached module a program file: a compile by another compiler or lib/ (here lib/ by another path) replaces it,
+# never one more beside it, and the module of the other key is never run (card compile-cache)
+ln -s "$library" "$folder/lib"
+printf 'print 3\n' >"$folder/keys.warp"
+check "compiled with one lib/" "$(ran keys.warp)" "3"
+check "with lib/ by another path" "$("$warp" --mute --lib "$folder/lib" "$folder/keys.warp" 2>&1)" "3"
+check "and the first again" "$(ran keys.warp)" "3"
+check "one cached module of the file" "$(ls "$HOME/Library/Caches/warp/compiled" | grep -c "compile-cache-test.$$_keys.warp.*wasm$")" "1"
 exit $((failures > 0))
