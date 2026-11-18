@@ -22,4 +22,7 @@ check "literals of every kind run" "$(ran kinds "'a'
 ø
 -2.5
 7")" "7"
+# statements on one line, separated by `;`, run as the program's own lines do
+check "statements separated by ;" "$(ran semicolons 'x = 1; y = 2
+x + y')" "3"
 exit $((failures > 0))

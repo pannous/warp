@@ -14,6 +14,7 @@
 # `line 4: unless … (rule extensions/…:3): …`.
 
 use "errors.wap"
+use "../kernel/forms.wap"
 
 # n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
 # also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
@@ -134,6 +135,20 @@ list_type(item: Node) as Node := Key(symbol(LIST_TYPE), Op.None, List([item], Br
 item_type(type: Node?) as Node? := match type {
 	Key(name, Op.None, group) => if name == symbol(LIST_TYPE) then only_item(group) else ø
 	_ => ø
+}
+# A record's TYPE is its name, `Point`; these find a record among the Records a program declares, and its fields,
+# each a typed name `x: int` (declared_name, declared_type)
+record_named(records: list, type: Node?) as Node? := {
+	if type == ø or not type is symbol { return ø }
+	for record in records { if record_name(record) == text(type) { return record } }
+	ø
+}
+record_name(record: Node) as text := match record { Record(name, fields, variants) => text(name) }
+fields_of(record: Node) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
+# a record's field of this name, ø when it has none
+field_named(record: Node, key: Node) as Node? := {
+	for field in fields_of(record) { if text(declared_name(field)) == text(key) { return field } }
+	ø
 }
 only_item(group: Node) as Node? := match group {
 	List(items, Bracket.Less, separator) => if #items == 1 then items#1 else ø

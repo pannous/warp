@@ -17,6 +17,11 @@ check "a list given to a function" "$(ran given 'second(xs: list<int>): int := x
 second [4, 5, 6]')" "5"
 check "a list's type in words" "$(ran in_words 'second(xs: list of int) as int := xs#2
 second [1, 2]')" "2"
+check "an item by its index, from 0" "$(ran index 'xs = [10, 20, 30]
+xs[0] + xs[2]')" "40"
+check "an item set by its index" "$(ran index_set 'xs = [1, 2]
+xs[1] = 5
+xs#2')" "5"
 check "a list of any items counted" "$(ran count_texts 'names = ["ann", "bo", "cy"]
 #names')" "3"
 check "for over a list of texts" "$(ran for_texts 'for name in ["ann", "bo"] { print name }')" "ann
