@@ -86,7 +86,10 @@ wap/
       types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
 
     emit/                     typed kernel → bytes
-      emitter.wap             one case per kernel form; any other node refused
+      emitter.wap             one case per kernel form; any other node refused; blocks, if, loops, labels
+      functions.wap           definitions waiting for their first call, function values, calls
+      patterns.wap            Case: arms, pattern tests, a case's own value
+      places.wap              a typed form's layout, fields and items reached, variables
       primitives.wap          what each Prim operation emits; a longer one is a helper function of the module
       closures.wap            Fn: closure conversion
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
@@ -127,7 +130,7 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 | warp-wap-lead | compiler.wap, kernel/forms.wap, core/stage.wap, core/pipeline.wap, core/errors.wap, core/rules/lowering.wap, preload/prelude.wap |
 | warp-wap-reader | core/parse/reader.wap, core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap, preload/lists.wap, preload/nodes.wap |
 | warp-wap-operators | core/parse/operators.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
-| warp-wap-emitter | core/emit/ (emitter, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
+| warp-wap-emitter | core/emit/ (emitter, functions, patterns, places, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
 | warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values) |
 
 ## Rules for every file

@@ -31,4 +31,24 @@ if Dime is Coin { print "yes" } else { print "no" }')" "yes"
 check "cases of two enums differ" "$(ran two_enums 'enum Coin { Penny, Dime }
 enum Fixity { Prefix, Infix }
 if Penny == Prefix { print "same" } else { print "differ" }')" "differ"
+check "a case pattern tests its fields by their own patterns" "$(ran nested 'enum Shape { Circle(r: int), Dot }
+enum Pair { Two(a: Shape, b: int) }
+score(p: Pair): int := match p { Two(Dot, n) => n; Two(Circle(r), 0) => r; Two(Circle(r), n) => r * n }
+print text(score(Two(Dot, 3)))
+print text(score(Two(Circle(5), 0)))
+score(Two(Circle(2), 4))')" "3
+5
+8"
+check "a field's pattern may be a value" "$(ran field_value 'enum Shape { Circle(r: int), Dot }
+size(s: Shape): int := match s { Circle(1) => 10; Circle(r) => r; Dot => 0 }
+size(Circle(1)) + size(Circle(7))')" "17"
+check "a case named by its enum" "$(ran qualified 'enum Side { Left, Right }
+enum Grouping { Left, Right, Refused }
+match Side.Right { Right => print "right"; _ => print "other" }
+g = Grouping.Refused
+match g { Left => print "left"; Right => print "right"; Refused => print "refused" }')" "right
+refused"
+check "cases of one name in two enums differ" "$(ran qualified_differ 'enum Side { Left, Right }
+enum Grouping { Left, Right }
+if Side.Right == Grouping.Right { print "same" } else { print "differ" }')" "differ"
 exit $((failures > 0))

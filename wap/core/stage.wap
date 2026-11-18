@@ -171,6 +171,15 @@ enum_of(records: list, name: Node) as Node? := {
 	for record in records { if cases_of(record).any(case => text(case_name(case)) == text(name)) { return record } }
 	ø
 }
+# the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
+# declaring it: two enums may each have a case of one spelling
+case_declaring(records: list, name: Node) as Node := declaring(records, name)#2
+enum_declaring(records: list, name: Node) as Node := declaring(records, name)#1
+declaring(records: list, name: Node) as list := {
+	key = place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this case name reached here unbound"))
+	for record in records { for case in cases_of(record) { if place_key(case_name(case)) == key { return [record, case] } } }
+	refused(name, "no enum the program declares has this case")
+}
 # a case's place among its enum's cases, from 0: its tag
 case_tag(record: Node, name: Node) as int := index_where(cases_of(record), case => text(case_name(case)) == text(name)) - 1
 case_named(record: Node, name: Node) as Node := cases_of(record)#(case_tag(record, name) + 1)
