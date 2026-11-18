@@ -98,8 +98,8 @@ signature_function_index(type: Node, m: Module, records: list) as int? := {
 	if parts == ø { return ø }
 	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
 }
-signature_parameters(parts: list, m: Module, records: list) as list := parts#1.map(parameter => signed_layout(parameter, m, records))
-signature_results(parts: list, m: Module, records: list) as list := if text(parts#2) == EMPTY_TYPE_WORD then [] else [signed_layout(parts#2, m, records)]
+signature_parameters(parts: FunctionParts, m: Module, records: list) as list := parts.parameters.map(parameter => signed_layout(parameter, m, records))
+signature_results(parts: FunctionParts, m: Module, records: list) as list := if text(parts.result) == EMPTY_TYPE_WORD then [] else [signed_layout(parts.result, m, records)]
 signed_layout(type: Node, m: Module, records: list) as list := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for this type of a signature yet")
 
 # The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the

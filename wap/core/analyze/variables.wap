@@ -62,7 +62,11 @@ assigned_variables(set: Node, place: Node, scope: list, depth: int) as list := {
 	[Definition(name, local_kind(depth), place, depth)]
 }
 # whether code was written before other code of its file, ø positions counting as before
-written_before(earlier: Node, later: Node) as bool := line_of(earlier) == ø or line_of(later) == ø or line_of(earlier) < line_of(later) or line_of(earlier) == line_of(later) and column_of(earlier) < column_of(later)
+written_before(earlier: Node, later: Node) as bool := {
+	a = position_of(earlier) ?? return yes
+	b = position_of(later) ?? return yes
+	a.line < b.line or a.line == b.line and a.column < b.column
+}
 global_reading(outer: Definition, name: text) as text := if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""
 # the variable of that name the program or a function around the one at depth defines, ø when the name is none
 outer_variable(name: text, scope: list, depth: int) as Definition? := {

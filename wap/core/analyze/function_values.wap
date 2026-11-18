@@ -48,7 +48,8 @@ captured_by(definition: Node, types: list) as list := {
 value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed_called = typed_form(called, s, f, ø)
 	type = value_type(typed_called)
-	if function_type_parts(type) != ø { return typed_call_through(n, typed_called, arguments, function_type_parts(type), s, f) }
+	through = function_type_parts(type)
+	if through != ø { return typed_call_through(n, typed_called, arguments, through, s, f) }
 	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
 	key = text(parts#1)
 	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
@@ -58,13 +59,13 @@ value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: Type
 }
 # A call of a value of a function type, `helpers#1(x)` of a list<(int) -> int>: a call of whichever function it holds,
 # at run time, each argument of the type's parameter type, giving its result type
-typed_call_through(n: Node, called: Node, arguments: list, parts: list, s: TypingState, f: TypeFrame) as Node := {
-	if #arguments != #parts#1 { refused(n, "a ${value_type(called)} takes ${#parts#1} arguments") }
+typed_call_through(n: Node, called: Node, arguments: list, parts: FunctionParts, s: TypingState, f: TypeFrame) as Node := {
+	if #arguments != #parts.parameters { refused(n, "a ${value_type(called)} takes ${#parts.parameters} arguments") }
 	typed = (1 to #arguments).map(at => {
-		given = typed_form(arguments#at, s, f, parts#1#at)
-		converted(given, parts#1#at, s, arguments#at, "the function takes a")
+		given = typed_form(arguments#at, s, f, parts.parameters#at)
+		converted(given, parts.parameters#at, s, arguments#at, "the function takes a")
 	})
-	with_type_of(refitted(Call(called, typed), n), parts#2)
+	with_type_of(refitted(Call(called, typed), n), parts.result)
 }
 # A function value where a function type is wanted, `inc` where `(int) -> int` is: its function typed for the type's
 # parameters, giving the type's result, the value then of that type (core/stage.wap FUNCTION_VALUE); ø when its
@@ -72,8 +73,8 @@ typed_call_through(n: Node, called: Node, arguments: list, parts: list, s: Typin
 as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 	parts = function_type_parts(wanted) ?? return ø
 	own = value_type(value)
-	typed = value_function_typed(parts#1, own, s) ?? return ø
-	if typed.result == ø or not conversion(typed.result, parts#2, s) in STATIC_CONVERSIONS { return ø }
+	typed = value_function_typed(parts.parameters, own, s) ?? return ø
+	if typed.result == ø or not conversion(typed.result, parts.result, s) in STATIC_CONVERSIONS { return ø }
 	with_fact(with_fact(with_type_of(value, wanted), FUNCTION_VALUE, own), DEFINED_AT, declared_name(typed.signed))
 }
 # the function type a function value's written signature gives, `(int) -> int` of `inc(a: int) as int`: ø unless

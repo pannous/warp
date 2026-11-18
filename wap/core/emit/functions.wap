@@ -49,8 +49,10 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 } }
 # The layout of a function's result as its signature, which the typing stage writes on its name, says: none for ø
 SIGNATURE_LESS = "this function reached the emitter without its signature"
+# a typed function's parameter and result types, as typing signed it
+signed_parts(name: Node) as FunctionParts := function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
 signed_result(name: Node, p: Program) as list := {
-	result = (function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS))#2
+	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
 # the items of a list node: a definition's parameters, a fact's list
