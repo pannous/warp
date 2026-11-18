@@ -125,4 +125,20 @@ as_text(x: any): text := prim cast(x)
 print text(as_int(3) + 1)
 print as_text("ab")')" "4
 ab"
+check "a character is read as its text wherever a text is wanted" "$(ran char_read_as_text 'cs: list<char> = ["a", "b"]
+s = ""
+s = cs[1]
+print(s)
+f(at: int) as text := cs[at]
+print(f(0))
+XS = ["a", "b"]
+g(i: int) as text? := {
+	if i > 0 { return XS#i }
+	ø
+}
+print(g(1) ?? "none")
+print(g(0) ?? "none")')" "b
+a
+a
+none"
 exit $((failures > 0))
