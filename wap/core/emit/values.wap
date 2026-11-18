@@ -17,7 +17,7 @@ class Code {
 
 # a case's tag, the first field of an enum's struct: its place among the cases, from 0
 TAG_FIELD = field_type(I32, IMMUTABLE)
-# the type any enum's value fits: `==(a: enum, b: enum)` compares two cases by their tags
+# the type a plain enum's value fits, one whose cases carry no fields: `==(a: enum, b: enum)` compares their tags
 ENUM_WORD = "enum"
 
 # the GC type of a text: its UTF-8 bytes

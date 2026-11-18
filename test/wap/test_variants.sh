@@ -18,4 +18,14 @@ sum(t: Tree): int := match t { Leaf(v) => v; Pair(a, b) => a + b; Nothing => 0 }
 sum(Pair(3, 4)) + sum(Leaf(5)) + sum(Nothing)')" "12"
 check "a case with a text field" "$(ran text_case 'enum Word { Named(name: text), Unnamed }
 match Named("hi") { Named(n) => print n; Unnamed => print "none" }')" "hi"
+check "two cases of a plain enum differ by ==" "$(ran differ 'enum Fixity { Prefix, Infix, Postfix }
+if Prefix == Infix { print "same" } else { print "differ" }')" "differ"
+check "a case equals itself" "$(ran equal 'enum Fixity { Prefix, Infix, Postfix }
+f = Infix
+if f == Infix and f != Postfix { print "same" } else { print "differ" }')" "same"
+check "is tests a case with fields by its tag" "$(ran is_case 'enum Shape { Circle(r: int), Dot }
+s = Circle(2)
+if s is Circle { print "circle" } else { print "other" }')" "circle"
+check "a case is of its enum" "$(ran is_enum 'enum Coin { Penny, Nickel, Dime }
+if Dime is Coin { print "yes" } else { print "no" }')" "yes"
 exit $((failures > 0))
