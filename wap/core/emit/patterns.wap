@@ -81,5 +81,6 @@ case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 }
 # A bound case's tag: its place among the cases of every enum the program declares, found by the case that defined
 # it, so cases of two enums never share a tag, not even two of one name
-tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => each === case_declaring(p.records, case)) - 1
+tag_of(case: Node, p: Program) as int := declared_tag(case_declaring(p.records, case), p)
+declared_tag(declared: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => each === declared) - 1
 is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
