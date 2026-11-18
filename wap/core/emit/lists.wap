@@ -19,6 +19,7 @@ LIST_ITEM = "list_item"
 LIST_SET = "list_set"
 LIST_ADD = "list_add"
 LIST_COUNT = "list_count"
+LIST_SLICE = "list_slice"
 MAP_GET = "map_get"
 MAP_SET = "map_set"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
@@ -98,7 +99,7 @@ map_setting_function(p: Program, map: Node) as int := {
 # The helper of map_keys: a new list of a map's keys, so no change to it reaches the map. Its local: 0 the map.
 keys_copying_function(p: Program, map: Node) as int := {
 	keys = map_part(MAP_KEYS, map, p)
-	copied = keys + i64_const(0) + keys + count_in(keys_of(map), ø, p) + I64_EXTEND_I32_U + typed_helper_called("list_slice", keys_of(map), p)
+	copied = keys + i64_const(0) + keys + count_in(keys_of(map), ø, p) + I64_EXTEND_I32_U + typed_helper_called(LIST_SLICE, keys_of(map), p)
 	added_function(p.m, [map_layout(map, p)], [list_layout(keys_of(map), p)], [], copied)
 }
 # The helper of map_remove: a key and its value taken out of the map, the other entries in their order; a key the map

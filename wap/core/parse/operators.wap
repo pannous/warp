@@ -12,6 +12,7 @@
 # group that refuses chaining, or an operator key the table lacks is refused.
 
 use "operator_table.wap"
+use "tokens.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
@@ -38,9 +39,6 @@ operated_program(program: Node) as Node := {
 
 # an operator as it is applied: its canonical spelling, fixity and group, and the item that wrote it (for its place)
 class Use { spelling: text, fixity: Fixity, group: text, written: Node }
-
-# an item of a phrase and whether it touches the item before and the item after it with no blank between
-class Spaced { item: Node, glued_before: bool, glued_after: bool }
 
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
 operated(n: Node) as Node := staged(n, operated_form)
@@ -121,58 +119,6 @@ note_discouraged(written: Node, spelling: text) := {
 	if alias != ø { hint place_of(written) + "write " + alias.canonical + " for " + spelling }
 }
 
-# the tokens of a space phrase: a glued run among its items contributes each of its own items
-tokens_of(items: list) as list := {
-	tokens = []
-	for item in items {
-		match item {
-			List(run, Bracket.None, Separator.None) => tokens = tokens + glued_tokens(run)
-			_ => tokens.add(Spaced(item, no, no))
-		}
-	}
-	tokens
-}
-
-# the tokens of a glued run, adjacent glyphs joined to the longest operator the table knows (`=` `>` is `=>`)
-glued_tokens(run: list) as list := {
-	items = joined_glyphs(run)
-	tokens = []
-	for i in 1 to #items { tokens.add(Spaced(items#i, i > 1, i < #items)) }
-	tokens
-}
-
-# the items of a glued run with each run of glyph symbols joined greedily to the longest known spelling
-joined_glyphs(run: list) as list := {
-	joined = []
-	i = 1
-	while i <= #run {
-		length = longest_spelling_at(run, i)
-		if length == 1 { joined.add(run#i) } else { joined.add(placed_like(symbol(spelling_of(run, i, length)), run#i)) }
-		i = i + length
-	}
-	joined
-}
-
-# how many symbols from position i spell the longest operator or alias the table knows; 1 when none longer does
-longest_spelling_at(run: list, i: int) as int := {
-	longest = 1
-	length = 2
-	while i + length - 1 <= #run and run#(i + length - 1) is symbol {
-		spelled = spelling_of(run, i, length)
-		if known_spelling(spelled) { longest = length }
-		length = length + 1
-	}
-	if run#i is symbol { longest } else { 1 }
-}
-
-spelling_of(run: list, i: int, length: int) as text := {
-	spelled = ""
-	for k in i to i + length - 1 { match run#k { Symbol(name) => spelled = spelled + name; _ => ø } }
-	spelled
-}
-
-known_spelling(spelled: text) as bool := operator_spelled(spelled) != ø or #aliases.filter(alias => alias.spelling == spelled) > 0 or compound_assignment(spelled) != ""
-
 # A phrase read by precedence (an operator-precedence parse): operands wait on one stack, operators on another; an
 # operator is applied once the one after it binds looser. Between two operands stands juxtaposition, glued or
 # spaced, a group like any other. An operator whose operand cannot follow it is a name: `fold +`, `(+)`.
@@ -221,24 +167,6 @@ tokens_read(tokens: list) as Node := {
 	operands#1
 }
 
-# An operator glued to the bracket group after it, with nothing glued before it, is called like any `f(x)`:
-# `+(a, b)` is the glued head Key(+, None, (a, b)), whatever fixities + has; `a-(b)` stays a subtraction
-operators_called(tokens: list) as list := {
-	called = []
-	i = 1
-	while i <= #tokens {
-		token = tokens#i
-		if i < #tokens and is_operator_word(token.item) and token.glued_after and not token.glued_before and is_bracketed(tokens#(i + 1).item) {
-			called.add(Spaced(Key(token.item, Op.None, tokens#(i + 1).item), no, tokens#(i + 1).glued_after))
-			i = i + 2
-		} else {
-			called.add(token)
-			i = i + 1
-		}
-	}
-	called
-}
-
 # A word that leads a rule's phrase after an infix operator, with more operands after it, takes the rest of the phrase
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
@@ -252,9 +180,6 @@ phrase_words = PhraseWords({}, {})
 # a word rules use only inside their phrases, which continues the code before it: `else`
 continuation_word(word: text) as bool := phrase_words.inner.has(word) and not phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
-
-# a symbol the table reads as an operator in any fixity
-is_operator_word(item: Node) as bool := reading_as(item, Fixity.Infix) != ø or reading_as(item, Fixity.Prefix) != ø or reading_as(item, Fixity.Postfix) != ø
 
 # whether the token can start an operand: a word, a literal, a group, or a prefix operator; ø ends the phrase
 operand_follows(next: Spaced?) as bool := next != ø and (reading_as(next.item, Fixity.Prefix) != ø or reading_as(next.item, Fixity.Infix) == ø and reading_as(next.item, Fixity.Postfix) == ø)
@@ -286,7 +211,6 @@ in_brackets(read: Node, bracket: Bracket) as Node := {
 juxtaposition_before(token: Spaced) as Use :=
 	if token.glued_before then Use("", Fixity.Infix, glue_group, token.item) else Use("", Fixity.Infix, juxtaposition_group, token.item)
 
-is_bracketed(n: Node) as bool := match n { List(items, bracket, separator) => bracket != Bracket.None; _ => no }
 
 spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => "" }
 

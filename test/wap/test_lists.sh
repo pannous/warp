@@ -62,4 +62,7 @@ ys = []
 print text(#ys)')" "2
 0"
 check "a list sorted by a key named by" "$(ran sorted_by_named 'print show(["ccc", "bb", "dddd"].sorted(by: t => #t))')" "[\"bb\", \"ccc\", \"dddd\"]"
+check "a list's items spread into another list" "$(ran spread 'xs = [1, 2]
+ys = [0, ...xs, 4, ...xs]
+print text(#ys) + " " + text(ys#5)')" "6 1"
 exit $((failures > 0))

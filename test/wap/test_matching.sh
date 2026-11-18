@@ -41,4 +41,12 @@ check "a match with a value in one arm and ø in another gives an optional" "$(r
 print text(k(3, yes) == 3)
 print text(k(3, no) == ø)')" "yes
 yes"
+check "a list pattern takes the first item and the rest" "$(ran list_rest 'total(xs: list<int>): int := match xs { [] => 0; [first, ...rest] => first + total(rest) }
+print text(total([1, 2, 3]))')" "6"
+check "list patterns fit by count" "$(ran list_count 'second(xs: list<text>) := match xs { [a, b] => b; [a, b, ...more] => b + "+"; _ => "none" }
+print second(["x", "y"])
+print second(["x", "y", "z"])
+print second(["x"])')" "y
+y+
+none"
 exit $((failures > 0))

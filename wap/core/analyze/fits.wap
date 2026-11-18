@@ -1,0 +1,47 @@
+# How types meet (core/analyze/types.wap): whether a value of one type may stand where another is wanted, two types
+# written alike, and the type that holds the values of two.
+
+use "types.wap"
+use "calls.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
+joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
+	if valued_type(a) and valued_type(b) { settles(a, b, s) }
+	joined_type(substituted(a, s.settled), substituted(b, s.settled))
+}
+# the type that holds both: the one that finishes, either when they are one, `T?` for a T and ø (or a T?), the wider
+# where one fits the other; ø when none does
+joined_type(a: Node?, b: Node?) as Node? := {
+	if a == symbol(NEVER_TYPE) { return b }
+	if b == symbol(NEVER_TYPE) or a == ø or b == ø { return if b == symbol(NEVER_TYPE) then a else ø }
+	if same_type(a, b) { return a }
+	if a == symbol(EMPTY_TYPE) { return optional_type(b) }
+	if b == symbol(EMPTY_TYPE) or type_fits(b, a) { return optional_type(a) }
+	if type_fits(a, b) then b else ø
+}
+
+# Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
+# `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.
+# A node not typed yet fits nothing, so a typed rule fires only on settled types; a rest hole asks it of each item.
+fits_type(n: Node, wanted: Node) as bool := {
+	held = type_held(n)
+	held != ø and same_type(held, wanted)
+}
+type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
+same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
+# a value given to a field, refused unless it fits the field's type; value is the code that gave it
+field_checked(given: Node, field: Node, value: Node) := if not gives_fitting(given, declared_type(field)) { refused(value, "this gives ${value_type(given) ?? "no value"}, the field holds a ${declared_type(field)}") }
+# whether typed code gives a value that may stand where the wanted type is
+gives_fitting(n: Node, wanted: Node) as bool := value_type(n) != ø and type_fits(value_type(n), wanted)
+# whether a value of the given type may stand where the wanted one is: the same type, code that never finishes, a value
+# boxed where any or a number is, or a T or ø where T? is
+type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or given == symbol(NEVER_TYPE) or boxed_fit(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+# any value where any is wanted, an int or a float where a number is
+boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
+# two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
+same_type(a: Node, b: Node) as bool := match b {
+	Symbol(name) => a is symbol and text(a) == name
+	_ => a == b
+}
