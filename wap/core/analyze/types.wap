@@ -386,9 +386,11 @@ same_types(these: list, those: list) as bool := #these == #those and (1 to #thes
 field_checked(given: Node, field: Node, value: Node) := if not gives_fitting(given, declared_type(field)) { refused(value, "this gives ${value_type(given) ?? "no value"}, the field holds a ${declared_type(field)}") }
 # whether typed code gives a value that may stand where the wanted type is
 gives_fitting(n: Node, wanted: Node) as bool := value_type(n) != ø and type_fits(value_type(n), wanted)
-# whether a value of the given type may stand where the wanted one is: the same type, any value where any is, an int
-# or a float where a number is, or a T or ø where T? is
-type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and (given == symbol(INT_TYPE) or given == symbol(FLOAT_TYPE)) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+# whether a value of the given type may stand where the wanted one is: the same type, code that never finishes, a value
+# boxed where any or a number is, or a T or ø where T? is
+type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or given == symbol(NEVER_TYPE) or boxed_fit(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+# any value where any is wanted, an int or a float where a number is
+boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name

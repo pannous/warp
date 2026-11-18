@@ -180,6 +180,8 @@ base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø
 	_ => ø
 }
+# a type as a message writes it, `int?`
+type_text(type: Node?) as text := if type == ø then "no type" else if base_of_optional(type) != ø then type_text(base_of_optional(type)) + OPTIONAL_MARK else "${type}"
 # a list's TYPE, `list<int>`, and its item type, ø for any other type
 LIST_TYPE = "list"
 list_type(item: Node) as Node := generic_type(LIST_TYPE, [item])
@@ -208,11 +210,6 @@ fields_of(record: Node) as list := match record { Record(name, fields, variants)
 cases_of(record: Node) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
-# the enum that has a case of this name, among these records, ø when none has
-enum_of(records: list, name: Node) as Node? := {
-	for record in records { if cases_of(record).any(case => text(case_name(case)) == text(name)) { return record } }
-	ø
-}
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling
 case_declaring(records: list, name: Node) as Node := declaring(records, name)#2
@@ -222,9 +219,6 @@ declaring(records: list, name: Node) as list := {
 	for record in records { for case in cases_of(record) { if place_key(case_name(case)) == key { return [record, case] } } }
 	refused(name, "no enum the program declares has this case")
 }
-# a case's place among its enum's cases, from 0: its tag
-case_tag(record: Node, name: Node) as int := index_where(cases_of(record), case => text(case_name(case)) == text(name)) - 1
-case_named(record: Node, name: Node) as Node := cases_of(record)#(case_tag(record, name) + 1)
 
 # a record's field of this name, ø when it has none
 field_named(record: Node, key: Node) as Node? := {
