@@ -18,6 +18,7 @@
 
 use "../errors.wap"
 use "../stage.wap"
+use "types.wap"
 use "../../kernel/forms.wap"
 
 # depth of the program's own statements: names defined there are globals and top-level functions
@@ -95,8 +96,10 @@ names_case(name: Node, scope: list) as bool := {
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant#1.kind == BOUND_CASE
 }
-# whether a name means functions and no type
+# whether a name means functions and no type: a type's word is a type test even beside a function of that name,
+# `3 is int` beside int(t: text)
 names_predicate(name: Node, scope: list) as bool := {
+	if TYPE_WORDS.contains(text(name)) { return no }
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
 }
