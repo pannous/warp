@@ -12,4 +12,5 @@ check "texts in order" "$(ran order 'print text("ab" < "b")')" "yes"
 check "the kinds of characters" "$(ran kinds 'print text(is_digit("7") and is_alpha("q") and is_hex_digit("F") and not is_digit("x"))')" "yes"
 check "a text's character at a place" "$(ran place 'print "héllo"#2')" "é"
 check "each place of a part replaced" "$(ran replace 'print "a-b--c".replace("-", "+") + " " + "x".replace("y", "z")')" "a+b++c x"
+check "a text trimmed of blanks at both ends" "$(ran trim 'print "[" + "  a b\t\n".trim() + "]" + "[" + "   ".trim() + "]"')" "[a b][]"
 exit $((failures > 0))

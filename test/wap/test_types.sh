@@ -97,6 +97,14 @@ print text(3 is int)')" "yes
 no
 yes
 yes"
+# a char literal where a letter bound to text is wanted reads as that text, as where text is written
+check "a char literal for a letter bound to text" "$(ran letter_text 'xs: list<text> = ["a", "bc"]
+print text(xs.contains("a"))
+has_key(m: map<K, V>, key: K): bool := yes
+print text({a: 1}.has_key("c"))')" "yes
+yes"
+check "a type's word after is tests the type, even beside a function of that name" "$(ran is_type_first 'int(t: text): int := 7
+print text(3 is int)')" "yes"
 check "codepoint is another name of the char type" "$(ran codepoint 'first(c: codepoint): char := c
 print text(first('"'"'a'"'"'))')" "a"
 check "a number tested for int is an int where the test holds" "$(ran number_narrowed 'f(n: number) := if n is int then n + 1 else 0

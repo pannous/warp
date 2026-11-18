@@ -4,6 +4,7 @@
 use "lexemes.wap"
 use "atoms.wap"
 use "layout.wap"
+use "../stage.wap"
 
 # ── pass 2: the separator cascade ───────────────────────────────────────────────────────────────────────────────────
 

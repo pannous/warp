@@ -8,6 +8,7 @@ use "wasm.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "places.wap"
 
 # A choice by patterns: the subject kept in a slot of its own, then each arm tested in order, an If each, until one
 # fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.

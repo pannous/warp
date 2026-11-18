@@ -25,7 +25,7 @@ MAP_SET = "map_set"
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
 	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function,
-	"map_get": map_reading_function, "map_set": map_setting_function
+	"map_get": map_reading_function, "map_set": map_setting_function, "map_keys": keys_copying_function, "map_remove": map_removing_function, "list_remove_at": item_removing_function
 }
 # a call of the helper of an operation on a value of this type
 typed_helper_called(operation: text, type: Node, p: Program) as list := instruction(CALL, [helper(p, "${operation} ${type}", q => TYPED_HELPERS[operation](q, type))])
@@ -41,6 +41,14 @@ item_reading_function(p: Program, type: Node) as int := added_function(p.m, [lis
 item_setting_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32, item_layout(type, p)], [], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + local_get(2) + instruction(ARRAY_SET, [items_array(type, p)]))
 place_checked(type: Node, p: Program) as list := local_get(1) + count_in(type, 0, p) + I32_GE_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
 
+# The helper of list_remove_at: the item at a place counted from 0 taken out, the items after it moved down one, in
+# their order. Its locals: 0 the list, 1 the place.
+item_removing_function(p: Program, type: Node) as int := {
+	array = items_array(type, p)
+	after = local_get(1) + i32_const(1) + I32_ADD
+	moved = items_in(type, 0, p) + local_get(1) + items_in(type, 0, p) + after + count_in(type, 0, p) + after + I32_SUB + instruction(ARRAY_COPY, [array, array])
+	added_function(p.m, [list_layout(type, p), I32], [], [], place_checked(type, p) + moved + counted_by(type, -1, p))
+}
 # The helper of list_add: the item put at the count, the array first copied into a larger one when full. Its locals:
 # 0 the list, 1 the item, 2 the larger array.
 adding_function(p: Program, type: Node) as int := {
@@ -86,6 +94,19 @@ map_setting_function(p: Program, map: Node) as int := {
 	found = map_part(MAP_VALUES, map, p) + local_get(3) + local_get(2) + typed_helper_called(LIST_SET, values_of(map), p) + RETURN
 	added = map_part(MAP_KEYS, map, p) + local_get(1) + typed_helper_called(LIST_ADD, keys_of(map), p) + map_part(MAP_VALUES, map, p) + local_get(2) + typed_helper_called(LIST_ADD, values_of(map), p)
 	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p), item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
+}
+# The helper of map_keys: a new list of a map's keys, so no change to it reaches the map. Its local: 0 the map.
+keys_copying_function(p: Program, map: Node) as int := {
+	keys = map_part(MAP_KEYS, map, p)
+	copied = keys + i64_const(0) + keys + count_in(keys_of(map), ø, p) + I64_EXTEND_I32_U + typed_helper_called("list_slice", keys_of(map), p)
+	added_function(p.m, [map_layout(map, p)], [list_layout(keys_of(map), p)], [], copied)
+}
+# The helper of map_remove: a key and its value taken out of the map, the other entries in their order; a key the map
+# lacks leaves it as it is. Its locals: 0 the map, 1 the key, 2 the count.
+map_removing_function(p: Program, map: Node) as int := {
+	removed = (at, list) => map_part(at, map, p) + local_get(2) + typed_helper_called("list_remove_at", list, p)
+	found = removed(MAP_KEYS, keys_of(map)) + removed(MAP_VALUES, values_of(map)) + RETURN
+	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p)], [], [I32], key_searched(2, found, map, p))
 }
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list, map: Node, p: Program) as list := {

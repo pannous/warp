@@ -7,6 +7,7 @@ use "function_values.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "data.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
@@ -24,16 +25,38 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
 	scopes = candidate_scopes(called).map(scope => scope.map(definer => definition_at(definer, s)))
 	candidates = scopes.flat_map(scope => scope)
+	if arguments.any(is_named) { arguments = arranged_arguments(n, called, arguments, candidates) }
 	by_count = candidates.filter(definition => takes_count(definition, #arguments))
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
 	meant = chosen_definition(n, called, scopes, given, expected, s)
-	wanted = parameters_in(meant).map(type_given)
-	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s, f) else given#at) + defaults_given(meant, #given, s, f)
+	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
+# A call's arguments with the named ones, `f(b: 1, a: 5)`, put in their parameters' places, a left-out parameter
+# given its default: the same places for every definition the name may mean, else refused
+arranged_arguments(n: Node, called: Node, arguments: list, candidates: list) as list := {
+	arrangements = candidates.map(definition => arranged(definition, arguments)).filter(each => each != ø)
+	if arrangements is empty { refused(n, "no ${called} has parameters of these names: ${candidates_text(candidates)}") }
+	if arrangements.any(each => each != arrangements#1) { refused(n, "the names put the arguments in different places for ${candidates_text(candidates)}; give them in order") }
+	arrangements#1
+}
+# the arguments in a definition's parameter order, ø when a name is none of its parameters or a parameter gets none
+arranged(definition: Node, arguments: list) as list? := {
+	parameters = parameters_in(definition)
+	positional = arguments.filter(argument => not is_named(argument))
+	named = arguments.filter(is_named)
+	if #positional > #parameters or not named.all(argument => parameters.drop(#positional).any(parameter => text(declared_name(parameter)) == text(declared_name(argument)))) { return ø }
+	placed = positional
+	for parameter in parameters.drop(#positional) {
+		given = named.filter(argument => text(declared_name(argument)) == text(declared_name(parameter)))
+		placed = placed + [if given then named_value(given#1) else fact_of(parameter, DEFAULT) ?? return ø]
+	}
+	placed
+}
+named_value(argument: Node) as Node := match argument { Key(name, Op.Colon, value) => value }
 # whether a definition takes this many arguments: one for each parameter, those with defaults at the end left out or not
 takes_count(definition: Node, count: int) as bool := {
 	parameters = parameters_in(definition)
@@ -57,14 +80,20 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	with_type_of(calling(refitted(Get(typed, key), n), chosen), chosen.result)
 }
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
-as_text(character: Node, s: TypingState, f: TypeFrame) as Node := {
-	if character is Char { return typed_form(character, s, f, symbol(TEXT_TYPE)) }
-	word_called(character, TEXT_FUNCTION, [character], ø, s)
+as_text(character: Node, s: TypingState) as Node := if character is Char then char_text(character) else word_called(character, TEXT_FUNCTION, [character], ø, s)
+char_text(character: Node) as Node := with_type(refitted(Text(text(character)), character), TEXT_TYPE)
+# a call's typed arguments, a char where its parameter wants a text (its letters bound by the call) read as its text
+texts_read(definition: Node, given: list, s: TypingState) as list := {
+	letters = letters_bound(definition, given.map(value_type), s) ?? []
+	wanted = parameters_in(definition).map(parameter => substituted(type_given(parameter), letters))
+	(1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s) else given#at)
 }
 # the call of a word with these typed arguments, the definition chosen among all of the word's
 word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) as Node := {
-	chosen = function_typed(chosen_definition(n, symbol(word), [definitions_named(word, s)], given, expected, s), given.map(value_type), s, n)
-	with_type_of(refitted(Call(calling(symbol(word), chosen), given), n), chosen.result)
+	meant = chosen_definition(n, symbol(word), [definitions_named(word, s)], given, expected, s)
+	taken = texts_read(meant, given, s)
+	chosen = function_typed(meant, taken.map(value_type), s, n)
+	with_type_of(refitted(Call(calling(symbol(word), chosen), taken), n), chosen.result)
 }
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
@@ -268,9 +297,11 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
 	held = type_keyed(text(letter), bound)
 	if held == ø { return if type == letter then bound else bound + [[text(letter), type]] }
-	if same_type(held, type) { return bound }
+	if same_type(held, type) or reads_as(held, type) { return bound }
 	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
 }
+# whether a value of the given type is read as one of the held type: a char as its text
+reads_as(held: Node, given: Node) as bool := same_type(held, symbol(TEXT_TYPE)) and given == symbol(CHAR_TYPE)
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
 function_value_bound(wanted: list, value: Node, bound: list, s: TypingState) as list? := {
@@ -306,7 +337,7 @@ any_enum(wanted: Node, given: Node?, records: list) as bool := {
 	record != ø and not cases_of(record) is empty
 }
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
-reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
+reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and reads_as(wanted, value_type(argument))
 # types as a message names them, `int, text?`
 types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
@@ -376,7 +407,7 @@ with_items(n: Node, items: list) as Node := match n {
 }
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
-all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and (not takes_own_type(type_given(parameter), records) or type_given(parameter) == symbol(LIST_TYPE) or type_given(parameter) == symbol(ENUM_TYPE)))
+all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and not takes_own_type(type_given(parameter), records))
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
