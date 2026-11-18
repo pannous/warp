@@ -77,6 +77,20 @@ captures_code(form: Node, f: Frame) as list := {
 captured_variable(definer: Node, f: Frame) as Placed := {
 	placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value")
 }
+# A value of a type where any holds it: [the GC type it is held as, a plain value's box or its own reference type,
+# the instructions that take the value out once cast]; at is the code that asks
+held_in_any(type: Node, at: Node, p: Program) as list := {
+	if WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES {
+		box = box_index(p.m, text(type))
+		return [box, instruction(STRUCT_GET, [box, 0])]
+	}
+	[referenced(layout_of(type, p.m, p.records) ?? []) ?? refused(at, "a value any holds is tested for references and plain values, not this type"), []]
+}
+# a value any holds, known of a type: cast to it, a plain one taken out of its box
+held_value(type: Node, at: Node, p: Program) as list := {
+	held = held_in_any(type, at, p)
+	instruction(REF_CAST, [held#1]) + held#2
+}
 # the GC struct of a typed function value
 closure_of(n: Node, p: Program) as int := function_value_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no function value")
 # The type a function gives back: its body's value and every return's, all of one type
@@ -124,11 +138,8 @@ dispatched_code(form: Node, p: Program) as list := {
 dispatching_function(p: Program, form: Node, overloads: list) as int := {
 	tried = overloads.flat_map(overload => {
 		taken = function_type_parts(fact_of(overload, SIGNATURE))#1#1
-		boxed = WORD_LAYOUTS.has(text(taken)) and WORD_LAYOUTS[text(taken)] in PLAIN_VALUES
-		type = if boxed then box_index(p.m, text(taken)) else referenced(layout_of(taken, p.m, p.records) ?? []) ?? refused(overload, "a dispatch tests references and boxed values, not this type")
-		unboxed = if boxed then instruction(STRUCT_GET, [type, 0]) else []
 		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
-		local_get(0) + instruction(REF_TEST, [type]) + IF + VOID_BLOCK + local_get(0) + instruction(REF_CAST, [type]) + unboxed + instruction(CALL, [called.index]) + RETURN + END
+		local_get(0) + instruction(REF_TEST, [held_in_any(taken, overload, p)#1]) + IF + VOID_BLOCK + local_get(0) + held_value(taken, overload, p) + instruction(CALL, [called.index]) + RETURN + END
 	})
 	taken = overloads.map(overload => text(function_type_parts(fact_of(overload, SIGNATURE))#1#1)).join(", ")
 	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + raised("no ${text(overloads#1)} takes this value; it takes ${taken}", p))
