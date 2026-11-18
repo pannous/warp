@@ -73,4 +73,10 @@ e: Duo = d
 print(text(match e { Duo(name, items) => name }))')" "duo
 node
 a"
+check "a declared pattern's name after is tests the shape, and the then-arm holds a value of it" "$(ran is_shape 'pattern Duo = (duo $name: Symbol $items: List)
+named(d: Duo) as text := match d { Duo(name, items) => text(name) }
+said(n: Node) as text := if n is Duo then named(n) else "other"
+print(said(Duo(symbol("a"), List([], Bracket.Square, Separator.Comma))))
+print(said(symbol("b")))')" "a
+other"
 exit $((failures > 0))
