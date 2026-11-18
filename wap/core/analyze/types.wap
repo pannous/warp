@@ -30,6 +30,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "letters.wap"
+use "shapes.wap"
 
 # the types of the literals, as a program writes them
 INT_TYPE = "int"
@@ -105,6 +106,7 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines
 	s.records = library.filter(statement => statement is Record)
+	s.definitions = shaped_definitions(s.definitions, s)
 	typed = typed_form(program, s, TypeFrame(), ø)
 	statements = statements_in(typed)
 	if shown and statements and gives_value(statements.last) {
@@ -165,9 +167,13 @@ with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fac
 # Statements typed in order, the last one expected the block's type. A function it defines stands where it was
 # written as each of its typed versions; one whose parameters all have their types is typed even when nothing calls it,
 # unless it is TYPED_WHEN_CALLED.
-block_typed(n: Node, statements: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	s.definitions = s.definitions + statements.filter(statement => statement is Define)
-	s.records = s.records + statements.filter(statement => statement is Record)
+block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+	s.records = s.records + written.filter(statement => statement is Record)
+	s.definitions = s.definitions + written.filter(statement => statement is Define)
+	# shaped once all are known: a pattern's builder may come after a definition naming its type
+	s.definitions = shaped_definitions(s.definitions, s)
+	# each definition as the typing stage keeps it, its written types' shapes known
+	statements = written.map(statement => if statement is Define then definition_keyed(function_key_of(statement), s) ?? statement else statement)
 	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
 	for statement in statements { if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø and all_typed(statement, s.records) { function_typed(statement, written_types(statement), s, statement) } }
 	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
@@ -202,7 +208,7 @@ receiver_field(name: Node) as Node := {
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
-	wanted = substituted(declared_type(place), f.letters) ?? variable_type(name, s, f)
+	wanted = shaped(substituted(declared_type(place), f.letters), s) ?? variable_type(name, s, f)
 	given = typed_form(value, s, f, wanted)
 	type = value_type(given) ?? refused(n, "this gives no value to set")
 	# a name given only ø so far holds an optional of a type its uses settle
