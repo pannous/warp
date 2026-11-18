@@ -74,6 +74,8 @@ SOURCE_FILE = "file"
 # the spelling a program wrote for code the reader gave another shape, which `wap format` prints back: the text
 # `"a ${x} b"` read as ("a " + text(x) + " b")
 WRITTEN = "written"
+# a `{…}` the reader built from a block indented below its line, not one written there: `if c⏎\tbody`, not `Point{x: 1}`
+INDENTED = "indented"
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø

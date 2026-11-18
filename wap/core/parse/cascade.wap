@@ -36,6 +36,7 @@ bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
 	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
 	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
 	if opener.written != "" { written = with_fact(written, WRITTEN, Text(opener.written)) }
+	if opener.indented { written = with_fact(written, INDENTED, True) }
 	if opener.bracket == Bracket.Curly then with_duplicates_warned(written, items) else written
 }
 
