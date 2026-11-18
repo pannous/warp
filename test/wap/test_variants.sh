@@ -28,4 +28,12 @@ s = Circle(2)
 if s is Circle { print "circle" } else { print "other" }')" "circle"
 check "a case is of its enum" "$(ran is_enum 'enum Coin { Penny, Nickel, Dime }
 if Dime is Coin { print "yes" } else { print "no" }')" "yes"
+check "a case pattern tests its fields by their own patterns" "$(ran nested 'enum Shape { Circle(r: int), Dot }
+enum Pair { Two(a: Shape, b: int) }
+score(p: Pair): int := match p { Two(Dot, n) => n; Two(Circle(r), 0) => r; Two(Circle(r), n) => r * n }
+print text(score(Two(Dot, 3)))
+print text(score(Two(Circle(5), 0)))
+score(Two(Circle(2), 4))')" "3
+5
+8"
 exit $((failures > 0))

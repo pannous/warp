@@ -157,41 +157,58 @@ case_code(form: Node, subject: Code, arms: list, p: Program, f: Frame) as Code :
 	Code(chosen.type, subject.instructions + instruction(LOCAL_SET, [held.index]) + chosen.instructions)
 }
 arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code := {
-	if arms is empty { return Code() }
+	if arms is empty { return if fact_of(form, TYPE) == ø then Code() else Code(NEVER, UNREACHABLE) }
 	match arms#1 {
 		Arm(pattern, result) => {
-			if pattern is symbol and not is_case(pattern) {
-				named = held_by(pattern, held, p, f)
-				given = code(result, p, f)
-				return Code(given.type, named + given.instructions)
-			}
-			if #arms == 1 and fact_of(form, TYPE) != ø { return arm_taken(pattern, result, held, p, f) }
-			if_code(form, pattern_test(pattern, held, p), labelled(f, [OTHER_LABEL], () => arm_taken(pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+			if names_any(pattern) or #arms == 1 and fact_of(form, TYPE) != ø and only_names(pattern, p) { return arm_taken(pattern, result, held, p, f) }
+			test = Code(I32, pattern_test(pattern, fetched(held), held.type, p))
+			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
 		}
 	}
 }
-# an arm's result, after the names of a case pattern are given its fields; the last arm of a Case that names every case
-# always fits, untested
+# an arm's result, after the names of its pattern are given their parts of the subject. The last arm of a Case that
+# names every case always fits when its fields are only names, untested
 arm_taken(pattern: Node, result: Node, held: Placed, p: Program, f: Frame) as Code := {
-	named = fields_held(pattern, held, p, f)
+	named = names_held(pattern, fetched(held), held.type, p, f)
 	given = code(result, p, f)
 	Code(given.type, named + given.instructions)
 }
-# whether the held subject fits a pattern: a case by its tag, a literal by equality; yes or no
-pattern_test(pattern: Node, held: Placed, p: Program) as Code := {
-	if is_case(case_name(pattern)) { return Code(I32, fetched(held) + tagged(p.m) + i32_const(case_tag(enum_of(p.records, case_name(pattern)), case_name(pattern))) + I32_EQ) }
-	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names, cases and _ so far")
-	Code(I32, fetched(held) + given.instructions + equality(held.type, p))
+# a pattern that fits any value: a name, or _
+names_any(pattern: Node) as bool := pattern is symbol and not is_case(pattern)
+only_names(pattern: Node, p: Program) as bool := field_parts(pattern, [], p).all(part => names_any(part.pattern))
+
+# A part of a value a pattern takes apart: the field's pattern, the code that gives the field's value, its layout
+class Part {
+	pattern: Node
+	value: list
+	type: list
 }
-# the names of a case pattern, `Circle(r)`, given the held subject's fields, cast to the case; code that leaves nothing
-fields_held(pattern: Node, held: Placed, p: Program, f: Frame) as list := match pattern {
-	Call(called, names) => {
+# the parts of a case pattern, `Circle(r)`: each field of the value, cast to the case; none for any other pattern
+field_parts(pattern: Node, value: list, p: Program) as list := match pattern {
+	Call(called, patterns) => {
 		record = enum_of(p.records, called)
 		cast = case_struct_of(record, case_named(record, called), p.m, p.records)
 		types = case_fields(case_named(record, called)).map(field => layout_of(declared_type(field), p.m, p.records))
-		(1 to #names).filter(at => text(names#at) != WILDCARD).flat_map(at => fetched(held) + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]) + kept(added_variable(names#at, types#at, p, f)) + DROP)
+		(1 to #patterns).map(at => Part(patterns#at, value + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
 	}
 	_ => []
+}
+# Whether the value fits a pattern, yes or no: a case by its tag, then each field by its own pattern, tested only once
+# the tag fits; a literal by equality. `value` is the code that gives the value, of the layout `type`.
+pattern_test(pattern: Node, value: list, type: list, p: Program) as list := {
+	if is_case(case_name(pattern)) {
+		tag = value + tagged(p.m) + i32_const(case_tag(enum_of(p.records, case_name(pattern)), case_name(pattern))) + I32_EQ
+		tested = field_parts(pattern, value, p).filter(part => not names_any(part.pattern))
+		return tested.fold(tag, (fits, part) => fits + IF + I32 + pattern_test(part.pattern, part.value, part.type, p) + ELSE + i32_const(0) + END)
+	}
+	given = literal(pattern, p.m) ?? refused(pattern, "wap matches literals, names, cases and _ so far")
+	value + given.instructions + equality(type, p)
+}
+# the names of a pattern given their parts of the value, after every test fit; code that leaves nothing. _ gives none.
+names_held(pattern: Node, value: list, type: list, p: Program, f: Frame) as list := {
+	if text(pattern) == WILDCARD { return [] }
+	if names_any(pattern) { return value + kept(added_variable(pattern, type, p, f)) + DROP }
+	field_parts(pattern, value, p).flat_map(part => names_held(part.pattern, part.value, part.type, p, f))
 }
 # A case's value, `Dime` or `Circle(3)`: its tag and its fields' values in a new struct of its case, of its enum's type
 case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
@@ -202,8 +219,6 @@ case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 }
 is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
 
-# a name pattern given the held subject, code that leaves nothing; _ gives it to none
-held_by(pattern: Node, held: Placed, p: Program, f: Frame) as list := if text(pattern) == WILDCARD then [] else fetched(held) + kept(added_variable(pattern, held.type, p, f)) + DROP
 
 # A loop: its condition tested before each run of its body, the loop left when it is no. It has no value.
 #   block (exit)  loop (next)  condition, not, br_if exit; body; br next  end  end
