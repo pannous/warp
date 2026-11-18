@@ -157,8 +157,9 @@ shaped_program(program: Node) as Node := {
 	rest = rules_loaded(program)
 	terminating(shape_rules)
 	terminating(typed_rules)
-	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them
-	with_facts_of(rewritten_by(shape_rules, rest).code, program)
+	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them; a
+	# program of rules only is an empty block, as Empty carries no facts
+	with_facts_of(rewritten_by(shape_rules, rest).code ?? Block([]), program)
 }
 
 # Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none

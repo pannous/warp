@@ -42,6 +42,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
+- Whether a used module's rules apply to the program that uses it: today they don't, because the program is shaped
+  before its modules are read.
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
 - A rule head in the middle of a phrase is not reached: `print match x { … }` and `print if c then a else b` need the
