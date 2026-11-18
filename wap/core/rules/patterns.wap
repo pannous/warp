@@ -24,6 +24,7 @@ use "lowering.wap"
 use "../analyze/declarations.wap"
 use "../analyze/fits.wap"
 use "stages.wap"
+use "../language.wap"
 
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
@@ -126,13 +127,13 @@ holes_in(n: Node) as list := match n {
 }
 
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
-declare_pattern(name: Node, shape: Node) as Declared := {
+declare_pattern(language: Language, name: Node, shape: Node) as Declared := {
 	normal = normalized(shape)
 	# known before its matcher is compiled, so the pattern may name itself
 	declared = Declared(spelling_written(name), normal, holes_in(normal), Matcher(Test.Literal))
 	declared_patterns[declared.name] = declared
 	declared.matcher = compiled_pattern(normal)
-	declared.taken = shape_taken(declared)
+	declared.taken = shape_taken(language, declared)
 	declared
 }
 
@@ -140,12 +141,12 @@ declare_pattern(name: Node, shape: Node) as Declared := {
 # its shape with them at their places: `pattern Call = (Call $called: Node $arguments...: Node)` declares
 # Call(called: Node, arguments: list<Node>): Node := List([Symbol("Call"), called, ...arguments], Bracket.Round,
 # Separator.Space), so Call(f, [x]) is (Call f x)
-pattern_builder(pattern: Declared) as Node := operated_program(notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name))
+pattern_builder(language: Language, pattern: Declared) as Node := operated_program(language, notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name))
 hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(REST_MARK) then ": list<Node>" else ": Node")
 hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
 # A declared pattern's shape as the Node pattern that takes it apart, its holes those its call's parts fill:
 # `Call(f, args)` in an arm is List([Symbol("Call"), f, ...args], Bracket.Round, Separator.Space)
-shape_taken(pattern: Declared) as Node := lowered(top_level_statements(shaped_program(operated_program(notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
+shape_taken(language: Language, pattern: Declared) as Node := lowered(top_level_statements(shaped_program(language, operated_program(language, notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
 # A declared pattern's call in an arm, its parts at its holes in order; ø for a call of any other name
 pattern_taken(called: Node, parts: list) as Node? := {
 	pattern = pattern_called(called) ?? return ø
@@ -200,7 +201,7 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 	Symbol(name) => match n { Symbol(other) => canonical_word(other) == canonical_word(name); _ => no }
 	_ => "${literal}" == "${n}"
 }
-canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
+canonical_word(spelling: text) as text := aliased(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
 	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or #items < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, braced_items(items, bracket), bindings)

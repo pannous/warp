@@ -1,0 +1,30 @@
+# The language a program is read in (notes/wap_review.md "Fix 7"): the operator table with the program's own
+# operators joined, the words of the rules' phrases, the rules of stages 1 and 3 and the declared patterns. One value,
+# which every front stage takes as a parameter: no stage reads a table another stage fills behind it, and two programs
+# read in one process share nothing they declare.
+use "../preload/operators.wap"
+use "rules/patterns.wap"
+use "parse/operator_table.wap"
+
+# The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
+# its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules, the operator
+# stage reads them.
+class PhraseWords { leading: map, inner: map }
+
+class Rule { head: text, matcher: Matcher, template: Node, fresh: list, written: Node, specificity: int }
+# the rules of one stage, by head: stage 1 asks only shapes, stage 3 the types of typed code (a hole of a value type)
+class Rules { by_head: map }
+
+# looser_than: group name → every group it binds tighter than, the order of the groups' relations, derived from
+# `groups` whenever they change (core/parse/operator_table.wap related_groups)
+class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map, looser_than: map = {} }
+
+# the language every program starts from: the preload's operator table, copied row by row so that what a program
+# declares joins its own copy, no rules or patterns yet
+base_language() as Language := {
+	language = Language(precedence_groups.map(row => copy(row)), operators.map(row => copy(row)), PhraseWords({}, {}), Rules({}), Rules({}), {})
+	related_groups(language)
+	language
+}
+copy(row: Group) as Group := Group(row.name, row.tighter_than.map(name => name), row.grouping)
+copy(row: Operator) as Operator := Operator(row.spelling, row.name, row.infix, row.prefix, row.postfix)

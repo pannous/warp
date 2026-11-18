@@ -3,8 +3,10 @@
 #   for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done
 use "../wap/core/pipeline.wap"
 use "../wap/core/emit/emitter.wap"
+use "../wap/core/language.wap"
 
-preload = language_loaded(program.folder + "/../wap")
+language = base_language()
+preload = language_loaded(language, program.folder + "/../wap")
 library_scope = declarations_of(preload).flat_map(library_words)
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
@@ -12,7 +14,7 @@ report(stage: text, message: text) := print "${stage}\t" + message.replace("\n",
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
-		modules = declared_modules(file)
+		modules = declared_modules(language, file)
 		return used_declarations(modules#(#modules), modules).flat_map(library_words)
 	} catch e { report("declare", e.message) }
 	[]
@@ -22,16 +24,16 @@ used_scope(file: text) as list := {
 # its template (core/rules/stages.wap sequence_rule)
 lines_of(code: Node) as list := match code { List(items, Bracket.None, Separator.Newline) => items; _ => [code] }
 statements_of_line(line: Node) as list := {
-	operated = operated_program(line)
+	operated = operated_program(language, line)
 	if sequence_rule(operated) != operated then [line] else top_level_statements(line)
 }
 probe(file: text) := {
 	statements = []
-	try statements = lines_of(read_notation(file)).flat_map(statements_of_line).filter(statement => not is_use(operated_program(statement))) catch e { report("read", e.message) }
+	try statements = lines_of(read_notation(file)).flat_map(statements_of_line).filter(statement => not is_use(operated_program(language, statement))) catch e { report("read", e.message) }
 	used = used_scope(file)
 	lowered_ok = []
 	for statement in statements {
-		try { lowered_ok = lowered_ok + statements_in(lowered_program(declared_code(statement))) } catch e { report("lower", e.message) }
+		try { lowered_ok = lowered_ok + statements_in(lowered_program(declared_code(language, statement))) } catch e { report("lower", e.message) }
 	}
 	scope = defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used + library_scope
 	bound_ok = []
@@ -42,7 +44,7 @@ probe(file: text) := {
 	typed = no
 	emitted_ok = no
 	try {
-		code = typed_file(file, preload)
+		code = typed_file(language, file, preload)
 		typed = yes
 		emitted(code)
 		emitted_ok = yes
