@@ -9,8 +9,9 @@
 # numbers) are the Node cases themselves and need no declaration. Milestone 1 (`print "Hello"`) needs two forms; the
 # others of notes/kernel.md join as programs need them.
 
-# a call of a function with its arguments, the forms after it: `print "Hello"` is Call(print, ["Hello"]), (Call print "Hello")
-pattern Call = (Call $called: Symbol $arguments...: Node)
+# a call of a function with its arguments, the forms after it: `print "Hello"` is Call(print, ["Hello"]), (Call print "Hello");
+# what it calls is a function's name or code giving a function value, `make(1)(2)`
+pattern Call = (Call $called: Node $arguments...: Node)
 
 # forms run in order, the value the last one's: a program, `{…}`, indented lines. Not a list: `[a, b]` builds a
 # list value, a block runs a, then b

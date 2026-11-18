@@ -20,6 +20,12 @@ use "../../kernel/forms.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
+# the groups that are Empty when they hold nothing, `()` and `{}` (wiki/Footguns.md: `()` stays ø, which doubles as
+# the empty list): a rule's group of no items fits either
+EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
+# the separators that end a statement, one for matching: a block's statements fit a pattern whether `;` or line ends
+# part them, and a pattern that parts them by spaces, `{ $a... $b... }`, fits either
+STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 class Declared { name: text, shape: Node, holes: list, matcher: Matcher }
@@ -139,9 +145,12 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 canonical_word(spelling: text) as text := canonical(spelling, Fixity.Anywhere)
 
 sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
-	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separator == m.separator) and parts_match(m.parts, items, bindings)
+	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, items, bindings)
+	Empty => EMPTY_GROUPS.contains(m.bracket) and parts_match(m.parts, [], bindings)
 	_ => no
 }
+
+separators_fit(wanted: Separator, given: Separator) as bool := wanted == given or STATEMENT_SEPARATORS.contains(given) and (wanted == Separator.Space or STATEMENT_SEPARATORS.contains(wanted))
 
 # Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
 # remain when it is last: `if $c... then $a...` stops the condition at the first then. A failed try leaves no binding.

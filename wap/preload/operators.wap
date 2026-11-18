@@ -65,7 +65,6 @@ precedence_groups = [
 operators = [
 	Operator(".", "dot", infix: "access"),
 	Operator("?.", "safe_dot", infix: "access"),
-	Operator("::", "scope", infix: "access"),
 	Operator("²", "square", postfix: "superscript"),
 	Operator("³", "cube", postfix: "superscript"),
 	Operator("#", "count", prefix: "count", infix: "access"),
@@ -134,7 +133,7 @@ precedence_below = ["has", "precedence", "below"]
 
 aliases = [
 	# symbols
-	Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
+	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
 	Alias("‐", "-"), Alias("‑", "-"), Alias("‒", "-"), Alias("–", "-"), Alias("—", "-"), Alias("―", "-"),
 	Alias("≤", "<="), Alias("≥", ">="), Alias("≠", "!="),
 	Alias("...", "to"), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),

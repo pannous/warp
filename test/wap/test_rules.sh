@@ -30,4 +30,15 @@ first"
 check "a glued pattern rule writing a glued kernel form" "$(ran glued 'rule shout($x) => Block(print($x), print($x))
 shout("hi")')" "hi
 hi"
+check "a rest hole in brackets takes an empty group" "$(ran empty_rest 'rule greet($names...) => print("hello")
+greet()')" "hello"
+check "a block pattern fits statements parted by ; or line ends" "$(ran statements 'rule both { $a $b } => print($b); print($a)
+both { "x"; "y" }
+both {
+	"p"
+	"q"
+}')" "y
+x
+q
+p"
 exit $((failures > 0))

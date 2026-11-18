@@ -1,7 +1,9 @@
 # The preload: the standard language every program gets, as whole definitions with their bodies (notes/wap.md
 # "Layers"). A built-in is declared here like any function; its body is a primitive, `prim`, where warp ends and wasm
 # or the host begins (notes/kernel.md "Primitives"). The compiler knows none of these names: the declare stage reads
-# their signatures from this file, the emitter their bodies.
+# their signatures from this file, the emitter their bodies. A module it uses holds words programs do not see.
+
+use "floats.wap"
 
 # a text written to the standard output, then a line end
 print(t: text) := prim print_text(t)
@@ -38,6 +40,9 @@ raise(message: text): never := prim raise_text(message)
 # texts: equal when their bytes are, joined by +
 ==(a: text, b: text): bool := prim text_equal(a, b)
 !=(a: text, b: text): bool := not(a == b)
+# two cases of a plain enum, one whose cases carry no fields, are equal by their tags
+==(a: enum, b: enum): bool := prim tag_equal(a, b)
+!=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
 # a value's text, as a text's holes show it: `"n is ${n}"`
@@ -53,6 +58,16 @@ not(b: bool): bool := if b then no else yes
 # (core/sugar/ranges.wap)
 class Range { from: int; last: int }
 
+# a float's sign turned, its whole parts, an int as a float
+-(x: float): float := prim f64_neg(x)
+floor(x: float): float := prim f64_floor(x)
+ceil(x: float): float := prim f64_ceil(x)
+trunc(x: float): int := prim i64_trunc_f64_s(x)
+float(n: int): float := prim f64_convert_i64_s(n)
+
+# a float's text: its shortest digits that read back (preload/floats.wap)
+text(x: float): text := float_text(x)
+
 # whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
 all(xs, fits) := {
 	for x in xs { if not fits(x) { return no } }
@@ -63,3 +78,9 @@ any(xs, fits) := {
 	no
 }
 contains(xs, item) := xs.any(x => x == item)
+
+# bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
+# (`===` compares the type too)
+==(a: bool, b: bool): bool := if a then b else not(b)
+==(a: int, b: bool): bool := a == (if b then 1 else 0)
+==(a: bool, b: int): bool := b == a

@@ -1,0 +1,202 @@
+# Pass 2 of the reader (core/parse/reader.wap): tokens → notation by the separator cascade, the loosest separator
+# splitting first, glued runs, keys, typed holes, `@annotations` and duplicate keys warned.
+
+use "lexemes.wap"
+use "atoms.wap"
+use "layout.wap"
+
+# ── pass 2: the separator cascade ───────────────────────────────────────────────────────────────────────────────────
+
+# the whole text: one item, the list of its items, or Empty
+built(tokens: list<Lexeme>) as Node := level_node(body_read(tokens, 0).parts)
+
+class Body { parts: list<Lexeme>; at: int }
+
+# the tokens from `at` up to the closing bracket, a bracket's own list made of each inner bracket
+body_read(tokens: list<Lexeme>, at: int) as Body := {
+	parts = []
+	while at < tokens.length and token_at(tokens, at).kind != LexemeKind.Close {
+		t = tokens[at]
+		if t.kind == LexemeKind.Open {
+			inner = body_read(tokens, at + 1)
+			parts += [Lexeme{kind: LexemeKind.Atom, node: bracket_list(inner.parts, t), bracket: t.bracket, separator: Separator.None, glued: t.glued, line: t.line, column: t.column}]
+			at = inner.at + 1
+		} else {
+			if t.kind != LexemeKind.Separator or parts.length > 0 { parts += [t] }
+			at += 1
+		}
+	}
+	if parts.length > 0 and last_of(parts).kind == LexemeKind.Separator { parts = parts[0 .. parts.length - 1] }
+	Body{parts: parts, at: at}
+}
+
+# a bracket's list: its items split by the loosest separator inside; duplicate keys in `{…}` warned of (Q12)
+bracket_list(parts: list<Lexeme>, opener: Lexeme) as Node := {
+	items = level_items(parts)
+	separator = if items.length > 1 then loosest_separator(parts) else Separator.None
+	written = placed(List(items, opener.bracket, separator), opener.line, opener.column)
+	if opener.written != "" { written = with_fact(written, WRITTEN, Text(opener.written)) }
+	if opener.bracket == Bracket.Curly then with_duplicates_warned(written, items) else written
+}
+
+listed(items: list, bracket: Bracket, separator: Separator) as Node := placed(List(items, bracket, separator), line_of(items#1), column_of(items#1))
+
+# the loosest separator among the parts, Space between two unglued atoms, None for a glued run
+loosest_separator(parts: list<Lexeme>) as Separator := {
+	found = Separator.None
+	for i in 0 ..< parts.length {
+		t = parts[i]
+		here = if t.kind == LexemeKind.Separator then t.separator else if i > 0 and not t.glued and token_at(parts, i - 1).kind != LexemeKind.Separator then Separator.Space else Separator.None
+		if looseness(here) > looseness(found) { found = here }
+	}
+	found
+}
+
+# the items of a level: the parts split by their loosest separator, each piece read one level tighter
+level_items(parts: list<Lexeme>) as list := {
+	separator = loosest_separator(parts)
+	if separator == Separator.None { return if parts.length == 0 then [] else [glued_run(parts)] }
+	if separator == Separator.Space { return annotated(spaced(runs_of(parts))) }
+	pieces = pieces_between(parts, separator)
+	annotated(pieces.map(piece => level_node(piece)))
+}
+
+# a level as one node: Empty, its one item, or the list of its items
+level_node(parts: list<Lexeme>) as Node := {
+	items = level_items(parts)
+	if items.length == 0 { return Empty }
+	if items.length == 1 then items#1 else listed(items, Bracket.None, loosest_separator(parts))
+}
+
+# the parts between the separators of this kind, the tighter separators kept inside each piece
+pieces_between(parts: list<Lexeme>, separator: Separator) as list := {
+	pieces = []
+	piece = []
+	for t in parts {
+		if t.kind == LexemeKind.Separator and looseness(t.separator) >= looseness(separator) { pieces += [piece]; piece = [] } else { piece += [t] }
+	}
+	pieces + [piece]
+}
+
+# the glued runs of a phrase: a new run at each part with a blank before it
+runs_of(parts: list<Lexeme>) as list := { // todo use  [Lexeme] as soon as syntax works, EVERYWHERE for all generics (via warp fix ?)
+	runs = []
+	run = []
+	for t in parts {
+		if not t.glued and run.length > 0 { runs += [run]; run = [] }
+		run += [t]
+	}
+	runs + [run]
+}
+
+# A phrase's items, split at its loosest key (below). A key with blanks around takes all before it as key and all
+# after it as value (`a b : c`, `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as
+# value (`a: b c`). A hole's `:` takes one run, its type: `$c: Node $then: Node` are two typed holes
+# (notes/first_principles.md "Holes")
+spaced(runs: list) as list := {
+	split = splitting_run(runs)
+	if split < 0 { return holes_typed(runs.map(glued_run)) }
+	run = runs[split]
+	before = runs[0 .. split]
+	value = phrase_of(spaced(runs[split + 1 .. runs.length]))
+	if run.length == 1 then [keyed(phrase_of(spaced(before)), last_of(run).op, value)] else spaced(before) + [keyed(glued_run(run[0 .. run.length - 1]), last_of(run).op, value)]
+}
+
+# Keys split by looseness: `=` and `:=` before `:`, so `x: int = 3` is (x: int) = 3 and `f(x): int := e` gives
+# f(x): int the body e; among keys alike the first splits (reader.md §6, typed declarations)
+KEY_LOOSENESS = {":": 1, "=": 2, ":=": 2}
+key_looseness(op: Op) as int := KEY_LOOSENESS[op as text]
+
+# the run of a phrase at its loosest key, -1 for none: a key between blanks (never the first run), or ending its run
+splitting_run(runs: list) as int := {
+	found = -1
+	for i in 0 ..< runs.length {
+		run = runs[i]
+		if last_of(run).kind == LexemeKind.Key and (run.length > 1 or i > 0) and not is_typed_hole(run) and (found < 0 or key_looseness(last_of(run).op) > key_looseness(last_of(runs[found]).op)) { found = i }
+	}
+	found
+}
+
+is_hole_word(n: Node) as bool := match n { Symbol(name) => name.starts_with(HOLE_SIGN) and #name > 1; _ => no }
+# a run that is a hole and its colon, `$c:`
+is_typed_hole(run: list) as bool := run.length == 2 and last_of(run).op == Op.Colon and is_hole_word(token_at(run, 0).node)
+
+# each hole's colon given the item after it as its type
+holes_typed(items: list) as list := {
+	typed = []
+	for item in items { if #typed > 0 and untyped_hole(typed.last) then typed[#typed - 1] = keyed(hole_of(typed.last), Op.Colon, item) else typed.add(item) }
+	typed
+}
+untyped_hole(n: Node) as bool := match n { Key(hole, Op.Colon, Empty) => is_hole_word(hole); _ => no }
+hole_of(n: Node) as Node := match n { Key(hole, op, value) => hole; _ => n }
+
+# the items as one node: Empty for none, the item for one, else a phrase
+phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)
+
+# A run without blanks: `x:40` and `a=1` split at their loosest key, the first of alike ones; a head glued to a bracket is the glue key
+# Key(head, Op.None, group), `f(x)` `a{x:1}` `xs[1]` `f(x)(y)` (Q1); a run of one part is that part, any other run a
+# glued list, `3ms` `a-b` `-x`
+glued_run(run: list) as Node := {
+	split = -1
+	for i in 1 ..< run.length {
+		t = token_at(run, i)
+		if t.kind == LexemeKind.Key and (split < 0 or key_looseness(t.op) > key_looseness(token_at(run, split).op)) { split = i }
+	}
+	if split > 0 { return keyed(glued_run(run[0 .. split]), token_at(run, split).op, if split + 1 < run.length then glued_run(run[split + 1 .. run.length]) else Empty) }
+	nodes = []
+	for t in run {
+		if t.bracket != Bracket.None and nodes.length > 0 and not is_operator(nodes.last) {
+			nodes = nodes[0 .. nodes.length - 1] + [keyed(nodes.last, Op.None, t.node)]
+		} else { nodes += [t.node] }
+	}
+	if nodes.length == 1 then nodes#1 else listed(nodes, Bracket.None, Separator.None)
+}
+
+# an operator written as glyphs, `+` `..` `#`: no head a bracket can glue to
+is_operator(n: Node) as bool := match n { Symbol(name) => is_glyph(name#1); _ => no }
+
+keyed(key: Node, op: Op, value: Node) as Node := placed(Key(key, op, value), line_of(key), column_of(key))
+
+# ── annotations: `@name` and `@name(args)` belong to the item after them ──
+
+annotated(items: list) as list := {
+	result = []
+	waiting = []
+	for item in items {
+		if is_annotation(item) { waiting += [item] }
+		else if waiting.length > 0 { result += [with_fact(item, "meta", phrase_of(waiting.map(annotation_of)))]; waiting = [] }
+		else { result += [item] }
+	}
+	result + waiting
+}
+
+# `@name…` glued, or a phrase of them
+is_annotation(n: Node) as bool := match n {
+	List(items, Bracket.None, Separator.None) => items.length > 1 and items#1 == Symbol("@")
+	List(items, Bracket.None, Separator.Space) => items.all(is_annotation)
+	_ => no
+}
+
+# what an annotation says, without its `@`
+annotation_of(n: Node) as Node := match n {
+	List(items, Bracket.None, Separator.None) => if items.length == 2 then items#2 else listed(items[1 .. items.length], Bracket.None, Separator.None)
+	List(items, Bracket.None, Separator.Space) => listed(items.map(annotation_of), Bracket.None, Separator.Space)
+	_ => n
+}
+
+# ── duplicate keys: the reader keeps both and warns, a later stage decides (Q12) ──
+
+with_duplicates_warned(written: Node, items: list) as Node := {
+	seen = []
+	for item in items {
+		match item {
+			Key(key, Op.Colon, value) => {
+				name = text(key)
+				if seen.contains(name) { return with_fact(written, "warning", Text("the key " + name + " is given twice")) }
+				seen += [name]
+			}
+			_ => ø
+		}
+	}
+	written
+}
