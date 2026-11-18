@@ -69,4 +69,12 @@ ws = row_of {
 	7
 }
 print text(#ws)')" "3"
+check "a rule's result in a group of one gives way to the key it became" "$(ran group_gives_way 'rule mk { $ms... } => {(nm ($ms))...}
+rule nm ($f: $t) => $f: 1
+m = mk { a: int; b: int }
+print text(m.a + m.b)')" "2"
+check "a key in brackets in a pattern fits the key written bare" "$(ran bare_key 'rule mk { $ms... } => {(nm $ms)...}
+rule nm ($f: $t) => $f: 1
+m = mk { a: int; b: int }
+print text(m.a + m.b)')" "2"
 exit $((failures > 0))

@@ -82,4 +82,10 @@ print text(g(1, 2))')" "3"
 check "a return given as an argument" "$(ran never_fits 'pick(a: int, b: int) as int := a
 g(a: int) as int := pick(a, return 7)
 print text(g(1))')" "7"
+# a parameter's default, which a call that leaves it out gives it (a class's field default the same, its constructor's)
+check "a parameter's default" "$(ran parameter_default 'f(x: int, y: int = 2) := x + y
+print text(f(1) + f(1, 5))
+class P { x: int; tag: text = "?" }
+print P(3).tag + P(3, "a").tag')" "9
+?a"
 exit $((failures > 0))

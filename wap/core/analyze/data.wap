@@ -24,21 +24,28 @@ field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := m
 	refitted(Key(name, Op.Colon, typed), item)
 } }
 
-# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>. An empty
-# list takes the type its place wants.
+# A list's items, each expected of the item type its place wants; all of one type T, the list is a list<T>, or all
+# fitting the item type its place wants, `[1, "a"]` a list<any>. An empty list takes the type its place wants, else an
+# unknown item type the first use that adds to it settles.
 list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	typed = items.map(item => typed_form(item, s, f, item_type(expected)))
-	item = if items is empty then item_type(expected) ?? refused(n, "an empty list needs its item type: write `xs: list<int> = []`") else value_type(typed#1)
-	if item == ø or not fit_each(typed, item) { refused(n, "a list's items are of one type") }
+	wanted = item_type(expected)
+	typed = items.map(item => typed_form(item, s, f, wanted))
+	item = if items is empty then wanted ?? unknown_type(s) else common_type(typed, wanted)
+	if item == ø or not all_fit(typed, item) { refused(n, "a list's items are of one type") }
 	with_type_of(refitted(List(typed, Bracket.Square, separator), n), list_type(item))
 }
 
+# the type that typed values share: the wanted one when each fits it, else the first one's
+common_type(values: list, wanted: Node?) as Node? := if wanted != ø and all_fit(values, wanted) then wanted else value_type(values#1)
+all_fit(values: list, wanted: Node) as bool := values.all(value => gives_fitting(value, wanted))
+
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
-# place wants; all of one type V, the map is a map<text, V>
+# place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>
 map_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = items.map(item => entry_typed(item, held_type(expected), s, f))
-	held = value_type(entry_value(typed#1))
-	if held == ø or not fit_each(typed.map(entry_value), held) { refused(n, "a map's values are of one type") }
+	values = typed.map(entry_value)
+	held = common_type(values, held_type(expected))
+	if held == ø or not all_fit(values, held) { refused(n, "a map's values are of one type") }
 	with_type_of(refitted(List(typed, Bracket.Curly, separator), n), map_type(symbol(TEXT_TYPE), held))
 }
 entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node := match entry { Key(key, Op.Colon, value) => refitted(Key(entry_key(key, s, f), Op.Colon, typed_form(value, s, f, expected)), entry) }
