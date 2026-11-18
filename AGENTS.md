@@ -243,6 +243,7 @@ before asking a question). After a context swap, this file and your role file be
   code, value and expectation before anyone fixes code or test.
 - Communicate less: message only for landed, blocked or a decision needed. Git (branch, commits, card) is the status.
   warp-integrator gets only requests it must act on.
+- Ideas for a better process or architecture go to warp-supervisor, which decides or brings them to warp-interviewer.
 
 ## Where to work
 - Notes, docs, wiki, scripts, samples: in /Users/me/dev/angles/warp, on a branch named as the card (a small change needs no worktree); 

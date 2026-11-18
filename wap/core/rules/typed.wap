@@ -7,6 +7,12 @@
 #
 #   rule twice $x: int => $x + $x      a rule only ints take
 #   twice 3                            3 + 3, typed again
+use "stages.wap"
+use "../analyze/scope.wap"
+use "../analyze/types.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
 
 # how often the typed rules may fire again on their own output before the program is refused
 ROUNDS_LIMIT = 100

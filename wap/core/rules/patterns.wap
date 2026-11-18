@@ -9,6 +9,13 @@
 #
 # A hole's type is a shape, checked here; a value type (`$k: int`, `$xs: list<int>`) makes the rule a stage-3 rule,
 # checked by typing (core/analyze/types.wap fits_type).
+use "../analyze/types.wap"
+use "../parse/reader.wap"
+use "../parse/operators.wap"
+use "../format.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
 
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
