@@ -119,9 +119,38 @@ holes_in(n: Node) as list := match n {
 }
 
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
-declare_pattern(name: Node, shape: Node) := {
+declare_pattern(name: Node, shape: Node) as Declared := {
 	normal = normalized(shape)
-	declared_patterns[spelling_written(name)] = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
+	declared = Declared(spelling_written(name), normal, holes_in(normal), compiled_pattern(normal))
+	declared_patterns[declared.name] = declared
+	declared
+}
+
+# A declared pattern's builder, a function of its name taking its holes in order, a rest hole as a list, that gives
+# its shape with them at their places: `pattern Call = (Call $called: Node $arguments...: Node)` declares
+# Call(called: Node, arguments: list<Node>): Node, so Call(f, [x]) is (Call f x)
+pattern_builder(pattern: Declared) as Node := operated_program(notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${built_text(pattern.shape)}", pattern.name))
+hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(REST_MARK) then ": list<Node>" else ": Node")
+hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
+# the code that builds a part of a shape: a hole its variable, a name its symbol, a group its list
+built_text(shape: Node) as text := match shape {
+	Symbol(name) => if is_hole(shape) then hole_variable(hole_key(shape)) else "Symbol(\"${spelling_written(shape)}\")"
+	List(items, bracket, separator) => "List(${items_text(items)}, Bracket.${bracket}, Separator.${separator})"
+	_ => refused(shape, "a pattern's builder writes names, holes and groups, not this part yet")
+}
+# a group's items: those of a rest hole as its list, the others in brackets, joined by +
+items_text(items: list) as text := {
+	parts = []
+	single = []
+	for item in items {
+		if is_rest_hole(item) {
+			if single { parts += ["[" + single.join(", ") + "]"] }
+			single = []
+			parts += [hole_variable(hole_key(item))]
+		} else { single += [built_text(item)] }
+	}
+	if single or parts is empty { parts += ["[" + single.join(", ") + "]"] }
+	parts.join(" + ")
 }
 
 # ---- matching
