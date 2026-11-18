@@ -69,4 +69,7 @@ check "cases holding cases compare by their parts" "$(ran tree_equal 'enum Tree 
 print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(2)))
 print text(Pair(Leaf(1), Leaf(2)) == Pair(Leaf(1), Leaf(3)))')" "yes
 no"
+check "a case's field typed with its parts" "$(ran case_field_parts 'enum Tree { Leaf, Branch(items: list<int>) }
+t = Branch([1, 2])
+print "ok"')" "ok"
 exit $((failures > 0))
