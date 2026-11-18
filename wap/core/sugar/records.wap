@@ -5,5 +5,9 @@
 # show, the instance in its constructor form, `P{x: 3}`, each field shown by its own type's show
 rule class $name { ($field: $type)... ($method($parameters...) := $body)... } => Record($name, [($field: $type)...], []); $name(($field: $type)...) := $name{($field: $field)...}; ($method(self: $name, $parameters...) := $body)...; show(self: $name): text := "$name{" + join([("$field: " + show(self.$field))...], ", ") + "}"
 
-# an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's type
-rule enum $name { $cases... } => Record($name, [], [$cases...])
+# an enum, its cases a bare name, `Dime`, or a name with fields, `Circle(r: float)`; each case a value of the enum's
+# type; and its show by match over the cases
+rule enum $name { $cases... } => Record($name, [], [$cases...]); show(self: $name): text := Case(self, (shown_case $cases)...)
+# the arm of an enum's show for one case: a bare case shows its name, a case with fields its name and their values
+rule shown_case $case: Symbol => Arm($case, "$case")
+rule shown_case $case(($field: $type)...) => Arm($case(($field)...), "$case(" + join([(show($field))...], ", ") + ")")
