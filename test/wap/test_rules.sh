@@ -56,4 +56,10 @@ methods { twice(k: int) := self * k; ten() := self * 10 }
 print text(twice(3, 4) + ten(2))')" "32"
 check "a block pattern of two parts fits a group of one item" "$(ran one_item 'rule klass $name { ($field: $type)... ($m := $b)... } => print "two"
 klass P { x: int }')" "two"
+check "in braces a line's comma row gives its items to a repetition" "$(ran brace_rows 'rule row_of { $cases... } => [$cases...]
+ws = row_of {
+	5, 6
+	7
+}
+print text(#ws)')" "3"
 exit $((failures > 0))
