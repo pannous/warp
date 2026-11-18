@@ -15,4 +15,5 @@ print text(#xs) + " " + text(xs#3)')" "3 3"
 check "each item's result" "$(ran map 'print text([1, 2].map(x => x * 10)#2)')" "20"
 check "the items that fit a test" "$(ran filter 'print show([1, 2, 3, 4].filter(x => x > 2))')" "[3, 4]"
 check "each item's list of results, joined" "$(ran flat_map 'print show([1, 2].flat_map(x => [x, x]))')" "[1, 1, 2, 2]"
+check "an item in a list" "$(ran in 'print text(2 in [1, 2]) + " " + text(5 in [1, 2])')" "yes no"
 exit $((failures > 0))

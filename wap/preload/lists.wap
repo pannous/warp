@@ -12,6 +12,8 @@ any(xs: list, fits) := {
 	no
 }
 contains(xs: list, item) := xs.any(x => x == item)
+# whether a list holds an item, the operator's reading: `x in xs` is xs.contains(x)
+in(x, xs: list): bool := xs.contains(x)
 
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
 +(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
