@@ -12,6 +12,7 @@ use "wasm.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 
 # the instructions that compare two values of a type on the stack, giving yes or no
 type_equality(type: Node, p: Program) as list := {

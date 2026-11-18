@@ -16,6 +16,7 @@ use "opcodes.wap"
 use "../../kernel/forms.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "places.wap"
 use "host.wap"
 

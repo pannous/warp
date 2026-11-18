@@ -12,6 +12,7 @@ use "equality.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 
 # a full list's array grows to twice its places and this many more
 GROWTH = 4

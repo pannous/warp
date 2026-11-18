@@ -63,6 +63,7 @@ wap/
 
   core/                       the machinery: mechanisms only, no names of a domain
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
+    type_notation.wap         types as written: list<int>, int?, (int) -> text, built and taken apart
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
     format.wap                code → canonical warp text (`format`): operators in their notation, spacing spelled out
     paths.wap                 a used file's path beside the file using it, `.` and `..` resolved
@@ -147,7 +148,7 @@ deletions, nothing rewritten; the handoff names what was trimmed.
 
 | stage | owner | files (under wap/) |
 |---|---|---|
-| lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap; the test/wap/ scripts no other row names |
+| lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/type_notation.wap, core/errors.wap, kernel/forms.wap; the test/wap/ scripts no other row names |
 | self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, test/wap/ratchet_census.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
 | front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/format.wap, core/language.wap, preload/ |
 | types: declare, bind, type | warp-wap-binding | core/analyze/, core/paths.wap |

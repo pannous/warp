@@ -7,6 +7,7 @@ use "wasm.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "primitives.wap"
 
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
