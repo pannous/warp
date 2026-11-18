@@ -13,4 +13,9 @@ value(Nickel) + value(Dime)')" "15"
 check "a case with fields taken apart" "$(ran fields 'enum Shape { Circle(r: int), Dot }
 area(s: Shape): int := match s { Circle(r) => r * r; Dot => 0 }
 area(Circle(3)) + area(Dot)')" "9"
+check "cases of one, two and no fields" "$(ran mixed 'enum Tree { Leaf(value: int), Pair(left: int, right: int), Nothing }
+sum(t: Tree): int := match t { Leaf(v) => v; Pair(a, b) => a + b; Nothing => 0 }
+sum(Pair(3, 4)) + sum(Leaf(5)) + sum(Nothing)')" "12"
+check "a case with a text field" "$(ran text_case 'enum Word { Named(name: text), Unnamed }
+match Named("hi") { Named(n) => print n; Unnamed => print "none" }')" "hi"
 exit $((failures > 0))
