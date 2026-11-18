@@ -37,6 +37,8 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 		return pattern
 	}
 	if list_pattern_items(pattern) != ø { return list_pattern_typed(pattern, type, s, f) }
+	# a case of an optional's value: `Text(name)` fits a Node? holding a text node, never ø
+	if base_of_optional(type) != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base_of_optional(type), s, f) }
 	tested = if pattern is Call then case_pattern_typed(pattern, type, s, f) else if is_case_name(pattern) then case_in_enum_typed(in_enum(pattern, type, s), s) else typed_form(pattern, s, f, type)
 	if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit a value of type ${type}") }
 	tested
