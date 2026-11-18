@@ -1,5 +1,5 @@
 # The preload's list words (notes/wap.md "Layers"): plain warp over lists and function values, a list in, a value or a
-# new list out. `xs.map(f)` is map(xs, f) by the dot rule (core/sugar/calls.wap). A letter in a signature is a type
+# new list out. `xs.map(f)` is map(xs, f) by the dot rule (preload/sugar/calls.wap). A letter in a signature is a type
 # variable, bound by the call: map's U is f's result for an item.
 
 # whether every item of a list fits a test, any item does, a list holds an item: `xs.all(x => x > 0)`, `xs.contains(3)`
