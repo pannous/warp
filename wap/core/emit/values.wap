@@ -37,15 +37,15 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
 layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
-	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then ARRAYREF else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
+	Symbol(name) => if name == "int" then I64 else if name == "float" then F64 else if name == "bool" or name == "char" then I32 else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record_named(records, type_name) == ø then ø else nullable(struct_of(record_named(records, type_name), m, records))
 	_ => {
 		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? map_index(type_name, m, records)
 		if index == ø then optional_layout(type_name, m, records) else nullable(index)
 	}
 }
 
-# The GC type of a map, `map<text, int>`: a struct of two arrays of one length, its keys and its values, as a list map
-# keeps them; ø for a type that is no map
+# The GC type of a map, `map<text, int>`: a struct of two lists of one count, its keys and its values (lists.wap); ø
+# for a type that is no map
 map_index(type: Node, m: Module, records: list) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
 # a map type's key type and value type: its keys' array is field 0, its values' field 1
 map_parts(type: Node) as list := [key_type(type), held_type(type)]
@@ -78,8 +78,19 @@ function_value_index(type: Node, m: Module, records: list) as int? := {
 	if parts == ø then ø else added_type(m, struct_type(parts[1 ..].map(capture => field_type(layout_of(capture, m, records) ?? refused(capture, "the emitter has no value layout for this capture's type yet"), IMMUTABLE))))
 }
 
-# the GC type of a list, `list<int>`: an array of its items' layout; ø for a type that is no list
+# The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the
+# count spare (lists.wap); ø for a type that is no list. Every list's type extends the list base, its count alone, so
+# `#` of any list reads it.
 list_index(type: Node, m: Module, records: list) as int? := {
+	items = items_index(type, m, records)
+	if items == ø then ø else added_type(m, open_type([list_base(m)], struct_type([LIST_COUNT_FIELD, field_type(nullable(items), MUTABLE)])))
+}
+list_base(m: Module) as int := added_type(m, open_type([], struct_type([LIST_COUNT_FIELD])))
+LIST_COUNT_FIELD = field_type(I32, MUTABLE)
+LIST_COUNT_AT = 0
+LIST_ITEMS_AT = 1
+# the GC array of a list's items, ø for a type that is no list
+items_index(type: Node, m: Module, records: list) as int? := {
 	item = if item_type(type) == ø then ø else layout_of(item_type(type), m, records)
 	if item == ø then ø else added_type(m, array_type(field_type(item, MUTABLE)))
 }

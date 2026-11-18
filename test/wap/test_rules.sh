@@ -63,4 +63,10 @@ numbers [1, "skip", 2]')" "2"
 check "a row a rule writes joins the list it lands in" "$(ran row_spliced 'rule twice $x: Symbol => $x, $x
 q = 5
 print text(#[(twice q), 1])')" "3"
+check "in braces a line's comma row gives its items to a repetition" "$(ran brace_rows 'rule row_of { $cases... } => [$cases...]
+ws = row_of {
+	5, 6
+	7
+}
+print text(#ws)')" "3"
 exit $((failures > 0))
