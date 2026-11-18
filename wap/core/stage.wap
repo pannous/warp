@@ -59,6 +59,8 @@ RULE = "rule"
 # call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
 # from stage to stage. A later fact of the same name replaces the earlier.
 with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
+# whether a stage has learned the fact of that name; one that holds ø is learned too, `o: text? = ø` a default
+has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => match fact { Key(Symbol(fact_name), Op.Colon, value) => fact_name == name; _ => no })
 # the fact of that name, ø when no stage has learned it
 fact_of(n: Node, name: text) as Node? := {
 	found: Node? = ø

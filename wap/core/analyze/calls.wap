@@ -58,7 +58,7 @@ arranged(definition: Node, arguments: list) as list? := {
 	placed = positional
 	for parameter in parameters.drop(#positional) {
 		given = named.filter(argument => text(declared_name(argument)) == text(declared_name(parameter)))
-		placed = placed + [if given then named_value(given#1) else fact_of(parameter, DEFAULT) ?? return ø]
+		placed = placed + [if given then named_value(given#1) else if defaulted(parameter) then fact_of(parameter, DEFAULT) else return ø]
 	}
 	placed
 }
@@ -66,8 +66,9 @@ named_value(argument: Node) as Node := match argument { Key(name, Op.Colon, valu
 # whether a definition takes this many arguments: one for each parameter, those with defaults at the end left out or not
 takes_count(definition: Node, count: int) as bool := {
 	parameters = parameters_in(definition)
-	count <= #parameters and parameters.drop(count).all(parameter => fact_of(parameter, DEFAULT) != ø)
+	count <= #parameters and parameters.drop(count).all(defaulted)
 }
+defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
 # the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
 defaults_given(definition: Node, count: int, s: TypingState, f: TypeFrame) as list := {
 	parameters_in(definition).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
