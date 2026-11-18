@@ -120,7 +120,7 @@ pattern_variables(pattern: Node, scope: list, depth: int) as list := match patte
 is_type_test(called: Node, scope: list) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
 type_test_bound(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node := {
 	tested = arguments#2
-	if tested is symbol and names_predicate(tested, scope) { return bound(refitted(Call(tested, [arguments#1]), n), scope, depth) }
+	if tested is symbol and names_predicate(tested, scope) { return with_fact(bound(refitted(Call(tested, [arguments#1]), n), scope, depth), PREDICATE, True) }
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }
