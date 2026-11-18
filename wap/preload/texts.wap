@@ -96,6 +96,23 @@ lower(t: text): text := {
 	}
 	out + bytes_between(t, start, byte_count(t))
 }
+# the parts of t between its separators, in order: `"a/b".split("/")` is ["a", "b"], a text without one is its only part
+split(t: text, separator: text): list<text> := {
+	parts: list<text> = []
+	start = 0
+	at = 0
+	while at <= byte_count(t) - byte_count(separator) and byte_count(separator) > 0 {
+		if bytes_match_at(t, separator, at) {
+			parts.add(bytes_between(t, start, at))
+			at += byte_count(separator)
+			start = at
+		} else {
+			at += 1
+		}
+	}
+	parts.add(bytes_between(t, start, byte_count(t)))
+	parts
+}
 # t with each place of a part given another text: `"a-b-c".replace("-", "+")` is "a+b+c"
 replace(t: text, part: text, other: text): text := {
 	out = ""

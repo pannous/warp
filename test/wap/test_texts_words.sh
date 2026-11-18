@@ -14,4 +14,6 @@ check "a text's character at a place" "$(ran place 'print "héllo"#2')" "é"
 check "each place of a part replaced" "$(ran replace 'print "a-b--c".replace("-", "+") + " " + "x".replace("y", "z")')" "a+b++c x"
 check "a text trimmed of blanks at both ends" "$(ran trim 'print "[" + "  a b\t\n".trim() + "]" + "[" + "   ".trim() + "]"')" "[a b][]"
 check "a text in lower case" "$(ran lower 'print "Hé ABC".lower()')" "hé abc"
+check "a text split at each separator" "$(ran split 'print show("a/bb//c".split("/")) + " " + show("abc".split(", "))')" "[\"a\", \"bb\", \"\", \"c\"] [\"abc\"]"
+check "is_letter is another name of is_alpha" "$(ran is_letter 'print text(is_letter("q") and not is_letter("1"))')" "yes"
 exit $((failures > 0))
