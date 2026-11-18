@@ -6,8 +6,10 @@
 # preload, the language programs get.
 # Run it with bash test/wap/ratchet_census.sh (or test/wap/run.sh --wait test/wap/ratchet_census.sh, never in run.sh's
 # default set: about 4 min, the rest about 1); the warp under test is WARP (default the warp on PATH)
-FILES_TYPED_WHOLE=18
-FUNCTIONS_TYPED=316
+# files outside the preload: a preload file is no program but every program's library, typed function by function
+# (warp-lead, 2026-11-18)
+FILES_TYPED_WHOLE=4
+FUNCTIONS_TYPED=511
 # the census runs in this many batches at once, each loading the preload once (one batch of all files: 10 min)
 BATCHES=6
 
