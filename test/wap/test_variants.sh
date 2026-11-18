@@ -59,4 +59,10 @@ if Circle(1) != Dot { print "differ" } else { print "same" }')" "differ
 same
 same
 differ"
+check "a case shows itself as written" "$(ran shown_case 'enum Shape { Circle(r: int), Pair(a: int, b: int), Dot }
+print show(Circle(3))
+print show(Pair(1, 2))
+print show(Dot)')" "Circle(3)
+Pair(1, 2)
+Dot"
 exit $((failures > 0))
