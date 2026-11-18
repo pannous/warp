@@ -70,4 +70,6 @@ print text(twice(y => y * 3, 2))
 print twice(t => t + "!", "ab")')" "5
 18
 ab!!"
+check "-> writes a function value as => does (wiki: both arrows denote lambdas)" "$(ran arrow 'g = (a, b) -> a + b
+print text(g(1, 2))')" "3"
 exit $((failures > 0))

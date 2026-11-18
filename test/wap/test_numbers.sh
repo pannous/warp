@@ -23,4 +23,9 @@ check "the texts of floats" "$(ran float_texts 'print "${0.1} ${1.5} ${1.0e21} $
 print "${5e-324} ${1.0 / 0.0} ${-1.0 / 0.0} ${0.0 / 0.0} ${trunc(2.7)} ${floor(-2.5)} ${ceil(2.1)}"')" "0.1 1.5 1e21 0 0.3333333333333333 0.30000000000000004 0.000025 1e-6 -2.5
 5e-324 ∞ -∞ NaN 2 -3 3"
 check "the smaller and the larger of two ints" "$(ran min_max 'print text(min(3, 2)) + " " + text(max(3, 2))')" "2 3"
+check "÷ and % of ints floor, the remainder taking the divisor's sign (wiki/Footguns.md)" "$(ran floored 'print text(-7 ÷ 2)
+print text(-7 % 3)
+print text(7 % -3)')" "-4
+2
+-2"
 exit $((failures > 0))
