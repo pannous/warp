@@ -29,4 +29,9 @@ bo"
 check "a compound assignment to a list position" "$(ran compound_item 'xs = [1, 2, 3]
 xs#2 *= 5
 xs#2')" "10"
+check "two lists joined" "$(ran joined '+(a: list<int>, b: list<int>): list<int> := prim array_joined(a, b)
+xs = [1, 2] + [3]
+print text(#xs)
+xs#3')" "3
+3"
 exit $((failures > 0))

@@ -197,7 +197,7 @@ field_parts(pattern: Node, value: list, p: Program) as list := match pattern {
 # the tag fits; a literal by equality. `value` is the code that gives the value, of the layout `type`.
 pattern_test(pattern: Node, value: list, type: list, p: Program) as list := {
 	if is_case(case_name(pattern)) {
-		tag = value + tagged(p.m) + i32_const(case_tag(enum_of(p.records, case_name(pattern)), case_name(pattern))) + I32_EQ
+		tag = value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ
 		tested = field_parts(pattern, value, p).filter(part => not names_any(part.pattern))
 		return tested.fold(tag, (fits, part) => fits + IF + I32 + pattern_test(part.pattern, part.value, part.type, p) + ELSE + i32_const(0) + END)
 	}
@@ -215,8 +215,10 @@ case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 	record = enum_of(p.records, called)
 	named = case_named(record, called)
 	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
-	Code(layout(form, p), i32_const(case_tag(record, called)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
+	Code(layout(form, p), i32_const(tag_of(called, p)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
 }
+# a case's tag, its place among the cases of every enum the program declares, so cases of two enums never share one
+tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => text(case_name(each)) == text(case)) - 1
 is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
 
 

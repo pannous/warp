@@ -12,7 +12,7 @@ use "../../kernel/forms.wap"
 # arguments; then the function it means, typed for these argument types
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if fact_of(called, BINDING) == symbol(BOUND_CASE) { return case_call_typed(n, called, arguments, s, f) }
-	if called is symbol and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
+	if called is symbol and text(called) == TYPE_TEST_WORD and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
 	candidates = candidates_of(called).map(definer => definition_at(definer, s))
 	by_count = candidates.filter(definition => #parameters_in(definition) == #arguments)

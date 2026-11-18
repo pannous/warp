@@ -28,6 +28,9 @@ s = Circle(2)
 if s is Circle { print "circle" } else { print "other" }')" "circle"
 check "a case is of its enum" "$(ran is_enum 'enum Coin { Penny, Nickel, Dime }
 if Dime is Coin { print "yes" } else { print "no" }')" "yes"
+check "cases of two enums differ" "$(ran two_enums 'enum Coin { Penny, Dime }
+enum Fixity { Prefix, Infix }
+if Penny == Prefix { print "same" } else { print "differ" }')" "differ"
 check "a case pattern tests its fields by their own patterns" "$(ran nested 'enum Shape { Circle(r: int), Dot }
 enum Pair { Two(a: Shape, b: int) }
 score(p: Pair): int := match p { Two(Dot, n) => n; Two(Circle(r), 0) => r; Two(Circle(r), n) => r * n }
