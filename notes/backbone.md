@@ -305,9 +305,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   of several overloads not yet. Its captures
   are copied when it is made, so a change of one afterwards is refused. Paid off by function references (a funcref
   beside the captures, call_ref), for values chosen at run time.
-- **Protocols are declared, not yet used** (`trait`): a place typed by a trait is refused by the emitter (no layout
-  for a function-typed field) and a class given to it is refused by typing (no structural fit yet). Paid off by the
-  owners of core/emit/ and core/analyze/ (asked 2026-11-18); `map default ListMap` waits for maps and class methods.
+- **Protocols fit structurally, by specialisation only** (wap/core/analyze/calls.wap `conforms`): a function of a
+  protocol parameter is typed anew for each type given, so a list of mixed protocol values (run-time dispatch through
+  function references), a protocol's default bodies (decision traits-are-protocols), `x is shape`, and a class's field
+  counting as a word are not there yet. Paid off by slice B's function references in core/emit/ and the typing of
+  defaults in core/analyze/; `map default ListMap` waits for its declaration rule.
 - **A method's bare field names come from the classes of its Block only** (wap/core/analyze/scope.wap
   `receiver_fields`): a method of a preload or used module's class still writes `self.c`, and a function value inside
   a method that reads a bare field is not given self as a capture. Paid off when the binding sees the library's
