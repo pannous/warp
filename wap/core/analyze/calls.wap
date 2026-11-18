@@ -8,6 +8,9 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
+# the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
+PLACE_WORD = "#"
+
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
@@ -40,8 +43,12 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
 as_text(character: Node, s: TypingState, f: TypeFrame) as Node := {
 	if character is Char { return typed_form(character, s, f, symbol(TEXT_TYPE)) }
-	chosen = function_typed(chosen_definition(character, symbol(TEXT_FUNCTION), [definitions_named(TEXT_FUNCTION, s)], [character], ø, s), [symbol(CHAR_TYPE)], s, character)
-	with_type_of(refitted(Call(calling(symbol(TEXT_FUNCTION), chosen), [character]), character), chosen.result)
+	word_called(character, TEXT_FUNCTION, [character], ø, s)
+}
+# the call of a word with these typed arguments, the definition chosen among all of the word's
+word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) as Node := {
+	chosen = function_typed(chosen_definition(n, symbol(word), [definitions_named(word, s)], given, expected, s), given.map(value_type), s, n)
+	with_type_of(refitted(Call(calling(symbol(word), chosen), given), n), chosen.result)
 }
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)

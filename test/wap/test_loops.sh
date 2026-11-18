@@ -58,4 +58,12 @@ for i in 1 to 3 { for j in 1 to 2 { pairs = pairs + 1 } }
 pairs')" "6"
 check "a range held in a name counts its ints" "$(ran range_count 'r = 2 to 5
 #r')" "4"
+check "a for loop walks a range, written or named, by its # word" "$(ran range_place 'sum = 0
+for i in 1 .. 4 { sum = sum + i }
+print text(sum)
+r = 2 to 5
+total = 0
+for i in r { total = total + i }
+total')" "6
+14"
 exit $((failures > 0))
