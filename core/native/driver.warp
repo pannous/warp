@@ -1286,7 +1286,10 @@ compiled_and_run(compiler: text, written: text, first: int) as nothing := {
 	option_given("cache", "")
 	if cached.length == 0 { return written_run(output, given, first) }
 	# a compile that found the cached module current wrote none
-	if access(c_string(output), EXISTING) == 0 { rename(c_string(output), c_string(cached)) }
+	if access(c_string(output), EXISTING) == 0 {
+		rename(c_string(output), c_string(cached))
+		older_forgotten(cached, file)
+	}
 	file_ran(cached, program_arguments(given, first))
 }
 # where the module of the file compiled by this compiler with this lib/ is cached: in the cache folder, named by the
@@ -1298,6 +1301,22 @@ cached_module(compiler: text, file: text, library: text) as text := {
 	mkdir(c_string(folder), FOLDER_MODE)
 	identity = text_of(fingerprint_of(joined(text_of(fingerprint_of(read_file(compiler))), library)))
 	joined(joined(joined(joined(joined(folder, "/"), flattened(resolved_path(file))), "."), identity), ".wasm")
+}
+# the file's module cached before this one, by another compiler or lib/, removed with its machine code of every kind
+# once this one is kept: the cache holds one module a program file, its newest, however many compilers ran it
+older_forgotten(cached: text, file: text) as nothing := {
+	latest = joined(joined(joined(cache_folder(), "/compiled/"), flattened(resolved_path(file))), ".latest")
+	older = read_file(latest)
+	if older.length > 0 and not same_text(older, cached) {
+		unlink(older)
+		# (each kind machine_code_suffix_of names: the plain run's 0 up to FUEL_MACHINE_CODE)
+		for kind in 0..FUEL_MACHINE_CODE + 1 {
+			machine_code = joined(older, machine_code_suffix_of(kind))
+			unlink(machine_code)
+			unlink(joined(machine_code, ".key"))
+		}
+	}
+	write_file(latest, cached)
 }
 # a program given as a URL (`warp https://host/a.warp`): fetched by curl, run by its argument vector, into the cache
 # folder under the whole URL, and run from there; any other word as it is. A fetch that fails stops with curl's reason
