@@ -10,6 +10,7 @@ FUNCTION_SECTION = 3
 MEMORY_SECTION = 5
 GLOBAL_SECTION = 6
 EXPORT_SECTION = 7
+ELEMENT_SECTION = 9
 DATA_COUNT_SECTION = 12
 CODE_SECTION = 10
 DATA_SECTION = 11
@@ -42,6 +43,8 @@ MEMORY_KIND = 0x02
 
 # where a data segment lives: placed in the memory, or kept passive for `array.new_data`
 ACTIVE_SEGMENT = 0x00
+# an element segment that only declares the functions `ref.func` refers to, by their indices
+DECLARED_FUNCTIONS = [0x03, 0x00]
 PASSIVE_SEGMENT = 0x01
 
 # every memory segment starts at a multiple of this, the size of the largest value, as WASI requires of its records
@@ -59,6 +62,8 @@ BRANCH_IF = [0x0D]
 VOID_BLOCK = [0x40]
 RETURN = [0x0F]
 CALL = [0x10]
+# a call of the function a typed function reference on the stack refers to, `call_ref $type`
+CALL_REF = [0x14]
 DROP = [0x1A]
 LOCAL_GET = [0x20]
 LOCAL_SET = [0x21]
@@ -119,6 +124,8 @@ F64_CONVERT_I64_S = [0xB9]
 I64_REINTERPRET_F64 = [0xBD]
 F64_REINTERPRET_I64 = [0xBF]
 REF_NULL = [0xD0]
+# a reference to a function of the module, which a declarative element segment names (Module.referenced)
+REF_FUNC = [0xD2]
 REF_IS_NULL = [0xD1]
 REF_EQ = [0xD3]
 REF_AS_NON_NULL = [0xD4]

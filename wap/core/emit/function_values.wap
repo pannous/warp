@@ -1,0 +1,83 @@
+# Function values: `x => x + 1` and a function's name as values, what they capture, and calls of them. A value of a
+# type of its own calls its one function directly (functions.wap); a value of a signature, `(int) -> int`, is chosen at
+# run time and called by its function's reference.
+
+use "emitter.wap"
+use "functions.wap"
+use "host.wap"
+use "places.wap"
+use "values.wap"
+use "wasm.wap"
+use "opcodes.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+
+# A function value's function starts by taking its captures out of its first parameter, the value, into variables of
+# its own, which its body reads as any local; a function that captures nothing takes none
+captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list := {
+	captures = captures_of(form)
+	value = if parameters is empty then ø else declared_name(parameters#1)
+	parts = if value == ø then ø else function_value_parts(fact_of(value, TYPE))
+	if captures is empty or parts == ø { return [] }
+	closure = closure_of(value, p)
+	loads = []
+	for at in 1 to #captures {
+		f.slots += [Placed(place_key(captures#at), #f.slots, layout_of(parts#(at + 1), p.m, p.records), [], yes)]
+		loads += instruction(LOCAL_GET, [0]) + instruction(STRUCT_GET, [closure, at - 1]) + instruction(LOCAL_SET, [f.slots.last.index])
+	}
+	loads
+}
+# A function value: of a signature, `(int) -> int`, chosen at run time, a reference to its function beside what it
+# captures; else of a type of its own, a struct of what it captures, its function called directly. A function's name
+# as a value captures nothing.
+function_value_code(form: Node, p: Program, f: Frame) as Code := {
+	if function_type_parts(fact_of(form, TYPE)) != ø { return signature_value_code(form, p, f) }
+	Code(layout(form, p), captures_code(form, f) + instruction(STRUCT_NEW, [closure_of(form, p)]))
+}
+# A function value of a signature: its function's adapter referred to, then its captures, the struct of them a λ
+# reads or ø for a function's name. FUNCTION_VALUE, from the typing stage, is the value's own type, naming its function
+# and its captures' types.
+signature_value_code(form: Node, p: Program, f: Frame) as Code := {
+	own = fact_of(form, FUNCTION_VALUE) ?? refused(form, "this function value reached the emitter without the function it is")
+	captures = if is_lambda(form) then captures_code(form, f) + instruction(STRUCT_NEW, [closure_of_type(own, form, p)]) else null_of(ANY_HEAP)
+	adapter = helper(p, "adapter ${defining_key(form)} ${fact_of(form, TYPE)}", q => adapting_function(form, own, q))
+	Code(layout(form, p), function_reference(p.m, adapter) + captures + instruction(STRUCT_NEW, [signature_value_index(fact_of(form, TYPE), p.m, p.records)]))
+}
+is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => no }
+# The function every value of a signature calls: its captures, then its parameters, given to the value's own function,
+# the one its DEFINED_AT names, typed for the signature; a λ takes the captures cast to their struct, a function's name
+# none
+adapting_function(form: Node, own: Node, p: Program) as int := {
+	function = placed_for(p.functions, form) ?? pending_function(p, form) ?? refused(form, "the typing stage typed no function for this value")
+	parts = function_type_parts(fact_of(form, TYPE))
+	parameters = signature_parameters(parts, p.m, p.records)
+	captures = if is_lambda(form) then local_get(0) + heap_instruction(REF_CAST_NULL, closure_of_type(own, form, p)) else []
+	added_function(p.m, [ANYREF] + parameters, signature_results(parts, p.m, p.records), [], captures + (1 to #parameters).flat_map(local_get) + instruction(CALL, [function.index]))
+}
+# A call of a function value of a signature: the value kept in a slot of its own, then its captures, the arguments and
+# its function's reference, called by call_ref
+value_call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+	type = fact_of(called, TYPE)
+	parts = function_type_parts(type)
+	value = code(called, p, f)
+	f.slots += [Placed("value called by ${place_key(form)}", #f.slots, value.type, [], yes)]
+	held = local_get(f.slots.last.index)
+	value_struct = signature_value_index(type, p.m, p.records)
+	taken = signature_parameters(parts, p.m, p.records)
+	if #arguments != #taken { refused(form, "the call gives ${#arguments} arguments, the function value takes ${#taken}") }
+	given = (1 to #arguments).flat_map(at => fitted(code(arguments#at, p, f), taken#at, arguments#at, p.m).instructions)
+	results = signature_results(parts, p.m, p.records)
+	reference = held + instruction(STRUCT_GET, [value_struct, VALUE_FUNCTION_AT])
+	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [value_struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(type, p.m, p.records)])))
+}
+# the values a function value captures, read from the variables they are where it is made
+captures_code(form: Node, f: Frame) as list := {
+	captures_of(form).flat_map(definer => fetched(captured_variable(definer, f)))
+}
+captured_variable(definer: Node, f: Frame) as Placed := {
+	placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value")
+}
+# the GC struct of a typed function value
+closure_of(n: Node, p: Program) as int := closure_of_type(fact_of(n, TYPE), n, p)
+closure_of_type(type: Node?, n: Node, p: Program) as int := function_value_index(type, p.m, p.records) ?? refused(n, "this is no function value")

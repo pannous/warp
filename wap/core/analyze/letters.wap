@@ -116,13 +116,20 @@ reads_as(held: Node, given: Node) as bool := same_type(held, symbol(TEXT_TYPE)) 
 function_value_bound(wanted: list, value: Node, bound: list, s: TypingState) as list? := {
 	parameters = wanted#1.map(type => substituted(type, bound))
 	if parameters.any(type => has_letters(type, s.records)) { return ø }
-	key = text(function_value_parts(value)#1)
-	definition = definition_keyed(key, s) ?? return ø
-	closure = if s.lambdas.any(lambda => function_key_of(lambda) == key) then [value] else []
-	if #parameters_in(definition) != #closure + #parameters { return ø }
-	result = function_typed(definition, closure + parameters, s, definition).result ?? return ø
+	result = (value_function_typed(parameters, value, s) ?? return ø).result ?? return ø
 	unified(wanted#2, result, bound, s)
 }
+# the function of a value of this type, fn<key, capture types…>, typed for these parameter types, a function value's
+# own one taking the value first; ø when its parameters take others
+value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunction? := {
+	key = text((function_value_parts(type) ?? return ø)#1)
+	definition = definition_keyed(key, s) ?? return ø
+	closure = if is_lambda_key(key, s) then [type] else []
+	if #parameters_in(definition) != #closure + #parameters { return ø }
+	typed = function_typed(definition, closure + parameters, s, definition)
+	if same_types(typed.arguments[#closure ..], parameters) then typed else ø
+}
+is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to
 substituted(type: Node?, bound: list) as Node? := {
 	if type == ø or bound is empty { return type }

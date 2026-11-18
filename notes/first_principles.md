@@ -29,6 +29,21 @@ special case that breaks one of these identities is a bug.
   `Key`.
 - **Blocks are values.** `{ it * 2 }` is a function of `it`. A parameter declared `block` takes the code unevaluated.
 - **Emptiness is tested loosely.** `if no x`, `x is empty` and `if x` test emptiness; `x is ø` tests only for missing.
+-  dynamic where we can't infer the type (fully in the future)
+- The compiler’s own source stays fully typed, so the self-build stays fast and checked.
+- Loud boundaries. Where a dynamic value enters a typed place, check it there and fail with the position.
+- any is the dynamic type, and inference falls back to it. Where two types do not meet, the answer is any, so ["a", 1] is a list of anything.
+- any list fits a bare list, special implementations of the protocol need automatic conversion 
+- Calls on dynamic values are written by the typing stage as ordinary code, not built into the emitter.
+- A call with an any argument becomes a chain of is tests over the overloads, most specific first, ending in an error OR dynamic call via duck-typing.
+
+
+- For multi dispatch we need one function that ranks the definitions of a word.
+    -  The compile-time choice takes the first of that ranking that fits.
+    -  The run-time choice emits its tests in that same ranking.
+    - TODO: invert mechanism of    show(x: any): text := prim dispatched(x) via compiler:
+    - compiler writes match type(x) : text => describe(x as text), int=> describe(x as int) ...
+
 
 We have one universal construct to hold all data and Code:
 
