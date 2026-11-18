@@ -59,3 +59,9 @@ any(xs, fits) := {
 	no
 }
 contains(xs, item) := xs.any(x => x == item)
+
+# bools compared: equal when both are yes or both no; beside an int a bool counts as 1 or 0, so `0 == no` is yes
+# (`===` compares the type too)
+==(a: bool, b: bool): bool := if a then b else not(b)
+==(a: int, b: bool): bool := a == (if b then 1 else 0)
+==(a: bool, b: int): bool := b == a
