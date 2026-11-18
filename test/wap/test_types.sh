@@ -54,4 +54,9 @@ check "an optional int takes an int or ø, its value read where a condition foun
 print text(f(4) + f(ø))
 print text(ø ?? 3)')" "5
 3"
+# any holds every value, number an int or a float (core/node.warp's Data(value: any))
+check "any value fits any" "$(ran any_fits 'f(x: any) := 1
+print text(f(3) + f("ab") + f([1]) + f(2.5))')" "4"
+check "an int or a float fits a number" "$(ran number_fits 'g(x: number) := 2
+print text(g(3) + g(2.5))')" "4"
 exit $((failures > 0))
