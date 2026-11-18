@@ -65,10 +65,10 @@ optional_layout(type: Node, m: Module, records: list) as list? := {
 }
 PLAIN_VALUES = [I32, I64, F64]
 # The box of a plain value of a type, `int`: a struct of the value, one type for each type word, so a value in an `any`
-# is told apart by its box at run time. A yes/no and a character are both an i32; a character's box holds it as a
-# mutable field, which makes the two box types differ.
-box_index(m: Module, word: text) as int := added_type(m, struct_type([field_type(WORD_LAYOUTS[word], if word == CHAR_WORD then MUTABLE else IMMUTABLE)]))
-CHAR_WORD = "char"
+# is told apart by its box at run time. The boxes are declared together in one recursion group, which keeps a yes/no's
+# box apart from a character's though both hold an i32, and keeps every box apart from any other struct of one field.
+box_index(m: Module, word: text) as int := added_group(m, BOXED_WORDS.map(each => struct_type([field_type(WORD_LAYOUTS[each], IMMUTABLE)]))) + index_where(BOXED_WORDS, each => each == word) - 1
+BOXED_WORDS = WORD_LAYOUTS.keys.filter(word => WORD_LAYOUTS[word] in PLAIN_VALUES)
 # the type word of a plain value, from the type the typing stage gave its form
 plain_word(form: Node) as text := {
 	type = fact_of(form, TYPE)

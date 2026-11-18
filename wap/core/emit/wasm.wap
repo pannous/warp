@@ -144,6 +144,8 @@ PAGE_BYTES = 0x10000
 # A module in the making. Imports come first among the functions, so a function's index is counted after them.
 class Module {
 	types: list = []
+	# the types declared together in one recursion group, each [its first index, how many]
+	groups: list = []
 	imports: list = []
 	functions: list = []
 	globals: list = []
@@ -228,9 +230,32 @@ open_type(supertypes: list, type: list) as list := [SUBTYPE] + unsigned(#superty
 
 # The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
 added_type(m: Module, type: list) as int := {
-	for at in 1 to #m.types { if m.types#at == type { return at - 1 } }
+	for at in 1 to #m.types { if m.types#at == type and grouped(m, at - 1) == ø { return at - 1 } }
 	m.types += [type]
 	#m.types - 1
+}
+# Types declared together in one recursion group: types of one group are distinct by their place in it, even when
+# their shapes match, so a reference tells at run time which of them it is. The index of the first.
+added_group(m: Module, types: list) as int := {
+	for group in m.groups { if m.types[group#1 .. group#1 + group#2] == types { return group#1 } }
+	m.groups += [[#m.types, #types]]
+	m.types += types
+	m.groups.last#1
+}
+# the group a type's index lies in, ø for one declared alone
+grouped(m: Module, index: int) as list? := {
+	for group in m.groups { if index >= group#1 and index < group#1 + group#2 { return group } }
+	ø
+}
+# the type section's entries: a type declared alone as itself, a group as one entry of its types
+REC_GROUP = 0x4E
+type_entries(m: Module) as list := {
+	entries = []
+	for at in 0 to #m.types - 1 {
+		group = grouped(m, at)
+		if group == ø { entries += [m.types#(at + 1)] } else if group#1 == at { entries += [[REC_GROUP] + counted(m.types[at .. at + group#2])] }
+	}
+	entries
 }
 
 # An imported function, `wasi_snapshot_preview1.fd_write`: its index among the functions.
@@ -288,5 +313,5 @@ module_bytes(m: Module) as list := {
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
 	memory_pages = [[0x00] + unsigned(1)]
 	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#placed + #passive)) + unsigned(#placed + #passive)
-	MAGIC + VERSION + section(TYPE_SECTION, m.types) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
+	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
 }

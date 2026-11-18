@@ -113,7 +113,7 @@ called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 
 # `prim dispatched(x)` in f(x: any): a call of whichever of f's other overloads takes x's type at run time, tried in
 # the order of the Prim's fact OVERLOADS, each a function's name as a call names it, its SIGNATURE on it; a value
-# none takes, ø included, traps
+# none takes, ø included, raises
 DISPATCHED = "dispatched"
 dispatched_code(form: Node, p: Program) as list := {
 	overloads = listed(fact_of(form, OVERLOADS) ?? refused(form, "the typing stage gave this dispatch no overloads"))
@@ -130,5 +130,6 @@ dispatching_function(p: Program, form: Node, overloads: list) as int := {
 		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
 		local_get(0) + instruction(REF_TEST, [type]) + IF + VOID_BLOCK + local_get(0) + instruction(REF_CAST, [type]) + unboxed + instruction(CALL, [called.index]) + RETURN + END
 	})
-	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + UNREACHABLE)
+	taken = overloads.map(overload => text(function_type_parts(fact_of(overload, SIGNATURE))#1#1)).join(", ")
+	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + raised("no ${text(overloads#1)} takes this value; it takes ${taken}", p))
 }

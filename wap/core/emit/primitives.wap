@@ -59,7 +59,7 @@ INSTRUCTIONS = {
 }
 # The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
 # primitives call, before any function of its own.
-HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"], "map_get": ["fd_write", "proc_exit"], "list_item": ["fd_write", "proc_exit"], "dispatched": ["fd_write", "proc_exit"], "list_pop": ["fd_write", "proc_exit"], "list_slice": ["fd_write", "proc_exit"], "read_text": ["path_open", "fd_seek", "fd_read", "fd_close", "fd_write", "proc_exit"]}
 # each host function's parameter and result types
 HOST_FUNCTIONS = {
 	"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []], "fd_read": [[I32, I32, I32, I32], [I32]],
@@ -137,6 +137,8 @@ helper(p: Program, operation: text, build: function) as int := {
 
 printing_function(p: Program) as int := writing_function(p, STDOUT, [])
 raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
+# a raise of a message from inside a helper
+raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
 # The helper of print_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
 writing_function(p: Program, file: int, after: list) as int := {
