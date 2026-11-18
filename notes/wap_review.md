@@ -22,9 +22,9 @@ whole effort is aimed at the wrong target.**
   language uses it.
 - **Direction.** The milestone is "wap builds itself", and wap is not measured against it. It gains language
   breadth (protocols, `any`, named arguments, shortest float text) while it refuses the way its own source is
-  written. Of the 30 files of wap that hold functions, wap types **none** today. The census that should show this
-  stops at each file's first refusal, so the team sees eight missing words where there are several hundred places
-  wap would refuse, its own most used helper (`fact_of`) among them.
+  written. Of the 32 files of wap that hold functions, wap types **none** today. The census that should show this
+  stops at each file's first refusal, so the team sees nine refusals where there are several hundred places wap
+  would refuse, its own most used helper (`fact_of`) among them.
 
 My main recommendation: stop adding language, decide what wap's own source may look like (decision 1), fix the
 five small typing defects that block wap's most basic code, and put one worker on compiling wap with wap file by
@@ -37,7 +37,7 @@ file, with a gauge that counts every refusal instead of the first.
   all 27 scripts of test/wap; scripts/wap-census.warp.
 - Ran once: `bash test/wap/run.sh --wait` at bc30daa9c8: 376 ✓, 0 ✗ in 27 scripts, 82 s.
 - Ran 57 small programs through wap to check each claim below that says "refused", "runs" or "invalid wasm"
-  (appendix A), three programs through the old compiler, and the census on all 41 program files of wap
+  (appendix A), three programs through the old compiler, and the census on all 43 program files of wap
   (appendix B). Every such claim was run, not inferred.
 
 ## The findings at a glance
@@ -109,9 +109,11 @@ Why A: it is the rule wap already has, said once instead of at parameters only; 
 compile time; and the edits it asks of wap's source make that source better.
 
 Sub-point, same decision: a file sees only the names of the modules it uses itself, not of the modules those use
-(core/pipeline.wap:40). The old compiler passes them on, and wap's source relies on it in dozens of places (17
-of the 41 census lines). Keep wap's rule (it is what Python, JavaScript and Rust do), add the `use` lines, and let
-the refusal name the module: "IMMUTABLE is opcodes.wap's: add `use "opcodes.wap"`".
+(core/pipeline.wap:40). The old compiler passes them on, and wap's source relies on it: in 14 of the 43 files the
+first names wap cannot bind are another module's that the file does not use itself (eight files of core/emit/
+read opcodes.wap through wasm.wap; core/parse/operator_table.wap even calls `tokens_of` of operators.wap, a module
+that uses *it*). Keep wap's rule (it is what Python, JavaScript and Rust do), add the `use` lines, and let the
+refusal name the module: "IMMUTABLE is opcodes.wap's: add `use "opcodes.wap"`".
 
 ### Decision 2. Where do readings that depend on what a name means live?
 
@@ -120,8 +122,8 @@ notes/first_principles.md:123-128), was never built. Its work is done by hand in
 
 - core/rules/lowering.wap:65-101: any phrase led by a word becomes a call, without asking what the word is;
 - core/analyze/scope.wap:124-126: `x is w` becomes a type test or the call `w(x)`; :283 `Shape.Dot` becomes a case;
-- core/analyze/types.wap:307-309: a field named bare in a method becomes `self.field`; the name of a function
-  of no parameters becomes its call;
+- core/analyze/types.wap:307-309: a field named bare in a method becomes `self.field`; :344-345: the name of a
+  function of no parameters becomes its call;
 - core/emit/emitter.wap:122: a `Get` that carries a definition is emitted as a call.
 
 A rule stage before binding cannot do this work anyway: whether `f x` calls `f` depends on what `f` is bound
@@ -188,4 +190,138 @@ because square brackets hold items separated by spaces. wap's own source writes 
   then read two ways depending on their first word.
 - **Park.**
 
-<!-- part 2 follows: fixes for the team, plan conformance, the road to self-build, appendices -->
+## Fixes for the team, by importance
+
+### Fix 1. A gauge that sees every refusal, and wap-on-wap as tests
+
+- **Where:** scripts/wap-census.warp lowers and binds statement by statement but types and emits the file as a
+  whole: the first refusal ends it. notes/wap.md:167-184 is read off it.
+- **What it shows today** (appendix B): of 43 files, 11 type and emit: kernel/forms.wap (patterns), 
+  core/emit/opcodes.wap (120 constants) and the 9 rule files of core/sugar/. None of the 32 files that hold
+  functions does. Those 32 show 9 distinct refusals between them, most of them in another file than the one
+  asked for: `float_bits` (core/emit/wasm.wap:59) stops 9 files, `is_named` (core/analyze/calls.wap:28) 8,
+  `tokens_of` (core/parse/operator_table.wap:42) 5, `Separator.None` (core/parse/layout.wap:10) 4.
+- **Why it matters:** the team works a queue of nine that refills from a backlog nobody has counted. Fixing
+  `float_bits` will reveal the next line of wasm.wap, not the distance left.
+- **Do:** (1) the census types each function on its own once the file is bound, so one refusal costs one function;
+  it prints "functions typed / functions" per file and the distinct refusals ranked by how many functions each
+  stops. (2) scripts/vitals.py already runs the census (:55-69): make that ranked list the daily queue.
+  (3) test/wap/test_self.sh: "wap compiles core/emit/opcodes.wap and the result loads" today, one line more for
+  every file that turns green: a ratchet that only moves forward.
+
+### Fix 2. Five small typing defects that stop wap's most basic code
+
+None has a test; each fix is a few lines; each needs one check line in test/wap.
+
+1. **A name written with an optional type and first given ø takes no value afterwards.** `found: int? = ø` then
+   `found = 3` → "this gives a int, the name holds a ø" (probes t01, t05, t06). core/analyze/types.wap:320
+   remembers the value's type, not the written one (`wanted`, :313). wap's most called function is written this
+   way (`fact_of`, core/stage.wap:63-69). Do: remember the written type when there is one.
+2. **An early `return` in a function whose written result is optional is refused.**
+   `first_big(xs: list<int>) as int? := { for x in xs { if x > 1 { return x } }; ø }` → "this function gives back
+   values of different types" (probes q03, q04, p16). core/analyze/calls.wap:348-352 compares each returned type
+   with the body's last value, never with the written result (known at :366). 29 of wap's 34 functions with an
+   optional result and a block body return early. Do: where a result type is written, every returned value must
+   fit it, and it is the result.
+3. **`{}` cannot be an empty map.** `m: map<text, int> = {}` → "this gives a ø, the name holds a map<text, int>";
+   `m = {}` then `m.a = 1` → "no field or function a for a value of type α1 ?"; `Rules({})` → "no Rules takes (ø)"
+   (probes r02, r03, p11, q11). The reader makes `{}` Empty (notes/backbone.md:79). Do: an Empty written `{}`
+   where a map is wanted is the empty map, as `[]` is the empty list of the type wanted; with nothing wanted, a
+   map its first entry settles.
+4. **A case named like an enum hides the enum.** With `enum LexemeKind { Atom, Open, Close, Separator, Key }`
+   (core/parse/lexemes.wap:8), `Separator.None` (core/parse/layout.wap:10) is read as a field of that case: "no
+   field or function None for a value of type LexemeKind" (probe t03). core/analyze/scope.wap:283. Do: in `A.b`,
+   where `A` names an enum that has a case `b`, it is that case; if a second reading holds too, refuse with both.
+5. **A parameter typed `function` cannot be called** (probe p17; core/stage.wap:21 `staged(n: Node, rewrite:
+   function)` is the first typing refusal of core/errors.wap). core/analyze/calls.wap:389 lets a bare `list` or
+   `enum` take its argument's type, not a bare `function`. Do: with fix 3, `function` is the bare function type.
+
+### Fix 3. One representation for function values, before self-build
+
+- **Where:** core/analyze/function_values.wap:13-14, :30-35, :46, :57-58, :65; core/analyze/calls.wap:307-316;
+  the debt at notes/backbone.md:308-313.
+- **What:** every function value is a type of its own, `fn<place, captures…>`, and is called directly; a
+  parameter of a function type makes one copy of the function per function value it is given.
+- **Why it matters now:** a list or a map of function values, a field holding one, an `if` choosing between two
+  are all refused (probes p05-p08, q07, q08). wap's source has 4 tables of functions (core/emit/primitives.wap:78,
+  :81, :82, core/emit/lists.wap:25) and 9 `function` parameters, among them the two walkers every stage calls
+  (core/stage.wap:21, :49). And size: wap's source gives a function to a list word 281 times (`map` 143, `filter`
+  57, `flat_map` 41, `all` 15, `any` 13, `fold` 12); each is its own copy of that word today.
+- **Do:** a function value is one struct holding a function reference and its captures; its type is its
+  signature, `(T) -> U` (a base struct per signature, a capturing value a subtype adding its fields, a call a
+  `call_ref`). `(T) -> U` and bare `function` are ordinary types, `map` is typed once per (T, U). The `fn<…>`
+  types, the copy per value and the "takes its own type" clause for function types go.
+
+### Fix 4. Call typing what it is: the one elaboration stage, with one fit relation
+
+- **The plan contradicts itself.** notes/backbone.md:112-116: "A stage that only learns facts (declare, bind,
+  type) never rewrites", and notes/wap.md:118. But notes/backbone.md:105-110 defines the typed kernel as one
+  Define per tuple of argument types, which is a rewrite. The code follows the second: core/analyze/types.wap:103
+  appends `print(show(it))`, :195-205 narrows by the spelling of `==` and `!=`, :307-309 writes `self.field`,
+  :342 inserts `required`, :344-345 turns a name into a call, :410-415 writes the dispatch on a boxed value;
+  core/analyze/data.wap:88-96 rewrites item reads; core/analyze/function_values.wap:30-35 lifts function values.
+  The drift is right and the sentence is wrong.
+- **"Does it fit" is answered in more than fifteen places:** `conforms`, `takes_any_item`, `settles`, `reads_as`,
+  `fits`, `fits_exactly`, `any_list`, `any_enum`, `reads_as_text`, `takes_own_type` (core/analyze/calls.wap:177,
+  :220, :222, :304, :329, :330, :332, :335, :340, :389); `fits_type`, `gives_fitting`, `type_fits`, `boxed_fit`,
+  `same_type` (core/analyze/types.wap:431, :440, :443, :445, :447); `read_as`, `all_fit`
+  (core/analyze/data.wap:50, :51); and again in the emitter: `fitted` (core/emit/values.wap:80), `passes`,
+  `held_in_any` (core/emit/functions.wap:123, :84). They differ by construct: `if c then name else "?"` joins a
+  character and a text, the same two arms of a `match` inside a function value do not (probes r05, r01).
+- **Why it matters:** every new kind of type must be taught to each of them, and each miss is a refusal a user
+  cannot explain.
+- **Do:** (1) Write the plan as built: declare and bind learn facts; type elaborates the bound kernel into the
+  typed kernel, in which every call names one Define, every conversion is written out and no function value is
+  left unlifted. (2) One function `conversion(given, wanted)` answering *how* the value gets there (as it is,
+  boxed into `any` or `number`, wrapped into `T?`, a character as a text, an empty `[]` or `{}` as the list or map
+  wanted, never, or not at all), used alike for arguments, results, fields, items, variables and the joining of
+  branches. Typing writes the conversion into the kernel once, so no later stage converts. (3) Split the two big
+  files along their real seams: choosing among definitions; generic letters and unknown types; one Define per
+  types; narrowing; conversions. types.wap (450 lines) and calls.wap (413) hold three of these each.
+
+### Fix 5. The emitter reads facts and nothing else
+
+- **Where:** core/emit/emitter.wap:9-12 says it: "The emitter reads only the parameters' types yet: a value's type
+  is known once its code is emitted, so a function's body is emitted at its first call". Hence the pending
+  functions (:134-139), the joining and checking of branch types on wasm layouts (:146-161),
+  core/emit/functions.wap:99-101 repeating core/analyze/calls.wap:348-352 down to the message,
+  core/emit/places.wap:61-67 ("The first value given decides the type"), and core/emit/values.wap:80-87.
+- **A hazard:** core/emit/values.wap:87 turns an `anyref` given where a reference is wanted into null
+  (`given.instructions + DROP + null_of(…)`). If typing ever lets such a value through, the program goes on with
+  ø: the plausible wrong value the principles call the worst bug. Make it a refusal.
+- **Why it matters:** two type systems must agree forever, and the emitter's order of emission makes refusals
+  depend on call order (functions.wap:127: "a function that calls itself needs its result type").
+- **Do:** after fix 4 every value carries its TYPE and every call its SIGNATURE. The emitter maps types to
+  layouts and emits functions in program order; `joined`, `checked_condition`, `result_type`, the inference in
+  `set_code` and the conversions of `fitted` go, roughly 150 lines. To make trusting the facts safe, state each
+  stage's output language as a check (`is_bound`, `is_typed`: every name read has a BINDING, every value a TYPE,
+  every call a SIGNATURE, no function value unlifted), run by the tests after each stage. Today the stage
+  languages of notes/backbone.md:50-60 exist only as catch-all refusals (core/analyze/scope.wap:73,
+  core/analyze/types.wap:147, core/emit/emitter.wap:128).
+
+### Fix 6. A table of primitives, checked (with decision 3)
+
+- **Where:** notes/wap.md:58 promises wap/kernel/primitives.wap; it does not exist. What a primitive is sits in
+  the emitter in six tables and a chain of lookups: core/emit/primitives.wap:52 `INSTRUCTIONS`, :64 `HOST_CALLS`,
+  :66 `HOST_FUNCTIONS`, :78 `HELPERS`, :81-82, :88-105 `primitive_code`, and :107 `ON_LISTS`, three primitives
+  that mean something else when the operand is a list.
+- **Why it matters:** nothing checks a primitive's operands. `prim print_text(3)` and a program's own
+  `(Prim print_text "x")` produce wasm that fails to load (probes q14, p12); so would a typo in the preload.
+- **Do:** one table, a row per primitive: name, operand types, result type, how it is emitted (an instruction, a
+  host call, a helper). Typing checks every `Prim` against its row and takes the result type from it; the emitter
+  looks the row up; the three of `ON_LISTS` become rows of their own.
+
+### Fix 7. One `Language` value instead of five global tables
+
+- **Where:** core/parse/operators.wap:250-251 `phrase_words`, read at :192 and :253, filled by the rule loader
+  (core/rules/stages.wap:101-104); core/rules/stages.wap:36-37 `shape_rules`, `typed_rules`;
+  core/rules/patterns.wap:36 `declared_patterns`; core/rules/templates.wap:97 `fresh_count`;
+  core/parse/operator_table.wap:31 `looser_than`.
+- **Why it matters:** the operator stage reads what a later stage loaded, so the stage order holds only by load
+  order. A module's rules reach files that do not use it (the debt at notes/backbone.md:304). Two programs
+  compiled in one process share everything, which is what the playground, the tests and a self-built wap do.
+- **Do:** a prescan of the `rule`, `pattern` and operator declarations of a file and of what it uses builds one
+  value, `Language { operators, phrase words, shape rules, typed rules, patterns }`, which every stage takes as a
+  parameter. Scoping by `use` then needs no code of its own.
+
+<!-- part 3 follows: fixes 8-14, plan conformance, the road to self-build, appendices -->
