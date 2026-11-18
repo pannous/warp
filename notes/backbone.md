@@ -229,6 +229,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 ## Open, not built yet
 
+- **Methods, the rest of wiki/class.md:** bare field names inside a method reading and writing the receiver
+  (`inc() := { c = c + 1 }`; scope's, binding a bare name to `self.c`), a getter without parentheses
+  (`double := v * 2`), defaults (`n: int = 1`), `init`, and `extends`. Built: methods written after a class's fields,
+  each a function taking `self` first, so `b.area()` and `b.area` both call it.
 - **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
   names the module is not built.
 - **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
