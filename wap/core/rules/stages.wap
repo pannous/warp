@@ -8,6 +8,15 @@
 # Rules are indexed by the head of their pattern. A node is rewritten top-down: by the most specific rule that fits,
 # again until none fits, then its parts. Each node a rule builds is placed where the rewritten code was and carries
 # the rule (fact RULE, core/stage.wap). Rules terminate by construction, checked when they are loaded.
+use "patterns.wap"
+use "templates.wap"
+use "lowering.wap"
+use "../parse/reader.wap"
+use "../parse/operators.wap"
+use "../format.wap"
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
 
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"
@@ -83,11 +92,16 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 # The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its
 # first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
 heads_of(n: Node) as list := match n {
-	List(items, bracket, separator) => list_heads(items) + [NO_HEAD]
+	List(items, bracket, separator) => list_heads(items) + shape_heads(items, bracket, separator) + [NO_HEAD]
 	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
 	_ => [NO_HEAD]
 }
+# A list under its bracket and separator, then its bracket alone: `$then... if $c` is a space phrase starting with a hole,
+# indexed there, not among the rules tried on any code; a pattern of one part matches any separator, so it waits under
+# its bracket
+shape_heads(items: list, bracket: Bracket, separator: Separator) as list := (if #items > 1 then ["${bracket} ${separator}"] else []) + ["${bracket}"]
+
 # a glued call or index, `f(x)`, `xs[i]`: under its name and bracket, then under its bracket alone (`$f($x)`, `$xs[$i]`)
 glued_heads(left: Node, bracket: Bracket) as list := (if left is symbol and not is_hole(left) then ["${spelling_written(left)} ${bracket}"] else []) + ["glued ${bracket}"]
 
@@ -148,8 +162,9 @@ shaped_program(program: Node) as Node := {
 	rest = rules_loaded(program)
 	terminating(shape_rules)
 	terminating(typed_rules)
-	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them
-	with_facts_of(rewritten_by(shape_rules, rest).code, program)
+	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them; a
+	# program of rules only is an empty block, as Empty carries no facts
+	with_facts_of(rewritten_by(shape_rules, rest).code ?? Block([]), program)
 }
 
 # Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none

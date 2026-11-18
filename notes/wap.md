@@ -140,24 +140,21 @@ Next, in order:
 
 ## Road to self-build
 
-Measured 2026-11-17 (main 968d32f095, the sources' own `use` lines added) by scripts/wap-census.warp: wap's stages run on wap's own sources (wap/**/*.wap,
-17 files, 482 top-level statements), statement by statement, each file bound with the names its `use`d modules
-define. A statement stops at its first refusal, so each row counts the statements a missing piece blocks first; the
-first column assumes the result-type rule (`f(x) as T := …`) exists (`deep`), which shows the layer behind it.
-Deep, 254 statements lower and 84 bind (100 and 76 without the stand-in); nothing past the emitter's literals emits.
+Measured 2026-11-18 (main 05ae82852f) by scripts/wap-census.warp, which runs the compiler's own stages
+(wap/core/pipeline.wap, the shape rules included) on each of wap's 21 program files (762 top-level statements; the 8
+rule files, kernel/forms.wap and core/sugar/, pass every stage). Lowering and binding run statement by statement, each
+file bound with the names its `use`d modules define; a statement stops at its first refusal, so each row counts the
+statements a missing piece blocks first. Typing and emitting run on the whole file with its modules, as the compiler
+does: 705 statements lower, 359 bind, no program file types yet.
 
-| blocks first (deep) | stage that should handle it | what is missing |
+| blocks first | stage that should handle it | what is missing |
 |---|---|---|
-| 170 | kernel + preload | list literals `[a, b]`, `[]`, indexing `xs[i]`, slices `xs[1 ..]` |
-| (158 without deep) | spelling rules | result types `f(x) as T := …` |
-| 65 | spelling rules → kernel | `match` (49), `for` (15), `while` reach binding as calls: rules to Case, loops |
-| 50 | preload functions | operators `==` `+` `!=` `??` `is` `>` `<=` `+=` `in`: preload definitions with `prim` bodies |
-| 33 | lowering | a parenthesized group `(a + b)`, `(if … then … else …)` |
-| 25 | kernel | Record: class fields `x: T`, enum cases `Left, Right`, map literals `{yes: True}` |
-| 8 | preload functions | the runtime's words `text`, `symbol`, `read`, `raise`, `with_attribute` |
-| 15 | spelling rules → kernel | `and`, `or` short-circuit: If |
-| 15 | kernel | Get: `x.f` member access |
-| 2 | reader | a text inside `${…}` of a text (`"${if c then "a" else ""}"`) is never closed |
+| 15 of 21 files' typing | preload functions | the runtime's word `line_of`: errors.wap's `refused`, used by every stage, so it stops them all |
+| ~90 statements | kernel + binding | a match arm of a constructor: `List(items, bracket, separator)` (39), `Symbol(name)` (16), `Key(…)` (16), Define, Call, Block, Arm, Get |
+| ~75 | kernel | Record: enums (`Fixity`, `LexemeKind`, `Separator`, `Bracket`) and their cases `a, b`, class fields `name: text`, constructors `Code`, `Block`, `Text`, `Key` |
+| ~40 | preload functions | operators `??` (19), `is` (17), `..`, `===` |
+| ~55 | preload + closures | list words taking a function: `map` (14), `filter` (10), `contains` (10), `has`, `all`, `add`, `flat_map`, `find`, `ends_with` |
+| ~30 | preload functions | the runtime's words: `symbol` (10), `text`, `line_of` (6), `attributes_of`, `positioned`, `is_digit`, `is_alpha`, `args` |
+| 4 files' typing | lowering | the range `0 upto width` (wasm.wap) |
 
-Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f deep;
-done`; the `deep` argument applies the result-type stand-in.
+Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done`.

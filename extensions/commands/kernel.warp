@@ -1,0 +1,82 @@
+# `warp kernel <code|file>` (card kernel-report, notes/kernel.md): how much of the lowered program, the code the emitter
+# receives, is already written in the kernel's forms, and which forms outside it still reach the emitter, each with
+# its count and the first place it was written. The yardstick of the kernel migration: every step makes the second
+# list shorter. Nothing is changed; the kernel's forms are read in today's node spellings.
+
+# the kernel's forms (notes/kernel.md "The kernel")
+KERNEL_FORMS = ["literal", "name", "define", "get", "set", "fn", "call", "prim", "if", "seq", "loop", "record", "case", "try"]
+# the operators whose meaning is a call (layers.md: operators are notation, a call each)
+CALLED_OPERATORS = [Op.Add, Op.Sub, Op.Mul, Op.Div, Op.FloorDiv, Op.Mod, Op.Rem, Op.Pow, Op.LogBase, Op.LogOf, Op.Shl, Op.Shr, Op.Lt, Op.Gt, Op.Le, Op.Ge, Op.Eq, Op.Is, Op.Ne, Op.Identical, Op.NotIdentical, Op.Similar, Op.Rough, Op.And, Op.Or, Op.Xor, Op.Not, Op.BitAnd, Op.BitOr, Op.Neg]
+# the jumps of a loop and a function, written as bare words
+JUMP_WORDS = ["break", "continue", "return"]
+# the hidden words the passes lower to, by the kernel form each is
+HIDDEN_FORMS = {"closure_new": "fn", "ran·without·error": "try", "wasm_instruction": "prim", "switch_no_case": "case"}
+CLOSURE_CALL_PREFIX = "closure_call_"
+
+# the kernel form n is written in, or the surface form it still is: `if … then …` without else, `a ?: b`, `x += 1`
+form_of_node(n: Node) as text := match n {
+	Meta(node, _): form_of_node(node)
+	Symbol(name): if name in JUMP_WORDS then "loop" else "name"
+	Key(left, op, right): key_form(left, op, right)
+	List(items, bracket, separator): list_form(n)
+	Type(name, body): "record"
+	_: "literal"
+}
+key_form(left: Node, op: Op, right: Node) as text := {
+	if left == opaque_symbol { return if kind_of(right) == "type" then "record" else "literal" }
+	if op == Op.Define { return "define" }
+	if op == Op.Assign { return "set" }
+	if op == Op.Dot or (op == Op.Hash and left != ø) { return "get" }
+	if op == Op.Hash or op == Op.As or op == Op.None { return "prim" }
+	if op == Op.Else and is_key(left, Op.Then) and is_key(key_of(left), Op.If) { return "if" }
+	if op == Op.Do and is_key(left, Op.While) { return "loop" }
+	if op == Op.Then and is_key(left, Op.If) { return "`if … then …` without else" }
+	if op in CALLED_OPERATORS { return "call" }
+	"`… " + (op as text) + " …`"
+}
+list_form(n: Node) as text := {
+	if is_quote(n) or is_spliced_quote(n) or #n == 0 or bracket_of(n) == "[" { return "literal" }
+	if is_braced_map(n) { return "prim" }
+	if bracket_of(n) == "(" and n#1 is symbol {
+		head = name_of(n#1)
+		if head.starts_with(CLOSURE_CALL_PREFIX) { return "call" }
+		return HIDDEN_FORMS.get(head) ?? "call"
+	}
+	if is_spaced(n) and n#1 is symbol { return "phrase `" + name_of(n#1) + " …`" }
+	if separator_of(n) == ";" or separator_of(n) == "\n" or bracket_of(n) == "{" or #n == 1 { return "seq" }
+	"the group " + opening_of(bracket_of(n)) + separator_of(n) + "…"
+}
+
+# each form's count and the first place it was written, by form, of n and everything inside it but quoted data
+def forms_counted(n: Node, counts: map, firsts: map) {
+	form = form_of_node(n)
+	counts[form] = (counts.get(form) ?? 0) + 1
+	if not firsts.has(form) and written_at(n) { firsts[form] = place_text(written_at(n), "") }
+	if is_quote(n) or is_spliced_quote(n) { return }
+	for part in form_parts(n) { forms_counted(part, counts, firsts) }
+}
+# the parts of n that are code of their own: an `if`'s and a loop's condition and branches, not the keys that
+# spell them; a definition's body, not its head; an assignment's place without its type, `x: int = 1`
+form_parts(n: Node) as list := match n {
+	Meta(node, _): form_parts(node)
+	Key(left, Op.Else, right): if is_key(left, Op.Then) and is_key(key_of(left), Op.If) then [value_of(key_of(left)), value_of(left), right] else [left, right]
+	Key(left, Op.Then, right): if is_key(left, Op.If) then [value_of(left), right] else [left, right]
+	Key(left, Op.Do, right): if is_key(left, Op.While) then [value_of(left), right] else [left, right]
+	Key(left, Op.Define, right): [right]
+	Key(left, Op.Assign, right): [if is_key(left, Op.Colon) then key_of(left) else left, right]
+	_: parts_within(n)
+}
+
+show_kernel_report() := {
+	counts = {}
+	firsts = {}
+	forms_counted(lowered_program(source_or_code(1), given_folder(1), prelude_text()), counts, firsts)
+	kernel = KERNEL_FORMS.filter(form => counts.has(form))
+	outside = counts.keys.filter(form => form not in KERNEL_FORMS)
+	in_kernel = kernel.map(form => counts[form]).sum()
+	all = counts.keys.map(form => counts[form]).sum()
+	print "kernel: " + in_kernel + " of " + all + " nodes"
+	for form in kernel { print "  " + form + " " + counts[form] }
+	print "outside the kernel: " + (all - in_kernel) + " nodes"
+	for form in outside { print "  " + form + " " + counts[form] + (firsts.get(form) ?? "") }
+}

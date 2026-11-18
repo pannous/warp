@@ -21,6 +21,9 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   form, `Get($xs, $i)`, counts under the form's name, as `(Get …)` does.
 - **Rule heads inside a phrase:** a phrase no rule fits whole, whose later word heads a rule fitting from there on,
   groups that part as the earlier words' last argument, as `print -x` does: `print if c then a else b`.
+- **The rest of the If row:** `c ? a : b` (the operator table's choice: the colon closes `?`, below every operator,
+  above a spaced call, so `print c ? a : b` is print(c ? a : b)) and
+  `print "a" if c` (core/sugar/conditions.wap).
 - **Refusals are rules too:** `rule P => refuse "fix-it"` refuses what P matches, by the usual specificity: the
   dangling else `if a then if b then x else y` (core/sugar/conditions.wap).
 - **Holes:** `$x`, `$x: Type`, `$xs...` (the reader keeps a rest hole one word and gives a hole's `:` exactly one
@@ -33,7 +36,8 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 - **Constructors come from patterns.** In a template (and a pattern), `If($c, ø, $body)` names a declared pattern
   and builds its node `(If $c ø $body)`; any other capitalized call stays a call (a class constructor).
 - **Indexed by head:** a phrase's first word, a form's name with its first word (`Call/+`), a key's operator; a
-  pattern starting with a hole is tried everywhere. Among fitting rules the most specific (most literal parts) wins;
+  list also under its bracket and separator, then its bracket alone, so a pattern starting with a hole, `$then... if $c`,
+  waits under the shape it matches; only a bare hole is tried everywhere. Among fitting rules the most specific (most literal parts) wins;
   two equally specific ones are refused naming both.
 - **Walk:** top-down; a node is rewritten until no rule fits, then its parts. Built nodes take the rewritten code's
   place (stage.wap `staged`) and carry the fact RULE, the rule's written head.
@@ -44,5 +48,7 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
 
 ## Open
 
+- Whether a used module's rules apply to the program that uses it: today they don't, because the program is shaped
+  before its modules are read.
 - Hygiene has no run test yet: wap's typing can't yet print a variable holding a text.
 - Lowering's hand cases (phrases, `=>`) move into core/sugar rules next; `if` already did.
