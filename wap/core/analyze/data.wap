@@ -41,7 +41,14 @@ map_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFra
 	if held == ø or not fit_each(typed.map(entry_value), held) { refused(n, "a map's values are of one type") }
 	with_type_of(refitted(List(typed, Bracket.Curly, separator), n), map_type(symbol(TEXT_TYPE), held))
 }
-entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node := match entry { Key(key, Op.Colon, value) => refitted(Key(key, Op.Colon, typed_form(value, s, f, expected)), entry) }
+entry_typed(entry: Node, expected: Node?, s: TypingState, f: TypeFrame) as Node := match entry { Key(key, Op.Colon, value) => refitted(Key(entry_key(key, s, f), Op.Colon, typed_form(value, s, f, expected)), entry) }
+# a map's key: a word stays a word, any other key gives a text, `'a'` a text too
+entry_key(key: Node, s: TypingState, f: TypeFrame) as Node := {
+	if key is symbol { return key }
+	typed = typed_form(key, s, f, symbol(TEXT_TYPE))
+	if not fits_type(typed, symbol(TEXT_TYPE)) { refused(key, "a map's keys are words or texts") }
+	typed
+}
 entry_value(entry: Node) as Node := match entry { Key(key, op, value) => value }
 # a map's value by its key, `m["a"]` or `m.a`: of the map's value type
 entry_read_typed(n: Node, map: Node, key: Node) as Node := with_type_of(refitted(Get(map, key), n), held_type(value_type(map)))

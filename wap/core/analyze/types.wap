@@ -380,7 +380,7 @@ fit_each(items: list, wanted: Node) as bool := items.all(item => fits_type(item,
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? (if fact_of(n, DEFINED_AT) == ø then ø else fact_of(fact_of(n, DEFINED_AT), SIGNATURE))
 same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
 # whether a value of the given type may stand where the wanted one is: the same type, or a T or ø where T? is
-type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
+type_fits(given: Node, wanted: Node) as bool := same_type(given, wanted) or given == symbol(NEVER_TYPE) or base_of_optional(wanted) != ø and (given == symbol(EMPTY_TYPE) or same_type(given, base_of_optional(wanted)))
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name
