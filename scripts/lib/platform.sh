@@ -58,6 +58,10 @@ DAY_BUILD_SLOTS=3  # user 2026-11-01: four warps at once, 3 builds plus 1 test r
 # sets the slots for every session at once (at night as many as the load allows; the Supervisor raises and lowers it
 # watching the load, notes/agents/night.md)
 build_slots() { echo "${WARP_BUILD_SLOTS:-$(cat "$warp_store/build-slots/count" 2>/dev/null || echo "$DAY_BUILD_SLOTS")}"; }
+# how many test and census jobs run at once machine-wide, from every worktree (scripts/job-slot.sh): all cores but
+# FREE_CORES, or <store>/job-slots/count when present (43 warps of ten workers' parallel test runs drove the load to 106)
+FREE_CORES=2
+job_slots() { cat "$warp_store/job-slots/count" 2>/dev/null || echo $(( $(getconf _NPROCESSORS_ONLN) - FREE_CORES )); }
 # a native warp copied into <folder> finds its wasmtime beside itself: put the folder on the loader's path (the Mac's
 # rpath already looks there; Linux's loader needs LD_LIBRARY_PATH)
 libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_library_path_variable:+:\$$warp_library_path_variable}\""; }
