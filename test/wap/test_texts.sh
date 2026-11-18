@@ -27,4 +27,7 @@ print bytes_between("hello", 1, 4)')" "97
 2
 98
 ell"
+check "int of a text of decimal digits, a leading - its sign" "$(ran int_of_text 'print text(int("-42") + 1)
+print text(int("7"))')" "-41
+7"
 exit $((failures > 0))

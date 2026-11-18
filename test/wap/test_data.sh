@@ -57,4 +57,18 @@ print text(#xs)')" "8
 1"
 check "a slice of a list, a new list of its items" "$(ran list_slice 'part(xs: list<int>, from: int, count: int): list<int> := prim array_slice(xs, from, count)
 print show(part([1, 2, 3, 4], 1, 2))')" "[2, 3]"
+check "a map's keys, a new list that leaves the map as it was" "$(ran map_keys 'keys(m: map<text, int>): list<text> := prim map_keys(m)
+m = {a: 1, b: 2}
+ks = keys(m)
+ks.add("zz")
+print show(ks)
+print text(#keys(m))')" "[\"a\", \"b\", \"zz\"]
+2"
+check "a map's keys in the order set, and whether it has a key" "$(ran map_has 'm = {ab: 1, b: 2}
+m.cd = 3
+print text(m.has("cd"))
+print text(m.has("zz"))
+print text(#m.keys())')" "yes
+no
+3"
 exit $((failures > 0))

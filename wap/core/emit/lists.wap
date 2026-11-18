@@ -25,7 +25,7 @@ MAP_SET = "map_set"
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
 	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function,
-	"map_get": map_reading_function, "map_set": map_setting_function
+	"map_get": map_reading_function, "map_set": map_setting_function, "map_keys": keys_copying_function
 }
 # a call of the helper of an operation on a value of this type
 typed_helper_called(operation: text, type: Node, p: Program) as list := instruction(CALL, [helper(p, "${operation} ${type}", q => TYPED_HELPERS[operation](q, type))])
@@ -86,6 +86,12 @@ map_setting_function(p: Program, map: Node) as int := {
 	found = map_part(MAP_VALUES, map, p) + local_get(3) + local_get(2) + typed_helper_called(LIST_SET, values_of(map), p) + RETURN
 	added = map_part(MAP_KEYS, map, p) + local_get(1) + typed_helper_called(LIST_ADD, keys_of(map), p) + map_part(MAP_VALUES, map, p) + local_get(2) + typed_helper_called(LIST_ADD, values_of(map), p)
 	added_function(p.m, [map_layout(map, p), item_layout(keys_of(map), p), item_layout(values_of(map), p)], [], [I32], key_searched(3, found, map, p) + added)
+}
+# The helper of map_keys: a new list of a map's keys, so no change to it reaches the map. Its local: 0 the map.
+keys_copying_function(p: Program, map: Node) as int := {
+	keys = map_part(MAP_KEYS, map, p)
+	copied = keys + i64_const(0) + keys + count_in(keys_of(map), ø, p) + I64_EXTEND_I32_U + typed_helper_called("list_slice", keys_of(map), p)
+	added_function(p.m, [map_layout(map, p)], [list_layout(keys_of(map), p)], [], copied)
 }
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list, map: Node, p: Program) as list := {

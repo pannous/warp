@@ -20,6 +20,8 @@ raise(message: text): never := prim raise_text(message)
 +(a: int, b: int): int := prim i64_add(a, b)
 -(a: int, b: int): int := prim i64_sub(a, b)
 *(a: int, b: int): int := prim i64_mul(a, b)
+# an int's sign turned: `-x`
+-(x: int): int := 0 - x
 # the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
 ÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
 %(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
@@ -47,6 +49,27 @@ raise(message: text): never := prim raise_text(message)
 ==(a: enum, b: enum): bool := prim tag_equal(a, b)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
+
+# a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
+keys(m: map<K, V>): list<K> := prim map_keys(m)
+# whether a map holds a key
+has(m: map<K, V>, key: K): bool := m.keys().contains(key)
+
+# the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
+int(t: text): int := {
+	negative = byte_count(t) > 1 and byte_at(t, 0) == MINUS_BYTE
+	if byte_count(t) == 0 { raise("int: an empty text writes no int") }
+	value = 0
+	for at in (if negative then 1 else 0) .. byte_count(t) {
+		digit = byte_at(t, at) - ZERO_BYTE
+		if digit < 0 or digit > 9 { raise("int: " + t + " is no decimal int") }
+		value = value * 10 + digit
+	}
+	if negative then -value else value
+}
+# the bytes of the characters - and 0
+MINUS_BYTE := 45
+ZERO_BYTE := 48
 
 # a value's text, as a text's holes show it: `"n is ${n}"`
 text(t: text): text := t
