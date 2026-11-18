@@ -199,17 +199,23 @@ fitted(given: Code, wanted: list, form: Node, p: Program) as Code := {
 		if wanted in [nullable(box), ANYREF] { return Code(wanted, given.instructions + instruction(STRUCT_NEW, [box])) }
 	}
 	if wanted == ANYREF and is_reference(given.type) { return Code(wanted, given.instructions) }
-	if given.type == ANYREF and is_reference(wanted) { return Code(wanted, given.instructions + instruction(CALL, [helper(p, "cast to ${wanted} at ${place_of_code(form)}", q => checked_cast(q, wanted, form))])) }
+	if given.type == ANYREF and is_reference(wanted) { return Code(wanted, given.instructions + cast_called(wanted, "one", form, p)) }
 	given
 }
-# The helper casting an `any` to a reference type: the value when it is of that type or ø, else a raise naming the
-# place that wanted it. Its local: 0 the value.
-ANY_OF_ANOTHER_TYPE = "this any holds a value of another type than the one wanted"
-checked_cast(p: Program, wanted: list, form: Node) as int := {
-	heap = heap_of(wanted)
-	fits = local_get(0) + REF_TEST_NULL + heap + IF + VOID_BLOCK + local_get(0) + REF_CAST_NULL + heap + RETURN + END
-	added_function(p.m, [ANYREF], [wanted], [], fits + raised("${ANY_OF_ANOTHER_TYPE} at ${place_of_code(form)}", p))
+# The helper casting an `any` to a type: the value when it holds one of that type, a plain value taken out of its box,
+# a reference type taking ø too; else a raise naming the type and the place that wanted it. `form` is the code
+# wanting it, whose type names a plain value's box; `name` the type's name. Its local: 0 the value.
+ANY_OF_ANOTHER_TYPE = "this any holds a value of another type than the"
+checked_cast(p: Program, wanted: list, name: text, form: Node) as int := {
+	plain = wanted in PLAIN_VALUES
+	box = if plain then box_index(p.m, plain_word(form)) else 0
+	test = if plain then heap_instruction(REF_TEST, box) else REF_TEST_NULL + heap_of(wanted)
+	taken = if plain then heap_instruction(REF_CAST, box) + instruction(STRUCT_GET, [box, 0]) else REF_CAST_NULL + heap_of(wanted)
+	fits = local_get(0) + test + IF + VOID_BLOCK + local_get(0) + taken + RETURN + END
+	added_function(p.m, [ANYREF], [wanted], [], fits + raised("${ANY_OF_ANOTHER_TYPE} ${name} wanted at ${place_of_code(form)}", p))
 }
+# a casting helper's call, one for each type and place, the type's name for the raise
+cast_called(wanted: list, name: text, form: Node, p: Program) as list := instruction(CALL, [helper(p, "cast to ${wanted} at ${place_of_code(form)}", q => checked_cast(q, wanted, name, form))])
 # where code was written, file:line:column
 place_of_code(form: Node) as text := "${file_of(form)}:${line_of(form)}:${column_of(form)}"
 items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p))
