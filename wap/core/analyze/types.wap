@@ -265,26 +265,5 @@ case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
 	# a primitive the typing stage wrote, a test or a checked cast, keeps its type
-	typed = with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), fact_of(n, TYPE) ?? f.result)
-	if text(operation) != DISPATCHED { return typed }
-	function = f.function ?? refused(n, "a dispatch is the body of a function of an any, `f(x: any) := prim dispatched(x)`")
-	with_fact(typed, OVERLOADS, List(dispatched_overloads(function, s), Bracket.Square, Separator.Comma))
+	with_type_of(refitted(Prim(operation, arguments.map(argument => typed_form(argument, s, f, ø))), n), fact_of(n, TYPE) ?? f.result)
 }
-# REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): this is the seed of calls on dynamic values, but written
-# by hand per word (`show(x: any) := prim dispatched(x)`), for one parameter, with its own fact and emitter code.
-# General form: when a call's arguments hold an any and no overload takes any there, typing itself writes the
-# instance `f(any)` once, as plain kernel: `if x is int then f(x as int) else if x is text … else raise "no f takes
-# a …"`, the overloads in the order the static choice ranks them (one ordering function for both). `is` tests and
-# checked conversions exist already, so the emitter needs nothing; `dispatched`, OVERLOADS and the hand-assembled
-# any_equality_function (core/emit/equality.wap) then fall out of the general rule.
-# the overloads of a function a dispatch may call, typed, records first: those of one parameter of a written type
-# other than any, one a concrete type has: no generic letters, no bare list or enum
-dispatched_overloads(function: Node, s: TypingState) as list := {
-	overloads = definitions_named(text(function), s).filter(definition => #parameters_in(definition) == 1 and dispatchable(taken_type(definition), s.records))
-	records_first = overloads.filter(definition => takes_record(definition, s)) + overloads.filter(definition => not takes_record(definition, s))
-	records_first.map(definition => declared_name(function_typed(definition, [taken_type(definition)], s, definition).signed))
-}
-# the written type of a function's one parameter, and whether it is a record's
-taken_type(definition: Node) as Node? := type_given(parameters_in(definition)#1)
-takes_record(definition: Node, s: TypingState) as bool := record_named(s.records, taken_type(definition)) != ø
-dispatchable(type: Node?, records: list) as bool := type != ø and type != symbol(ANY_TYPE) and not has_letters(type, records) and not takes_own_type(type, records)

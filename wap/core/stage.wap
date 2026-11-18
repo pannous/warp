@@ -123,11 +123,6 @@ SELF_WORD = "self"
 # on a Define a rule wrote for every class, as its show: typed only when something calls it, so a class whose field
 # has no show of its own is not refused for a show nothing uses
 TYPED_WHEN_CALLED = "typed_when_called"
-# the primitive that calls, at run time, the overload a value's type has: `show(x: any): text := prim dispatched(x)`
-# calls the show of x's type; on the Prim, OVERLOADS lists those overloads typed, each as a call names its function
-# (DEFINED_AT), records first
-DISPATCHED = "dispatched"
-OVERLOADS = "overloads"
 # on a parameter, the value a call that leaves it out gives it: `f(x: int, y: int = 2)`, f(1) is f(1, 2)
 DEFAULT = "default"
 # the word of a type test, `s is Circle`, `Dime is Coin`, where nothing else defines it (core/analyze/scope.wap)

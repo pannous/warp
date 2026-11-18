@@ -65,7 +65,6 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
 	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
-	if name == DISPATCHED { return finished(Code(given_layout(form, p), operands + dispatched_code(form, p))) }
 	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
 	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
