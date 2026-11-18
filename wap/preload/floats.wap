@@ -9,6 +9,12 @@ rem(a: int, b: int): int := prim i64_rem_s(a, b)
 # whether a quotient truncated toward zero lies one above the floored one: a remainder left of the dividend's sign,
 # not the divisor's
 truncated_above_floor(a: int, b: int): bool := rem(a, b) != 0 and (rem(a, b) < 0) != (b < 0)
+# a to the power b ≥ 0 by squaring, from one, the 1 or 1.0 of a's type: the prelude's ^
+powered(a: T, b: int, one: T): T := {
+	if b == 0 { return one }
+	half = powered(a, quotient(b, 2), one)
+	if rem(b, 2) == 0 then half * half else half * half * a
+}
 
 # The text of a float, its shortest digits that read back, positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7;
 # ∞, -∞ and NaN by name (the warp runtime's algorithm, core/runtime/floats.warp)
