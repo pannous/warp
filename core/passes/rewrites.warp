@@ -277,7 +277,9 @@ own_rules_applied(program: Node, source: text) as Node := {
 	raw_rules = []
 	for index in 0 ..< #rules { if symbol(raw_word) in rules[index].conditions { raw_rules += [[rules[index], origins[index]]] } }
 	maps = map_names_of(program)
-	program = if is_statement_sequence(program) then children(program, statement => statement_rewritten(statement, rules, origins, maps)) else statement_rewritten(program, rules, origins, maps)
+	# (each statement walked as a sequence of its own, so the rules of a statement's place apply to it, `law …` too; the
+	# runs across statements by every rule)
+	program = if is_statement_sequence(program) then group_like(program, statement_runs(spliced_statements(items_of(program).map(statement => statement_rewritten(group_like(program, [statement]), rules, origins, maps))), rules, origins)) else statement_rewritten(program, rules, origins, maps)
 	raw_rules = []
 	program = with_program_rules(program, rules, origins)
 	uses = []
@@ -291,7 +293,7 @@ own_rules_applied(program: Node, source: text) as Node := {
 # the statement rewritten by the rules none of whose words it binds itself: a function's loop variable `val` keeps
 # its `for val in xs` from the declaration rule `val $d` there only, as a function's local `push` keeps its own
 statement_rewritten(statement: Node, rules: list, origins: list, maps: map) as Node := {
-	bindings = statement_bindings(statement)
+	bindings = statement_bindings(if is_statement_sequence(statement) and #statement == 1 then statement#1 else statement)
 	kept = (0 ..< #rules).filter(at => is_unbound(rules[at], bindings))
 	kept_rules = kept.map(at => rules[at])
 	kept_origins = kept.map(at => origins[at])
