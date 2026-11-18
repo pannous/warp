@@ -68,11 +68,11 @@ typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 # ---- compiling
 
 # a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
-compiled_pattern(n: Node) as Matcher := match n {
+compiled_pattern(n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else shape_matcher(n)
+shape_matcher(n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
 	Key(left, op, right) => pair_matcher(n, left, op, right)
-	List(items, Bracket.None, Separator.None) => if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else sequence_matcher(items, Bracket.None, Separator.None)
 	List(items, bracket, separator) => sequence_matcher(items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
 }
@@ -82,7 +82,7 @@ sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher
 # and $r to the sequences of their matches (as a rest hole binds, under `$p...`); in a template `Arm($p, $r)...`
 # writes one Arm per match. The part repeated, ø when the node is no repetition.
 repeated_part(n: Node) as Node? := match n {
-	List(items, Bracket.None, Separator.None) => if #items == 2 and items#2 is symbol and spelling_written(items#2) == canonical(REST_MARK, Fixity.Anywhere) then items#1 else ø
+	Call(called, parts) => if spelling_written(called) == REST_MARK and #parts == 1 then parts#1 else ø
 	_ => ø
 }
 
