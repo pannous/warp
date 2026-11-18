@@ -1,0 +1,81 @@
+# The preload's text words (notes/wap.md "Layers"): plain warp over a text's UTF-8 bytes, as warp's runtime words
+# (core/runtime/text_words.warp, characters.warp). Positions count characters from 1; byte offsets count from 0.
+# Primitives: byte_count, byte_at, bytes_between (a new text of the bytes from start up to stop).
+
+# a byte that continues a character: 10xxxxxx
+CONTINUATION_FROM = 128
+CONTINUATION_UNTIL = 192
+# the characters a hex digit takes beyond the digits
+HEX_LETTERS = "abcdefABCDEF"
+
+byte_count(t: text): int := prim byte_count(t)
+byte_at(t: text, at: int): int := prim byte_at(t, at)
+bytes_between(t: text, start: int, stop: int): text := prim bytes_between(t, start, stop)
+
+is_continuation_byte(b: int): bool := b >= CONTINUATION_FROM and b < CONTINUATION_UNTIL
+# the byte offset after the character at offset `at`
+character_end(t: text, at: int): int := {
+	end = at + 1
+	while end < byte_count(t) and is_continuation_byte(byte_at(t, end)) { end += 1 }
+	end
+}
+# the byte offset of t's index-th character, counted from 1; past the last, the byte count
+character_offset(t: text, index: int): int := {
+	at = 0
+	counted = 1
+	while counted < index and at < byte_count(t) {
+		at = character_end(t, at)
+		counted += 1
+	}
+	at
+}
+
+# how many characters t holds: `#"héllo"` is 5
+#(t: text): int := {
+	count = 0
+	for at in 0 .. byte_count(t) { if not is_continuation_byte(byte_at(t, at)) { count += 1 } }
+	count
+}
+# t's character at a place, counted from 1: `"abc"#2` is "b"
+#(t: text, place: int): text := bytes_between(t, character_offset(t, place), character_offset(t, place + 1))
+
+# part's bytes stand in t from byte offset at on
+bytes_match_at(t: text, part: text, at: int): bool := {
+	if at < 0 or at + byte_count(part) > byte_count(t) { return no }
+	for i in 0 .. byte_count(part) { if byte_at(t, at + i) != byte_at(part, i) { return no } }
+	yes
+}
+starts_with(t: text, start: text): bool := bytes_match_at(t, start, 0)
+ends_with(t: text, end: text): bool := bytes_match_at(t, end, byte_count(t) - byte_count(end))
+# the character position of part's first place in t, counted from 1; 0 when t holds no part
+find(t: text, part: text): int := {
+	at = 0
+	position = 1
+	while at <= byte_count(t) - byte_count(part) {
+		if bytes_match_at(t, part, at) { return position }
+		at = character_end(t, at)
+		position += 1
+	}
+	0
+}
+contains(t: text, part: text): bool := find(t, part) > 0
+
+# texts in byte order, which is code point order: `"a" < "b"`
+<(a: text, b: text): bool := compared(a, b) < 0
+<=(a: text, b: text): bool := compared(a, b) <= 0
+>(a: text, b: text): bool := compared(a, b) > 0
+>=(a: text, b: text): bool := compared(a, b) >= 0
+# below 0 when a comes first, 0 when equal, above 0 when b does
+compared(a: text, b: text): int := {
+	at = 0
+	while at < byte_count(a) and at < byte_count(b) {
+		if byte_at(a, at) != byte_at(b, at) { return byte_at(a, at) - byte_at(b, at) }
+		at += 1
+	}
+	byte_count(a) - byte_count(b)
+}
+
+# a character's kind: a decimal digit, an ASCII letter, a hex digit
+is_digit(c: text): bool := c >= "0" and c <= "9"
+is_alpha(c: text): bool := (c >= "a" and c <= "z") or (c >= "A" and c <= "Z")
+is_hex_digit(c: text): bool := is_digit(c) or HEX_LETTERS.contains(c)
