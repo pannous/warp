@@ -45,4 +45,14 @@ xs[0] = 5
 print text(xs[0] + xs[1])')" "7"
 check "a text's character counted from 0" "$(ran text_item 't = "abc"
 print t[2]')" "c"
+check "a list grows in place, every name holding it sees the items" "$(ran grown 'xs = [1]
+ys = xs
+for i in 1 to 9 { xs.add(i) }
+print text(#ys)')" "10"
+check "the last item taken off a list" "$(ran popped 'xs = [7, 8]
+print text(xs.pop())
+print text(#xs)')" "8
+1"
+check "a slice of a list, a new list of its items" "$(ran list_slice 'part(xs: list<int>, from: int, count: int): list<int> := prim array_slice(xs, from, count)
+print show(part([1, 2, 3, 4], 1, 2))')" "[2, 3]"
 exit $((failures > 0))

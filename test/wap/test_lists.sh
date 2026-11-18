@@ -16,4 +16,5 @@ check "each item's result" "$(ran map 'print text([1, 2].map(x => x * 10)#2)')" 
 check "the items that fit a test" "$(ran filter 'print show([1, 2, 3, 4].filter(x => x > 2))')" "[3, 4]"
 check "each item's list of results, joined" "$(ran flat_map 'print show([1, 2].flat_map(x => [x, x]))')" "[1, 1, 2, 2]"
 check "an item in a list" "$(ran in 'print text(2 in [1, 2]) + " " + text(5 in [1, 2])')" "yes no"
+check "the items combined from a first value" "$(ran fold 'print text([1, 2, 3].fold(0, (sum, x) => sum + x)) + " " + [1, 2].fold("", (t, x) => t + text(x))')" "6 12"
 exit $((failures > 0))
