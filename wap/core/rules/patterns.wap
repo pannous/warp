@@ -40,7 +40,6 @@ STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 # its shape as the Node pattern that takes a value apart, `taken`
 class Declared { name: text, shape: Node, holes: list, matcher: Matcher, taken: Node = Empty }
-declared_patterns = {}
 
 # what a part of a pattern asks of the code at its place
 enum Test { Hole, Literal, Sequence, Pair, Repeat }
@@ -60,9 +59,9 @@ hole_type(n: Node) as Node := {
 }
 
 # whether a type is a shape: none, Node, a case of Node or a declared pattern; any other type is a value type
-is_shape(type: Node) as bool := match type {
+is_shape(language: Language, type: Node) as bool := match type {
 	Empty => yes
-	Symbol(name) => name == "Node" or SHAPES.contains(name) or declared_patterns.has(name)
+	Symbol(name) => name == "Node" or SHAPES.contains(name) or language.patterns.has(name)
 	_ => no
 }
 
@@ -80,15 +79,15 @@ typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 # ---- compiling
 
 # a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
-compiled_pattern(n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(ungrouped(repeated_part(n)))]) else shape_matcher(n)
-shape_matcher(n: Node) as Matcher := match n {
-	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(hole_type(n)), pattern: pattern_called(hole_type(n)), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
-	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(head) != ø then compiled_pattern(instance(pattern_called(head), arguments)) else pair_matcher(n, head, Op.None, List(arguments, Bracket.Round, separator))
-	Key(left, op, right) => pair_matcher(n, left, op, right)
-	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(items#1) else sequence_matcher(items, bracket, separator)
+compiled_pattern(language: Language, n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(language, ungrouped(repeated_part(n)))]) else shape_matcher(language, n)
+shape_matcher(language: Language, n: Node) as Matcher := match n {
+	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(language, hole_type(n)), pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
+	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(language, head) != ø then compiled_pattern(language, instance(language, pattern_called(language, head), arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
+	Key(left, op, right) => pair_matcher(language, n, left, op, right)
+	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(language, items#1) else sequence_matcher(language, items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
 }
-sequence_matcher(items: list, bracket: Bracket, separator: Separator) as Matcher := Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(compiled_pattern))
+sequence_matcher(language: Language, items: list, bracket: Bracket, separator: Separator) as Matcher := Matcher(Test.Sequence, bracket: bracket, separator: separator, parts: items.map(item => compiled_pattern(language, item)))
 
 # Repetition, as in macros by example: `($p => $r)...` in a pattern takes items that each fit `$p => $r`, binding $p
 # and $r to the sequences of their matches (as a rest hole binds, under `$p...`); in a template `Arm($p, $r)...`
@@ -98,16 +97,16 @@ repeated_part(n: Node) as Node? := match n {
 	_ => ø
 }
 
-pair_matcher(n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(left), compiled_pattern(right)])
+pair_matcher(language: Language, n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(language, left), compiled_pattern(language, right)])
 
 # the declared pattern a name calls, ø for any other name
-pattern_called(head: Node) as Declared? := match head {
-	Symbol(name) => if declared_patterns.has(name) then declared_patterns[name] else ø
+pattern_called(language: Language, head: Node) as Declared? := match head {
+	Symbol(name) => if language.patterns.has(name) then language.patterns[name] else ø
 	_ => ø
 }
 
 # a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
-instance(pattern: Declared, parts: list) as Node := built(pattern.shape, bound_in_order(pattern.holes, parts))
+instance(language: Language, pattern: Declared, parts: list) as Node := with_fact(built(language, pattern.shape, bound_in_order(pattern.holes, parts)), BUILT_FORM, True)
 
 bound_in_order(holes: list, parts: list) as map := {
 	bindings = {}
@@ -131,8 +130,8 @@ declare_pattern(language: Language, name: Node, shape: Node) as Declared := {
 	normal = normalized(shape)
 	# known before its matcher is compiled, so the pattern may name itself
 	declared = Declared(spelling_written(name), normal, holes_in(normal), Matcher(Test.Literal))
-	declared_patterns[declared.name] = declared
-	declared.matcher = compiled_pattern(normal)
+	language.patterns[declared.name] = declared
+	declared.matcher = compiled_pattern(language, normal)
 	declared.taken = shape_taken(language, declared)
 	declared
 }
@@ -141,19 +140,30 @@ declare_pattern(language: Language, name: Node, shape: Node) as Declared := {
 # its shape with them at their places: `pattern Call = (Call $called: Node $arguments...: Node)` declares
 # Call(called: Node, arguments: list<Node>): Node := List([Symbol("Call"), called, ...arguments], Bracket.Round,
 # Separator.Space), so Call(f, [x]) is (Call f x)
-pattern_builder(language: Language, pattern: Declared) as Node := operated_program(language, notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name))
+pattern_builder(language: Language, pattern: Declared) as Node := {
+	builder = top_level_statements(operated_program(language, notation("${pattern.name}(${pattern.holes.map(hole_parameter).join(", ")}): Node := ${shape_text(pattern.shape, hole_variable)}", pattern.name)))#1
+	leftmost_marked(leftmost_marked(builder, PATTERN_HOLES, List(pattern.holes.map(hole => symbol(hole_variable(hole))), Bracket.Square, Separator.Comma)), PATTERN_TAKEN, pattern.taken)
+}
+# n with a fact on its leftmost word, the name a definition `f(x): T := body` defines; an operator's leftmost word is
+# in its first operand
+leftmost_marked(n: Node, name: text, value: Node) as Node := match n {
+	Symbol(word) => with_fact(n, name, value)
+	Call(called, operands) => staged(n, whole => Call(called, [leftmost_marked(operands#1, name, value)] + operands[1 ..]))
+	Key(left, op, right) => staged(n, whole => Key(leftmost_marked(left, name, value), op, right))
+	_ => n
+}
 hole_parameter(hole: text) as text := hole_variable(hole) + (if hole.ends_with(REST_MARK) then ": list<Node>" else ": Node")
 hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 .. #hole - #REST_MARK] else hole[1 ..]
 # A declared pattern's shape as the Node pattern that takes it apart, its holes those its call's parts fill:
 # `Call(f, args)` in an arm is List([Symbol("Call"), f, ...args], Bracket.Round, Separator.Space)
 shape_taken(language: Language, pattern: Declared) as Node := lowered(top_level_statements(shaped_program(language, operated_program(language, notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
-# A declared pattern's call in an arm, its parts at its holes in order; ø for a call of any other name
-pattern_taken(called: Node, parts: list) as Node? := {
-	pattern = pattern_called(called) ?? return ø
-	if #parts != #pattern.holes { refused(called, "${pattern.name} takes ${#pattern.holes} parts, not ${#parts}") }
+# A declared pattern's call in an arm, its parts at its holes in order, by the facts its builder's name carries
+pattern_taken(called: Node, parts: list, builder: Node) as Node := {
+	holes = items_of(fact_of(builder, PATTERN_HOLES))
+	if #parts != #holes { refused(called, "${text(called)} takes ${#holes} parts, not ${#parts}") }
 	bindings = {}
-	for at in 1 to #parts { bindings[HOLE_SIGN + hole_variable(pattern.holes#at)] = parts#at }
-	holes_filled(pattern.taken, bindings)
+	for at in 1 to #parts { bindings[HOLE_SIGN + text(holes#at)] = parts#at }
+	holes_filled(fact_of(builder, PATTERN_TAKEN), bindings)
 }
 # lowered code with each hole replaced by its binding; a `...` in it spreads a list, no repetition as in a template
 holes_filled(n: Node, bindings: map) as Node := match n {

@@ -82,7 +82,7 @@ lowered_form(n: Node) as Node := match n {
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Comma) => List(items.map(lowered), Bracket.Square, Separator.Comma)
-	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
+	List(items, Bracket.Round, Separator.Space) => if fact_of(n, BUILT_FORM) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
 	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
 	# a word written against what follows it, `...rest`, as a phrase
@@ -168,6 +168,7 @@ grouped(statements: list) as Node := if #statements == 1 then lowered(statements
 # a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
 # one statement
 statements_of(n: Node) as list := match n {
+	Block(statements) => statements
 	List(items, Bracket.None, separator) => if #items == 1 then statements_of(items#1) else top_level_statements(n)
 	_ => [n]
 }
