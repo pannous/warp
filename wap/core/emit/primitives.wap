@@ -31,6 +31,14 @@ INSTRUCTIONS = {
 	"f64_lt": F64_LT, "f64_gt": F64_GT, "f64_le": F64_LE, "f64_ge": F64_GE,
 	"array_len": ARRAY_LEN + I64_EXTEND_I32_U
 }
+# The host's functions (WASI) a primitive calls: operation → their names. A module imports only those its program's
+# primitives call, before any function of its own.
+HOST_CALLS = {"print_text": ["fd_write"], "raise_text": ["fd_write", "proc_exit"]}
+# each host function's parameter and result types
+HOST_FUNCTIONS = {"fd_write": [[I32, I32, I32, I32], [I32]], "proc_exit": [[I32], []]}
+# the index of a host function the module imported
+host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
+
 # The operations a helper function of the module performs: operation → the function that builds the helper
 HELPERS = {"print_text": printing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 
@@ -66,7 +74,7 @@ helper(p: Program, operation: text, build: function) as int := {
 }
 
 printing_function(p: Program) as int := writing_function(p, STDOUT, [])
-raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [p.exit]))
+raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
 # The helper of print_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
 writing_function(p: Program, file: int, after: list) as int := {
@@ -81,7 +89,7 @@ writing_function(p: Program, file: int, after: list) as int := {
 	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + i32_const(1) + I32_ADD + instruction(I32_STORE, [2, 0])
-	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [p.output]) + DROP
+	written = i32_const(file) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")]) + DROP
 	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + grown + copied + line_end + iovec + written + after)
 }
 
