@@ -9,4 +9,8 @@ line two"
 check "a file read is a text like any" "$(ran read_compared "if read(\"$stage/sample.txt\") == \"line one\" + \"
 line two\" then print \"same\" else print \"other\"")" "same"
 check "a file that cannot be read" "$(ran read_missing "print read(\"$stage/missing.txt\")")" "cannot read $stage/missing.txt"
+check "the command line, the program first" "$(ran command_line 'arguments(): list<text> := prim arguments()
+for each in arguments() { print each }' >/dev/null; $warp "$stage/command_line.wasm" a "b c")" "$stage/command_line.wasm
+a
+b c"
 exit $((failures > 0))
