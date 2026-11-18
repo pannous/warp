@@ -237,6 +237,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
+  program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
+  example the preload's `slice` taking a Range and raising when it does not fit.
+
 - **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
@@ -262,10 +266,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
   Paid off with closures.
-- **`wap format` does not spell out a rule head's grouping inside a phrase**: `print if c then a else b` is read as
-  `print (if c then a else b)` by the shape stage (core/rules/stages.wap inner_rewritten), but format prints it as
-  written. Bends "a reading decided by spacing or position is printed explicitly", as `print -x` is. Reason: format
-  runs before the shape rules. Paid off when format reads the rules' groupings.
 - **An int and a float mixed are refused** (`1 + 2.5`: no `+` takes (int, float); wap/preload/prelude.wap). warp
   gives 3.5. Reason: the overloads are chosen by exact types, and no conversion of an int to a float where one is
   wanted exists yet. Paid off by that conversion, in typing, not by mixed overloads.
@@ -292,7 +292,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   Paid off by a rule table per program, the language's rules plus those of the modules it uses.
 - **Each function value is a type of its own** (wap/core/analyze/types.wap `function_value_typed`): a call of a value
   calls its one function directly, typed for that call's arguments, so a variable or a parameter holds one `x => …`
-  only, and an `if` choosing between two function values gives none; a function's name is no value yet. Its captures
+  only, and an `if` choosing between two function values gives none; a function's name is a value the same way, one
+  of several overloads not yet. Its captures
   are copied when it is made, so a change of one afterwards is refused. Paid off by function references (a funcref
   beside the captures, call_ref), for values chosen at run time.
 - **A trait word needs a parameter** (wap/core/sugar/types.wap `rule trait`): `trait shape { area() }` is not read as a
