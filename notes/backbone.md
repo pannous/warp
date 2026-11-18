@@ -364,3 +364,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   any rule read a square list as one phrase made `xs = [1 2 3]` hang, some rule rewriting the phrase `1 2 3` again and
   again (the loop was not traced). A list is now one phrase only when its first word leads a rule. A rewrite whose
   result fires the rules again without end should be refused by name, as every other unknown form is.
+- **Every word a rule's template spells carries DERIVED** (wap/core/rules/templates.wap filled), though only a
+  definition's name reads it (core/analyze/calls.wap ranked). Reason: a template does not know which of its words
+  will stand in a definition's name place. Paid off when templates are built from their forms, so the Define's name
+  hole is known.
