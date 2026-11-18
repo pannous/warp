@@ -248,6 +248,8 @@ item_type(type: Node?) as Node? := only(parts_of_type(LIST_TYPE, type))
 # a map's TYPE, `map<text, int>`, and its keys' and values' types, ø for any other type
 MAP_TYPE = "map"
 map_type(key: Node, value: Node) as Node := generic_type(MAP_TYPE, [key, value])
+# the bare type of an enum's values, which every enum fits
+ENUM_TYPE = "enum"
 key_type(type: Node?) as Node? := map_part(type, 1)
 held_type(type: Node?) as Node? := map_part(type, 2)
 map_part(type: Node?, at: int) as Node? := {

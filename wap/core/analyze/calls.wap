@@ -235,7 +235,6 @@ fits(argument: Node, wanted: Node?, s: TypingState) as bool := wanted == ø or r
 fits_exactly(argument: Node, wanted: Node?, s: TypingState) as bool := wanted == ø or conversion(value_type(argument), wanted, s) == Conversion.Same
 # the bare words of a kind, which every value of the kind fits (core/analyze/fits.wap bare_fit)
 FUNCTION_WORD = "function"
-ENUM_TYPE = "enum"
 BARE_KINDS = [LIST_TYPE, FUNCTION_WORD, ENUM_TYPE]
 # a kind's bare word, or an optional of one: `list`, `enum?`
 names_bare_kind(type: Node?) as bool := {
