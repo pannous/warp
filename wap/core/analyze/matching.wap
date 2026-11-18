@@ -29,7 +29,7 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 }
 # an arm's result, its variable subject known of the shape a declared pattern's pattern names: `n` a Record in
 # `Record(name, fields, variants) => n`
-arm_typed(arm: Node, subject: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
+arm_typed(arm: Arm, subject: Node, type: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match arm {
 	Arm(pattern, result) => {
 		tested = pattern_typed(pattern, type, s, f)
 		shape = if fact_of(pattern, SHAPE_OF) == ø then ø else shaped(symbol(text(fact_of(pattern, SHAPE_OF))), s)
@@ -72,7 +72,7 @@ list_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as N
 	typed = (1 to #items).map(at => if rest_named(items#at) == ø then pattern_typed(items#at, item, s, f) else rest_typed(items#at, at == #items, type, s, f))
 	with_type_of(refitted(List(typed, Bracket.Square, Separator.Comma), pattern), type)
 }
-rest_typed(rest: Node, last: bool, type: Node, s: TypingState, f: TypeFrame) as Node := match rest {
+rest_typed(rest: Call, last: bool, type: Node, s: TypingState, f: TypeFrame) as Node := match rest {
 	Call(called, names) => if last then refitted(Call(called, [pattern_typed(names#1, type, s, f)]), rest) else refused(rest, "only a list pattern's last item takes the rest")
 }
 # The values no arm fits, as one pattern of them, a witness (`Dot`, `Two(Circle(_), _)`), or ø when the arms fit every
@@ -148,7 +148,7 @@ pattern_text(pattern: Node) as text := match pattern {
 fits_any(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) != symbol(BOUND_CASE)
 # a case's bare name: as a pattern it fits the case whatever its fields hold
 is_case_name(pattern: Node) as bool := pattern is symbol and fact_of(pattern, BINDING) == symbol(BOUND_CASE)
-pattern_of(arm: Node) as Node := match arm { Arm(pattern, result) => pattern }
+pattern_of(arm: Arm) as Node := match arm { Arm(pattern, result) => pattern }
 
 # a case pattern's name, the case of that name in the subject's enum when it has one (two enums may share the name)
 in_enum(name: Node, type: Node, s: TypingState) as Node := {
@@ -160,7 +160,7 @@ in_enum(name: Node, type: Node, s: TypingState) as Node := {
 case_in_enum_typed(name: Node, s: TypingState) as Node := case_typed_as(name, name, [], s)
 field_names(fields: list) as text := fields.map(field => text(declared_name(field))).join(", ")
 # A case pattern, `Circle(r)`: a pattern for each of its fields, of the field's type
-case_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := match pattern { Call(written, parts) => {
+case_pattern_typed(pattern: Call, type: Node, s: TypingState, f: TypeFrame) as Node := match pattern { Call(written, parts) => {
 	called = in_enum(written, type, s)
 	fields = case_fields(case_declaring(s.records, called))
 	if #parts != #fields { refused(pattern, "${called} names each of its fields: ${field_names(fields)}") }

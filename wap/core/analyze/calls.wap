@@ -89,7 +89,7 @@ arranged(definition: Node, arguments: list) as list? := {
 	}
 	placed
 }
-named_value(argument: Node) as Node := match argument { Key(name, Op.Colon, value) => value }
+named_value(argument: Node) as Node := match argument { Key(name, Op.Colon, value) => value; _ => refused(argument, "a named argument is written name: value") }
 # whether a definition takes this many arguments: one for each parameter, those with defaults at the end left out or not
 takes_count(definition: Node, count: int) as bool := {
 	parameters = parameters_in(definition)
@@ -163,7 +163,7 @@ takes_record(parameter: Node, record: Node) as bool := {
 # the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
 # its candidates
 candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
-	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items })
+	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items; _ => refused(scope, "a name's candidates are a list of definitions") })
 	_ => [[defined_at(called)]]
 }
 # the definition a defining name means: its own, or, for the name of a function typed already (a call typed again),
@@ -309,7 +309,7 @@ result_given(body_type: Node?, frame: TypeFrame, name: Node, s: TypingState) as 
 	for returned in frame.returns { if not (returned == result or conversion(returned, result, s) in STATIC_CONVERSIONS) { refused(name, "this function gives back values of different types") } }
 	result
 }
-function_typed(definition: Node, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+function_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	key = place_key(declared_name(name))
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
@@ -357,8 +357,8 @@ parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 with_signature(name: Node, types: list, result: Node?) as Node := with_name_fact(name, SIGNATURE, Call(symbol(ARROW), [List(types, Bracket.Round, Separator.Comma), result ?? Empty]))
 
 # the parts of a Define, its parameters as a list of none or more
-written_name(definition: Node) as Node := match definition { Define(name, parameters, body) => name }
-parameters_in(definition: Node) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
+written_name(definition: Define) as Node := match definition { Define(name, parameters, body) => name }
+parameters_in(definition: Define) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
 with_items(n: Node, items: list) as Node := match n {
 	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
 	_ => n

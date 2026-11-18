@@ -4,6 +4,7 @@
 
 use "parse/operators.wap"
 use "stage.wap"
+use "errors.wap"
 use "../kernel/forms.wap"
 use "../preload/operators.wap"
 use "analyze/calls.wap"
@@ -76,6 +77,7 @@ open_text(language: Language, arguments: list, call: Node, spelling: text) as te
 # `x += 1` as written: the assignment x = x + 1 the operator stage read it as, its right side's right operand
 compound_text(language: Language, call: Node, arguments: list) as text := match arguments#2 {
 	Call(operator, operands) => formatted(language, arguments#1) + " " + formatted(language, fact_of(call, COMPOUND)) + " " + formatted(language, operands#2)
+	_ => refused(arguments#2, "a compound assignment gives the call of its operator")
 }
 
 enum Side { Left, Right }

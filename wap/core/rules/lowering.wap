@@ -62,7 +62,7 @@ names_a_variable(statement: Node) as bool := match statement {
 	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 is symbol and items#2 is symbol and VARIABLE_WORDS.has(text(items#1))
 	_ => no
 }
-variable_named(statement: Node) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
+variable_named(statement: List) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
 
 # code as a kernel form, placed where the code was written (core/stage.wap)
 lowered(language: Language, n: Node) as Node := staged(n, form => lowered_form(language, form))
