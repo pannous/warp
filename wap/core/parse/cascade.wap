@@ -56,7 +56,7 @@ loosest_separator(parts: list<Lexeme>) as Separator := {
 }
 
 # the items of a level: the parts split by their loosest separator, each piece read one level tighter
-level_items(parts: list<Lexeme>) as list := {
+level_items(parts: list<Lexeme>) as list<Node> := {
 	separator = loosest_separator(parts)
 	if separator == Separator.None { return if parts.length == 0 then [] else [glued_run(parts)] }
 	if separator == Separator.Space { return annotated(spaced(runs_of(parts))) }
@@ -96,7 +96,7 @@ runs_of(parts: list<Lexeme>) as list := { // todo use  [Lexeme] as soon as synta
 # after it as value (`a b : c`, `x = a + b`); glued to a run with a blank after, it takes the rest of the phrase as
 # value (`a: b c`). A hole's `:` takes one run, its type: `$c: Node $then: Node` are two typed holes
 # (notes/first_principles.md "Holes")
-spaced(runs: list) as list := {
+spaced(runs: list) as list<Node> := {
 	split = splitting_run(runs)
 	if split < 0 { return holes_typed(runs.map(glued_run)) }
 	run = runs[split]
