@@ -48,9 +48,9 @@ class Part {
 # the parts of a case pattern, `Circle(r)`: each field of the value, cast to the case; none for any other pattern
 field_parts(pattern: Node, value: list, p: Program) as list := match pattern {
 	Call(called, patterns) => {
-		record = enum_of(p.records, called)
-		cast = case_struct_of(record, case_named(record, called), p.m, p.records)
-		types = case_fields(case_named(record, called)).map(field => layout_of(declared_type(field), p.m, p.records))
+		record = enum_declaring(p.records, called)
+		cast = case_struct_of(record, case_declaring(p.records, called), p.m, p.records)
+		types = case_fields(case_declaring(p.records, called)).map(field => layout_of(declared_type(field), p.m, p.records))
 		(1 to #patterns).map(at => Part(patterns#at, value + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
 	}
 	_ => []
@@ -74,11 +74,12 @@ names_held(pattern: Node, value: list, type: list, p: Program, f: Frame) as list
 }
 # A case's value, `Dime` or `Circle(3)`: its tag and its fields' values in a new struct of its case, of its enum's type
 case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
-	record = enum_of(p.records, called)
-	named = case_named(record, called)
+	record = enum_declaring(p.records, called)
+	named = case_declaring(p.records, called)
 	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
 	Code(layout(form, p), i32_const(tag_of(called, p)) + arguments.flat_map(argument => code(argument, p, f).instructions) + instruction(STRUCT_NEW, [made]))
 }
-# a case's tag, its place among the cases of every enum the program declares, so cases of two enums never share one
-tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => text(case_name(each)) == text(case)) - 1
+# A bound case's tag: its place among the cases of every enum the program declares, found by the case that defined
+# it, so cases of two enums never share a tag, not even two of one name
+tag_of(case: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => each === case_declaring(p.records, case)) - 1
 is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)
