@@ -54,6 +54,8 @@ raise(message: text): never := prim raise_text(message)
 keys(m: map<K, V>): list<K> := prim map_keys(m)
 # whether a map holds a key
 has(m: map<K, V>, key: K): bool := m.keys().contains(key)
+# a key taken out of a map with its value, the others kept in their order; a missing key leaves the map as it was
+remove(m: map<K, V>, key: K) := prim map_remove(m, key)
 
 # the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
 int(t: text): int := {
