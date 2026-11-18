@@ -5,7 +5,7 @@ use "../wap/core/pipeline.wap"
 use "../wap/core/emit/emitter.wap"
 
 preload = language_loaded(program.folder + "/../wap")
-library_scope = declarations_of(preload).map(library_word)
+library_scope = declarations_of(preload).flat_map(library_words)
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
@@ -13,7 +13,7 @@ report(stage: text, message: text) := print "${stage}\t" + message.replace("\n",
 used_scope(file: text) as list := {
 	try {
 		modules = declared_modules(file)
-		return used_declarations(modules#(#modules), modules).map(library_word)
+		return used_declarations(modules#(#modules), modules).flat_map(library_words)
 	} catch e { report("declare", e.message) }
 	[]
 }

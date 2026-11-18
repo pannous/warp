@@ -89,7 +89,7 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
-	if fitting is empty { refused(n, "no ${called} takes (${types.join(", ")}): ${candidates_text(candidates)}") }
+	if fitting is empty { refused(n, "no ${called} takes (${types_text(types)}): ${candidates_text(candidates)}${words_missing(candidates, types, s)}") }
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
@@ -101,7 +101,7 @@ takes(definition: Node, given: list, s: TypingState, fit: function) as bool := {
 	parameters = parameters_in(definition)
 	if #parameters != #given { return no }
 	letters = letters_bound(definition, given.map(value_type), s)
-	letters != ø and (1 to #given).all(at => function_type_parts(type_given(parameters#at)) != ø or fit(given#at, substituted(type_given(parameters#at), letters)))
+	letters != ø and (1 to #given).all(at => function_type_parts(type_given(parameters#at)) != ø or conforms(value_type(given#at), type_given(parameters#at), s) or fit(given#at, substituted(type_given(parameters#at), letters)))
 }
 # Among several definitions that fit, the most specific: a written type beats a generic letter, a letter beats no
 # type, `===(a: T, b: T)` beats `===(a, b)`; several equally specific are left for the caller to refuse
@@ -118,7 +118,42 @@ innermost(definitions: list, scopes: list) as list := {
 	}
 	definitions
 }
-typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter), records) then 1 else 2).fold(0, (a, b) -> a + b)
+typing_weight(definition: Node, records: list) as int := parameters_in(definition).map(parameter => if type_given(parameter) == ø then 0 else if has_letters(type_given(parameter), records) or protocol_named(records, type_given(parameter)) != ø then 1 else 2).fold(0, (a, b) -> a + b)
+
+# Protocols (wiki/trait.md, decision traits-are-protocols): a type of words a value can do, `trait shape { area() }`,
+# a Record of function-typed fields and no cases. A value fits one when for each word a function of that name takes
+# the value's type first and the word's parameters after; a function of a protocol parameter is typed for each type
+# given, so `area(s)` in its body is the given type's own area.
+protocol_named(records: list, type: Node?) as Node? := {
+	record = record_named(records, type)
+	if record == ø or not cases_of(record) is empty or fields_of(record) is empty or not fields_of(record).all(field => function_type_parts(declared_type(field)) != ø) { return ø }
+	record
+}
+# whether a value of the given type fits the protocol wanted: no protocol wanted, or every word of it done for the type
+conforms(given: Node?, wanted: Node?, s: TypingState) as bool := {
+	protocol = protocol_named(s.records, wanted)
+	protocol != ø and given != ø and fields_of(protocol).all(word => does_word(given, word, s))
+}
+# the protocol words these types lack for these definitions' protocol parameters, as a refusal's fix-it
+words_missing(definitions: list, types: list, s: TypingState) as text := {
+	missing = []
+	for definition in definitions {
+		parameters = parameters_in(definition)
+		if #parameters == #types {
+			for at in 1 to #types {
+				protocol = protocol_named(s.records, type_given(parameters#at))
+				if protocol != ø { missing += fields_of(protocol).filter(word => not does_word(types#at, word, s)).map(word => "${types#at} is no ${record_name(protocol)}: define ${declared_name(word)}(x: ${types#at}${", …" * #(function_type_parts(declared_type(word))#1)})") }
+			}
+		}
+	}
+	if missing is empty then "" else "; " + missing.join("; ")
+}
+does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, #(function_type_parts(declared_type(word))#1)))
+# whether a definition takes a value of this type first, then as many parameters as a protocol's word
+does_as(definition: Node, given: Node, arity: int) as bool := {
+	parameters = parameters_in(definition)
+	#parameters == arity + 1 and (type_given(parameters#1) == ø or same_type(type_given(parameters#1), given))
+}
 
 # Generic letters (wiki/type.md "Foreign type names and generic letters"): a one-letter type name, `f(x: T)`, stands
 # for the type its argument gives, every T of one signature the same; `list<T>` takes a list of any one item type. A
@@ -140,9 +175,11 @@ letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 	}
 	bound
 }
-# the letters bound so far with those a wanted type binds against a given one, ø when they don't fit
+# the letters bound so far with those a wanted type binds against a given one, ø when they don't fit; code that never
+# gives a value, `return 0`, binds none
 unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if given == ø { return ø }
+	if given == symbol(NEVER_TYPE) { return bound }
 	records = s.records
 	if is_letter(wanted, records) {
 		held = type_keyed(text(wanted), bound)
@@ -189,10 +226,12 @@ any_enum(wanted: Node, given: Node?, records: list) as bool := {
 }
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
 reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
+# types as a message names them, `int, text?`
+types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
-# A function typed for these argument types, once per tuple: its parameters, then its body, its result written or
-# its body's type. A call inside its own body finds it typed but without a result unless one is written.
+# A function typed for these argument types, once per tuple: its parameters, then its body, its result the written
+# one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
 result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 	result = if body_type == symbol(NEVER_TYPE) then (if frame.returns is empty then body_type else frame.returns#1) else body_type
@@ -202,7 +241,7 @@ result_given(body_type: Node?, frame: TypeFrame, name: Node) as Node? := {
 function_typed(definition: Node, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	key = place_key(declared_name(name))
 	letters = letters_bound(definition, argument_types, s) ?? []
-	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), argument_types#place, letters))
+	types = (1 to #argument_types).map(place => parameter_type(type_given(parameters_in(definition)#place), argument_types#place, letters, s.records))
 	for typed in s.functions {
 		if typed.key == key and same_types(typed.arguments, types) {
 			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its result type: write `${declared_name(name)}(…): int := …`") }
@@ -221,15 +260,18 @@ function_typed(definition: Node, argument_types: list, s: TypingState, at: Node)
 	typed_body = typed_form(body, s, frame, typed.result)
 	given = result_given(value_type(typed_body), frame, name)
 	if typed.result != ø and (given == ø or not type_fits(given, typed.result)) { refused(body, "this gives ${given ?? "no value"}, the function says it gives a ${typed.result}") }
-	typed.result = given
-	typed.signed = with_signature(name, types, given)
+	typed.result = typed.result ?? given
+	typed.signed = with_signature(name, types, typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
 	typed.done = yes
 	typed
 } }
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
-# int?; none written, or a bare `list` or `enum`, which take any list or enum, it is of the argument's type
-parameter_type(written: Node?, given: Node, letters: list) as Node := if written == ø or written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or function_type_parts(written) != ø then given else substituted(written, letters)
+# int?; none written, or one that takes its argument's own type, it is of the argument's type
+parameter_type(written: Node?, given: Node, letters: list, records: list) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
+# whether a parameter of this written type is typed anew for each type given: a bare `list` or `enum`, which take any
+# list or enum, a function type, whose function values each type it, and a protocol
+takes_own_type(written: Node, records: list) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or function_type_parts(written) != ø or protocol_named(records, written) != ø
 parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 	frame.variables += [[place_key(declared_name(parameter)), type]]
 	with_name_fact(parameter, TYPE, type)
@@ -250,7 +292,7 @@ with_items(n: Node, items: list) as Node := match n {
 }
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
-all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and function_type_parts(type_given(parameter)) == ø)
+all_typed(definition: Node, records: list) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and (not takes_own_type(type_given(parameter), records) or type_given(parameter) == symbol(LIST_TYPE) or type_given(parameter) == symbol(ENUM_TYPE)))
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)

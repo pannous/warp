@@ -30,3 +30,8 @@
 # the_empty_set_sign_is_nothing
 '∅ == ø'	true
 '∅ is ø'	true
+# x is not empty, x isn't empty: the negated test word, emptiness tested loosely (wiki/null.md, card empty-list-check)
+'xs = []; xs is not empty'	false
+'xs = [1]; xs is not empty'	true
+'t = ""; t isn’t empty'	false
+'xs = [1, 2]; e = []; if #xs > 1 and e is not empty { "wrong" } else { "right" }'	'right'

@@ -20,6 +20,9 @@ raise(message: text): never := prim raise_text(message)
 +(a: int, b: int): int := prim i64_add(a, b)
 -(a: int, b: int): int := prim i64_sub(a, b)
 *(a: int, b: int): int := prim i64_mul(a, b)
+# the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
+÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
+%(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
 ==(a: int, b: int): bool := prim i64_eq(a, b)
 !=(a: int, b: int): bool := prim i64_ne(a, b)
 <(a: int, b: int): bool := prim i64_lt_s(a, b)
@@ -61,6 +64,10 @@ class Range { from: int; last: int }
 # it walks a list
 #(r: Range): int := r.last - r.from + 1
 #(r: Range, at: int): int := r.from + at - 1
+# the largest int, where a range left open ends: `xs[2 ..]` is Range(2, LAST_INT), every item from the place 2 on
+LAST_INT := 0x7FFFFFFFFFFFFFFF
+# the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]
+slice(xs: list<T>, r: Range): list<T> := prim array_slice(xs, r.from, (if r.last < #xs then r.last + 1 else #xs) - r.from)
 
 # a float's sign turned, its whole parts, an int as a float
 -(x: float): float := prim f64_neg(x)

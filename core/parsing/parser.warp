@@ -1049,6 +1049,7 @@ def continued(p: Parser, left: Node, min_power: int) as Node := {
 		if test.length > 0 {
 			p.at = test#1
 			left = tested(left, test#2, test#3)
+			if test#4 { left = Key(ø, Op.Not, left) }
 			continue
 		}
 		if (c == '+' or c == '-') and is_at(p.code, p.at + 1, c, p.n) and SUFFIX_POWER >= min_power {
@@ -1501,16 +1502,18 @@ def labelled_argument(p: Parser) as Node := {
 	Key(symbol(p.code[at .. end]), Op.Colon, expression(p, ARGUMENT_POWER))
 }
 
-// `x empty`, `x missing`, `x is absent` … ending a condition (wiki/null.md): [the end of the word, the word, whether
-// `is` stood before it], else []; the word ends the condition where no operand follows it, or a block, a colon or an
-// operator word does
+// `x empty`, `x missing`, `x is absent`, `x is not empty` … ending a condition (wiki/null.md): [the end of the word,
+// the word, whether `is` stood before it, whether a spelling negating it did], else []; the word ends the condition
+// where no operand follows it, or a block, a colon or an operator word does
 TEST_WORDS = ["empty", "missing", "absent", "unknown", "undefined", "failed"]
 TEST_WORD_STARTS = by_first_character(TEST_WORDS, word => word)
 NOT_POWER = 105
+// `is` and the spellings negating it, `is not`, `isn't`, each with whether it negates (the negating first: `is` begins them)
+IS_SPELLINGS = NEGATED_SPELLINGS.keys.filter(written => NEGATED_SPELLINGS[written] == "is").map(written => [written, yes]) + [["is", no]]
 def test_word_at(p: Parser, min_power: int) as list {
 	if min_power > NOT_POWER { return [] }
-	after_is = keyword_at(p, "is")
-	start = if after_is then blank_end(p, p.at + 2) else p.at
+	spelled = IS_SPELLINGS.find(spelling => keyword_at(p, spelling#1))
+	start = if spelled != ø then blank_end(p, p.at + spelled#1.length) else p.at
 	word = starting_here(TEST_WORD_STARTS, p, start).find(candidate => keyword_at_position(p, candidate, start)) ?? ""
 	if word == "" { return [] }
 	end = start + word.length
@@ -1518,7 +1521,7 @@ def test_word_at(p: Parser, min_power: int) as list {
 	next = char_at(p, after)
 	following = p.code[after .. name_end(p.code, after, p.n)]
 	ends = not operand_follows_at(p, end) or next == '{' or next == ':' or word_operators().any(op => op#1 == following)
-	if ends then [end, word, after_is] else []
+	if ends then [end, word, spelled != ø, spelled != ø and spelled#2] else []
 }
 // `x is empty`, `x failed` as their phrase, the test word kept as written (`empty` alone reads as ø): its meaning is
 // extensions/sugar/test_words.warp's rules

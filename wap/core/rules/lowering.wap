@@ -13,12 +13,15 @@
 #   let x = 1, global x = 1  (Call = (let x) 1) → Set(x, 1) with the fact which variable it assigns: a new one here,
 #                            the program's
 #   f(x) := body             (Call := f(x) body) → Define(f, [x], body); `n := 1` → Define(n, [], 1)
-#   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1)
+#   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1); `(a, b) -> a + b` likewise, -> and => both
+#                            write a function value
 #   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
 #                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 #   (x + 1)  (a; b)          a group: its one statement, several a Block
 #   [a, b]                   a list, data as the reader reads it, its items lowered
+#   a, b                     a row is a list wherever it stands as a value: `[1, 2⏎3]` is [[1, 2], 3]; in braces
+#                            rows of keys are the keys, `{a: 1, b: 2⏎c: 3}` one map of three
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
@@ -73,7 +76,8 @@ lowered_form(n: Node) as Node := match n {
 	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(lowered))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
-	List(items, Bracket.Curly, separator) => if items.all(is_field) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.None, Separator.Comma) => List(items.map(lowered), Bracket.Square, Separator.Comma)
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
 	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
@@ -84,9 +88,12 @@ lowered_form(n: Node) as Node := match n {
 operator_lowered(n: Node, spelling: text, arguments: list) as Node := match spelling {
 	"=" => assigned(arguments#1, lowered(arguments#2), n)
 	":=" => defined(n, arguments#1, lowered(arguments#2))
-	"=>" => Fn(parameter_list(arguments#1), lowered(arguments#2))
+	"=>" => function_value(arguments)
+	"->" => function_value(arguments)
 	_ => Call(symbol(spelling), arguments.map(lowered))
 }
+
+function_value(arguments: list) as Node := Fn(parameter_list(arguments#1), lowered(arguments#2))
 
 # a phrase headed by a word: a built-in's primitive body, `prim print_text(t)`, or a call of the word
 phrase_lowered(items: list, n: Node) as Node := {
@@ -118,11 +125,16 @@ with_result(definition: Define, result: Node) as Node := match definition { Defi
 
 # what a head's brackets hold: `()` nothing, `(a, b)` its items, `(a)` or `(a b)` one argument
 # a map's or an instance's fields, `{a: 1, b: 2}`, each value lowered: data, not a block (notes/kernel.md Data)
-fields_lowered(items: list, separator: Separator, n: Node) as Node := List(items.map(field => field_lowered(field, n)), Bracket.Curly, separator)
-is_field(item: Node) as bool := match item { Key(name, Op.Colon, value) => yes; _ => no }
+fields_lowered(items: list, separator: Separator, n: Node) as Node := List(items.flat_map(row_items).map(field => field_lowered(field, n)), Bracket.Curly, separator)
+# a key, or a row of keys
+is_fields(item: Node) as bool := match item {
+	Key(name, Op.Colon, value) => yes
+	List(row, Bracket.None, Separator.Comma) => row.all(is_fields)
+	_ => no
+}
 # an instance's field, `x: 1`, its value lowered
 field_lowered(field: Node, n: Node) as Node := match field {
-	Key(name, Op.Colon, value) => if name is symbol then refitted(Key(name, Op.Colon, lowered(value)), field) else not_lowered(n)
+	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(name), Op.Colon, lowered(value)), field)
 	_ => not_lowered(n)
 }
 arguments_of(group: Node) as list := match group {

@@ -25,8 +25,6 @@ I32 = [0x7F]
 I64 = [0x7E]
 F64 = [0x7C]
 ANYREF = [0x6E]
-# a reference to any array, ø included: the type every list<T> fits
-ARRAYREF = [0x6A]
 # the storage of an array of bytes, packed
 I8 = [0x78]
 # heap types, each its bytes (a declared type's is signed(index)), and type constructors
@@ -99,6 +97,7 @@ F64_LE = [0x65]
 F64_GE = [0x66]
 I32_ADD = [0x6A]
 I32_SUB = [0x6B]
+I32_MUL = [0x6C]
 I32_DIV_U = [0x6E]
 I64_ADD = [0x7C]
 I64_SUB = [0x7D]
@@ -185,6 +184,7 @@ i32_const(n: int) as list := I32_CONST + signed(n)
 i64_const(n: int) as list := I64_CONST + signed(n)
 f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
 # the null reference of a heap type, `ref.null any`
+local_get(local: int) as list := instruction(LOCAL_GET, [local])
 null_of(heap_type: list) as list := REF_NULL + heap_type
 
 # the value a variable of that type starts with: zero, or the null reference
@@ -198,7 +198,7 @@ default_of(value_type: list) as list := {
 
 # a reference to the declared type of that index, or null
 # whether a value type is a nullable reference, and the heap type it refers to
-is_reference(type: list) as bool := type#1 == NULLABLE_REFERENCE or type in [ANYREF, ARRAYREF]
+is_reference(type: list) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
 heap_of(reference: list) as list := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 nullable(type_index: int) as list := [NULLABLE_REFERENCE] + signed(type_index)
 # whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
