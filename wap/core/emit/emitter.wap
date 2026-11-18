@@ -329,7 +329,7 @@ set_code(form: Node, place: Node, value: Code, p: Program, f: Frame) as Code := 
 	Code(value.type, value.instructions + kept(held))
 }
 
-# a name's value: a parameter, local or global; functions as values and captures come with closures
+# a name's value: a parameter, local, capture or global, or a function's name as a value (an empty struct)
 name_code(name: Node, p: Program, f: Frame) as Code := {
 	if binding_of(name) in [BOUND_FUNCTION, BOUND_LIBRARY] { return function_value_code(name, p, f) }
 	held = variable_of(name, p, f) ?? refused(name, "this name is read before any value is given to it; a global is read only after the statement that sets it, until the typing stage")
