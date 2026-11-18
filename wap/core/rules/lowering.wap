@@ -132,7 +132,6 @@ is_fields(item: Node) as bool := match item {
 	List(row, Bracket.None, Separator.Comma) => row.all(is_fields)
 	_ => no
 }
-row_items(item: Node) as list := match item { List(row, Bracket.None, Separator.Comma) => row; _ => [item] }
 # an instance's field, `x: 1`, its value lowered
 field_lowered(field: Node, n: Node) as Node := match field {
 	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(name), Op.Colon, lowered(value)), field)
