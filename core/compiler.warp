@@ -243,7 +243,7 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 	write_bytes(wasm_file, with_questions(compiled))
 }
 # A compile the native warp caches (its run option cache names the cached module, core/native/driver.warp) keeps in
-# the module the questions it asked the host (host_io.warp asked) and the warnings and hints it said, a record each,
+# the module the questions it asked the host (host_io.warp host_answered) and the warnings and hints it said, a record each,
 # its parts apart by a unit separator
 QUESTIONS_SECTION = "warp.questions"
 WARNINGS_SECTION = "warp.warnings"
@@ -252,19 +252,19 @@ RECORDS_APART = "\u{1e}"
 PARTS_APART = "\u{1f}"
 with_questions(wasm: list) as list := if not asking_recorded then wasm else wasm + records_section(QUESTIONS_SECTION, questions_asked) + records_section(WARNINGS_SECTION, said_warnings.map(said => [said])) + records_section(HINTS_SECTION, said_hints.map(said => [said]))
 records_section(name: text, records: list) as list := section(section_ids.custom, name_bytes(name) + records.map(record => record.join(PARTS_APART)).join(RECORDS_APART).bytes)
-records_in(module: list, name: text) as list := {
-	place = section_place(module, section_ids.custom, name)
-	if place == ø or place#1 == place#2 then [] else utf8_text(module[place#1 ..< place#2]).split(RECORDS_APART).map(record => record.split(PARTS_APART))
+records_in(wasm: list, name: text) as list := {
+	place = section_place(wasm, section_ids.custom, name)
+	if place == ø or place#1 == place#2 then [] else utf8_text(wasm[place#1 ..< place#2]).split(RECORDS_APART).map(record => record.split(PARTS_APART))
 }
 # whether the cached module is current: each question its compile asked gets the same answer now (asked of the host
 # directly, so these never join the questions of a compile that follows); then its warnings and hints said again
 cached_current() as bool := {
 	cached = run_option("cache") ?? ""
 	if cached == "" or not std_io("file", "exists", [cached]) { return no }
-	module = std_io("file", "read_bytes", [cached])
-	questions = records_in(module, QUESTIONS_SECTION)
+	wasm = std_io("file", "read_bytes", [cached])
+	questions = records_in(wasm, QUESTIONS_SECTION)
 	if questions.length == 0 or not questions.all(answered_alike) { return no }
-	said_again(records_in(module, WARNINGS_SECTION).map(record => record#1), records_in(module, HINTS_SECTION).map(record => record#1))
+	said_again(records_in(wasm, WARNINGS_SECTION).map(record => record#1), records_in(wasm, HINTS_SECTION).map(record => record#1))
 	yes
 }
 answered_alike(question: list) as bool := text(answer_fingerprint(std_io(question#2, question#3, question[3 ..]))) == question#1
