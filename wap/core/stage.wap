@@ -125,6 +125,10 @@ VARIABLES = "variables"
 CANDIDATES = "candidates"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
+captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
+	List(items, bracket, separator) => items
+	_ => []
+}
 
 # The facts of the typing stage, core/analyze/types.wap: a value's TYPE, `int`, as a program writes types; a function's
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
@@ -133,6 +137,15 @@ SIGNATURE = "signature"
 # a list's TYPE as the reader reads `list<int>`: the word list glued to its item type in angle brackets
 LIST_TYPE = "list"
 list_type(item: Node) as Node := Key(symbol(LIST_TYPE), Op.None, List([item], Bracket.Less, Separator.None))
+# A function value's TYPE, its own for each `x => …` the program writes: the word fn glued to the key of the function
+# it calls and the types of what it captures, in angle brackets: `fn<"f.wap:3:5 λ", int>` (core/analyze/types.wap)
+FUNCTION_VALUE_TYPE = "fn"
+function_value_type(key: text, captures: list) as Node := Key(symbol(FUNCTION_VALUE_TYPE), Op.None, List([Text(key)] + captures, Bracket.Less, Separator.Comma))
+# a function value type's parts, the key of its function and then its captures' types; ø for any other type
+function_value_parts(type: Node?) as list? := match type {
+	Key(name, Op.None, List(items, Bracket.Less, separator)) => if name == symbol(FUNCTION_VALUE_TYPE) then items else ø
+	_ => ø
+}
 # the item type of a list's type, ø for any other type
 item_type(type: Node?) as Node? := match type {
 	Key(name, Op.None, group) => if name == symbol(LIST_TYPE) then only_item(group) else ø
