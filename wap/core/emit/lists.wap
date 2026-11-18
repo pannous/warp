@@ -90,7 +90,7 @@ map_setting_function(p: Program, map: Node) as int := {
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list, map: Node, p: Program) as list := {
 	keys = map_part(MAP_KEYS, map, p)
-	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + equality(item_layout(keys_of(map), p), p)
+	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + type_equality(key_type(map), p)
 	counted(count, keys + count_in(keys_of(map), ø, p), equal + IF + VOID_BLOCK + found + END)
 }
 # a new map of these keys' and values' code
