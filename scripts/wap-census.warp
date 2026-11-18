@@ -9,7 +9,7 @@ use "../wap/core/language.wap"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
 library_scope = declarations_of(preload).flat_map(library_words)
-library = statements_in(library_code_of(preload))
+library = statements_in(library_code_of(language, preload))
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
@@ -70,9 +70,9 @@ parts_of(n: Node) as list := match n { Key(left, op, right) => [left, right]; Li
 # refusal names its function and hides no other; a function of letters or untyped parameters is typed by its calls
 functions_probe(file: text) as Tally := {
 	modules = []
-	try modules = declared_modules(file) catch e { return Tally() }
+	try modules = declared_modules(language, file) catch e { report("declare", e.message); return Tally() }
 	prepared_modules = []
-	try prepared_modules = modules.map(module => statements_in(prepared(module, modules, preload))) catch e { return Tally() }
+	try prepared_modules = modules.map(module => statements_in(prepared(module, modules, preload))) catch e { report("bind", e.message); return Tally() }
 	program = prepared_modules.flat_map(statements => statements)
 	own = prepared_modules.last.filter(statement => statement is Define)
 	typed_alone = 0
@@ -84,9 +84,11 @@ functions_probe(file: text) as Tally := {
 		if not all_typed(definition, s.records) { by_calls += 1 } else {
 			try {
 				typed = function_typed(definition, written_types(definition), s, definition)
+				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
+				# the other functions that fill it, as the whole program types it
+				found = anys_in(typed.define)
 				all_settled(s)
 				typed_alone += 1
-				found = anys_in(settled_everywhere(typed.define, s))
 				if found > 0 { report("any", "${declared_name(written_name(definition))}: ${found} places typed any") }
 				anys += found
 			} catch e { report("type", "${declared_name(written_name(definition))}: " + e.message) }
