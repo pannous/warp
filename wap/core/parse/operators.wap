@@ -223,10 +223,13 @@ operators_called(tokens: list) as list := {
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
 called_after_infix(token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(next) and not is_block(next.item)
-# The words rules' phrases start with, `return` of `rule return $value... => …`, each with whether one of its rules
-# takes a block. The rule stage tells them as it loads rules: rules/ uses this stage, so it cannot ask rules/ itself.
-class PhraseWords { leading: map }
-phrase_words = PhraseWords({})
+# The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
+# its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules: rules/ uses
+# this stage, so it cannot ask rules/ itself.
+class PhraseWords { leading: map, inner: map }
+phrase_words = PhraseWords({}, {})
+# a word rules use only inside their phrases, which continues the code before it: `else`
+continuation_word(word: text) as bool := phrase_words.inner.has(word) and not phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
 # a symbol the table reads as an operator in any fixity

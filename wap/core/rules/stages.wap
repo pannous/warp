@@ -30,10 +30,10 @@ NO_HEAD = ""
 class Rule { head: text, matcher: Matcher, template: Node, fresh: list, written: Node, specificity: int }
 # the rules of one stage, by head
 # the rules of one stage, by head, and the words their phrases spell after the first, `then` and `else` of an if
-class Rules { by_head: map, inner_words: map }
+class Rules { by_head: map }
 # stage 1 asks only shapes; stage 3 asks the types of typed code (a hole of a value type)
-shape_rules = Rules({}, {})
-typed_rules = Rules({}, {})
+shape_rules = Rules({})
+typed_rules = Rules({})
 # code after a stage's rules, and whether any of them fired
 class Fired { code: Node, fired: bool }
 
@@ -87,14 +87,15 @@ rule_added(written: Node, pattern: Node, template: Node) := {
 	rule = Rule(heads_of(normal)#1, matcher, output, names_bound_in(output), written, specificity(matcher))
 	rules = if typed then typed_rules else shape_rules
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
+	# a rule loaded again, its file read twice, is the rule already there
+	if rules.by_head[rule.head].filter(other => "${other.written}" == "${written}") is not empty { return }
 	rules.by_head[rule.head].add(rule)
-	match normal { List(items, Bracket.None, Separator.Space) => words_told(rules, items, #matcher.parts.filter(takes_block) > 0); _ => ø }
+	match normal { List(items, Bracket.None, Separator.Space) => words_told(items, #matcher.parts.filter(takes_block) > 0); _ => ø }
 }
-# a phrase pattern's words: the first ones lead it (the operator stage reads a rule word after an infix by them), the
-# words after the first are inner words, which may continue a line before
-words_told(rules: Rules, items: list, block: bool) := {
+# a phrase pattern's words told the operator stage: the first ones lead it, the words after the first are inner words
+words_told(items: list, block: bool) := {
 	for word in list_heads(items) { if block or not phrase_words.leading.has(word) { phrase_words.leading[word] = block } }
-	for word in items[1 ..].filter(item => item is symbol and not is_hole(item)) { rules.inner_words[spelling_written(word)] = yes }
+	for word in items[1 ..].filter(item => item is symbol and not is_hole(item)) { phrase_words.inner[spelling_written(word)] = yes }
 }
 # a pattern part that takes a block: a braced sequence, `{ ($pattern => $result)... }`, or a hole of a shape a block has
 takes_block(m: Matcher) as bool := m.test == Test.Sequence and m.bracket == Bracket.Curly or m.test == Test.Hole and m.type != Empty and matches(m, SAMPLE_BLOCK, {})
@@ -270,7 +271,7 @@ block_taken(rules: Rules, block: Node) as list? := match block {
 }
 continues(rules: Rules, statement: Node) as bool := {
 	first = phrase_items(statement)#1
-	first is symbol and rules.inner_words.has(spelling_written(first)) and not rules.by_head.has(spelling_written(first))
+	first is symbol and continuation_word(spelling_written(first))
 }
 
 # A rule's result as the items it stands for in its list or block: a statement sequence, `A; B`, its statements; a row a
