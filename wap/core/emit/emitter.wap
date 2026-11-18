@@ -112,7 +112,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => Code()
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
-	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), labelled(f, [OTHER_LABEL], () => code(then_part, p, f)), labelled(f, [OTHER_LABEL], () => code(else_part, p, f)))
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
 	Return(value) => return_code(form, value, p, f)
@@ -148,6 +148,12 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 	type = joined(then_part.type, else_part.type)
 	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
 	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
+}
+# a part of a choice, made to fit the choice's type: 3 in `if b then 3 else ø`, an int?, is boxed
+arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := {
+	given = labelled(f, [OTHER_LABEL], () => code(part, p, f))
+	wanted = typed_layout(choice, p)
+	if wanted == ø then given else fitted(given, wanted, p.m)
 }
 # the type of either of two values: the one that finishes, or the common one; none when they differ
 joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
