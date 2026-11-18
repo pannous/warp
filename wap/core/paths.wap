@@ -1,0 +1,25 @@
+# The paths of the files a program uses (core/analyze/declarations.wap): a used path read against the folder of the
+# file that names it, its `.` and `..` parts resolved, so each file has one spelling.
+
+# the file `use` names, beside the file naming it: "../stage.wap" used by "core/analyze/scope.wap" is "core/stage.wap"
+beside(file: text, used: text) as text := normalized_path(if used.starts_with("/") then used else folder_of(file) + "/" + used)
+# a file's folder, "." for a file named without one (the preload's folder_of, written here too while old warp, which
+# reads no wap preload, builds the compiler)
+folder_of(file: text) as text := {
+	parts = file.split("/")
+	if #parts == 1 then "." else parts[.. #parts - 1].join("/")
+}
+# a path without empty and `.` parts, each `..` taking back the part before it; "." for none
+normalized_path(path: text) as text := {
+	absolute = path.starts_with("/")
+	kept = []
+	for part in path.split("/") {
+		if part == ".." and kept and kept.last != ".." {
+			kept = kept[.. #kept - 1]
+		} else if part == ".." {
+			if not absolute { kept += [part] }
+		} else if part != "" and part != "." { kept += [part] }
+	}
+	written = kept.join("/")
+	if absolute then "/" + written else if written == "" then "." else written
+}

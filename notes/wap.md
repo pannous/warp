@@ -64,6 +64,7 @@ wap/
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     errors.wap                refusals: the user's line, the readings, the fix-it, the rule that expanded it
     format.wap                code → canonical warp text (`format`): operators in their notation, spacing spelled out
+    paths.wap                 a used file's path beside the file using it, `.` and `..` resolved
 
     parse/                    text → notation
       reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
@@ -87,7 +88,15 @@ wap/
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
       scope.wap               the one binding analysis: what each name refers to
+      variables.wap           which variable each assignment gives a value to, in written order; late reads
       types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
+      calls.wap               a call's function chosen among its overloads, typed once per tuple of argument types
+      letters.wap             generic letters a call binds; an empty list's unknown item type, settled by a use
+      conditions.wap          conditions, the narrowing they give their arms, type tests
+      matching.wap            match: patterns typed, whether the arms fit every value
+      fits.wap                how types meet: fitting, sameness, the joined type of two
+      data.wap                lists, maps and instances written as data
+      function_values.wap     function values and what they capture
 
     emit/                     typed kernel → bytes
       emitter.wap             one case per kernel form; any other node refused; blocks, if, loops, labels
@@ -124,18 +133,20 @@ A rule file is in core/sugar/ exactly when wap's own source uses its spelling; w
 
 ## Owners
 
-Every wap file has one owner. Only the owner edits it; anyone else sends the owner the change they need (the lines,
-or the behavior with a run test) and keeps working. A new file belongs to whoever makes it, listed here in the same
-commit. Tests (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that
-blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile.
+Owners go by stage (user 2026-11-18, notes/wap_review.md "The workers"). Anyone may edit any wap file on a branch;
+the owner of the file's stage reviews the change before the handoff, and owns the stage's contract: what its output
+language is (notes/backbone.md "Stage languages"). Breadth stops until milestone 2: wap gets only what its own
+source uses, and every landing names the functions of wap it turned green (scripts/wap-census.warp). Tests
+(test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that blocks wap
+goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new file belongs to the stage of its folder.
 
-| owner | files (under wap/) |
-|---|---|
-| warp-wap-lead | compiler.wap, kernel/forms.wap, core/stage.wap, core/pipeline.wap, core/errors.wap, core/rules/lowering.wap, preload/prelude.wap |
-| warp-wap-reader | core/parse/ (reader, lexemes, atoms, layout, cascade), core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap, preload/lists.wap, preload/nodes.wap, preload/texts.wap, preload/numbers.wap |
-| warp-wap-operators | core/parse/operators.wap, core/parse/operator_table.wap, core/analyze/data.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
-| warp-wap-emitter | core/emit/ (emitter, functions, patterns, places, values, primitives, lists, equality, wasm, opcodes), core/sugar/records.wap, core/sugar/data.wap |
-| warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values; not data.wap) |
+| stage | owner | files (under wap/) |
+|---|---|---|
+| lead: the queue, the contracts | warp-lead | compiler.wap, core/pipeline.wap, core/stage.wap, core/errors.wap, kernel/forms.wap |
+| self-build: wap compiled by wap, file by file | warp-wap-operators | test/wap/test_self.sh, scripts/wap-census.warp; edits any file to write its types and `use` lines |
+| front: read, operators, rules, lowering | warp-wap-reader | core/parse/, core/rules/, core/sugar/, core/format.wap, core/language.wap, preload/ |
+| types: declare, bind, type | warp-wap-binding | core/analyze/, core/paths.wap |
+| back: emitter, runtime | warp-wap-emitter | core/emit/ |
 
 ## Rules for every file
 

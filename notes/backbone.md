@@ -188,6 +188,17 @@ checked) and a line here when its language changed. The lead reviews it against 
 1. **Hello:** `print "Hello"` through the new stages, with the emitter accepting only the kernel. Reached
    2026-11-17 (b5a5029b3d).
 2. **The new compiler builds itself.**
+   Done when all of these hold, each measured by a script, never by eye (user 2026-11-18, notes/wap_review.md):
+   1. the gauge, `warp scripts/wap-census.warp`, says every function of every wap file typed and emitted
+      ("typed n of n functions" on each line, the total likewise); test/wap/test_census.sh holds that count and
+      only lets it rise;
+   2. test/wap/test_self.sh has one line per wap file, "wap compiles <file> and the result loads", all green;
+   3. wap, run by the old compiler, compiles wap/compiler.wap to wap1.wasm; wap1 compiles it to wap2.wasm, wap2 to
+      wap3.wasm, and wap2 and wap3 are the same bytes;
+   4. test/wap/run.sh passes with wap2 as the compiler;
+   5. wap1 compiling wap/compiler.wap takes under a minute on the Mac;
+   6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds.
+   Until then nothing lands that turns no function of wap green, unless it fixes a wrong value.
 
 After that, the test pass rate is a ballpark of how well the engine works, nothing more. Then the user and the
 interviewer go through the ugly forms the tests show: each is either standardised, because it arises from the
@@ -332,3 +343,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   core/node.warp whole, but its `List(items: list, …)` gives an untyped list whose items wap can't read (`data#1` is
   refused: no # takes (list, int)). Reading it needs a bare `list` to mean list<any> and an `any` read back as a Node by
   a match. Until then nodes.wap types the items list<Node>, and the two copies must change together.
+- **A rewrite that loops forever hangs the compiler instead of being refused** (wap/core/rules/stages.wap): letting
+  any rule read a square list as one phrase made `xs = [1 2 3]` hang, some rule rewriting the phrase `1 2 3` again and
+  again (the loop was not traced). A list is now one phrase only when its first word leads a rule. A rewrite whose
+  result fires the rules again without end should be refused by name, as every other unknown form is.

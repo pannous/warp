@@ -56,4 +56,13 @@ P(3).x')" "3"
 check "an instance shows itself in its constructor form" "$(ran shown 'class P { x: int }
 class Q { p: P; name: text }
 print show(Q(P(1), "a"))')" 'Q{p: P{x: 1}, name: "a"}'
+check "a field's item read and set through the dot" "$(ran field_item 'class G { names: map<text, int> }
+g = G({"a": 1})
+g.names["b"] = 2
+print(text(g.names["a"] + g.names["b"]))
+class H { xs: list<int> }
+h = H([5, 6])
+h.xs[0] = 7
+print(text(h.xs[0] + h.xs[1]))')" "3
+13"
 exit $((failures > 0))

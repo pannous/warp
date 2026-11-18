@@ -35,12 +35,14 @@ use "../analyze/declarations.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
+use "patterns.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
-# the words that are a kernel form alone: the canonical words of the literals, and the statements that leave a loop or
-# a function (a rule cannot match a word alone: it would have no head)
+# the words that are a kernel form alone: the canonical words of the literals, the statements that leave a loop or
+# a function, and empty braces (a rule cannot match a word alone: it would have no head)
 WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue": Continue(), "return": Return(Empty)}
+WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
 VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
@@ -83,6 +85,8 @@ lowered_form(n: Node) as Node := match n {
 	List(items, Bracket.Round, Separator.Space) => if pattern_called(items#1) != ø then List([items#1] + items[1 ..].map(lowered), Bracket.Round, Separator.Space) else grouped(statements_of(List(items, Bracket.None, Separator.Space)))
 	List(items, Bracket.Round, separator) => grouped(statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(items, n)
+	# a word written against what follows it, `...rest`, as a phrase
+	List(items, Bracket.None, Separator.None) => phrase_lowered(items, n)
 	_ => not_lowered(n)
 }
 
@@ -111,8 +115,7 @@ primitive_of(operation: Node, n: Node) as Node := match operation {
 # `x = 1` gives x a value; `let x = 1` and `global x = 1` also say which variable x is (core/analyze/scope.wap)
 assigned(place: Node, value: Node, n: Node) as Node := match place {
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
-	Get(subject, key) => Set(lowered(place), value)
-	_ => Set(place, value)
+	_ => Set(lowered(place), value)
 }
 variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
 

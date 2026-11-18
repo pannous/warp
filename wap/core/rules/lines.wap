@@ -1,0 +1,59 @@
+# A program's lines as the rules read them (stage 1, core/rules/stages.wap): a line that starts with a word rules use only
+# inside their phrases continues the line before, and a block the reader glued below a phrase belongs to the phrase.
+use "patterns.wap"
+use "../parse/operators.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "../language.wap"
+
+# the words of a phrase, a single code its one word
+phrase_items(n: Node) as list := match n { List(items, Bracket.None, Separator.Space) => items; _ => [n] }
+
+# the items of a list, a block's lines continued
+lines_of(language: Language, items: list, separator: Separator) as list := if STATEMENT_SEPARATORS.contains(separator) then lines_continued(language, items) else items
+
+# A line that starts with a word rules spell inside their phrases but start none with continues the statement before
+# it: `if c {a}⏎else {b}` is one if, so is a `then` or `else` at a line's start
+lines_continued(language: Language, statements: list) as list := {
+	joined = []
+	for statement in statements {
+		if joined is not empty and continues(language, statement) { joined[#joined - 1] = staged(joined.last, line => List(phrase_items(line) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
+	}
+	joined
+}
+# The lines indented below a phrase, which the reader glues to its last word as a block, belong to the phrase: they
+# continue it when they start with such a word, `x = if c then 1⏎	else 2` is `x = if c then 1 else 2`; otherwise the
+# block is the phrase's last part, `if c⏎	print "a"` is `if c {print "a"}`. A block glued on its line, `Point{x: 1}`,
+# stays its word's.
+unglued(language: Language, n: Node) as Node := match n {
+	List(items, Bracket.None, Separator.Space) => {
+		split = block_split(items.last)
+		if split == ø { return n }
+		taken = block_taken(language, split#2)
+		if taken == ø then n else staged(n, phrase => List(items[.. #items - 1] + [split#1] + taken, Bracket.None, Separator.Space))
+	}
+	_ => n
+}
+# the code a block is glued to at its end, and that block: `1{else 2}`, `i in xs{…}` the operator's right side; ø when
+# no block ends it
+block_split(n: Node) as list? := match n {
+	Key(word, Op.None, block) => if is_braced(block) then [word, block] else ø
+	Call(called, arguments) => {
+		inner = if arguments is empty then ø else block_split(arguments.last)
+		if inner == ø then ø else [staged(n, call => Call(called, arguments[.. #arguments - 1] + [inner#1])), inner#2]
+	}
+	_ => ø
+}
+is_braced(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
+# the parts a glued block gives the phrase it ends, ø where it stays glued
+block_taken(language: Language, block: Node) as list? := match block {
+	List(lines, Bracket.Curly, separator) => {
+		continued = lines_continued(language, if STATEMENT_SEPARATORS.contains(separator) then lines else [List(lines, Bracket.None, separator)])
+		if #continued == 1 and continues(language, continued#1) then phrase_items(continued#1) else if fact_of(block, INDENTED) != ø then [block] else ø
+	}
+	_ => ø
+}
+continues(language: Language, statement: Node) as bool := {
+	first = phrase_items(statement)#1
+	first is symbol and continuation_word(language, spelling_written(first))
+}

@@ -10,4 +10,5 @@ print text(line_of(n)) + ":" + text(column_of(n))')" "3:7"
 check "a node without a position" "$(ran no_position 'print text(line_of(Text("a")) == ø)')" "yes"
 check "a fact added keeps the position" "$(ran facts 'n = with_attribute(positioned(Symbol("x"), 2, 1), Text("f"))
 print text(#attributes_of(n)) + " " + text(line_of(n))')" "1 2"
+check "a node shows its parts" "$(ran shown_node 'print show(List([Symbol("f"), Text("a")], Bracket.Round, Separator.Space))')" 'List([Symbol("f"), Text("a")], Round, Space)'
 exit $((failures > 0))

@@ -9,6 +9,7 @@ use "patterns.wap"
 use "primitives.wap"
 use "values.wap"
 use "wasm.wap"
+use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
 
@@ -49,7 +50,7 @@ tag_in(local: int, p: Program) as list := local_get(local) + tagged(p.m)
 # When both cases are this one, each of its fields of the two compared by the field's equality
 fields_compared(record: Node, case: Node, p: Program) as list := {
 	cast = case_struct_of(record, case, p.m, p.records)
-	field = (local, at) => local_get(local) + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
+	field = (local, at) => local_get(local) + heap_instruction(REF_CAST_NULL, cast) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
 	fields = case_fields(case)
 	compared = (1 to #fields).flat_map(at => field(0, at) + field(1, at) + type_equality(declared_type(fields#at), p) + NO_UNLESS_YES)
 	tag_in(0, p) + i32_const(declared_tag(case, p)) + I32_EQ + IF + VOID_BLOCK + compared + END
@@ -90,11 +91,11 @@ any_equality_function(p: Program) as int := {
 	missing = local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 	boxed = BOXED_WORDS.flat_map(word => compared_as(box_index(p.m, word), instruction(STRUCT_GET, [box_index(p.m, word), 0]), equality(WORD_LAYOUTS[word], p)))
 	texts = compared_as(text_type(p.m), [], equality(nullable(text_type(p.m)), p))
-	same = local_get(0) + instruction(REF_CAST, [EQ_HEAP]) + local_get(1) + instruction(REF_CAST, [EQ_HEAP]) + REF_EQ
+	same = local_get(0) + REF_CAST + EQ_HEAP + local_get(1) + REF_CAST + EQ_HEAP + REF_EQ
 	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing + boxed + texts + same)
 }
 # when the value in local 0 is of a type: no unless local 1 is too, else both taken out and compared
 compared_as(type: int, taken: list, compare: list) as list := {
-	both = local_get(0) + instruction(REF_CAST, [type]) + taken + local_get(1) + instruction(REF_CAST, [type]) + taken
-	local_get(0) + instruction(REF_TEST, [type]) + IF + VOID_BLOCK + local_get(1) + instruction(REF_TEST, [type]) + NO_UNLESS_YES + both + compare + RETURN + END
+	both = local_get(0) + heap_instruction(REF_CAST, type) + taken + local_get(1) + heap_instruction(REF_CAST, type) + taken
+	local_get(0) + heap_instruction(REF_TEST, type) + IF + VOID_BLOCK + local_get(1) + heap_instruction(REF_TEST, type) + NO_UNLESS_YES + both + compare + RETURN + END
 }

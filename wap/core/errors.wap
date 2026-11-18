@@ -8,6 +8,8 @@
 #
 # Later: the readings a phrase allows, a fix-it, and the rule that expanded the form.
 
+use "stage.wap"
+
 refused(code: Node, why: text) := raise place_of(code) + why + ": " + code
 
 # `hello.wap line 2:1: `, `line 2:1: ` for code no file holds, or nothing for code without a position

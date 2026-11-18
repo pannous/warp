@@ -10,6 +10,10 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../parse/operator_table.wap"
+use "../parse/atoms.wap"
+use "../parse/cascade.wap"
+use "../../preload/operators.wap"
+use "../language.wap"
 
 FRESH_MARK = "·"
 
@@ -81,18 +85,18 @@ items_taken(taken: Node) as list := match taken { List(items, bracket, separator
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.
-names_bound_in(template: Node) as list := match template {
+names_bound_in(language: Language, template: Node) as list := match template {
 	Call(called, arguments) => {
-		inner = arguments.map(names_bound_in).fold([], (a, b) -> a + b)
-		if #arguments == 2 and assigning(called) and arguments#1 is symbol and not is_hole(arguments#1) then [spelling_written(arguments#1)] + inner else inner
+		inner = arguments.map(argument => names_bound_in(language, argument)).fold([], (a, b) -> a + b)
+		if #arguments == 2 and assigning(language, called) and arguments#1 is symbol and not is_hole(arguments#1) then [spelling_written(arguments#1)] + inner else inner
 	}
-	List(items, bracket, separator) => items.map(names_bound_in).fold([], (a, b) -> a + b)
-	Key(left, op, right) => names_bound_in(left) + names_bound_in(right)
+	List(items, bracket, separator) => items.map(item => names_bound_in(language, item)).fold([], (a, b) -> a + b)
+	Key(left, op, right) => names_bound_in(language, left) + names_bound_in(language, right)
 	_ => []
 }
 
 # whether a called operator is in the assignment group: `=`, `:=`, `+=` …
-assigning(called: Node) as bool := group_of(spelling_written(called), Fixity.Infix) == compound_assignment_group
+assigning(language: Language, called: Node) as bool := group_of(language, spelling_written(called), Fixity.Infix) == compound_assignment_group
 
 fresh_count = [0]
 # the bindings with each name the template binds made fresh

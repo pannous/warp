@@ -44,4 +44,16 @@ check "a variable defined only after a function value is no variable yet in it" 
   taken
 }
 print text(f([1, 2]))')" "6"
+check "a variable keeps its written optional type when given ø first" "$(ran declared_optional 'f() := {
+  found: int? = ø
+  for x in [1, 2] { if x == 2 { found = x } }
+  found
+}
+print text(f() == 2)')" "yes"
+check "an enum's case by its enum beside a case of the enum's name" "$(ran enum_beside_case 'enum Kind { Word, Sep }
+enum Sep { Space, None }
+k = Sep
+print text(#[Sep.None, Sep.Space])
+print text(k == Kind.Sep)')" "2
+yes"
 exit $((failures > 0))

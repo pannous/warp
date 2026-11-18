@@ -21,6 +21,8 @@ class Module {
 	texts: list = []
 	# memory segments: [address, bytes]
 	data: list = []
+	# the functions `ref.func` refers to, declared once each
+	referenced: list = []
 	# the first free byte of the memory; below it lie the memory segments
 	memory_end: int = 16
 }
@@ -51,6 +53,9 @@ little_endian(n: int, width: int) as list := (0 upto width).map(at => n ÷ 0x100
 
 # an instruction with its unsigned immediates: instruction(CALL, [3])
 instruction(opcode: list, indices: list) as list := opcode + indices.flat_map(unsigned)
+# an instruction on a heap type, which the format writes signed, a declared type's index among them: ref.test 64 is
+# [0xFB, 0x14, 0xC0, 0x00]
+heap_instruction(opcode: list, type_index: int) as list := opcode + signed(type_index)
 i32_const(n: int) as list := I32_CONST + signed(n)
 i64_const(n: int) as list := I64_CONST + signed(n)
 f64_const(x: float) as list := F64_CONST + little_endian(float_bits(x), 8)
@@ -89,7 +94,7 @@ section(id: int, items: list) as list := {
 
 # Types: a function's, a struct's, an array's. A field is its storage type and whether it is mutable.
 function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + counted(parameters) + counted(results)
-field_type(storage: list, mutability: int) as list := storage + [mutability]
+field_type(storage: list<int>, mutability: int) as list<int> := storage + [mutability]
 struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
 array_type(item: list) as list := [ARRAY_TYPE] + item
 # a type open to subtypes, extending these type indices
@@ -171,6 +176,13 @@ added_text(m: Module, bytes: list) as int := {
 	#m.texts - 1
 }
 
+# A reference to a function of the module, `ref.func`, its index declared for the element section
+function_reference(m: Module, index: int) as list := {
+	if not (index in m.referenced) { m.referenced += [index] }
+	instruction(REF_FUNC, [index])
+}
+# the element section, one declarative segment of the functions referred to; none when no function is
+declared_references(m: Module) as list := if m.referenced is empty then [] else section(ELEMENT_SECTION, [DECLARED_FUNCTIONS + unsigned(#m.referenced) + m.referenced.flat_map(unsigned)])
 # The whole module, its sections in the order the format requires.
 module_bytes(m: Module) as list := {
 	declarations = m.functions.map(function => unsigned(function#1))
@@ -179,5 +191,5 @@ module_bytes(m: Module) as list := {
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
 	memory_pages = [[0x00] + unsigned(1)]
 	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#placed + #passive)) + unsigned(#placed + #passive)
-	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
+	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + declared_references(m) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive + placed)
 }

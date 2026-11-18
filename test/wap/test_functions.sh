@@ -105,4 +105,35 @@ print text(["ccc", "a"].pick(by: t => #t))')" "4
 13
 access
 3"
+check "a parameter's default names a value of the program" "$(ran default_named 'k = 5
+f(g: int = k) := g
+print text(f())')" "5"
+check "a field's default is a case of an enum" "$(ran field_default_case 'enum Grouping { Left, Right }
+class Group { name: text, grouping: Grouping = Grouping.Left }
+g = Group("a")
+print text(g.grouping == Grouping.Left)')" "yes"
+check "a bare function parameter takes any function value" "$(ran bare_function 'twice(f: function, x: int) := f(f(x))
+print text(twice(x => x + 1, 3))')" "5"
+check "functions of one signature in one list, called as chosen" "$(ran signature_list 'inc(x: int): int := x + 1
+double(x: int): int := x * 2
+m: list<(int) -> int> = [inc, double, x => x * 3]
+for g in m { print text(g(5)) }
+print text((m#2)(7))')" "6
+10
+15
+14"
+check "function values of a signature keep what they capture" "$(ran signature_captures 'made(n: int): list<(int) -> int> := [x => x + n, x => x * n]
+fs = made(10)
+print text((fs#1)(1)) + " " + text((fs#2)(2))')" "11 20"
+check "a map of functions by name" "$(ran signature_map 'inc(x: int): int := x + 1
+twice(x: int): int := x * 2
+ops: map<text, (int) -> int> = {"inc": inc, "twice": twice}
+print text((ops["twice"])(21))')" "42"
+check "an early return of an int in a function giving int?" "$(ran early_optional_return 'first_big(xs: list<int>) as int? := {
+	for x in xs { if x > 1 { return x } }
+	ø
+}
+print(text(first_big([1, 5, 2])))
+print(text(first_big([1])))')" "5
+ø"
 exit $((failures > 0))
