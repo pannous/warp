@@ -162,12 +162,14 @@ type_built(word: text, parts: list) as Node := if word == OPTIONAL_MARK then opt
 # A function type, `(int, text) -> bool`: the parameters' types in round brackets, an arrow, the result's type
 FUNCTION_ARROW = "->"
 function_type_of(parameters: list, result: Node) as Node := Call(symbol(FUNCTION_ARROW), [List(parameters, Bracket.Round, Separator.Comma), result])
-# a function type's parameter types and result type, [parameters, result]; ø for any other type
+# a function type's parameter types and result type, [parameters, result], in round brackets or not; ø for any other
+# type
 function_type_parts(type: Node?) as list? := match type {
 	Call(called, items) => if text(called) == FUNCTION_ARROW and #items == 2 then [items_or_one(items#1), items#2] else ø
+	List(items, Bracket.Round, separator) => if #items == 1 then function_type_parts(items#1) else ø
 	_ => ø
 }
-items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; _ => [n] }
+items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; Empty => []; _ => [n] }
 # An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
 OPTIONAL_MARK = "?"
 optional_type(base: Node) as Node := if base_of_optional(base) != ø then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
