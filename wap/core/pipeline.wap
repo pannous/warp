@@ -12,7 +12,7 @@ use "analyze/types.wap"
 use "rules/typed.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
-RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/calls.wap"]
+RULE_FILES = ["kernel/forms.wap", "core/sugar/conditions.wap", "core/sugar/loops.wap", "core/sugar/matching.wap", "core/sugar/data.wap", "core/sugar/records.wap", "core/sugar/definitions.wap", "core/sugar/types.wap", "core/sugar/ranges.wap", "core/sugar/calls.wap"]
 # the standard language every program gets, as definitions
 PRELUDE_FILE = "preload/prelude.wap"
 
@@ -36,12 +36,19 @@ declared_modules(file: text) as list := {
 # the names the modules a declared program uses define
 used_declarations(code: Node, modules: list) as list := uses_of(code).flat_map(file => declarations_of(module_of(file, modules)))
 # declared code lowered and bound inside the preload's declarations and those of the modules it uses
-prepared(code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(code), declarations_of(preload) + used_declarations(code, modules))
+prepared(code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(code), library_around(code, preload) + used_declarations(code, modules))
+# the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
+library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
+# the preload's code with the modules it uses, whose words only the preload sees
+library_code_of(preload: Node) as Block := {
+	modules = modules_used(preload, operated_file).map(declared_operated) + [preload]
+	Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
+}
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
 # functions are there for any caller; typed, then rewritten by the typed rules
 typed_file(file: text, preload: Node) as Block := {
 	modules = declared_modules(file)
 	whole = Block(modules.flat_map(module => statements_in(prepared(module, modules, preload))))
-	library_code = bound_program(lowered_program(preload), [])
+	library_code = library_code_of(preload)
 	typed_by_rules(typed_program(whole, library_code), declarations_of(preload), library_code)
 }

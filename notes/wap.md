@@ -67,6 +67,10 @@ wap/
 
     parse/                    text → notation
       reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
+      lexemes.wap             the reader's state and its tokens
+      atoms.wap               pass 1: names, numbers, glyphs, texts with their holes
+      layout.wap              pass 1: brackets, separators, indentation
+      cascade.wap             pass 2: tokens → notation by the separator cascade
       operators.wap           notation → operated by the table of preload/operators.wap: precedence groups sorted
                               topologically, the minus rule, aliases to canonical words; unrelated mixes refused
 
@@ -86,7 +90,10 @@ wap/
       types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
 
     emit/                     typed kernel → bytes
-      emitter.wap             one case per kernel form; any other node refused
+      emitter.wap             one case per kernel form; any other node refused; blocks, if, loops, labels
+      functions.wap           definitions waiting for their first call, function values, calls
+      patterns.wap            Case: arms, pattern tests, a case's own value
+      places.wap              a typed form's layout, fields and items reached, variables
       primitives.wap          what each Prim operation emits; a longer one is a helper function of the module
       closures.wap            Fn: closure conversion
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
@@ -125,9 +132,9 @@ blocks wap goes to warp-host-fixer as a repro; work around it or go on meanwhile
 | owner | files (under wap/) |
 |---|---|
 | warp-wap-lead | compiler.wap, kernel/forms.wap, core/stage.wap, core/pipeline.wap, core/errors.wap, core/rules/lowering.wap, preload/prelude.wap |
-| warp-wap-reader | core/parse/reader.wap, core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap |
-| warp-wap-operators | core/parse/operators.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
-| warp-wap-emitter | core/emit/ (emitter, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
+| warp-wap-reader | core/parse/ (reader, lexemes, atoms, layout, cascade), core/rules/typed.wap, core/sugar/types.wap, core/sugar/definitions.wap |
+| warp-wap-operators | core/parse/operators.wap, core/parse/operator_table.wap, core/format.wap, preload/operators.wap, core/rules/stages.wap, core/rules/patterns.wap, core/rules/templates.wap, core/sugar/conditions.wap, core/sugar/loops.wap, core/sugar/calls.wap, core/sugar/matching.wap |
+| warp-wap-emitter | core/emit/ (emitter, functions, patterns, places, values, primitives, wasm), core/sugar/records.wap, core/sugar/data.wap |
 | warp-wap-binding | core/analyze/ (scope, declarations, types, calls, function_values) |
 
 ## Rules for every file
