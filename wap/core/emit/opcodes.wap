@@ -24,7 +24,7 @@ I8 = [0x78]
 # heap types, each its bytes (a declared type's is signed(index)), and type constructors
 ANY_HEAP = [0x6E]
 # the heap type of the references wasm compares by identity, structs and arrays among them
-EQ_HEAP = 0x6D
+EQ_HEAP = [0x6D]
 NULLABLE_REFERENCE = 0x63
 FUNCTION_TYPE = 0x60
 STRUCT_TYPE = 0x5F

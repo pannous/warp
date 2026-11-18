@@ -91,7 +91,7 @@ held_in_any(type: Node, at: Node, p: Program) as list := {
 # a value any holds, known of a type: cast to it, a plain one taken out of its box
 held_value(type: Node, at: Node, p: Program) as list := {
 	held = held_in_any(type, at, p)
-	instruction(REF_CAST, [held#1]) + held#2
+	heap_instruction(REF_CAST, held#1) + held#2
 }
 # the GC struct of a typed function value
 closure_of(n: Node, p: Program) as int := function_value_index(fact_of(n, TYPE), p.m, p.records) ?? refused(n, "this is no function value")
@@ -141,7 +141,7 @@ dispatching_function(p: Program, form: Node, overloads: list) as int := {
 	tried = overloads.flat_map(overload => {
 		taken = function_type_parts(fact_of(overload, SIGNATURE))#1#1
 		called = placed_by_key(p.functions, place_key(overload)) ?? waiting_function(p, place_key(overload)) ?? refused(overload, "this overload is not among the program's functions")
-		local_get(0) + instruction(REF_TEST, [held_in_any(taken, overload, p)#1]) + IF + VOID_BLOCK + local_get(0) + held_value(taken, overload, p) + instruction(CALL, [called.index]) + RETURN + END
+		local_get(0) + heap_instruction(REF_TEST, held_in_any(taken, overload, p)#1) + IF + VOID_BLOCK + local_get(0) + held_value(taken, overload, p) + instruction(CALL, [called.index]) + RETURN + END
 	})
 	taken = overloads.map(overload => text(function_type_parts(fact_of(overload, SIGNATURE))#1#1)).join(", ")
 	added_function(p.m, [ANYREF], [given_layout(form, p)], [], tried + raised("no ${text(overloads#1)} takes this value; it takes ${taken}", p))
