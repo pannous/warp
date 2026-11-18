@@ -58,12 +58,17 @@ call_text(call: Node, called: Node, arguments: list) as text := {
 	if #arguments == 2 and group_of(spelling, Fixity.Infix) != "" {
 		left = if spelling == DEFINE_SPELLING then definition_head_text(arguments#1) else operand_text(arguments#1, call, Side.Left)
 		gap = if group_of(spelling, Fixity.Infix) == glue_group then "" else " "
+		if arguments#1 == symbol(OPEN_SIDE) or arguments#2 == symbol(OPEN_SIDE) { return open_text(arguments, call, spelling) }
 		return left + gap + spelling + gap + operand_text(arguments#2, call, Side.Right)
 	}
 	if #arguments == 1 and group_of(spelling, Fixity.Prefix) != "" { return spelling + word_gap(spelling) + operand_text(arguments#1, call, Side.Right) }
 	if #arguments == 1 and group_of(spelling, Fixity.Postfix) != "" { return operand_text(arguments#1, call, Side.Left) + word_gap(spelling) + spelling }
 	spelling + "(" + arguments.map(formatted).join(", ") + ")"
 }
+
+# an operator read before or after one operand, its open side written as nothing: `2 ..`, `.. 3`
+open_text(arguments: list, call: Node, spelling: text) as text :=
+	if arguments#1 == symbol(OPEN_SIDE) then spelling + " " + operand_text(arguments#2, call, Side.Right) else operand_text(arguments#1, call, Side.Left) + " " + spelling
 
 # `x += 1` as written: the assignment x = x + 1 the operator stage read it as, its right side's right operand
 compound_text(call: Node, arguments: list) as text := match arguments#2 {

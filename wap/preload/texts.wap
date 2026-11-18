@@ -31,6 +31,8 @@ character_offset(t: text, index: int): int := {
 	at
 }
 
+# whether a text has no characters: `t is empty`
+empty(t: text): bool := t == ""
 # how many characters t holds: `#"héllo"` is 5
 #(t: text): int := {
 	count = 0

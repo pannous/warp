@@ -65,4 +65,36 @@ h(x: int?) := 1
 print text(missing(f(1)))
 print text(h(f(1)))')" "yes
 1"
+check "a value in an any shows itself by its own type's show" "$(ran shown_any 's(x: any): text := show(x)
+class Box { n: int }
+print s(1) + " " + s(2.5) + " " + s("ab") + " " + s(yes) + " " + s(Box(3))')" "1 2.5 \"ab\" yes Box{n: 3}"
+check "a case with an any field shows it" "$(ran held_any 'enum Holder { Held(value: any) }
+print show(Held(3))')" "Held(3)"
+# a name given only ø holds an optional whose type its uses settle; a generic function given a type not settled yet is
+# typed once it is
+check "a name given only ø is an optional of the type its uses give" "$(ran missing_name 'held = ø
+print text(missing(held))
+print text(if missing(held) then 3 else held!)
+g(xs: list<T>): int := #xs
+xs = []
+n = g(xs)
+xs += [5]
+print text(n + #xs)')" "yes
+3
+1"
+check "a list of any holds values of several types" "$(ran any_list 'xs: list<any> = [1, 2.5, "a b", yes]
+for x in xs { print show(x) }')" "1
+2.5
+\"a b\"
+yes"
+# `x is w`: a type's word tests the type, a predicate's word calls it (wiki keyword.md: `x = []; x is empty` is yes)
+check "is with a predicate word calls it" "$(ran is_predicate 'x = []
+print text(x is empty)
+print text("a" is empty)
+even(n: int): bool := n % 2 == 0
+print text(4 is even)
+print text(3 is int)')" "yes
+no
+yes
+yes"
 exit $((failures > 0))

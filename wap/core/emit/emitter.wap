@@ -89,6 +89,8 @@ class Frame {
 	# a function's frame takes returns, the program's does not; the types of the values returned so far
 	function: bool = no
 	returns: list = []
+	# the layout of the function's result as its signature says, which a returned value is made to fit
+	signed: list = []
 	# the labels open around the code being emitted, the innermost last
 	labels: list = []
 }
@@ -116,7 +118,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items.map(item => code(item, p, f)), p))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items_fitted(item_type(fact_of(form, TYPE)), items, p, f), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
@@ -151,7 +153,7 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := {
 	given = labelled(f, [OTHER_LABEL], () => code(part, p, f))
 	wanted = typed_layout(choice, p)
-	if wanted == ø then given else fitted(given, wanted, p.m)
+	if wanted == ø then given else fitted(given, wanted, part, p.m)
 }
 # the type of either of two values: the one that finishes, or the common one; none when they differ
 joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
@@ -172,11 +174,15 @@ while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Cod
 # The function left with a value, or with none for a bare return; the code after it never runs
 return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	if not f.function { refused(form, "a return leaves a function; the program has none to leave") }
-	given = if value is Empty then Code() else code(value, p, f)
+	given = if value is Empty then Code() else signed_fit(code(value, p, f), value, f, p)
 	f.returns += [given.type]
 	Code(NEVER, given.instructions + RETURN)
 }
 
+# the code of items made to fit the type a list or a map holds: `[1, "a"]` as a list<any> boxes the 1
+items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p.m))
+# a function's value made to fit its signed result, a frame without one leaving it as it is
+signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p.m) else given
 # code emitted inside wasm's structured instructions, which open these labels
 labelled(f: Frame, labels: list, emit: function) as Code := {
 	f.labels += labels

@@ -113,5 +113,3 @@ map_layout(map: Node, p: Program) as list := nullable(map_struct(map, p))
 keys_of(map: Node) as Node := list_type(key_type(map))
 values_of(map: Node) as Node := list_type(held_type(map))
 map_part(at: int, map: Node, p: Program) as list := local_get(0) + instruction(STRUCT_GET, [map_struct(map, p), at])
-# a raise of a message from inside a helper
-raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
