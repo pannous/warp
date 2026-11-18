@@ -34,7 +34,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	candidates = scopes.flat_map(scope => scope)
 	if arguments.any(is_named) { arguments = arranged_arguments(n, called, arguments, candidates) }
 	by_count = candidates.filter(definition => takes_count(definition, #arguments))
-	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
+	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else (1 to #arguments).map(at => result_wanted(arguments#at, at, by_count, s))
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
 	# `n is symbol` on a Node tests the kind even beside a maker symbol(name) (core/analyze/shapes.wap kind_named)
 	kind = if fact_of(n, PREDICATE) == ø then ø else kind_named(called, value_type(given#1), s)
@@ -50,6 +50,24 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	with_type_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen.result)
 }
+# A word with several results gives the one that is wanted (wiki/conversion.md "declared type via as"): an argument
+# whose definitions differ by their result, `int(hi())` beside hi() as int and hi() as text, is wanted as the parameter
+# type of the outer definition that one of its results is; T(x) of an x that can be a T takes it as a T, int(n: int)
+# before int(t: text); ø where no single type is left
+result_wanted(argument: Node, at: int, outer: list, s: TypingState) as Node? := {
+	results = results_written(argument, s)
+	if #results < 2 { return ø }
+	taking = outer.filter(definition => results.any(result => same_type(result, parameter_type_at(definition, at))))
+	giving = taking.filter(definition => same_type(declared_type(written_name(definition)), parameter_type_at(definition, at)))
+	chosen = if #giving == 1 then giving else taking
+	if #chosen == 1 then parameter_type_at(chosen#1, at) else ø
+}
+# the results a call's definitions write, of those taking as many arguments
+results_written(argument: Node, s: TypingState) as list := match argument {
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => declared_type(written_name(definition))).filter(result => result != ø)
+	_ => []
+}
+parameter_type_at(definition: Node, at: int) as Node? := if #parameters_in(definition) < at then ø else type_given(parameters_in(definition)#at)
 # A call's arguments with the named ones, `f(b: 1, a: 5)`, put in their parameters' places, a left-out parameter
 # given its default: the same places for every definition the name may mean, else refused
 arranged_arguments(n: Node, called: Node, arguments: list, candidates: list) as list := {
