@@ -905,6 +905,8 @@ function_passes(items: list, program: Node) as any := {
 field_drawn(item: Node) as any := if is_key(item, Op.Colon) and key_of(item) is symbol then key_of(item) else ø
 # `["a", "b"]`: the names of the function's parameters as a list; ø when the program defines no such function
 parameters_named(name: Node, program: Node) as any := {
+	# (a parameter or local of the name where the rule reads it wins over every function of it, card parameters-must)
+	if locally_bound(name) { return ø }
 	definition = function_definition(name, program)
 	if definition != ø { return List(definition_parameters(definition), Bracket.Square, Separator.Comma) }
 	builtin = builtin_signature(name, program)
@@ -926,6 +928,8 @@ signature_text(name: Node, program: Node) as any := {
 }
 # `f.signatures`: each definition's signature in order, a library or foreign word's one; ø as signature_text
 signatures_listed(name: Node, program: Node) as list? := {
+	# (a parameter or local of the name where the rule reads it wins over every function of it, card parameters-must)
+	if locally_bound(name) { return ø }
 	definitions = definitions_of(name, program)
 	if #definitions == 0 {
 		outside = builtin_shown(name, program, "") ?? foreign_shown(spelled(name))
