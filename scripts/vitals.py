@@ -60,7 +60,8 @@ WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (with hello) when wap/ changed, "tests"
 WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree")  # wap/ and the census script of main's tip, extracted to run them
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
-WAP_CENSUS_JOBS = 4  # census runs at once, niced: each takes ~25 s
+WAP_CENSUS_JOBS = 4  # census runs at once, each in a machine-wide job slot (scripts/job-slot.sh, niced): ~25 s each
+JOB_SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job-slot.sh")
 WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
@@ -522,7 +523,7 @@ def wap_census(files):
     statements, lowered, bound, files typed whole and emitted, functions typed, and the WAP_BLOCKERS most frequent refusals [stage, message, count]"""
     def run(file):
         try:
-            return subprocess.run(["nice", "-n", "19", WARP, "--no-window", WAP_CENSUS, file], capture_output=True, text=True,
+            return subprocess.run([JOB_SLOT, WARP, "--no-window", WAP_CENSUS, file], capture_output=True, text=True,
                                   cwd=WAP_TREE, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS).stdout
         except subprocess.TimeoutExpired:
             return f"timeout\tafter {WAP_CENSUS_FILE_SECONDS} s"
