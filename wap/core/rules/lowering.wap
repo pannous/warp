@@ -73,7 +73,7 @@ lowered_form(n: Node) as Node := match n {
 	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
 	Call(called, arguments) => operator_lowered(n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(items, separator, n)) else not_lowered(n)
-	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(lowered))
+	Key(head, Op.None, group) => Call(if head is symbol then head else lowered(head), arguments_of(group).map(argument_lowered))
 	Key(name, Op.Colon, type) => if name is symbol then n else not_lowered(n)
 	List(items, Bracket.Square, separator) => List(items.map(lowered), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(items, separator, n) else lowered_block(statements_of(List(items, Bracket.None, separator)))
@@ -133,6 +133,11 @@ is_fields(item: Node) as bool := match item {
 	_ => no
 }
 # an instance's field, `x: 1`, its value lowered
+# a call's argument lowered: a named one, `by: f`, its value
+argument_lowered(argument: Node) as Node := match argument {
+	Key(name, Op.Colon, value) => if name is symbol then field_lowered(argument, argument) else lowered(argument)
+	_ => lowered(argument)
+}
 field_lowered(field: Node, n: Node) as Node := match field {
 	Key(name, Op.Colon, value) => refitted(Key(if name is symbol then name else lowered(name), Op.Colon, lowered(value)), field)
 	_ => not_lowered(n)
