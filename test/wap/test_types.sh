@@ -97,4 +97,10 @@ print text(3 is int)')" "yes
 no
 yes
 yes"
+# a char literal where a letter bound to text is wanted reads as that text, as where text is written
+check "a char literal for a letter bound to text" "$(ran letter_text 'xs: list<text> = ["a", "bc"]
+print text(xs.contains("a"))
+has_key(m: map<K, V>, key: K): bool := yes
+print text({a: 1}.has_key("c"))')" "yes
+yes"
 exit $((failures > 0))

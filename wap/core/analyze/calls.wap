@@ -28,7 +28,8 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	hints = if #by_count == 1 then parameters_in(by_count#1).map(parameter => if has_letters(type_given(parameter), s.records) then ø else type_given(parameter)) else arguments.map(argument => ø)
 	given = (1 to #arguments).map(at => typed_form(arguments#at, s, f, hints#at))
 	meant = chosen_definition(n, called, scopes, given, expected, s)
-	wanted = parameters_in(meant).map(type_given)
+	letters = letters_bound(meant, given.map(value_type), s) ?? []
+	wanted = parameters_in(meant).map(parameter => substituted(type_given(parameter), letters))
 	taken = (1 to #given).map(at => if reads_as_text(given#at, wanted#at) then as_text(given#at, s, f) else given#at) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
@@ -268,9 +269,11 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
 	held = type_keyed(text(letter), bound)
 	if held == ø { return if type == letter then bound else bound + [[text(letter), type]] }
-	if same_type(held, type) { return bound }
+	if same_type(held, type) or reads_as(held, type) { return bound }
 	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
 }
+# whether a value of the given type is read as one of the held type: a char as its text
+reads_as(held: Node, given: Node) as bool := same_type(held, symbol(TEXT_TYPE)) and given == symbol(CHAR_TYPE)
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
 function_value_bound(wanted: list, value: Node, bound: list, s: TypingState) as list? := {
@@ -306,7 +309,7 @@ any_enum(wanted: Node, given: Node?, records: list) as bool := {
 	record != ø and not cases_of(record) is empty
 }
 # a character where a text is wanted: a one-character text is a character (wiki/char.md, 'a' == "a")
-reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and same_type(wanted, symbol(TEXT_TYPE)) and value_type(argument) == symbol(CHAR_TYPE)
+reads_as_text(argument: Node, wanted: Node?) as bool := wanted != ø and reads_as(wanted, value_type(argument))
 # types as a message names them, `int, text?`
 types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
