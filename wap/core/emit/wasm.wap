@@ -92,7 +92,7 @@ section(id: int, items: list) as list := {
 
 # Types: a function's, a struct's, an array's. A field is its storage type and whether it is mutable.
 function_type(parameters: list, results: list) as list := [FUNCTION_TYPE] + counted(parameters) + counted(results)
-field_type(storage: list, mutability: int) as list := storage + [mutability]
+field_type(storage: list<int>, mutability: int) as list<int> := storage + [mutability]
 struct_type(fields: list) as list := [STRUCT_TYPE] + counted(fields)
 array_type(item: list) as list := [ARRAY_TYPE] + item
 # a type open to subtypes, extending these type indices
