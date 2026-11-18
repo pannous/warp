@@ -6,6 +6,7 @@
 # function of the module, emitted once.
 
 use "emitter.wap"
+use "patterns.wap"
 use "values.wap"
 use "wasm.wap"
 use "../errors.wap"
@@ -66,6 +67,9 @@ HOST_FUNCTIONS = {
 }
 # the index of a host function the module imported
 host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
+
+# a helper's early end: unless the test on the stack is yes, the helper gives no
+NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
 HELPERS = {"print_text": printing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function, "tag_equal": tag_equality_function}
@@ -173,17 +177,29 @@ counted(local: int, limit: list, body: list) as list := {
 # count.
 text_equality_function(p: Program) as int := {
 	type = text_type(p.m)
-	no_unless_equal = I32_NE + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+	no_unless_equal = I32_EQ + NO_UNLESS_YES
 	byte = local => instruction(LOCAL_GET, [local]) + instruction(LOCAL_GET, [3]) + instruction(ARRAY_GET_U, [type])
 	lengths = instruction(LOCAL_GET, [0]) + ARRAY_LEN + instruction(LOCAL_TEE, [2]) + instruction(LOCAL_GET, [1]) + ARRAY_LEN + no_unless_equal
 	bytes = counted(3, instruction(LOCAL_GET, [2]), byte(0) + byte(1) + no_unless_equal)
 	added_function(p.m, [nullable(type), nullable(type)], [I32], [I32, I32], lengths + bytes + i32_const(1))
 }
 
-# The helper of tag_equal: yes when two cases of an enum have one tag
+# The helper of tag_equal: yes when two cases have one tag and, for a case with fields, equal fields. Tags count the
+# cases of every enum, so one helper serves them all. Its locals: 0 and 1 the cases.
 tag_equality_function(p: Program) as int := {
 	base = nullable(enum_base(p.m))
-	added_function(p.m, [base, base], [I32], [], instruction(LOCAL_GET, [0]) + tagged(p.m) + instruction(LOCAL_GET, [1]) + tagged(p.m) + I32_EQ)
+	tags = tag_in(0, p) + tag_in(1, p) + I32_EQ + NO_UNLESS_YES
+	fields = p.records.flat_map(record => cases_of(record).filter(case => case_fields(case) is not empty).flat_map(case => fields_compared(record, case, p)))
+	added_function(p.m, [base, base], [I32], [], tags + fields + i32_const(1))
+}
+tag_in(local: int, p: Program) as list := instruction(LOCAL_GET, [local]) + tagged(p.m)
+# When both cases are this one, each of its fields of the two compared by the field's equality
+fields_compared(record: Node, case: Node, p: Program) as list := {
+	cast = case_struct_of(record, case, p.m, p.records)
+	field = (local, at) => instruction(LOCAL_GET, [local]) + instruction(REF_CAST_NULL, [cast]) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
+	fields = case_fields(case)
+	compared = (1 to #fields).flat_map(at => field(0, at) + field(1, at) + equality(layout_of(declared_type(fields#at), p.m, p.records), p) + NO_UNLESS_YES)
+	tag_in(0, p) + i32_const(declared_tag(case, p)) + I32_EQ + IF + VOID_BLOCK + compared + END
 }
 
 # The helper of text_joined: a new text of the first's bytes, then the second's

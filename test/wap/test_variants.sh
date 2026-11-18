@@ -51,4 +51,12 @@ refused"
 check "cases of one name in two enums differ" "$(ran qualified_differ 'enum Side { Left, Right }
 enum Grouping { Left, Right }
 if Side.Right == Grouping.Right { print "same" } else { print "differ" }')" "differ"
+check "cases with fields are equal by their fields" "$(ran fields_equal 'enum Shape { Circle(r: int), Label(name: text), Dot }
+if Circle(1) == Circle(2) { print "same" } else { print "differ" }
+if Circle(1) == Circle(1) { print "same" } else { print "differ" }
+if Label("a") == Label("a") { print "same" } else { print "differ" }
+if Circle(1) != Dot { print "differ" } else { print "same" }')" "differ
+same
+same
+differ"
 exit $((failures > 0))
