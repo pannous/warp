@@ -243,7 +243,7 @@ compile_written(source: text, wasm_file: text, folder: text) := {
 	write_bytes(wasm_file, with_questions(compiled))
 }
 # A compile the native warp caches (its run option cache names the cached module, core/native/driver.warp) keeps in
-# the module the questions it asked the host (host_io.warp host_answered) and the warnings and hints it said, a record each,
+# the module the questions it asked the host (host_io.warp asked_host) and the warnings and hints it said, a record each,
 # its parts apart by a unit separator
 QUESTIONS_SECTION = "warp.questions"
 WARNINGS_SECTION = "warp.warnings"
@@ -267,7 +267,7 @@ cached_current() as bool := {
 	said_again(records_in(wasm, WARNINGS_SECTION).map(record => record#1), records_in(wasm, HINTS_SECTION).map(record => record#1))
 	yes
 }
-answered_alike(question: list) as bool := text(answer_fingerprint(std_io(question#2, question#3, question[3 ..]))) == question#1
+answered_alike(question: list) as bool := text(answer_fingerprint(host_answer(question#2, question#3))) == question#1
 
 # runtime.wasm beside this compiler, the harness's fifth argument of a compile: the program is compiled behind it (card
 # runtime-prepended), read once. A compile has no other runtime: without it, it fails
