@@ -48,8 +48,8 @@ library_words(declaration: Node) as list := match declaration {
 bound(n: Node, scope: list, depth: int) as Node := match n {
 	Symbol(name) => resolved(n, scope, depth)
 	Block(statements) => block_bound(n, statements, named_variables(n, scope, depth) + scope, depth)
-	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
-	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
+	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
@@ -145,8 +145,13 @@ all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bou
 
 # A function's parameters and body, one depth further in than the function's definition, the body seeing the
 # parameters before the names around it
-parameters_bound(parameters: List, depth: int) as Node := match parameters {
-	List(items, bracket, separator) => refitted(List(items.map(p => bound(p, parameter_definitions(parameters, depth + 1), depth + 1)), bracket, separator), parameters)
+parameters_bound(parameters: List, scope: list, depth: int) as Node := match parameters {
+	List(items, bracket, separator) => refitted(List(items.map(p => default_bound(bound(p, parameter_definitions(parameters, depth + 1), depth + 1), scope, depth)), bracket, separator), parameters)
+}
+# a parameter's default value, `y: int = k`, bound where the function is defined
+default_bound(parameter: Node, scope: list, depth: int) as Node := {
+	given = fact_of(parameter, DEFAULT)
+	if given == ø then parameter else with_fact(parameter, DEFAULT, bound(given, scope, depth))
 }
 body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + receiver_fields(parameters, scope, depth + 1) + scope, depth + 1)
 # A method's receiver fields: in a function whose first parameter is `self` of a class, each field of the class by its

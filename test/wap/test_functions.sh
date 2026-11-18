@@ -105,4 +105,11 @@ print text(["ccc", "a"].pick(by: t => #t))')" "4
 13
 access
 3"
+check "a parameter's default names a value of the program" "$(ran default_named 'k = 5
+f(g: int = k) := g
+print text(f())')" "5"
+check "a field's default is a case of an enum" "$(ran field_default_case 'enum Grouping { Left, Right }
+class Group { name: text, grouping: Grouping = Grouping.Left }
+g = Group("a")
+print text(g.grouping == Grouping.Left)')" "yes"
 exit $((failures > 0))
