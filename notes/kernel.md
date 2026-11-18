@@ -142,6 +142,8 @@ Measured on warp (the old compiler, 2026-11-17; the full census is in this file'
 - at least 7 passes walk variable bindings by themselves; wap has one scope analysis.
 - of 410 rewrite rules, 82 ask about declared names or signatures and none about inferred types: stage 3 is new
   ground.
+- `warp kernel <code|file>` (extensions/commands/kernel.warp) prints how many nodes of the old compiler's lowered
+  program are kernel forms and each form outside the kernel with its count and first place.
 - dependent types are not needed: typed holes, type variables and, for units, integer exponents in types cover every
   case found.
 
