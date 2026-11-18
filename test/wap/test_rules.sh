@@ -56,10 +56,25 @@ methods { twice(k: int) := self * k; ten() := self * 10 }
 print text(twice(3, 4) + ten(2))')" "32"
 check "a block pattern of two parts fits a group of one item" "$(ran one_item 'rule klass $name { ($field: $type)... ($m := $b)... } => print "two"
 klass P { x: int }')" "two"
+check "a rule that writes nothing leaves its place in the list" "$(ran writes_nothing 'rule kept $x: Number => $x
+rule kept $x: Text => ()
+rule numbers [$items...] => print(text(#[(kept $items)...]))
+numbers [1, "skip", 2]')" "2"
+check "a row a rule writes joins the list it lands in" "$(ran row_spliced 'rule twice $x: Symbol => $x, $x
+q = 5
+print text(#[(twice q), 1])')" "3"
 check "in braces a line's comma row gives its items to a repetition" "$(ran brace_rows 'rule row_of { $cases... } => [$cases...]
 ws = row_of {
 	5, 6
 	7
 }
 print text(#ws)')" "3"
+check "a rule's result in a group of one gives way to the key it became" "$(ran group_gives_way 'rule mk { $ms... } => {(nm ($ms))...}
+rule nm ($f: $t) => $f: 1
+m = mk { a: int; b: int }
+print text(m.a + m.b)')" "2"
+check "a key in brackets in a pattern fits the key written bare" "$(ran bare_key 'rule mk { $ms... } => {(nm $ms)...}
+rule nm ($f: $t) => $f: 1
+m = mk { a: int; b: int }
+print text(m.a + m.b)')" "2"
 exit $((failures > 0))

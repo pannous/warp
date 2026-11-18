@@ -76,4 +76,18 @@ twice(x: int) := x * 2
 print text(n + 1)
 print text(twice(n))')" "6
 10"
+check "-> writes a function value as => does (wiki: both arrows denote lambdas)" "$(ran arrow 'g = (a, b) -> a + b
+print text(g(1, 2))')" "3"
+# code that never finishes, a return, fits any parameter
+check "a return given as an argument" "$(ran never_fits 'pick(a: int, b: int) as int := a
+g(a: int) as int := pick(a, return 7)
+print text(g(1))')" "7"
+check "a function calls itself" "$(ran recursive 'f(n: int): int := if n < 1 then 0 else n + f(n - 1)
+print text(f(3))')" "6"
+# a parameter's default, which a call that leaves it out gives it (a class's field default the same, its constructor's)
+check "a parameter's default" "$(ran parameter_default 'f(x: int, y: int = 2) := x + y
+print text(f(1) + f(1, 5))
+class P { x: int; tag: text = "?" }
+print P(3).tag + P(3, "a").tag')" "9
+?a"
 exit $((failures > 0))

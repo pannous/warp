@@ -27,4 +27,11 @@ check "no arm fits: nothing runs" "$(ran none 'match 5 { 1 => print "one" }
 print "after"')" "after"
 check "a match later in a phrase is the earlier word's argument" "$(ran inner_match 'x = 2
 print match x { 1 => "one"; _ => "other" }')" "other"
+check "an arm assigns in its result, not to the arrow" "$(ran arm_assigns 'y = 0
+x = 1
+match x {
+	1 => y = 2
+	_ => y = 3
+}
+print text(y)')" "2"
 exit $((failures > 0))

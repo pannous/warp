@@ -66,4 +66,13 @@ total = 0
 for i in r { total = total + i }
 total')" "6
 14"
+check "a block indented below a loop is its body" "$(ran loop_indented 'xs = [1, 2]
+for i in xs
+	print text(i)
+c = yes
+while c
+	print "once"
+	c = no')" "1
+2
+once"
 exit $((failures > 0))

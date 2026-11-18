@@ -6,6 +6,9 @@ bits_of(x: float): int := prim i64_reinterpret_f64(x)
 float_of_bits(bits: int): float := prim f64_reinterpret_i64(bits)
 quotient(a: int, b: int): int := prim i64_div_s(a, b)
 rem(a: int, b: int): int := prim i64_rem_s(a, b)
+# whether a quotient truncated toward zero lies one above the floored one: a remainder left of the dividend's sign,
+# not the divisor's
+truncated_above_floor(a: int, b: int): bool := rem(a, b) != 0 and (rem(a, b) < 0) != (b < 0)
 
 # The text of a float, its shortest digits that read back, positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7;
 # ∞, -∞ and NaN by name (the warp runtime's algorithm, core/runtime/floats.warp)

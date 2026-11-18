@@ -40,4 +40,22 @@ if c {
 }
 else if not c { print "d" }
 else { print "e" }')" "d"
+check "an else indented below continues the if" "$(ran else_indented 'c = no
+x = if c then 1
+	else 2
+print text(x)
+if c then print "a"
+	else if c then print "b"
+	else print "c"')" "2
+c"
+check "?? runs its right side only when the left is missing" "$(ran default_short 'f(a: int) as int? := if a > 0 then a else ø
+g(a: int) as int := {
+	x = f(a) ?? return 0
+	x * 2 }
+print text(g(3))
+print text(g(-1))')" "6
+0"
+check "a block indented below an if is its body" "$(ran if_indented 'c = yes
+if c
+	print "body"')" "body"
 exit $((failures > 0))
