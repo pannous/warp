@@ -42,7 +42,6 @@ definitions_made_by(n: Node, scope: list, depth: int) as list := match n {
 	Prim(operation, arguments) => defined_in(arguments, scope, depth)
 	If(condition, then_part, else_part) => defined_in([condition, then_part, else_part], scope, depth)
 	While(condition, body) => defined_in([condition, body], scope, depth)
-	Try(body, otherwise) => defined_in([body, otherwise], scope, depth)
 	Case(subject, arms) => defined_in([subject] + arms.map(arm_result), scope, depth)
 	Return(value) => defined_in([value], scope, depth)
 	Get(subject, key) => defined_in([subject, key], scope, depth)
