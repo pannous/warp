@@ -8,6 +8,7 @@ use "../parse/reader.wap"
 use "../parse/operators.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 use "../parse/operator_table.wap"
 use "../parse/atoms.wap"
@@ -50,7 +51,7 @@ built_items(language: Language, items: list, bindings: map) as list := {
 	all = []
 	for item in items {
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
-			all = all + items_taken(bindings[hole_key(item)])
+			all = all + items_or_one(bindings[hole_key(item)])
 		} else if repeated_part(item) != ø {
 			all = all + repeated(language, repeated_part(item), bindings)
 		} else {
@@ -72,17 +73,15 @@ grown(items: list, bracket: Bracket, separator: Separator) as Node := {
 repeated(language: Language, part: Node, bindings: map) as list := {
 	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
 	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
-	times = #items_taken(bindings[sequences#1 + REST_MARK])
+	times = #items_or_one(bindings[sequences#1 + REST_MARK])
 	written = []
 	for i in 1 to times {
-		for hole in sequences { bindings[hole] = items_taken(bindings[hole + REST_MARK])#i }
+		for hole in sequences { bindings[hole] = items_or_one(bindings[hole + REST_MARK])#i }
 		written.add(built(language, ungrouped(part), bindings))
 	}
 	for hole in sequences { bindings.remove(hole) }
 	written
 }
-# what a rest or repetition took; none taken is Empty, as the host gives an empty list
-items_taken(taken: Node) as list := match taken { List(items, bracket, separator) => items; Empty => []; _ => [taken] }
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.

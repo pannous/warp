@@ -35,6 +35,7 @@ function_type_parts(type: Node?) as FunctionParts? := match type {
 	List(items, Bracket.Round, separator) => if #items == 1 then function_type_parts(items#1) else ø
 	_ => ø
 }
+# what a rest or repetition took; none taken is Empty, as the host gives an empty list
 items_or_one(n: Node) as list := match n { List(items, bracket, separator) => items; Empty => []; _ => [n] }
 # An optional type, `int?`, as the reader reads it: the type glued to `?`; it holds a value of the type or ø
 OPTIONAL_MARK = "?"

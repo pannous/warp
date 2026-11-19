@@ -37,14 +37,13 @@ unglued(language: Language, n: Node) as Node := match n {
 # the code a block is glued to at its end, and that block: `1{else 2}`, `i in xs{…}` the operator's right side; ø when
 # no block ends it
 block_split(n: Node) as list? := match n {
-	Key(word, Op.None, block) => if is_braced(block) then [word, block] else ø
+	Key(word, Op.None, block) => if is_block(block) then [word, block] else ø
 	Call(called, arguments) => {
 		inner = if arguments is empty then ø else block_split(arguments.last)
 		if inner == ø then ø else [staged(n, call => Call(called, arguments[.. #arguments - 1] + [inner#1])), inner#2]
 	}
 	_ => ø
 }
-is_braced(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 # the parts a glued block gives the phrase it ends, ø where it stays glued
 block_taken(language: Language, block: Node) as list? := match block {
 	List(lines, Bracket.Curly, separator) => {
