@@ -63,4 +63,8 @@ format_check 'if c
 format_check 'r = 2..' 'r = 2 ..'
 format_check 'q = ..3' 'q = .. 3'
 format_check 'x = ø' 'x = ø'
+check "an operator glued to brackets is a call, as f(x) is" "$(ran glued_operator_call 'squared(n: int) as int := n * n
+next(n: int) as int := n + 1
+xs = [1, 2, 3]
+print(text(-(3).squared) + " " + text(#(xs).next) + " " + text(#((xs).filter(x => x > 1))) + " " + text(#xs.filter(x => x > 1)))')" "9 4 2 2"
 exit $((failures > 0))

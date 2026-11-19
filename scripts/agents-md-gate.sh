@@ -12,7 +12,13 @@ session=$(tmux display-message -p '#S' 2>/dev/null)
 
 case "${1:-}" in
 	--tool) touched=$(python3 -c 'import json,sys; print(json.load(sys.stdin).get("tool_input", {}).get("file_path", ""))') ;;
-	--commit) touched=$(git diff --cached --name-only) ;;
+	--commit) touched=$(git diff --cached --name-only)
+		# a merge that only brings in the other side's AGENTS.md (staged file == MERGE_HEAD's) is no edit of it
+		if git rev-parse -q --verify MERGE_HEAD >/dev/null; then
+			touched=$(echo "$touched" | while read -r f; do
+				[ "$(git rev-parse -q ":$f" 2>/dev/null)" = "$(git rev-parse -q "MERGE_HEAD:$f" 2>/dev/null)" ] || echo "$f"
+			done)
+		fi ;;
 	*) echo "usage: $0 --tool | --commit" >&2; exit 1 ;;
 esac
 echo "$touched" | grep -qE "$GATED" || exit 0

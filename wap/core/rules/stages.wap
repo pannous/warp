@@ -31,6 +31,8 @@ REFUSE_WORD = "refuse"
 DEFINITION = "="
 # the head of a pattern that starts with a hole: tried on every node
 NO_HEAD = ""
+# the head of a pattern that is one word, before the word
+WORD_HEAD = "word "
 
 # code after a stage's rules, and whether any of them fired
 class Fired { code: Node, fired: bool }
@@ -106,12 +108,14 @@ takes_block(m: Matcher) as bool := m.test == Test.Sequence and m.bracket == Brac
 SAMPLE_BLOCK = List([symbol("x")], Bracket.Curly, Separator.Newline)
 
 # The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its
-# first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
+# first word (`Call/+` for (Call + a b)), a key's operator, a word alone; NO_HEAD last, where rules starting with a hole wait.
 heads_of(language: Language, n: Node) as list<text> := match n {
 	List(items, bracket, separator) => list_heads(language, items) + shape_heads(items, bracket, separator) + [NO_HEAD]
 	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, Op.None, Empty) => EMPTY_GROUPS.flat_map(bracket => glued_heads(left, bracket)) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, op, right) => ["key " + (op as text), NO_HEAD]
+	# a word standing alone, `break`: the rules of that one word, apart from those of the phrases it heads
+	Symbol(name) => [WORD_HEAD + spelling_written(n), NO_HEAD]
 	_ => [NO_HEAD]
 }
 # A list under its bracket and separator, then its bracket alone: `$then... if $c` is a space phrase starting with a hole,
@@ -131,10 +135,7 @@ list_heads(language: Language, items: list) as list<text> := {
 
 # A rule may refuse a spelling with a fix-it, `rule … => refuse "put the inner if in braces"`: the message, ø for a
 # template that writes code
-refusal_of(template: Node) as text? := match template {
-	List(items, Bracket.None, Separator.Space) => if #items == 2 and items#1 == symbol(REFUSE_WORD) and items#2 is text then text(items#2) else ø
-	_ => ø
-}
+refusal_of(template: Node) as text? := phrase_text(template, REFUSE_WORD)
 
 # ---- termination, checked once all rules are loaded
 
@@ -161,6 +162,7 @@ rules_on(rules: Rules, heads: list<text>) as list<Rule> := heads.filter(head => 
 template_heads(language: Language, n: Node) as list<text> := match n {
 	List(items, bracket, separator) => heads_of(language, n) + items.flat_map(item => template_heads(language, item))
 	Key(left, op, right) => (if op == Op.None and pattern_called(language, left) != ø then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
+	Symbol(name) => heads_of(language, n)
 	_ => []
 }
 
