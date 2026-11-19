@@ -2,6 +2,7 @@
 # by layer, each layer finding its definitions of a name through its index, and the ones a name means.
 
 use "../stage.wap"
+use "../bindings.wap"
 
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 # (owner: a case's enum)

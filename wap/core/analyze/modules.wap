@@ -3,6 +3,7 @@
 
 use "../errors.wap"
 use "../stage.wap"
+use "../bindings.wap"
 use "../../kernel/forms.wap"
 use "scope.wap"
 use "names.wap"
