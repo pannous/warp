@@ -25,7 +25,7 @@ case_code(form: Node, subject: Code, arms: list, p: Program, f: Frame) as Code :
 	f.slots += [Placed("subject of ${place_key(form)}", #f.slots, subject.type, [], yes)]
 	held = f.slots.last
 	chosen = arms_code(form, arms, held, p, f)
-	Code(chosen.type, subject.instructions + instruction(LOCAL_SET, [held.index]) + chosen.instructions)
+	Code(chosen.type, subject.instructions + local_set(held.index) + chosen.instructions)
 }
 arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code := {
 	if arms is empty { return if fact_of(form, TYPE) == ø then Code() else Code(NEVER, UNREACHABLE) }

@@ -163,7 +163,7 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 		instead = arm_code(form, handling, p, f)
 		type = joined(tried.type, instead.type)
 		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
-		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + instruction(LOCAL_SET, [error.index]) + kept(instead, type) + END)
+		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + local_set(error.index) + kept(instead, type) + END)
 	}
 	_ => refused(handler, "a Try's handler is a function written in place, `error => …`")
 }

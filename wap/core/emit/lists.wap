@@ -59,7 +59,7 @@ item_removing_function(p: Program, type: Node) as int := {
 adding_function(p: Program, type: Node) as int := {
 	array = items_array(type, p)
 	full = count_in(type, 0, p) + items_in(type, 0, p) + ARRAY_LEN + I32_EQ
-	grown = items_in(type, 0, p) + ARRAY_LEN + i32_const(2) + I32_MUL + i32_const(GROWTH) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [2]) + local_get(2) + i32_const(0) + items_in(type, 0, p) + i32_const(0) + count_in(type, 0, p) + instruction(ARRAY_COPY, [array, array]) + local_get(0) + local_get(2) + instruction(STRUCT_SET, [list_struct(type, p), LIST_ITEMS_AT])
+	grown = items_in(type, 0, p) + ARRAY_LEN + i32_const(2) + I32_MUL + i32_const(GROWTH) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(2) + local_get(2) + i32_const(0) + items_in(type, 0, p) + i32_const(0) + count_in(type, 0, p) + instruction(ARRAY_COPY, [array, array]) + local_get(0) + local_get(2) + instruction(STRUCT_SET, [list_struct(type, p), LIST_ITEMS_AT])
 	put = items_in(type, 0, p) + count_in(type, 0, p) + local_get(1) + instruction(ARRAY_SET, [array])
 	added_function(p.m, [list_layout(type, p), item_layout(type, p)], [], [nullable(array)], full + IF + VOID_BLOCK + grown + END + put + counted_by(type, 1, p))
 }
@@ -75,7 +75,7 @@ list_slicing_function(p: Program, type: Node) as int := {
 	array = items_array(type, p)
 	place = slot => local_get(slot) + I32_WRAP_I64
 	checked = count_in(type, 0, p) + place(1) + place(2) + I32_ADD + I32_LT_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
-	copied = place(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [3]) + local_get(3) + i32_const(0) + items_in(type, 0, p) + place(1) + place(2) + instruction(ARRAY_COPY, [array, array])
+	copied = place(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + items_in(type, 0, p) + place(1) + place(2) + instruction(ARRAY_COPY, [array, array])
 	added_function(p.m, [list_layout(type, p), I64, I64], [list_layout(type, p)], [nullable(array)], checked + copied + place(2) + local_get(3) + instruction(STRUCT_NEW, [list_struct(type, p)]))
 }
 # The helper of list_joined: a new list of the first's items, then the second's. Its locals: 0 and 1 the lists, 2 the
@@ -84,7 +84,7 @@ lists_joining_function(p: Program, type: Node) as int := {
 	array = items_array(type, p)
 	total = count_in(type, 0, p) + count_in(type, 1, p) + I32_ADD
 	copied = (at, local) => local_get(2) + at + items_in(type, local, p) + i32_const(0) + count_in(type, local, p) + instruction(ARRAY_COPY, [array, array])
-	made = total + instruction(ARRAY_NEW_DEFAULT, [array]) + instruction(LOCAL_SET, [2]) + copied(i32_const(0), 0) + copied(count_in(type, 0, p), 1)
+	made = total + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(2) + copied(i32_const(0), 0) + copied(count_in(type, 0, p), 1)
 	added_function(p.m, [list_layout(type, p), list_layout(type, p)], [list_layout(type, p)], [nullable(array)], made + total + local_get(2) + instruction(STRUCT_NEW, [list_struct(type, p)]))
 }
 
