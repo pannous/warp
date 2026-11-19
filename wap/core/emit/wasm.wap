@@ -11,7 +11,7 @@ use "opcodes.wap"
 # A module in the making. Imports come first among the functions, so a function's index is counted after them. Each
 # entry is in bytes, as its section writes it, except a function and a recursion group, whose parts
 # the module reads again.
-class Module {
+class WasmModule {
 	types: list<list<int>> = []
 	# the types declared together in one recursion group
 	groups: list<RecursionGroup> = []
@@ -83,7 +83,7 @@ heap_of(reference: list<int>) as list<int> := if reference#1 == NULLABLE_REFEREN
 # a nullable reference to the declared type of that index
 nullable(type_index: int) as list<int> := [NULLABLE_REFERENCE] + signed(type_index)
 # whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
-packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
+packed_array(m: WasmModule, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
 # the type index a nullable reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref.
 # Every reference wap makes is nullable, so a non-null one (0x64) is not read yet.
 referenced(reference: list<int>) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
@@ -106,26 +106,26 @@ array_type(item: list<int>) as list<int> := [ARRAY_TYPE] + item
 open_type(supertypes: list<int>, type: list<int>) as list<int> := [SUBTYPE] + unsigned(#supertypes) + supertypes.flat_map(unsigned) + type
 
 # The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
-added_type(m: Module, type: list<int>) as int := {
+added_type(m: WasmModule, type: list<int>) as int := {
 	for at in 1 to #m.types { if m.types#at == type and grouped(m, at - 1).count == 1 { return at - 1 } }
 	m.types += [type]
 	#m.types - 1
 }
 # Types declared together in one recursion group: types of one group are distinct by their place in it, even when
 # their shapes match, so a reference tells at run time which of them it is. The index of the first.
-added_group(m: Module, types: list<list<int>>) as int := {
+added_group(m: WasmModule, types: list<list<int>>) as int := {
 	for group in m.groups { if m.types[group.first .. group.first + group.count] == types { return group.first } }
 	m.groups += [RecursionGroup(#m.types, #types)]
 	m.types += types
 	m.groups.last.first
 }
 # the group a type's index lies in; a type declared alone is a group of one, as the format reads it
-grouped(m: Module, index: int) as RecursionGroup := {
+grouped(m: WasmModule, index: int) as RecursionGroup := {
 	for group in m.groups { if index >= group.first and index < group.first + group.count { return group } }
 	RecursionGroup(index, 1)
 }
 # the type section's entries: a group of one as its type, a larger group as one entry of its types
-type_entries(m: Module) as list<list<int>> := {
+type_entries(m: WasmModule) as list<list<int>> := {
 	entries = []
 	for at in 0 to #m.types - 1 {
 		group = grouped(m, at)
@@ -135,25 +135,25 @@ type_entries(m: Module) as list<list<int>> := {
 }
 
 # An imported function, `wasi_snapshot_preview1.fd_write`: its index among the functions.
-imported(m: Module, module: text, name: text, parameters: list<list<int>>, results: list<list<int>>) as int := {
+imported(m: WasmModule, module: text, name: text, parameters: list<list<int>>, results: list<list<int>>) as int := {
 	m.imports += [named(module) + named(name) + [FUNCTION_KIND] + unsigned(added_type(m, function_type(parameters, results)))]
 	#m.imports - 1
 }
 
 # A function of the module, its locals after its parameters, its body without the final `end`: its index among
 # the functions.
-added_function(m: Module, parameters: list<list<int>>, results: list<list<int>>, locals: list<list<int>>, body: list<int>) as int := {
+added_function(m: WasmModule, parameters: list<list<int>>, results: list<list<int>>, locals: list<list<int>>, body: list<int>) as int := {
 	index = reserved_function(m, parameters, results)
 	bodied(m, index, locals, body)
 	index
 }
 # A function's place in the module, taken before its code is known, so its own body can call it: its index
-reserved_function(m: Module, parameters: list<list<int>>, results: list<list<int>>) as int := {
+reserved_function(m: WasmModule, parameters: list<list<int>>, results: list<list<int>>) as int := {
 	m.functions += [DefinedFunction(added_type(m, function_type(parameters, results)), [])]
 	#m.imports + #m.functions - 1
 }
 # the code of a function whose place was reserved
-bodied(m: Module, index: int, locals: list<list<int>>, body: list<int>) := { m.functions[index - #m.imports].code = code_entry(locals, body) }
+bodied(m: WasmModule, index: int, locals: list<list<int>>, body: list<int>) := { m.functions[index - #m.imports].code = code_entry(locals, body) }
 # a function's code: its size, its locals one entry each, its instructions and `end`
 code_entry(locals: list<list<int>>, body: list<int>) as list<int> := {
 	content = counted(locals.map(local => unsigned(1) + local)) + body + END
@@ -161,35 +161,35 @@ code_entry(locals: list<list<int>>, body: list<int>) as list<int> := {
 }
 
 # A global of that type, mutable or not, set at start by the constant instructions `initial`: its index.
-added_global(m: Module, type: list<int>, mutability: int, initial: list<int>) as int := {
+added_global(m: WasmModule, type: list<int>, mutability: int, initial: list<int>) as int := {
 	m.globals += [type + [mutability] + initial + END]
 	#m.globals - 1
 }
 
-exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
+exported(m: WasmModule, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
 
 # An exception tag whose exceptions carry values of these types: its index
-added_tag(m: Module, parameters: list<list<int>>) as int := {
+added_tag(m: WasmModule, parameters: list<list<int>>) as int := {
 	m.tags += [[EXCEPTION_TAG] + unsigned(added_type(m, function_type(parameters, [])))]
 	#m.tags - 1
 }
 # a block of a type running `body`, an exception of the tag thrown in it caught: its values taken to the label that far out
 try_table(type: list<int>, tag: int, label: int, body: list<int>) as list<int> := TRY_TABLE + type + unsigned(1) + [CATCH] + unsigned(tag) + unsigned(label) + body + END
 # Bytes kept passive, for `array.new_data`: their segment index.
-added_text(m: Module, bytes: list<int>) as int := {
+added_text(m: WasmModule, bytes: list<int>) as int := {
 	m.texts += [bytes]
 	#m.texts - 1
 }
 
 # A reference to a function of the module, `ref.func`, its index declared for the element section
-function_reference(m: Module, index: int) as list<int> := {
+function_reference(m: WasmModule, index: int) as list<int> := {
 	if not (index in m.referenced) { m.referenced += [index] }
 	instruction(REF_FUNC, [index])
 }
 # the element section, one declarative segment of the functions referred to; none when no function is
-declared_references(m: Module) as list<int> := if m.referenced is empty then [] else section(ELEMENT_SECTION, [DECLARED_FUNCTIONS + unsigned(#m.referenced) + m.referenced.flat_map(unsigned)])
+declared_references(m: WasmModule) as list<int> := if m.referenced is empty then [] else section(ELEMENT_SECTION, [DECLARED_FUNCTIONS + unsigned(#m.referenced) + m.referenced.flat_map(unsigned)])
 # The whole module, its sections in the order the format requires.
-module_bytes(m: Module) as list<int> := {
+module_bytes(m: WasmModule) as list<int> := {
 	declarations = m.functions.map(function => unsigned(function.type_index))
 	codes = m.functions.map(function => function.code)
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))

@@ -1,6 +1,6 @@
 # Kernel forms to a wasm module (notes/kernel.md): one case per form, any other node refused.
 #
-# Input: the kernel (wap/kernel/forms.wap and the literals); output: a Module (core/emit/wasm.wap). The emitter
+# Input: the kernel (wap/kernel/forms.wap and the literals); output: a WasmModule (core/emit/wasm.wap). The emitter
 # never sees a surface spelling, and it decides nothing a rule could decide: it translates. Which wasm type holds a
 # value is core/emit/values.wap's; the bytes are wasm.wap's.
 #
@@ -47,8 +47,8 @@ FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER, BOUND_CAPTURE]
 
 # The module of a program: its statements become the body of `main`, which the host runs. The typing stage made the
 # program print its value, `print(show(it))`, so main gives nothing back.
-emitted(program: Block) as Module := {
-	m = Module()
+emitted(program: Block) as WasmModule := {
+	m = WasmModule()
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
 	added_tag(m, [nullable(text_type(m))])
@@ -74,7 +74,7 @@ primitives_in(n: Node) as list<text> := match n {
 # What the emitter knows of the whole program: the module, the host functions it imported, and the functions and
 # globals emitted so far, each a Placed
 class Program {
-	m: Module
+	m: WasmModule
 	# the host functions imported: name → index
 	host: map<text, int> = {}
 	functions: list<Placed> = []
