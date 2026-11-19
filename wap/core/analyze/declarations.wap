@@ -28,8 +28,11 @@ USE_WORD = "use"
 declared_program(program: Node) as Node := {
 	ids = definers_of(program)
 	statements = top_level_statements(program).map(statement => declared_statement(names_identified(statement, ids)))
-	declarations = []
-	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
+	declarations: list<Node> = []
+	for statement in statements {
+		declares = fact_of(statement, DECLARES)
+		if declares != ø { declarations += [declares] }
+	}
 	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
 	with_definers(with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma)), ids)
 }
