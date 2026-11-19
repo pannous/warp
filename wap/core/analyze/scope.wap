@@ -42,8 +42,10 @@ class Definition { name: text; kind: text; definer: Node; depth: int; owner: tex
 # two modules defining one name are refused, used or not
 bound_program(program: Block, preload: list, modules: list) as Block := {
 	clashes_refused(modules)
-	late_reads_checked(bound(program, modules_scope(modules) + preload_scope(preload), PROGRAM_DEPTH))
+	late_reads_checked(bound(program, scope_around(preload, modules), PROGRAM_DEPTH))
 }
+# the words around a program: the modules it uses, then the preload's, outermost
+scope_around(preload: list, modules: list) as list := modules_scope(modules) + preload_scope(preload)
 # the preload's words, outermost
 preload_scope(preload: list) as list := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature

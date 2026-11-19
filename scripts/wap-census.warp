@@ -71,7 +71,7 @@ typing_joined(modules: list) := {
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
 bound_alone(module: Node, modules: list) as list := {
-	words = (library_around(module, preload) + used_declarations(module, modules)).flat_map(library_words)
+	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
 	statements = statements_in(lowered_program(language, module))
 	bound_each(statements, defined_in(statements, words, PROGRAM_DEPTH) + words, no)
 }
@@ -134,7 +134,7 @@ report(stage: text, message: text) := print "${stage}\t" + message.replace("\n",
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return modules_scope(uses_of(modules#(#modules)).map(file => module_of(file, modules)))
+		return modules_scope(modules_of_uses(modules#(#modules), modules))
 	} catch e { report("declare", e.message) }
 	[]
 }

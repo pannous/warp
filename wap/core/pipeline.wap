@@ -41,7 +41,9 @@ declared_modules(language: Language, file: text) as list := {
 	(modules_used(code, file => operated_file(language, file)) + [code]).map(module => declared_operated(language, module))
 }
 # declared code lowered and bound inside the modules it uses and the preload's declarations
-prepared(language: Language, code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(language, code), library_around(code, preload), uses_of(code).map(file => module_of(file, modules)))
+prepared(language: Language, code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(language, code), library_around(code, preload), modules_of_uses(code, modules))
+# the modules a declared program uses, declared
+modules_of_uses(code: Node, modules: list) as list := uses_of(code).map(file => module_of(file, modules))
 # the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
 # the preload's code with the modules it uses, whose words only the preload sees
