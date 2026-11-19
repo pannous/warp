@@ -142,9 +142,11 @@ spelled_equality(left: Node, op: Node, right: Node, n: Node, declared: map) as N
 # A spelled enum's annotation, `op: Op`, whose cases a text stands for, stays for plain_enums.warp, which reads the
 # names it types before it lets them hold any value (card enum-parameter-conversion)
 holds_any(type: Node, declared: map, scope: map) as bool := match type {
-	Symbol(name): name not in declared and (holds_node(required_type(name)) or (#name == 1 and is_capitalized(name) and not binds_as(scope, name, Meaning.Type)))
+	Symbol(name): holds_any_named(required_type(name), declared, scope)
 	_: no
 }
+# (optional or not: `T?` holds any value as `T` does, ø too)
+holds_any_named(name: text, declared: map, scope: map) as bool := name not in declared and (holds_node(name) or (#name == 1 and is_capitalized(name) and not binds_as(scope, name, Meaning.Type)))
 
 holds_node(name: text) as bool := name == node_type or name in node_case_types
 

@@ -110,6 +110,8 @@ The languages, each a set of Node shapes:
   A function whose parameters have no type stands as one Define per tuple of argument types it is called with; one
   nothing calls is gone. The program comes first after the preload's functions it calls: one Block
   (core/analyze/types.wap). Every node with a position also has its `file` (core/stage.wap `file_of`).
+- **emit** reads the typed kernel's `type` and `binding` facts and decides nothing about them: it may choose its code
+  by them, but computes no type (test_guardrails.sh emit-infers-type).
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written

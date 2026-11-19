@@ -12,12 +12,6 @@ one-fit same_type 1
 one-fit same_types 1
 one-fit settles 1
 one-fit tested_fit 1
-emit-reads-type wap/core/emit/function_values.wap 4
-emit-reads-type wap/core/emit/functions.wap 1
-emit-reads-type wap/core/emit/patterns.wap 3
-emit-reads-type wap/core/emit/places.wap 2
-emit-reads-type wap/core/emit/primitives.wap 3
-emit-reads-type wap/core/emit/values.wap 1
 long-file wap/core/analyze/calls.wap 1
 long-file wap/core/analyze/types.wap 1
 repeated-code wap/core/analyze/data.wap 1

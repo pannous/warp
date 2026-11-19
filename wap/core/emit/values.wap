@@ -57,7 +57,7 @@ layout_of(type_name: Node, m: WasmModule, records: Records) as list<int>? := mat
 
 # The GC type of a map, `map<text, int>`: a struct of two lists of one count, its keys and its values (lists.wap); ø
 # for a type that is no map
-map_index(type: Node, m: WasmModule, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
+map_index(type: Node, m: WasmModule, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(items_list(part, m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
 # a map type's key type and value type: its keys' array is field 0, its values' field 1
 map_parts(type: Node) as list<Node> := [key_type(type), held_type(type)].map(part => part ?? refused(type, "a map type names its key and value types, `map<text, int>`"))
 MAP_KEYS = 0
@@ -114,19 +114,19 @@ known_layout(type: Node, m: WasmModule, records: Records) as list<int> := layout
 # The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the
 # count spare (lists.wap); ø for a type that is no list. Every list's type extends the list base, its count alone, so
 # `#` of any list reads it.
-list_index(type: Node, m: WasmModule, records: Records) as int? := {
-	items = items_index(type, m, records)
-	if items == ø then ø else added_type(m, open_type([list_base(m)], struct_type([LIST_COUNT_FIELD, field_type(nullable(items), MUTABLE)])))
+list_index(type: Node, m: WasmModule, records: Records) as int? := items_list(item_type(type) ?? return ø, m, records)
+# the list of items of a type
+items_list(item: Node, m: WasmModule, records: Records) as int? := {
+	items = item_array(item, m, records) ?? return ø
+	added_type(m, open_type([list_base(m)], struct_type([LIST_COUNT_FIELD, field_type(nullable(items), MUTABLE)])))
 }
 list_base(m: WasmModule) as int := added_type(m, open_type([], struct_type([LIST_COUNT_FIELD])))
 LIST_COUNT_FIELD = field_type(I32, MUTABLE)
 LIST_COUNT_AT = 0
 LIST_ITEMS_AT = 1
 # the GC array of a list's items, ø for a type that is no list
-items_index(type: Node, m: WasmModule, records: Records) as int? := {
-	item = layout_of(item_type(type) ?? return ø, m, records) ?? return ø
-	added_type(m, array_type(field_type(item, MUTABLE)))
-}
+items_index(type: Node, m: WasmModule, records: Records) as int? := item_array(item_type(type) ?? return ø, m, records)
+item_array(item: Node, m: WasmModule, records: Records) as int? := added_type(m, array_type(field_type(layout_of(item, m, records) ?? return ø, MUTABLE)))
 # The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
 # its cases, its tag first; a case with fields extends it with them.
 struct_of(record: Node, m: WasmModule, records: Records) as int := {
