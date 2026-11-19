@@ -377,6 +377,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   definition's name reads it (core/analyze/calls.wap ranked). Reason: a template does not know which of its words
   will stand in a definition's name place. Paid off when templates are built from their forms, so the Define's name
   hole is known.
-- **Try's handler hole is read as Node** (wap/kernel/forms.wap `pattern Try`), though the handler is always a Fn.
-  Reason: old warp, which runs the compiler, never matches a single hole typed by a declared pattern, so `$handler: Fn`
-  stopped every Try. Paid off when card pattern-hole-typing lands: `Fn` goes back and this line goes.
+- **Every operator's spelling is written twice**: in the table of wap/preload/operators.wap and in `text(op: Op)` of
+  wap/preload/nodes.wap. Reason: the Op enum is declared case for case as core/node.warp declares it, so old warp
+  reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a
+  second mechanism (warp-simplifier measured it, 2026-11-19). Paid off when old warp no longer reads wap's source: Op
+  then comes from the table.

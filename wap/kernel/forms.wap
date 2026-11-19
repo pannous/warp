@@ -66,8 +66,7 @@ pattern Case = (Case $subject: Node $arms...: Arm)
 
 # the body's value, or the handler's when the body raises: a raise ends the body at once, and the handler, a function
 # value written in place, takes its text (kernel-try); Try(parse(t), Fn([error], ø)), (Try (Call parse t) (Fn [error] ø))
-# the handler is a Fn; read as Node until old warp matches a hole typed by a pattern (card pattern-hole-typing)
-pattern Try = (Try $body: Node $handler: Node)
+pattern Try = (Try $body: Node $handler: Fn)
 
 # a body run again and again while a condition holds, yes or no: `while c { b }` is While(c, b), (While c b); it has
 # no value
