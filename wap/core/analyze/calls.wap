@@ -304,6 +304,9 @@ full_type_hint(written: Node?) as text := if names_bare_kind(written) then text(
 types_text(types: list) as text := types.map(type_text).join(", ")
 candidates_text(definitions: list) as text := definitions.map(definition => "${written_name(definition)}(${parameters_in(definition).join(", ")}), line ${line_of(definition)} of ${(file_of(definition) ?? "").split("/").last}").join("; ")
 
+# A function typed for these argument types, its written types' shapes known first, so it types alike however it is
+# reached: from a block, a call, or alone
+function_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := shaped_typed(shaped_once(definition, s), argument_types, s, at)
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result the written
 # one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type
@@ -317,7 +320,7 @@ result_given(body: Node, frame: TypeFrame, name: Node, s: TypingState) as Node? 
 	for returned in frame.returns { if not (returned == result or result == ø and returned == symbol(EMPTY_TYPE) or conversion(returned, result, s) in STATIC_CONVERSIONS) { refused(name, "this function gives back values of different types") } }
 	result
 }
-function_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+shaped_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	key = place_key(declared_name(name))
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)

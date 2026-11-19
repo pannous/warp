@@ -31,7 +31,8 @@ shaped(type: Node?, s: TypingState) as Node? := {
 	if #holders == 1 then with_fact(type, NARROWS, symbol(record_name(holders#1))) else type
 }
 # definitions with the shapes their written types name, each shaped once
-shaped_definitions(definitions: list, s: TypingState) as list := definitions.map(definition => if fact_of(definition, SHAPED) != ø then definition else with_fact(shaped_definition(definition, s), SHAPED, True))
+shaped_definitions(definitions: list, s: TypingState) as list := definitions.map(definition => shaped_once(definition, s))
+shaped_once(definition: Node, s: TypingState) as Node := if fact_of(definition, SHAPED) != ø then definition else with_fact(shaped_definition(definition, s), SHAPED, True)
 # a definition with the shapes its parameters' and its result's written types name
 shaped_definition(definition: Node, s: TypingState) as Node := match definition {
 	Define(name, parameters, body) => refitted(Define(shaped_key(name, s), with_items(parameters, items_of(parameters).map(parameter => shaped_key(parameter, s))), body), definition)
