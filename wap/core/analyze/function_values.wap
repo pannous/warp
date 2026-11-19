@@ -39,11 +39,11 @@ lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) a
 }
 # The captures a function value's function reads, each [key, type], from its first parameter, the value; none for a
 # function of no function value
-captured_by(definition: Node, types: list) as list := {
+captured_by(definition: Node, types: list) as list<Binding> := {
 	parts = if types is empty then ø else function_value_parts(types#1)
 	captures = captures_of(definition)
 	if parts == ø or text(parts#1) != function_key_of(definition) or captures is empty { return [] }
-	(1 to #captures).map(at => [place_key(captures#at), parts#(at + 1)])
+	(1 to #captures).map(at => Binding(place_key(captures#at), parts#(at + 1)))
 }
 # A call of a function value, `f(x)` where f holds `y => y + 1` or a function's name: a call of the value's function,
 # a function value's own one taking the value as its first argument

@@ -52,6 +52,10 @@ ATOM_TYPES = [CHAR_TYPE, INT_TYPE, FLOAT_TYPE, NUMBER_TYPE, TEXT_TYPE]
 # the operator a signature is written with: `(int, text) -> int`
 ARROW = "->"
 
+# The type a key has: a variable's by its place's key, a generic letter's, an unknown's (α1) once settled
+class Binding { key: text; type: Node }
+# A call of a function typed only once its unknowns settle: the definition, the argument types, the call
+class Deferred { definition: Node; types: list<Node>; at: Node }
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
 class TypingState {
 	definitions: list<Node> = []
@@ -61,7 +65,7 @@ class TypingState {
 	definition_keys: NameIndex = NameIndex()
 	records: Records = Records()
 	functions: list<TypedFunction> = []
-	globals: list = []
+	globals: list<Binding> = []
 	# the keys of the globals functions read before the statements that give them their values, until those statements
 	unset: list<text> = []
 	# the functions of the function values met, and the keys of the variables they capture
@@ -69,11 +73,11 @@ class TypingState {
 	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
 	dispatchers: list<Node> = []
 	captured: list<text> = []
-	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
+	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled
 	unknowns: int = 0
-	settled: list = []
-	# the calls of functions typed only once their unknowns settle, each [definition, argument types, call]
-	deferred: list = []
+	settled: list<Binding> = []
+	# the calls of functions typed only once their unknowns settle
+	deferred: list<Deferred> = []
 	# the functions wap refuses, each ended alone: its siblings are typed anyway, and its callers refused naming it
 	refusals: list<Refusal> = []
 }
@@ -86,13 +90,13 @@ class Refusal {
 # its name with its signature and the Define it became
 class TypedFunction {
 	key: text
-	arguments: list
+	arguments: list<Node>
 	result: Node? = ø
 	signed: Node = ø
 	define: Node = ø
 	done: bool = no
 	# the globals it reads, itself or through the functions it calls, before the statements that give them their values
-	late: list = []
+	late: list<Node> = []
 	# whether it never returns: its result written `never`, or its body jumps and nothing returns
 	jumps: bool = no
 	# whether its body calls it before its result is known: such a call gives no value, so the function may give none;
@@ -102,21 +106,21 @@ class TypedFunction {
 }
 # What a condition finds of a variable: its key, the arm it holds in (1 then, 2 else), the type it reads as there
 class Finding { key: text; arm: int; type: Node }
-# The function whose body is being typed: its variables' types, each [key, type], and its written result type
+# The function whose body is being typed: its variables' types and its written result type
 class TypeFrame {
-	variables: list = []
+	variables: list<Binding> = []
 	result: Node? = ø
 	# the types its returns give, ø for a bare return
 	returns: list = []
-	# the generic letters its parameters bound, each [letter, type] (core/analyze/calls.wap)
-	letters: list = []
+	# the generic letters its parameters bound (core/analyze/calls.wap)
+	letters: list<Binding> = []
 	# what the conditions around find of their variables: an optional one present, read as its value; one any or a
 	# number holds, of the type tested, read as that (core/analyze/conditions.wap if_typed)
 	present: list<Finding> = []
 	# the name of the function typed, ø for the program
 	function: Node? = ø
 	# the globals it reads before the statements that give them their values (TypedFunction late)
-	late: list = []
+	late: list<Node> = []
 }
 
 # the program typed, after the preload's functions it calls
@@ -321,23 +325,20 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
 names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #parameters_in(definition_at(definer, s)) == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
-variables_of(name: Node, s: TypingState, f: TypeFrame) as list := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
+variables_of(name: Node, s: TypingState, f: TypeFrame) as list<Binding> := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
-	variable = [place_key(defined_at(name)), type]
-	f.present = f.present.filter(known => known.key != variable#1)
+	variable = Binding(place_key(defined_at(name)), type)
+	f.present = f.present.filter(known => known.key != variable.key)
 	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
 }
 variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := substituted(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s.settled)
-# the type of the variable of this key among these, each [key, type]
-type_keyed(key: text, variables: list) as Node? := {
-	for variable in variables { if variable#1 == key { return variable#2 } }
+# the type of this key among these bindings
+type_keyed(key: text, bindings: list<Binding>) as Node? := {
+	for binding in bindings { if binding.key == key { return binding.type } }
 	ø
 }
 # the type a condition around finds a variable of, ø where none finds it
-found_type(key: text, present: list<Finding>) as Node? := {
-	for finding in present { if finding.key == key { return finding.type } }
-	ø
-}
+found_type(key: text, present: list<Finding>) as Node? := type_keyed(key, present.map(finding => Binding(finding.key, finding.type)))
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
 # whether a name is the one that defines its variable, its first value rather than a change
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
