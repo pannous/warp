@@ -57,7 +57,7 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 SIGNATURE_LESS = "this function reached the emitter without its signature"
 # a typed function's parameter and result types, as typing signed it
 signed_parts(name: Node) as FunctionParts := function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
-signed_result(name: Node, p: Program) as list := {
+signed_result(name: Node, p: Program) as list<int> := {
 	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
@@ -73,12 +73,12 @@ held_in_any(type: Node, at: Node, p: Program) as Held := {
 	Held(referenced(layout_of(type, p.m, p.records) ?? []) ?? refused(at, "a value any holds is tested for references and plain values, not this type"), [])
 }
 # a value any holds, known of a type: cast to it, a plain one taken out of its box
-held_value(type: Node, at: Node, p: Program) as list := {
+held_value(type: Node, at: Node, p: Program) as list<int> := {
 	held = held_in_any(type, at, p)
 	heap_instruction(REF_CAST, held.type_index) + held.taken
 }
 # The type a function gives back: its body's value and every return's, all of one type
-result_type(name: Node, body: Code, f: Frame) as list := {
+result_type(name: Node, body: Code, f: Frame) as list<int> := {
 	result = if body.type == NEVER then (if f.returns is empty then NEVER else f.returns#1) else body.type
 	for returned in f.returns { if returned != result { refused(name, "this function gives back values of different types") } }
 	result
@@ -90,7 +90,7 @@ function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
 }
 
 # a parameter's type, as the typing stage gives it
-parameter_type(parameter: Node, p: Program) as list := layout(declared_name(parameter), p)
+parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name(parameter), p)
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
