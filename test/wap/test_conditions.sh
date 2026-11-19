@@ -154,4 +154,6 @@ read(n: int) as int := {
 	escape.reads + 1
 }
 print(text(read(5)) + " " + text(read(0)) + " " + text(read(9)))')" "6 0 0"
+check "a condition of a test and a list, a and xs, is yes when the test holds and the list has items" "$(ran test_and_list 'kept(xs: list<text>, n: int) as text := if n > 0 and xs then "yes" else "no"
+print(kept(["a"], 1) + " " + kept([], 1) + " " + kept(["a"], 0))')" "yes no no"
 exit $((failures > 0))

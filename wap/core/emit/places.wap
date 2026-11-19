@@ -104,8 +104,8 @@ kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.in
 # what a bound name refers to: local, parameter, capture, global, function or library
 binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
 # the definition a bound name refers to, among those placed so far
-placed_for(placed: list, name: Node) as Placed? := placed_by_key(placed, defining_key(name))
-placed_by_key(placed: list, key: text) as Placed? := {
+placed_for(placed: list<Placed>, name: Node) as Placed? := placed_by_key(placed, defining_key(name))
+placed_by_key(placed: list<Placed>, key: text) as Placed? := {
 	for each in placed { if each.key == key { return each } }
 	ø
 }
