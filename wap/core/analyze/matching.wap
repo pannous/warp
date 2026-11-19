@@ -23,11 +23,12 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 	witness = missing(arms.map(arm => [pattern_of(arm)]), [type], s)
 	# a shape's value of another shape, which only a narrowing gone wrong gives, raises naming the match
 	if narrowed_type(type) != ø and witness == ø and not arms.any(arm => fits_any(pattern_of(arm))) { typed = typed + [arm_typed(placed_like(Arm(symbol(WILDCARD), raised(other_shape(type, n), n, s)), n), subject, type, s, f, expected)] }
-	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
+	record = record_named(s.records, type)
+	is_enum = record != ø and not cases_of(record) is empty
 	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`${shape_offered(arms)}") }
 	if witness != ø { return refitted(Case(subject, typed), n) }
-	type = parts_type(typed, s)
-	fitted = typed.map(arm => arm_as(arm, type, s))
+	joined = parts_type(typed, s)
+	fitted = typed.map(arm => arm_as(arm, joined, s))
 	joined_of(refitted(Case(subject, fitted), n), fitted, s)
 }
 # where every arm names one declared pattern, `Record(…)`, the fix-it of taking that shape instead
@@ -101,7 +102,7 @@ rest_typed(rest: Call, last: bool, type: Node, s: TypingState, f: TypeFrame) as 
 # value: the classic usefulness check over rows of patterns, one for each of these types, the witness built on the way
 # back. Where a column holds a case, its enum's values are split by case, each case's fields joining the patterns; any
 # other column keeps only the rows whose pattern there fits any value.
-missing(rows: list, types: list, s: TypingState) as list? := {
+missing(rows: list<list<Node>>, types: list<Node>, s: TypingState) as list<Node>? := {
 	if types is empty { return if rows is empty then [] else ø }
 	if narrowed_type(types#1) != ø { return shape_missing(rows, types, s) }
 	if item_type(types#1) != ø and rows.any(row => list_pattern_items(row#1) != ø) { return list_missing(rows, types, s) }
@@ -113,7 +114,7 @@ missing(rows: list, types: list, s: TypingState) as list? := {
 	cases_missing(rows, types, cases_of(record), s)
 }
 # the values of these cases no row fits, split by case, each case's fields joining the patterns
-cases_missing(rows: list, types: list, cases: list, s: TypingState) as list? := {
+cases_missing(rows: list<list<Node>>, types: list<Node>, cases: list<Node>, s: TypingState) as list<Node>? := {
 	for case in cases {
 		fields = case_fields(case)
 		inner = missing(rows.filter(row => fits_any(row#1) or text(case_name(row#1)) == text(case_name(case))).map(row => opened(row, #fields)), fields.map(field_type) + types[1 ..], s)
@@ -123,27 +124,30 @@ cases_missing(rows: list, types: list, cases: list, s: TypingState) as list? := 
 }
 # The values of a shape no row fits: a case's, as its one case; a declared pattern's, by the patterns at its holes, of
 # its holes' types (a row of another shape is left out)
-shape_missing(rows: list, types: list, s: TypingState) as list? := {
+shape_missing(rows: list<list<Node>>, types: list<Node>, s: TypingState) as list<Node>? := {
 	form = form_named(types#1, s)
 	if form == ø { return cases_missing(rows, types, cases_of(record_named(s.records, narrowed_type(types#1)) ?? refused(types#1, "a case's shape narrows its enum")).filter(case => text(case_name(case)) == text(types#1)), s) }
 	holes = hole_types(form, s)
 	taken = form_taken(form)
 	kept = rows.filter(row => fits_any(row#1) or form_parts(taken, row#1) != ø)
 	inner = missing(kept.map(row => (if fits_any(row#1) then wildcards(#holes) else form_parts(taken, row#1) ?? []) + row[1 ..]), holes + types[1 ..], s)
-	if inner == ø then ø else [Call(symbol(text(types#1)), inner[.. #holes])] + inner[#holes ..]
+	if inner == ø { return ø }
+	shape: Node = Call(symbol(text(types#1)), inner[.. #holes])
+	[shape] + inner[#holes ..]
 }
 # a row with its first pattern opened into patterns of the case's fields: a name, `_` or a bare case fits each
-opened(row: list, count: int) as list := (if row#1 is symbol then wildcards(count) else case_fields(row#1)) + row[1 ..]
-wildcards(count: int) as list := copies(symbol(WILDCARD), count)
+opened(row: list<Node>, count: int) as list<Node> := (if row#1 is symbol then wildcards(count) else case_fields(row#1)) + row[1 ..]
+wildcards(count: int) as list<Node> := copies(symbol(WILDCARD), count)
 copies(x: Node, count: int) as list := if count == 0 then [] else (1 to count).map(at => x)
 # Where a column holds list patterns, its lists are split by count, each count up to the longest pattern's and then the
 # longer lists, their items joining the patterns
-list_missing(rows: list, types: list, s: TypingState) as list? := {
+list_missing(rows: list<list<Node>>, types: list<Node>, s: TypingState) as list<Node>? := {
 	longest = rows.map(row => fixed_count(row#1)).fold(0, (a, b) -> if a > b then a else b)
 	for count in 0 to longest + 1 {
 		longer = count > longest
-		inner = missing(rows.filter(row => fits_count(row#1, count, longer)).map(row => items_opened(row, count)), copies(item_type(types#1), count) + types[1 ..], s)
-		if inner != ø { return [List(inner[.. count] + (if longer then [Call(symbol(REST_WORD), [symbol(WILDCARD)])] else []), Bracket.Square, Separator.Comma)] + inner[count ..] }
+		inner = missing(rows.filter(row => fits_count(row#1, count, longer)).map(row => items_opened(row, count)), copies(item_type(types#1) ?? refused(types#1, "a list pattern's value is a list"), count) + types[1 ..], s)
+		rest: Node = Call(symbol(REST_WORD), [symbol(WILDCARD)])
+		if inner != ø { return [List(inner[.. count] + (if longer then [rest] else []), Bracket.Square, Separator.Comma)] + inner[count ..] }
 	}
 	ø
 }
@@ -157,7 +161,7 @@ fits_count(pattern: Node, count: int, longer: bool) as bool := {
 	if fixed_count(pattern) < #items then fixed_count(pattern) <= count else not longer and fixed_count(pattern) == count
 }
 # a row with its first pattern opened into the patterns of a count of items: a list pattern's own, `_` for the others
-items_opened(row: list, count: int) as list := (if fits_any(row#1) then wildcards(count) else (list_pattern_items(row#1) ?? []).filter(item => rest_named(item) == ø) + wildcards(count - fixed_count(row#1))) + row[1 ..]
+items_opened(row: list<Node>, count: int) as list<Node> := (if fits_any(row#1) then wildcards(count) else (list_pattern_items(row#1) ?? []).filter(item => rest_named(item) == ø) + wildcards(count - fixed_count(row#1))) + row[1 ..]
 # a pattern as the program writes it: `Two(Circle(_), _)`, `[_, ..._]`
 pattern_text(pattern: Node) as text := match pattern {
 	List(items, Bracket.Square, separator) => "[${items.map(pattern_text).join(", ")}]"
