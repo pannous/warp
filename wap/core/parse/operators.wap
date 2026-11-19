@@ -241,9 +241,10 @@ shown(use: Use) as text := if use.spelling == "" then "juxtaposition" else use.s
 # A spelling read both before and after one operand, `.. 3` and `2 ..`, tells the two by its position only: the absent
 # side is written ø, (Call .. ø 3) and (Call .. 2 ø); one reading alone, `-x`, `x!`, keeps its one operand
 one_sided(language: Language, use: Use, operand: Node) as list := {
-	if group_of(language, use.spelling, Fixity.Prefix) == "" or group_of(language, use.spelling, Fixity.Postfix) == "" { return [operand] }
+	if not two_sided(language, use.spelling) { return [operand] }
 	if use.fixity == Fixity.Prefix then [symbol(OPEN_SIDE), operand] else [operand, symbol(OPEN_SIDE)]
 }
+two_sided(language: Language, spelling: text) as bool := group_of(language, spelling, Fixity.Prefix) != "" and group_of(language, spelling, Fixity.Postfix) != ""
 
 # the operator applied to its operands on the stack: a Call of its canonical spelling, or a phrase for juxtaposition
 applied(language: Language, use: Use, operands: list<Node>) := {
