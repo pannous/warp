@@ -72,11 +72,18 @@ is_shape(language: Language, type: Node) as bool := match type {
 # A typed hole `$c: Symbol` reads as a colon key (the reader gives a hole's `:` one type): the hole, its type a fact.
 # A hole after the colon makes a key of two holes, `$field: $type`, as in `class $name { ($field: $type)... }`
 normalized(n: Node) as Node := match n {
+	# brackets group in a pattern as they do in code: a round group of one key or call is that item, `global ($n = $v)`;
+	# around a phrase or a list they keep their meaning
+	List(items, Bracket.Round, separator) => if grouped_item(n) != ø or #items == 1 and items#1 is Call then normalized(items#1) else List(items.map(normalized), Bracket.Round, separator)
 	List(items, bracket, separator) => List(items.map(normalized), bracket, separator)
 	Key(left, Op.Colon, right) => if is_hole(left) and not is_hole(right) then typed_hole(left, right) else Key(normalized(left), Op.Colon, normalized(right))
-	Key(left, op, right) => Key(normalized(left), op, normalized(right))
+	Key(left, op, right) => Key(normalized(left), op, if op == Op.None then bracketed_normalized(right) else normalized(right))
 	_ => n
 }
+
+# brackets that are part of the form keep their meaning, its parts normalized: a glued call's arguments, `shout($x)`, a
+# declared pattern's shape, `(Return $value)`
+bracketed_normalized(n: Node) as Node := match n { List(items, bracket, separator) => List(items.map(normalized), bracket, separator); _ => normalized(n) }
 
 typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 
@@ -139,7 +146,7 @@ hole_nodes(n: Node) as list<Node> := match n {
 
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
 declare_pattern(language: Language, name: Node, shape: Node) as Declared := {
-	normal = normalized(shape)
+	normal = bracketed_normalized(shape)
 	# known before its matcher is compiled, so the pattern may name itself
 	declared = Declared(spelling_written(name), normal, holes_in(normal), Matcher(Test.Literal))
 	language.patterns[declared.name] = declared
