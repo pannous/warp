@@ -59,10 +59,7 @@ in_place_function(name: Node, p: Program) as Placed? := {
 SIGNATURE_LESS = "this function reached the emitter without its signature"
 # a typed function's parameter and result types, as typing signed it
 signed_parts(name: Node) as Signature := signature(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
-signed_result(name: Node, p: Program) as list<int> := {
-	result = signed_parts(name).result
-	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
-}
+signed_result(name: Node, p: Program) as list<int> := result_layout(signed_parts(name).result, p)
 # A value of a type where any holds it: the GC type it is held as, a plain value's box or its own reference type, and
 # the instructions that take the value out once cast
 class Held { type_index: int, taken: list<int> }

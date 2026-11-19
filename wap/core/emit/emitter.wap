@@ -120,7 +120,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	Try(body, handler) => try_code(form, body, handler, p, f)
-	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f), p)
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
 	Return(value) => return_code(form, value, p, f)
@@ -147,11 +147,11 @@ block_code(statements: list<Node>, p: Program, f: Frame) as Code := {
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }
 
-# A choice by a condition, yes or no (an i32). With both parts of one type (a part that never finishes fits any) it has
-# the chosen part's value, otherwise none: each part's value is dropped, as a missing else part's ø is.
-if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code := {
+# A choice by a condition, yes or no (an i32), of the type typing gives it: with none, each part's value is dropped, as
+# a missing else part's ø is.
+if_code(form: Node, condition: Code, then_part: Code, else_part: Code, p: Program) as Code := {
 	checked_condition(form, condition)
-	type = joined(then_part.type, else_part.type)
+	type = typed_layout(form, p)
 	Code(type, condition.instructions + IF + block_type(type) + kept(then_part, type) + ELSE + kept(else_part, type) + END)
 }
 # The body's value, or the handler's when a raise in the body is thrown (kernel-try): the handler's body runs in
@@ -163,7 +163,7 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
 		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
-		type = joined(tried.type, instead.type)
+		type = typed_layout(form, p)
 		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
 		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + local_set(error.index) + kept(instead, type) + END)
 	}
@@ -179,10 +179,8 @@ arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitte
 # a part's value made to fit its choice's type, an If's or a Case's
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
-	if wanted == ø then given else fitted(given, wanted, part, p)
+	if valued(wanted) then fitted(given, wanted, part, p) else given
 }
-# the type of either of two values: the one that finishes, or the common one; none when they differ
-joined(a: list<int>, b: list<int>) as list<int> := if a == NEVER then b else if b == NEVER or a == b then a else []
 valued(type: list<int>) as bool := not type is empty and type != NEVER
 checked_condition(form: Node, condition: Code) := if condition.type != I32 { refused(form, "a condition is yes or no") }
 
