@@ -23,11 +23,12 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 	witness = missing(arms.map(arm => [pattern_of(arm)]), [type], s)
 	# a shape's value of another shape, which only a narrowing gone wrong gives, raises naming the match
 	if narrowed_type(type) != ø and witness == ø and not arms.any(arm => fits_any(pattern_of(arm))) { typed = typed + [arm_typed(placed_like(Arm(symbol(WILDCARD), raised(other_shape(type, n), n, s)), n), subject, type, s, f, expected)] }
-	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
+	record = record_named(s.records, type)
+	is_enum = record != ø and not cases_of(record) is empty
 	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`${shape_offered(arms)}") }
 	if witness != ø { return refitted(Case(subject, typed), n) }
-	type = parts_type(typed, s)
-	fitted = typed.map(arm => arm_as(arm, type, s))
+	joined = parts_type(typed, s)
+	fitted = typed.map(arm => arm_as(arm, joined, s))
 	joined_of(refitted(Case(subject, fitted), n), fitted, s)
 }
 # where every arm names one declared pattern, `Record(…)`, the fix-it of taking that shape instead
@@ -130,7 +131,9 @@ shape_missing(rows: list<list<Node>>, types: list<Node>, s: TypingState) as list
 	taken = form_taken(form)
 	kept = rows.filter(row => fits_any(row#1) or form_parts(taken, row#1) != ø)
 	inner = missing(kept.map(row => (if fits_any(row#1) then wildcards(#holes) else form_parts(taken, row#1) ?? []) + row[1 ..]), holes + types[1 ..], s)
-	if inner == ø then ø else [Call(symbol(text(types#1)), inner[.. #holes])] + inner[#holes ..]
+	if inner == ø { return ø }
+	shape: Node = Call(symbol(text(types#1)), inner[.. #holes])
+	[shape] + inner[#holes ..]
 }
 # a row with its first pattern opened into patterns of the case's fields: a name, `_` or a bare case fits each
 opened(row: list<Node>, count: int) as list<Node> := (if row#1 is symbol then wildcards(count) else case_fields(row#1)) + row[1 ..]
@@ -143,7 +146,8 @@ list_missing(rows: list<list<Node>>, types: list<Node>, s: TypingState) as list<
 	for count in 0 to longest + 1 {
 		longer = count > longest
 		inner = missing(rows.filter(row => fits_count(row#1, count, longer)).map(row => items_opened(row, count)), copies(item_type(types#1) ?? refused(types#1, "a list pattern's value is a list"), count) + types[1 ..], s)
-		if inner != ø { return [List(inner[.. count] + (if longer then [Call(symbol(REST_WORD), [symbol(WILDCARD)])] else []), Bracket.Square, Separator.Comma)] + inner[count ..] }
+		rest: Node = Call(symbol(REST_WORD), [symbol(WILDCARD)])
+		if inner != ø { return [List(inner[.. count] + (if longer then [rest] else []), Bracket.Square, Separator.Comma)] + inner[count ..] }
 	}
 	ø
 }
