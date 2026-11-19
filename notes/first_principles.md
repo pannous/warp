@@ -5,19 +5,22 @@ only with the user's OK.
 
 ## Core identities
 
-Forms that look different but are one thing. Each pair is one meaning; the differences are notation or meta only. A
-special case that breaks one of these identities is a bug.
-
 - **Data and code are one notation.** One reader reads warp data and warp programs alike. Code is data until it runs:
   `data x` quotes it.
 - **Functions and operators are the same, except for notation.** `a + b` is a call of the function `+` or `add`. An operator
   is a function name with a fixity (infix, prefix, postfix) and a place in the precedence table. Any function can be
   given an operator spelling, and any operator can be defined and overloaded like a function.
-- **Aliases are one table.** Every alias maps to a canonical word, for example `through` and `…` to `to`, or `≤` to
-  `<=`, `less` to `<`. Spelling never changes meaning, and everything warp prints uses the canonical word.
+- **Aliases are one table.** Every alias maps to a canonical word, for example 
+    `plus` and `add` to `+`
+    `through` and `…` to `to` ( in 1 to 5 ranges )
+    `&&` to `and`,
+    `≤` to `<=`, 
+    `less` to `<`.  Note that sometimes the English word is canonical, sometimes, the familiar operator. 
+- Alias spelling never changes meaning, and everything warp prints uses the canonical word.
 - **Functions and methods are the same, except for meta.** A method is a function whose first parameter is the
   receiver. Where it is declared (inside a class or not) is metadata, not meaning.
 - **`f(x)` is `x.f`, universally.** `f(x, y)` is `x.f(y)`, for every function, built-in or user-defined, on every type.
+- These above pairs look different but mean the same thing. Only the spelling or the metadata differs. If the compiler ever treats one form of a pair differently from the other, that is a bug in the compiler.
 - **Overloads are distinguished by parameter types, or by the return type alone.** Several functions may share a
   name. The call picks the one whose parameter types fit. When only the return type differs, the expected type picks
   it: `x: Meters = parse(t)`. Where nothing decides, the compiler refuses and names the candidates.
@@ -41,9 +44,10 @@ special case that breaks one of these identities is a bug.
 - For multi dispatch we need one function that ranks the definitions of a word.
     -  The compile-time choice takes the first of that ranking that fits.
     -  The run-time choice emits its tests in that same ranking.
-    - TODO: invert mechanism of    show(x: any): text := prim dispatched(x) via compiler:
+  <!--   - TODO: invert mechanism of    show(x: any): text := prim dispatched(x) via compiler:
     - compiler writes match type(x) : text => describe(x as text), int=> describe(x as int) ...
-
+    DONE? Do we have that one function now? 
+ -->
 Important: whenever working on a topic, please read the specification under the ~/dev/angles/warp/wiki/...md
 No status on any page! Built, planned and dropped do NOT belong in the wiki but in notes and or on cards
 https://github.com/users/pannous/projects/1  add via `todo` tool
@@ -179,3 +183,9 @@ As wap is laid out (wap/):
   pass: add the missing rule or library function, or bring the form to the interviewer.
 - **No silent compromises.** A compromise against a principle is written down with its reason, in the Debts of
   notes/backbone.md during the rewrite and as a card afterwards.
+
+## Structural integrity
+<!-- “checks”: the lead turns the reviewer’s three rules plus the file-size and single-conversion rules into a script that fails test/wap. -->
+<!-- “review cadence”: a short Opus review of new accretion every three days, report to me. -->
+“refusal list”: forms wap can’t handle __cleanly__ are refused and collected for the interviewer, never patched.
+“deletions”: vitals shows lines deleted next to the typed count.

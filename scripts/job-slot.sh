@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# scripts/job-slot.sh <command…>: the command run in one of the machine's job slots, niced, its output and exit status
+# its own. Every wap test script and census run goes through it, from every worktree (test/wap/run.sh,
+# ratchet_census.sh, vitals.py): it takes the first free slot of <store>/job-slots, job_slots() of them
+# (scripts/lib/platform.sh), and waits for one when all are taken, saying so once
+set -uo pipefail
+LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
+RETRY_SECONDS=1
+source "$(dirname "$0")/lib/platform.sh"
+slots=$warp_store/job-slots
+mkdir -p "$slots"
+[ $# -gt 0 ] || { echo "usage: job-slot.sh <command…>" >&2; exit 2; }
+command -v lockf >/dev/null || exec nice -n 19 "$@"
+waited=
+while :; do
+	for slot in $(seq "$(job_slots)"); do
+		lockf -s -t 0 "$slots/$slot" nice -n 19 "$@"
+		status=$?
+		[ $status = $LOCK_HELD_ELSEWHERE ] || exit $status
+	done
+	[ -n "$waited" ] || { echo "job-slot.sh: all $(job_slots) job slots taken, waiting" >&2; waited=1; }
+	sleep $RETRY_SECONDS
+done

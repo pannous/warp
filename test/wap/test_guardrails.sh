@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# wap's guardrails as checks (user decision via warp-lead, 2026-11-18), so they hold when nobody is looking:
+#   one-fit          core/analyze has one type relation, `conversion`: no other function answers "does this type fit"
+#                    (a yes/no or Conversion with a parameter `wanted`, two of given, held, these, those, or named same_type(s) or fits_type)
+#   emit-reads-type  core/emit reads the TYPE fact only to lay it out (places.wap layout, typed_layout): no read that
+#                    chooses (an if, a comparison, a match, a `??` or a name held for later)
+#   dynamic-prim     a dynamic call is kernel typing writes: no `prim dispatched` anywhere, no `prim cast` in the preload
+#   one-ranking      definitions are ordered only by `ranked` (analyze/calls.wap): no other sort in core/analyze or core/emit
+#   long-file        no wap file over 300 lines: its owner splits it along a real seam
+#   repeated-code    no line or list written twice in a file (scripts/repeated-code.sh)
+# Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
+# the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
+# until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
+RELATION=conversion
+LONGEST=300
+DECIDING='(^|[^a-z_])(if|match)[ (]|==|!=|[?][?]|^[a-z_]+ = '
+SAME_TYPE_NAMES='^(same|fits)_types?$'
+TYPE_PARAMETERS="given|held|these|those"
+
+root="$(cd "$(dirname "$0")/../.." && pwd)"
+allowed="$root/test/wap/guardrails_allowed.txt"
+cd "$root" || exit 1
+failures=0
+wap_files=$(git ls-files 'wap/*.wap')
+
+# grep -n's file:line:text as a violation of a rule keyed by its file
+filed() { awk -F: -v rule="$1" '{ text = substr($0, length($1) + length($2) + 3); sub(/^[ \t]+/, "", text); printf "%s\t%s\t%s:%s\t%s\n", rule, $1, $1, $2, substr(text, 1, 100) }'; }
+# each finder prints a violation a line: <rule> <key> <file:line> <text>, tab-separated
+one_fit() {
+	awk -v relation=$RELATION -v kinds="$TYPE_PARAMETERS" -v named="$SAME_TYPE_NAMES" '
+	match($0, /^[a-z_]+\(.*\) as (bool|Conversion\??) /) {
+		name = substr($0, 1, index($0, "(") - 1)
+		parameters = substr($0, index($0, "(") + 1); sub(/\) as .*/, "", parameters)
+		typed = 0; wanted = 0
+		count = split(parameters, each, ",")
+		for (i = 1; i <= count; i++) { gsub(/^ +|:.*/, "", each[i]); if (each[i] == "wanted") wanted = 1; if (each[i] ~ "^(" kinds ")$") typed++ }
+		if (name != relation && (wanted || typed >= 2 || name ~ named)) printf "one-fit\t%s\t%s:%d\t%s\n", name, FILENAME, FNR, substr($0, 1, 100)
+	}' wap/core/analyze/*.wap
+}
+emit_reads_type() {
+	grep -nE ', TYPE\)' wap/core/emit/*.wap | grep -vE '^wap/core/emit/places\.wap:[0-9]+:(typed_)?layout\(' |
+		filed emit-reads-type | awk -F'\t' -v deciding="$DECIDING" '$4 ~ deciding'
+}
+dynamic_prim() {
+	{ grep -nE 'prim dispatched\b' $wap_files; grep -nE 'prim cast\b' wap/preload/*.wap; } | filed dynamic-prim
+}
+one_ranking() {
+	grep -nE 'sorted|min_by|max_by' wap/core/analyze/*.wap wap/core/emit/*.wap | grep -vE '^[^:]+:[0-9]+:ranked\(' | filed one-ranking
+}
+long_file() {
+	wc -l $wap_files | awk -v longest=$LONGEST '$2 != "total" && $1 > longest { printf "long-file\t%s\t%s:%d\t%d lines\n", $2, $2, $1, $1 }'
+}
+repeated_code() {
+	bash scripts/repeated-code.sh "$root" --list $wap_files | sed -E 's/^([^:]+):([0-9]+) (.*)/repeated-code\t\1\t\1:\2\t\3/'
+}
+
+found=$({ one_fit; emit_reads_type; dynamic_prim; one_ranking; long_file; repeated_code; })
+# each rule and key, its count found and its count allowed
+counts=$(printf '%s\n' "$found" | awk -F'\t' 'NF { print $1 " " $2 }' | sort | uniq -c | awk '{ print $2, $3, $1 }')
+listed=$(grep -vE '^(#|$)' "$allowed")
+for rule in one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code; do
+	said=$(join -a1 -a2 -e0 -o 0,1.2,2.2 <(printf '%s\n' "$counts" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) \
+		<(printf '%s\n' "$listed" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) |
+		while read -r key count allows; do
+			if [ "$count" -gt "$allows" ]; then
+				printf '%s\n' "$found" | awk -F'\t' -v r=$rule -v k="$key" '$1 == r && $2 == k { print "  " $3 ": " $4 }'
+				echo "  $rule: $key has $count, $allows allowed"
+			elif [ "$count" -lt "$allows" ]; then
+				echo "  $rule: $key has $count, the allowlist still says $allows: lower it in test/wap/guardrails_allowed.txt"
+			fi
+		done)
+	if [ -z "$said" ]; then echo "✓ $rule"; else printf '✗ %s\n%s\n' "$rule" "$said"; failures=$((failures + 1)); fi
+done
+exit $((failures > 0))

@@ -1,5 +1,10 @@
 # Self-hosting: warp's compiler written in warp
 
+October 26, 2026 (dc4114afaf): “warp rebuild builds both compilers without Rust”. The old compiler first built itself, and a second build gave identical output.
+October 29, 2026 (d115331edf): “the Rust harness is gone”. Rust was deleted completely.
+November 18, 2026: Let's rebuild the warp compiler with a cleaner architecture (call it wap for now)
+
+
 ## Value layout
 Typed values inside, a boxed $Node only at the edges. Where emitter.warp knows a value's kind it stays plain:
 
