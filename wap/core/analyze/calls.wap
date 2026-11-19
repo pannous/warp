@@ -58,7 +58,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	called_reads(chosen, n, s, f)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
-	result_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(chosen.signed)), taken), n), chosen)
+	result_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(signed_name(chosen))), taken), n), chosen)
 }
 # A word with several results gives the one that is wanted (wiki/conversion.md "declared type via as"): an argument
 # whose definitions differ by their result, `int(hi())` beside hi() as int and hi() as text, is wanted as the parameter
@@ -162,7 +162,7 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list<Function> := items_named(s.definition_names, s.definitions, name, definition => definition.name)
 # a call's function, or a Get that calls one, marked with the function it calls
-calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_binding(called, DefinitionKind.Function), DEFINED_AT, declared_name(chosen.signed))
+calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_binding(called, DefinitionKind.Function), DEFINED_AT, declared_name(signed_name(chosen)))
 # a class's maker given one map that none of its definitions takes, `person({name: "Ann"})`: the instance made from it
 # field by field (core/analyze/data.wap instance_from_map); ø for any other call
 made_from_map(n: Node, called: Node, candidates: list<Function>, given: list, s: TypingState) as Node? := {
@@ -187,7 +187,7 @@ candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø t
 # the definition that typed function came from, so typing a typed form again changes nothing
 definition_at(definer: Node, s: TypingState) as Function := definition_keyed(place_key(definer), s) ?? definition_keyed(typed_from(place_key(definer), s), s) ?? refused(definer, "the typing stage found no definition here")
 typed_from(key: text, s: TypingState) as text := {
-	for typed in s.functions { if place_key(declared_name(typed.signed)) == key { return typed.key } }
+	for typed in s.functions { if place_key(declared_name(signed_name(typed))) == key { return key_of(typed.function) } }
 	""
 }
 definition_keyed(key: text, s: TypingState) as Function? := {
@@ -353,25 +353,23 @@ result_given(body: Node, frame: TypeFrame, name: Node, s: TypingState) as Node? 
 	result
 }
 shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition.definer { Define(name, parameters, body) => {
-	key = place_key(declared_name(name))
+	key = key_of(definition)
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
 	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, substituted(argument_types#place, letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
-		if typed.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
+		if key_of(typed.function) == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
 			# a call of itself before its result is known gives no value; a function giving one refuses below
 			typed.called_unknown = typed.called_unknown or not typed.done and typed.result == ø
 			return typed
 		}
 	}
-	typed = TypedFunction(key, types)
+	typed = TypedFunction(definition, types)
 	written = substituted(declared_type(name), letters)
 	# a bare `list` (or `list?`) written takes the body's own type, as a bare list parameter takes its argument's
 	typed.jumps = written == symbol(NEVER_RESULT)
 	typed.result = if names_bare_kind(written) or typed.jumps then ø else written
-	# a function that never returns says so in its signature, as a built-in writes it, `never`, which the emitter lays out
-	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
 	typed.unknown_result = "a function that calls itself and gives a value needs its full result type: write `${declared_name(name)}(…): ${full_type_hint(declared_type(name))} := …`"
 	s.functions += [typed]
 	frame = TypeFrame()
@@ -386,8 +384,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	typed.jumps = typed.jumps or written == ø and jumps(typed_body) and frame.returns is empty
 	if written != ø and not typed.jumps { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
 	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
-	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
-	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition.definer)
+	typed.define = refitted(Define(signed_name(typed), with_items(parameters, typed_parameters), typed_body), definition.definer)
 	typed.late = frame.late
 	if typed.called_unknown and valued_type(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
 	typed.done = yes
@@ -405,8 +402,12 @@ parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 	frame.variables += [Binding(place_key(declared_name(parameter)), type)]
 	with_name_fact(parameter, TYPE, type)
 }
-# a function's name with its signature, `(int, text) -> int`; `()` for no parameters or no value
-with_signature(name: Node, types: list, result: Node?) as Node := with_name_fact(name, SIGNATURE, Call(symbol(ARROW), [List(types, Bracket.Round, Separator.Comma), result ?? Empty]))
+# a typed function's name with its signature, `(int, text) -> int`: its argument types and its result, `()` for no
+# parameters or no value known, `never` for one that never returns, as a built-in writes it, which the emitter lays out
+signed_name(typed: TypedFunction) as Node := {
+	result = if typed.jumps then symbol(NEVER_RESULT) else typed.result ?? Empty
+	with_name_fact(written_name(typed.function.definer), SIGNATURE, function_type_of(typed.arguments, result))
+}
 
 # the parts of a Define, its parameters as a list of none or more
 written_name(definition: Define) as Node := match definition { Define(name, parameters, body) => name }

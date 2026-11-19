@@ -43,9 +43,8 @@ settled_by(bound: list<Binding>, s: TypingState) := {
 # A call of a function for types an unknown still holds: typed once the unknowns settle, so no instance is made for a
 # guess; meanwhile of its written result type, which a function typed later must write
 deferred_typed(definition: Function, types: list, letters: list<Binding>, s: TypingState, at: Node) as TypedFunction := match definition.definer { Define(name, parameters, body) => {
-	typed = TypedFunction(place_key(declared_name(name)), types)
+	typed = TypedFunction(definition, types)
 	typed.result = substituted(declared_type(name) ?? refused(at, UNSETTLED), letters)
-	typed.signed = with_signature(name, types, typed.result)
 	s.deferred += [Deferred(definition, types, at)]
 	typed
 } }
