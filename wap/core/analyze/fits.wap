@@ -28,8 +28,14 @@ parts_fitted(parts: list, s: TypingState) as list := {
 	type = parts_type(parts, s)
 	parts.map(part => as_wanted(part, type, s))
 }
-# the type that holds all of these, ø for none
-joined_all(types: list, s: TypingState) as Node? := if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_settling(a, b, s))
+# the type that holds all of these, ø for none: two at a time, or where two only meet in any, the one of them that
+# holds every other, whatever their order: `"one"`, `2` and a Symbol meet in Node
+joined_all(types: list, s: TypingState) as Node? := {
+	if types is empty { return ø }
+	folded = types.drop(1).fold(types#1, (a, b) -> joined_settling(a, b, s))
+	if folded != symbol(ANY_TYPE) { return folded }
+	types.find(holder => types.all(type => conversion(type, holder, s) in STATIC_CONVERSIONS)) ?? folded
+}
 # the type that holds both: either when they are one, `T?` for a T and ø (or a T?), the type two shapes of it narrow,
 # the wider where one fits the other, else any, the dynamic type: `["a", 1]` is a list<any>; ø when either has none
 joined_type(a: Node?, b: Node?, s: TypingState) as Node? := {
@@ -93,7 +99,7 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	if jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
-	if way == Conversion.Read { return as_read(n, s) }
+	if way == Conversion.Read { return as_read(n, base_or_self(wanted), s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
 	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
@@ -110,7 +116,7 @@ unboxed(n: Node) as Node := match n {
 as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 	if wanted == ø or jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s)
-	if way == Conversion.Read then as_read(n, s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+	if way == Conversion.Read then as_read(n, base_or_self(wanted), s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
 # a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
 bare_fit(given: Node, wanted: Node, records: Records) as bool := {

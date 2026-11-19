@@ -132,9 +132,12 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	called_reads(chosen, n, s, f)
 	result_of(calling(refitted(Get(typed, key), n), chosen), chosen)
 }
-# a value where the type it reads as is wanted, by that type's word: a written character is its text, any other value
-# the call text(c), a range list(r)
-as_read(n: Node, s: TypingState) as Node := if n is Char then char_text(n) else word_called(n, type_word(read_type(value_type(n)) ?? refused(n, "this value reads as no other type")), [n], ø, s)
+# a value where the type it reads as is wanted, by that type's word: a written character where a text is wanted is
+# its text, any other value the call text(c), a range list(r), an atom Node('a')
+as_read(n: Node, wanted: Node, s: TypingState) as Node := {
+	read = read_type(value_type(n), wanted) ?? refused(n, "this value reads as no other type")
+	if n is Char and read == symbol(TEXT_TYPE) then char_text(n) else word_called(n, type_word(read), [n], ø, s)
+}
 char_text(character: Node) as Node := with_type(refitted(Text(text(character)), character), TEXT_TYPE)
 # a call's typed arguments as their parameters (their letters bound by the call) have them: a char read as its text,
 # a plain value boxed for an any or an optional
@@ -199,7 +202,7 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if dispatcher != ø { return dispatcher }
 	fitting = candidates.filter(definition => takes(definition, given, s, (argument, wanted) -> fits(argument, wanted, s)))
 	exact = fitting.filter(definition => takes(definition, given, s, (argument, wanted) -> fits_exactly(argument, wanted, s)))
-	if #fitting > 1 and exact { fitting = exact }
+	if #fitting > 1 { fitting = if exact then exact else fewest_conversions(fitting, given, s) }
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
@@ -207,8 +210,19 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
-# whether a definition takes these arguments, each one fitting its parameter; a definition they fit exactly wins over
-# one they fit only by a conversion (`text('é')` is text(c: char), not text(t: text))
+# A definition the arguments fit exactly wins over one they fit only by a conversion (`text('é')` is text(c: char),
+# not text(t: text)); of those they fit by conversions, those converting the fewest (`t == "?"` compares texts, not
+# Nodes)
+fewest_conversions(definitions: list, given: list, s: TypingState) as list := {
+	counts = definitions.map(definition => conversions_taken(definition, given, s))
+	least = counts.fold(counts#1, (a, b) -> if b < a then b else a)
+	(1 to #definitions).filter(at => counts#at == least).map(at => definitions#at)
+}
+conversions_taken(definition: Node, given: list, s: TypingState) as int := {
+	parameters = parameters_in(definition)
+	#(1 to #given).filter(at => at <= #parameters and not fits_exactly(given#at, type_given(parameters#at), s))
+}
+# whether a definition takes these arguments, each one fitting its parameter
 # (a parameter typed by generic letters takes an argument whose type binds them alike, and one of a function type a
 # function value whose function gives that type's result for its parameters, see letters_bound); the arguments known
 # whole where no letter is wanted are fitted first, so a function value is never typed for a definition that takes

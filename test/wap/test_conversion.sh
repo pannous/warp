@@ -29,4 +29,11 @@ print text(size(1 to 3))')" "3"
 check "a text and a number join" "$(ran text_plus_number 'print("a" + 3)
 print("x·" + 12)')" "a3
 x·12"
+# decision atom-into-node: a plain atom given where a Node is wanted becomes its case
+check "an atom where a Node is wanted is its case, in assignments, arguments and arms" "$(ran atom_node 'shown(n: Node) := show(n)
+c: Node = '"'a'"'
+k = 2
+arm: Node = match k { 1 => "one"; 2 => 2; _ => Symbol("many") }
+turned: Node = match k { 1 => Symbol("many"); 2 => 2; _ => "one" }
+print shown(c) + " " + shown(3) + " " + shown("hi") + " " + show(arm) + " " + show(turned) + " " + show(if k > 1 then 2.5 else Symbol("x"))')" "Char('a') Number(3) Text(\"hi\") Number(2) Number(2) Number(2.5)"
 exit $((failures > 0))
