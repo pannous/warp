@@ -17,7 +17,7 @@ root="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # one census of every file, in one process: the files share their modules and their typing (scripts/wap-census.warp)
 report="$stage/census.out"
-(cd "$root" && scripts/job-slot.sh "$warp" --no-window scripts/wap-census.warp $(git ls-files 'wap/*.wap') >"$report" 2>&1)
+(cd "$root" && scripts/job-slot.sh $warp --no-window scripts/wap-census.warp $(git ls-files 'wap/*.wap') >"$report" 2>&1)
 total=$(grep '^total' "$report" | cut -f2)
 whole=$(echo "$total" | sed -n 's/^\([0-9]*\) of .* files typed whole.*/\1/p')
 counted=$(echo "$total" | sed -n 's/.*files typed whole, \([0-9]*\) of \([0-9]*\) functions typed.*/\2 - \1/p')
