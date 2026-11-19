@@ -50,7 +50,7 @@ captured_by(definition: Node, types: list) as list<Binding> := {
 value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed_called = typed_form(called, s, f, ø)
 	type = value_type(typed_called)
-	through = function_type_parts(type)
+	through = signature(type)
 	if through != ø { return typed_call_through(n, typed_called, arguments, through, s, f) }
 	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
 	key = text(parts#1)
@@ -61,7 +61,7 @@ value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: Type
 }
 # A call of a value of a function type, `helpers#1(x)` of a list<(int) -> int>: a call of whichever function it holds,
 # at run time, each argument of the type's parameter type, giving its result type
-typed_call_through(n: Node, called: Node, arguments: list, parts: FunctionParts, s: TypingState, f: TypeFrame) as Node := {
+typed_call_through(n: Node, called: Node, arguments: list, parts: Signature, s: TypingState, f: TypeFrame) as Node := {
 	if #arguments != #parts.parameters { refused(n, "a ${value_type(called)} takes ${#parts.parameters} arguments") }
 	typed = (1 to #arguments).map(at => {
 		given = typed_form(arguments#at, s, f, parts.parameters#at)
@@ -73,7 +73,7 @@ typed_call_through(n: Node, called: Node, arguments: list, parts: FunctionParts,
 # parameters, giving the type's result, the value then of that type (core/stage.wap FUNCTION_VALUE); ø when its
 # function takes or gives others
 as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
-	parts = function_type_parts(wanted) ?? return ø
+	parts = signature(wanted) ?? return ø
 	own = value_type(value)
 	typed = value_function_typed(parts.parameters, own, s) ?? return ø
 	if not same_types(typed.arguments[#typed.arguments - #parts.parameters ..], parts.parameters) { return shape_taking(value, typed, parts, s, wanted) }
@@ -83,7 +83,7 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 # A function taking shapes where one taking their types is wanted, `pair_name(pair: Pair)` where `(Node) -> text` is:
 # a function the typing stage writes once, taking those types and calling it, so each shape is checked where the value
 # is called, as a direct call checks it
-shape_taking(value: Node, typed: TypedFunction, parts: FunctionParts, s: TypingState, wanted: Node) as Node := {
+shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState, wanted: Node) as Node := {
 	definition = definition_keyed(typed.key, s) ?? refused(value, "the typing stage found no definition of this function")
 	word = text(declared_name(written_name(definition)))
 	name = placed_like(symbol("${word}(${parts.parameters.map(text).join(", ")})"), value)
