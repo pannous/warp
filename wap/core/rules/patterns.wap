@@ -26,6 +26,7 @@ use "../analyze/declarations.wap"
 use "../analyze/fits.wap"
 use "stages.wap"
 use "matcher.wap"
+use "templates.wap"
 use "../language.wap"
 
 TYPE_FACT = "type"
@@ -87,7 +88,10 @@ compiled_pattern(language: Language, n: Node) as Matcher := {
 }
 shape_matcher(language: Language, n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(language, hole_type(n)), pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
-	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(language, head) != ø then compiled_pattern(language, instance(language, pattern_called(language, head), arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
+	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
+		pattern = pattern_called(language, head)
+		if pattern != ø then compiled_pattern(language, instance(language, pattern, arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
+	}
 	Key(left, op, right) => pair_matcher(language, n, left, op, right)
 	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(language, items#1) else sequence_matcher(language, items, bracket, separator)
 	_ => Matcher(Test.Literal, literal: n)
