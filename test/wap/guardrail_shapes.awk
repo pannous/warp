@@ -1,5 +1,6 @@
 # same-shape: function bodies and { } blocks of at least `least` tokens whose shapes match, names, numbers and texts
-# erased. Prints `same-shape <file> <file:line> same shape as <file:line>` for each later copy
+# erased. Prints `same-shape <file> <file:line> same shape as <file:line>` for each later copy. A table, data alone
+# (names, numbers and texts between , : [ ]), has no logic to repeat and is no candidate
 function keyword(word) { return word ~ /^(if|then|else|for|each|in|return|match|is|not|and|or|yes|no|ø|as|while|to|use|class|enum|raise|break|continue|_)$/ }
 function add(kind, text) { n++; tokens[n] = kind == "N" && keyword(text) ? text : kind == "N" || kind == "0" || kind == "T" ? kind : text; files[n] = FILENAME; lines[n] = FNR
 	if (text == ":=" && !definition) { definition = 1; body = n + 1 }
@@ -7,7 +8,8 @@ function add(kind, text) { n++; tokens[n] = kind == "N" && keyword(text) ? text 
 	else if (text == "}" && depth > 0) { candidate(stack[depth] + 1, n - 1); depth-- }
 }
 function shape(from, to,   i, s) { s = ""; for (i = from; i <= to; i++) s = s " " tokens[i]; return s }
-function candidate(from, to) { if (to - from + 1 >= least) { count++; froms[count] = from; tos[count] = to } }
+function candidate(from, to) { if (to - from + 1 >= least && !data(from, to)) { count++; froms[count] = from; tos[count] = to } }
+function data(from, to,   i) { for (i = from; i <= to; i++) if (tokens[i] !~ /^(N|0|T|,|:|\[|\])$/) return 0; return 1 }
 FNR == 1 { if (definition) candidate(body, n); definition = 0; depth = 0 }
 {
 	line = $0; at = 1
