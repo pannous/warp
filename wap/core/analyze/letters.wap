@@ -144,9 +144,10 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	closure = if is_lambda_key(key, s) then [type] else []
 	if #parameters_in(definition) != #closure + #parameters { return ø }
 	typed = function_typed(definition, closure + parameters, s, definition)
-	# its parameters those wanted or shapes of them, `(pair: Pair)` where `(Node)` is
+	# its parameters take the wanted ones as they are: that type or a shape of it, `(pair: Pair)` where `(Node)` is, or
+	# a reference's optional, `(type: Node?)` where `(Node)` is; a plain value's optional would hold it boxed
 	taken = typed.arguments[#closure ..]
-	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed]) then typed else ø
+	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed] + (if is_plain(parameters#at) then [] else [Conversion.Wrapped])) then typed else ø
 }
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to

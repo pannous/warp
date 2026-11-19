@@ -263,7 +263,8 @@ receiver_field(name: Node) as Node := {
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	name = declared_name(place)
-	wanted = shaped(substituted(declared_type(place), f.letters), s) ?? variable_type(name, s, f)
+	declared = substituted(declared_type(place), f.letters)
+	wanted = if declared == ø then variable_type(name, s, f) else shaped(declared, s)
 	given = typed_form(value, s, f, wanted)
 	# a global functions read before it is set from here on
 	s.unset = s.unset.filter(key => key != place_key(defined_at(name)))

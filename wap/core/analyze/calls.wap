@@ -412,7 +412,9 @@ written_name(definition: Define) as Node := match definition { Define(name, para
 parameters_in(definition: Define) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
-all_typed(definition: Node, records: Records) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and not takes_own_type(type_given(parameter), records))
+all_typed(definition: Node, records: Records) as bool := parameters_in(definition).all(parameter => once_typed(type_given(parameter), records))
+# a written type that types its parameter once for every call: none missing, no generic letter, none typed anew
+once_typed(type: Node?, records: Records) as bool := type != ø and not has_letters(type, records) and not takes_own_type(type, records)
 written_types(definition: Node) as list := parameters_in(definition).map(type_given)
 # a parameter's type, written or given by an earlier typing: typing a typed program again changes nothing
 type_given(parameter: Node) as Node? := declared_type(parameter) ?? fact_of(declared_name(parameter), TYPE)
