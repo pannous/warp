@@ -68,7 +68,7 @@ settled_everywhere(n: Node, s: TypingState) as Node := {
 facts_settled(n: Node, s: TypingState) as Node := {
 	for fact in [TYPE, SIGNATURE] {
 		type = fact_of(n, fact)
-		if has_unknowns(type) { n = with_fact(n, fact, substituted(type, s.settled)) }
+		if type != ø and has_unknowns(type) { n = with_fact(n, fact, type_substituted(type, s.settled)) }
 	}
 	n
 }
