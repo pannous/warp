@@ -261,6 +261,12 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **Type names are not scoped by module** (2026-11-19, card type-names-by-module): a module's class of a preload
+  class's name, wap/core/emit/emitter.wap's `Program`, replaces the preload's everywhere, so the preload's own
+  `show(self: Program)` refuses (six functions in the census). Words follow local > parameter > program > used module
+  > preload, type names not yet. Not renamed: a program's class sharing a preload class's name is meant to work, and a
+  rename would hide the gap. Paid off when binding binds type names like every other name.
+
 - **Boxed `any` in wap's own source** (user 2026-11-19): a value of wap's source whose type typing can't name yet is
   boxed as `any` and checked where it enters a typed place, though the compiler's source should stay fully typed
   (first_principles.md). Only analyze/types.wap decides what is boxed; the emitter never infers it. Each boxed spot
@@ -377,9 +383,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   definition's name reads it (core/analyze/calls.wap ranked). Reason: a template does not know which of its words
   will stand in a definition's name place. Paid off when templates are built from their forms, so the Define's name
   hole is known.
-- **Try's handler hole is read as Node** (wap/kernel/forms.wap `pattern Try`), though the handler is always a Fn.
-  Reason: old warp, which runs the compiler, never matches a single hole typed by a declared pattern, so `$handler: Fn`
-  stopped every Try. Paid off when card pattern-hole-typing lands: `Fn` goes back and this line goes.
 - **Every operator's spelling is written twice**: in the table of wap/preload/operators.wap and in `text(op: Op)` of
   wap/preload/nodes.wap. Reason: the Op enum is declared case for case as core/node.warp declares it, so old warp
   reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a

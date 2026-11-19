@@ -25,12 +25,12 @@ typed_by_rules(language: Language, typed: Block, library: list, preload: Block) 
 	for round in 1 to ROUNDS_LIMIT {
 		after = rewritten_by(language, language.typed_rules, code)
 		if not after.fired { return code }
-		code = typed_program(bound_program(own_statements(after.code, preload), library), preload)
+		code = typed_program(bound_program(own_statements(after.code, preload), library, []), preload)
 	}
 	refused(code, "the typed rules still fire after ${ROUNDS_LIMIT} rounds: a rule writes code it fires on again")
 }
 # the program without the preload's functions typing put before it
 own_statements(program: Block, preload: Block) as Block := {
-	library_file = file_of(statements_in(preload)#1)
-	refitted(Block(statements_in(program).filter(statement => not (statement is Define and file_of(statement) == library_file))), program)
+	library_files = statements_in(preload).map(file_of).unique
+	refitted(Block(statements_in(program).filter(statement => not (statement is Define and library_files.contains(file_of(statement))))), program)
 }
