@@ -414,7 +414,7 @@ defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "th
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
-case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+case_call_typed(n: Node, called: Node, arguments: list<Node>, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => field_checked(typed_form(arguments#at, s, f, declared_type(fields#at)), fields#at, arguments#at, s))
