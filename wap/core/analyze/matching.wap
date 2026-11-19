@@ -116,7 +116,7 @@ missing(rows: list, types: list, s: TypingState) as list? := {
 cases_missing(rows: list, types: list, cases: list, s: TypingState) as list? := {
 	for case in cases {
 		fields = case_fields(case)
-		inner = missing(rows.filter(row => fits_any(row#1) or text(case_name(row#1)) == text(case_name(case))).map(row => opened(row, #fields)), fields.map(declared_type) + types[1 ..], s)
+		inner = missing(rows.filter(row => fits_any(row#1) or text(case_name(row#1)) == text(case_name(case))).map(row => opened(row, #fields)), fields.map(field_type) + types[1 ..], s)
 		if inner != ø { return [if fields is empty then case_name(case) else Call(case_name(case), inner[.. #fields])] + inner[#fields ..] }
 	}
 	ø
@@ -125,7 +125,7 @@ cases_missing(rows: list, types: list, cases: list, s: TypingState) as list? := 
 # its holes' types (a row of another shape is left out)
 shape_missing(rows: list, types: list, s: TypingState) as list? := {
 	form = form_named(types#1, s)
-	if form == ø { return cases_missing(rows, types, cases_of(record_named(s.records, narrowed_type(types#1))).filter(case => text(case_name(case)) == text(types#1)), s) }
+	if form == ø { return cases_missing(rows, types, cases_of(record_named(s.records, narrowed_type(types#1)) ?? refused(types#1, "a case's shape narrows its enum")).filter(case => text(case_name(case)) == text(types#1)), s) }
 	holes = hole_types(form, s)
 	taken = form_taken(form)
 	kept = rows.filter(row => fits_any(row#1) or form_parts(taken, row#1) != ø)
@@ -184,5 +184,5 @@ case_pattern_typed(pattern: Call, type: Node, s: TypingState, f: TypeFrame) as N
 	called = in_enum(written, type, s)
 	fields = case_fields(case_declaring(s.records, called))
 	if #parts != #fields { refused(pattern, "${called} names each of its fields: ${field_names(fields)}") }
-	case_typed_as(pattern, called, (1 to #parts).map(at => pattern_typed(parts#at, declared_type(fields#at) ?? refused(fields#at, "a case's field has a type"), s, f)), s)
+	case_typed_as(pattern, called, (1 to #parts).map(at => pattern_typed(parts#at, field_type(fields#at), s, f)), s)
 } }
