@@ -1,3 +1,6 @@
 # Definitions written other ways (notes/wap.md preload/sugar/): the spellings wap's own source uses
 # a result type after `as`, `f(x) as T := …`, is the typed head `f(x): T := …`
 rule ($head as $type := $body) => ($head: $type := $body)
+# a built-in's body, an operation the emitter performs itself (kernel/forms.wap Prim); only the preload writes it:
+# `print(t: text) := prim print_text(t)`
+rule prim $operation($arguments...) => Prim($operation, $arguments...)
