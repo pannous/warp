@@ -103,9 +103,9 @@ written_function_type(type: Node?, s: TypingState) as Node? := {
 	result = definition.result ?? return ø
 	types: list<Node> = []
 	for parameter in taken {
-		type = type_given(parameter)
-		if type == ø or has_letters(type, s.records) { return ø }
-		types += [type]
+		given = type_given(parameter) ?? return ø
+		if has_letters(given, s.records) { return ø }
+		types += [given]
 	}
 	function_type_of(types, result)
 }
