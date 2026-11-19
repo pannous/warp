@@ -204,6 +204,8 @@ module_probed(key: text, own: list) as Probed := {
 				p.anys += found
 			} catch e {
 				run.state = rolled_back(before)
+				key_typed = function_key_of(definition)
+				if not run.state.refusals.any(each => each.key == key_typed) { run.state.refusals += [Refusal(key_typed, e.message)] }
 				p.lines += ["type\t${name}: " + e.message.replace("\n", " ")]
 			}
 		}
@@ -234,6 +236,8 @@ typing_state(library: list) as TypingState := {
 # The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
 # shared with the state that refused, forget the places past them
 rolled_back(before: TypingState) as TypingState := {
+	# what was refused stays known: a function refused once is refused to every caller after it, as the typing says
+	before.refusals = run.state.refusals
 	truncated(before.definition_names, #before.definitions)
 	truncated(before.definition_keys, #before.definitions)
 	truncated(before.records.names, #before.records.items)
@@ -259,6 +263,9 @@ copied(base: TypingState) as TypingState := {
 	s.unknowns = base.unknowns
 	s.settled = base.settled + []
 	s.deferred = base.deferred + []
+	s.unset = base.unset + []
+	s.dispatchers = base.dispatchers + []
+	s.refusals = base.refusals + []
 	s
 }
 
@@ -267,4 +274,28 @@ for file in args {
 	print "== ${file}"
 	total = added(total, probe(file))
 }
+# The refusals that block the most functions, most first: a root, a refusal of a function's own, with the functions
+# refused for calling it, directly or through one another ("this calls …, which wap refuses", core/analyze/calls.wap)
+CALLS_REFUSED = ", which wap refuses"
+CALLS = "this calls "
+class Family { root: Refusal, name: text, size: int = 1 }
+refused_name(refusal: Refusal) as text := {
+	definition = definition_keyed(refusal.key, run.state)
+	if definition == ø then refusal.key else definition_name(definition)
+}
+called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
+family_of(root: Refusal, refusals: list) as Family := {
+	family = Family(root, refused_name(root))
+	blocked = [family.name]
+	grown = yes
+	while grown {
+		callers = refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked))
+		blocked = blocked + callers.map(refused_name).unique
+		grown = callers is not empty
+	}
+	family.size = #blocked
+	family
+}
+families = run.state.refusals.filter(each => called_refused(each) == "").map(root => family_of(root, run.state.refusals)).sorted(by: family => -family.size)
+for family in families { print "family\t${family.size} blocked by ${family.name}: " + family.root.message.replace("\n", " ") }
 print "total\t${total.whole} of ${total.files} files typed whole, ${total.typed} of ${total.functions} functions typed, ${total.anys} places typed any"
