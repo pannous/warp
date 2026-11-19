@@ -25,8 +25,12 @@ use "../rules/patterns.wap"
 
 # depth of the program's own statements: names defined there are globals and top-level functions
 PROGRAM_DEPTH = 0
-# depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
-LIBRARY_DEPTH = -1
+# depth of the words of the modules the program uses, around it, and of the preload's declarations, around those
+# (core/analyze/declarations.wap): a name means the innermost, local > parameter > program > used module > preload
+MODULE_DEPTH = -1
+PRELOAD_DEPTH = -2
+# a used module, by its file's name, `a` for "lib/a.wap", which `a.twice` reads one word of; never a name's meaning
+MODULE_KIND = "module"
 # a class a Block declares, seen by the methods beside it for their receiver's fields; never a name's meaning
 RECORD_KIND = "record"
 
@@ -35,14 +39,55 @@ RECORD_KIND = "record"
 # a case's owner is its enum, its fields how many values it takes
 class Definition { name: text; kind: text; definer: Node; depth: int; owner: text = ""; fields: int = 0 }
 
-# the program bound inside the library, whose declarations (`name: signature`) it may use
-bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.flat_map(library_words), PROGRAM_DEPTH))
+# the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
+# two modules defining one name are refused, used or not
+bound_program(program: Block, preload: list, modules: list) as Block := {
+	clashes_refused(modules)
+	words = modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH))) + preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
+	late_reads_checked(bound(program, words, PROGRAM_DEPTH))
+}
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
-library_words(declaration: Node) as list := match declaration {
-	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH)]
-	Record(name, fields, variants) => definitions_made_by(declaration, [], LIBRARY_DEPTH)
+library_words(declaration: Node, depth: int) as list := match declaration {
+	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, depth)]
+	Record(name, fields, variants) => definitions_made_by(declaration, [], depth)
 	_ => refused(declaration, "a library declares names and records")
+}
+# a module's name, its file's without the folder and the extension
+module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
+# the names a module declares itself: its functions, variables and types, not their fields or cases
+module_names(module: Node) as list := declarations_of(module).map(declaration => match declaration {
+	Key(name, Op.Colon, signature) => name
+	Record(name, fields, variants) => name
+})
+# Two used modules defining one name, refused naming both, even where nothing calls it: a name means one module's word
+clashes_refused(modules: list) := for later in 2 to #modules {
+	for earlier in modules.take(later - 1) {
+		for name in module_names(modules#later) {
+			for other in module_names(earlier) { if text(other) == text(name) { refused(name, "${module_name(earlier)}.wap line ${line_of(other)} and ${module_name(modules#later)}.wap line ${line_of(name)} both define ${name}: rename one, or call it ${module_name(earlier)}.${name}") } }
+		}
+	}
+}
+# A used module's word named by the module, `a.twice` or `a.twice(3)`, read as twice(a, 3) is: the definitions of
+# that name the module declares, bound as the bare name would be were they the only ones; ø where the subject names no
+# module, or names something nearer, a variable `a`
+module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
+	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
+	for definition in scope {
+		if definition.kind == MODULE_KIND and definition.name == text(subject) {
+			named = module_names(definition.definer).filter(name => text(name) == key)
+			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
+			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
+			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(with_fact(found, DEFINED_AT, Empty), CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+		}
+	}
+	ø
+}
+# a call of a used module's word, `a.twice(3)`, its other arguments bound; ø for any other call
+module_call(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node? := {
+	if not called is symbol or arguments is empty { return ø }
+	word = module_word(called, arguments#1, text(called), scope) ?? return ø
+	refitted(Call(word, all_bound(arguments.drop(1), scope, depth)), n)
 }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
@@ -52,7 +97,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
-	Call(called, arguments) => if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
+	Call(called, arguments) => module_call(n, called, arguments, scope, depth) ?? if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
@@ -62,7 +107,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Break() => n
 	Continue() => n
 	EmptyMap() => n
-	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
+	Get(subject, key) => qualified_case(n, subject, key, scope) ?? (if key is text then module_word(n, subject, text(key), scope) else ø) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	Item(subject, key) => refitted(Item(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
 	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
@@ -257,7 +302,7 @@ unambiguous_case(name: Node, meant: Definition, given: int?, scope: list) as Def
 definitions_meant(name: text, scope: list) as list := {
 	meant = []
 	for definition in scope {
-		if definition.name == name and definition.kind != RECORD_KIND {
+		if definition.name == name and definition.kind != RECORD_KIND and definition.kind != MODULE_KIND {
 			if not is_function(definition) { return if meant is empty then [definition] else meant }
 			meant = meant + [definition]
 		}
