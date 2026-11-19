@@ -56,7 +56,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
-	Try(body, otherwise) => refitted(Try(bound(body, scope, depth), bound(otherwise, scope, depth)), n)
+	Try(body, handler) => refitted(Try(bound(body, scope, depth), handler_bound(handler, scope, depth)), n)
 	Case(subject, arms) => refitted(Case(bound(subject, scope, depth), arms.map(arm => arm_bound(arm, scope, depth))), n)
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
@@ -165,6 +165,12 @@ default_bound(parameter: Node, scope: list, depth: int) as Node := {
 	if given == ø then parameter else with_fact(parameter, DEFAULT, bound(given, scope, depth))
 }
 body_bound(parameters: List, body: Node, scope: list, depth: int) as Node := bound(body, parameter_definitions(parameters, depth + 1) + receiver_fields(parameters, scope, depth + 1) + scope, depth + 1)
+# A Try's handler, run in place: its parameter, the caught Error, one more of the function around it, which its body
+# reads and returns from as its own
+handler_bound(handler: Fn, scope: list, depth: int) as Node := match handler { Fn(parameters, body) => {
+	inner = parameter_definitions(parameters, depth) + scope
+	refitted(Fn(with_items(parameters, all_bound(items_of(parameters), inner, depth)), bound(body, inner, depth)), handler)
+} }
 # A method's receiver fields: in a function whose first parameter is `self` of a class, each field of the class by its
 # bare name, `c` for `self.c`, read and set; the function's parameters and locals hide them
 receiver_fields(parameters: List, scope: list, depth: int) as list := {
