@@ -234,7 +234,8 @@ descends(name: text, ancestor: text) as bool := name == ancestor or (name in mod
 def class_test_code(body: Body, value: TypedCode, spec: text, word: text) as TypedCode {
 	kept = "classes·" + spec
 	index = relocatable(relocated.globals, declared_global(kept, ValueKind.Node)#1)
-	classes = kept_once(kept, index, () => boxed(TypedCode(ValueKind.List, vector_code(module.classes.keys.filter(name => descends(name, spec)).map(name => boxed(text_value_of(name)))))), Kind.List)
+	names = module.classes.keys.filter(name => descends(name, spec))
+	classes = kept_once(kept, index, () => boxed(TypedCode(ValueKind.List, vector_code(names.map(name => boxed(text_value_of(name)))))), Kind.List)
 	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), TypedCode(ValueKind.List, converted(classes, ValueKind.List))])
 }
 def type_test_code(body: Body, subject: Node, written: text) as TypedCode { value_type_test(body, expression_code(body, subject), written) }
