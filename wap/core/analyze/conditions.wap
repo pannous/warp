@@ -14,7 +14,7 @@ use "shapes.wap"
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
 # An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`; a variable tested of a
-# type, `x is int`, is of that type in the then-arm; `a and b` finds what both find. Where one arm never finishes,
+# type, `x is int`, is of that type in the then-arm; `a and b` finds what both find, `a or b` what neither does. Where one arm never finishes,
 # what the other finds holds after the If too, `if x == ø { return }` leaving x present for the statements after it;
 # a loop's body, a match's arm and a try's parts keep such findings to themselves, as an If's arm does.
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
@@ -39,15 +39,17 @@ present_typed(part: Node, known: list<Finding>, s: TypingState, f: TypeFrame, ex
 # what a condition finds of its variables, from the condition as written and as typed: `a and b` (If(a, b, no)) what
 # each part finds in its then-arm
 found(condition: Node, tested: Node, s: TypingState, f: TypeFrame) as list<Finding> := {
-	parts = conjoined(condition)
-	typed_parts = conjoined(tested)
-	if parts != ø and typed_parts != ø { return (found(parts#1, typed_parts#1, s, f) + found(parts#2, typed_parts#2, s, f)).filter(finding => finding.arm == 1) }
+	parts = both_parts(condition)
+	typed_parts = both_parts(tested)
+	if parts != ø and typed_parts != ø { return (found(parts.first, typed_parts.first, s, f) + found(parts.second, typed_parts.second, s, f)).filter(finding => finding.arm == parts.arm) }
 	one = present_tested(condition, s, f) ?? type_tested(tested)
 	if one == ø then [] else [one]
 }
-# the two parts of `a and b`, If(a, b, no); ø for any other form
-conjoined(n: Node) as list? := match n {
-	If(first, second, otherwise) => if otherwise is False then [first, second] else ø
+# the two parts of `a and b`, If(a, b, no), with the arm where both hold, 1; of `a or b`, If(a, yes, b), with the arm
+# where neither holds, 2, so `if x == ø or x.n == 0 { return }` leaves x present after it; ø for any other form
+class BothParts { first: Node; second: Node; arm: int }
+both_parts(n: Node) as BothParts? := match n {
+	If(first, second, otherwise) => if otherwise is False then BothParts(first, second, 1) else if second is True then BothParts(first, otherwise, 2) else ø
 	_ => ø
 }
 # the variable a condition finds present, of its value's type: `x != ø` and `if x` in the then-arm, `x == ø` in the
@@ -96,7 +98,7 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 	if fact_of(tested, BINDING) == symbol(BOUND_CASE) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
 	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	typed = typed_form(subject, s, f, ø)
-	type = value_type(typed) ?? refused(subject, "this gives no value to test")
+	type = value_of(typed, "to test")
 	kind = kind_named(tested, type, s)
 	if kind != ø { return typed_form(shape_test(subject, kind, n, s), s, f, ø) }
 	if boxed_fit(tested, type) and not same_type(type, tested) { return with_fact(with_type(placed_like(Prim(symbol(BOXED_TEST), [typed]), n), BOOL_TYPE), TESTED, tested) }

@@ -50,7 +50,7 @@ field_dispatching(key: Node, s: TypingState) as Node? := {
 	known = definition_keyed(place_key(name), s)
 	if known != ø { return known }
 	read = parameters_of(name, [symbol(ANY_TYPE)])#1
-	tried = holders.map(record => [[test_of(read, symbol(record_name(record)), name, s)], placed_like(Get(read, key), name)])
+	tried = holders.map(record => [[test_of(read, record_type(record), name, s)], placed_like(Get(read, key), name)])
 	dispatcher_made(name, [read], chained(tried, raised("${key}: no record of this value's type has this field", name, s), name), holders.map(record => declared_type(field_named(record, key))), s)
 }
 
