@@ -168,7 +168,7 @@ group_lowered(language: Language, statements: list) as Node := if #statements ==
 
 # a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
 # one statement
-statements_of(n: Node) as list := match n {
+statements_of(n: Node) as list<Node> := match n {
 	Block(statements) => statements
 	List(items, Bracket.None, separator) => if #items == 1 then statements_of(items#1) else top_level_statements(n)
 	_ => [n]

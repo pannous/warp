@@ -72,7 +72,8 @@ key_read(language: Language, n: Node, left: Node, spelling: text, right: Node) a
 # x = x + 1, (Call = x (Call + x 1)); its written spelling stays a fact, so `wap format` prints `x += 1` again
 infix_call(language: Language, spelling: text, left: Node, right: Node) as Node := {
 	if is_assignment(language, spelling) and arrow_parts(language, left) != ø { return arrow_assigned(language, spelling, left, right) }
-	if is_assignment(language, spelling) and rule_phrase(language, left) != ø { return phrase_assigned(language, spelling, rule_phrase(language, left), right) }
+	phrase = if is_assignment(language, spelling) then rule_phrase(language, left) else ø
+	if phrase != ø { return phrase_assigned(language, spelling, phrase, right) }
 	if compound_assignment(language, spelling) != spelling { return Call(symbol(spelling), [left, right]) }
 	with_fact(Call(symbol(ASSIGNMENT), [left, Call(symbol(spelling[.. #spelling - 1]), [left, right])]), COMPOUND, symbol(spelling))
 }
@@ -170,7 +171,7 @@ tokens_read(language: Language, tokens: list) as Node := {
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
-called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(language, next) and not is_block(next.item)
+called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list<Use>) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(language, next) and not is_block(next.item)
 # a word rules use only inside their phrases, which continues the code before it: `else`
 continuation_word(language: Language, word: text) as bool := language.phrase_words.inner.has(word) and not language.phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
@@ -210,7 +211,7 @@ spelling_written(item: Node) as text := match item { Symbol(name) => name; _ => 
 
 # Before an incoming operator waits, every pending one that binds tighter is applied. Two of one group apply by its
 # grouping; two groups with no relation are refused, as is a chain of a group that refuses chaining.
-arrive(language: Language, incoming: Use, operands: list, pending: list) := {
+arrive(language: Language, incoming: Use, operands: list<Node>, pending: list<Use>) := {
 	while pending is not empty and applies_first(language, pending.last, incoming) { applied(language, pending.pop(), operands) }
 }
 
@@ -237,7 +238,7 @@ one_sided(language: Language, use: Use, operand: Node) as list := {
 }
 
 # the operator applied to its operands on the stack: a Call of its canonical spelling, or a phrase for juxtaposition
-applied(language: Language, use: Use, operands: list) := {
+applied(language: Language, use: Use, operands: list<Node>) := {
 	right = operands.pop()
 	if use.fixity != Fixity.Infix { operands.add(placed_like(Call(symbol(use.spelling), one_sided(language, use, right)), use.written)); return }
 	left = operands.pop()

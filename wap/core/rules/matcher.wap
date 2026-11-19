@@ -85,7 +85,7 @@ repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 }
 
 # the names a matcher binds when it fits: its holes, a repetition's under `$p...`
-names_bound(m: Matcher) as list := match m.test {
+names_bound(m: Matcher) as list<text> := match m.test {
 	Test.Hole => [m.name]
 	Test.Repeat => names_bound(m.parts#1).map(name => name + REST_MARK)
 	_ => m.parts.flat_map(names_bound)

@@ -107,7 +107,7 @@ SAMPLE_BLOCK = List([symbol("x")], Bracket.Curly, Separator.Newline)
 
 # The heads a node is indexed under, most specific first: a phrase's first word, a declared form's name with its
 # first word (`Call/+` for (Call + a b)), a key's operator; NO_HEAD last, where rules starting with a hole wait.
-heads_of(language: Language, n: Node) as list := match n {
+heads_of(language: Language, n: Node) as list<text> := match n {
 	List(items, bracket, separator) => list_heads(language, items) + shape_heads(items, bracket, separator) + [NO_HEAD]
 	Key(left, Op.None, List(items, bracket, separator)) => glued_heads(left, bracket) + ["key " + (Op.None as text), NO_HEAD]
 	Key(left, Op.None, Empty) => EMPTY_GROUPS.flat_map(bracket => glued_heads(left, bracket)) + ["key " + (Op.None as text), NO_HEAD]
@@ -117,12 +117,12 @@ heads_of(language: Language, n: Node) as list := match n {
 # A list under its bracket and separator, then its bracket alone: `$then... if $c` is a space phrase starting with a hole,
 # indexed there, not among the rules tried on any code; a pattern of one part matches any separator, so it waits under
 # its bracket
-shape_heads(items: list, bracket: Bracket, separator: Separator) as list := (if #items > 1 then ["${bracket} ${separator}"] else []) + ["${bracket}"]
+shape_heads(items: list, bracket: Bracket, separator: Separator) as list<text> := (if #items > 1 then ["${bracket} ${separator}"] else []) + ["${bracket}"]
 
 # a glued call or index, `f(x)`, `xs[i]`: under its name and bracket, then under its bracket alone (`$f($x)`, `$xs[$i]`)
-glued_heads(left: Node, bracket: Bracket) as list := (if left is symbol and not is_hole(left) then ["${spelling_written(left)} ${bracket}"] else []) + ["glued ${bracket}"]
+glued_heads(left: Node, bracket: Bracket) as list<text> := (if left is symbol and not is_hole(left) then ["${spelling_written(left)} ${bracket}"] else []) + ["glued ${bracket}"]
 
-list_heads(language: Language, items: list) as list := {
+list_heads(language: Language, items: list) as list<text> := {
 	if #items == 0 or is_hole(items#1) or not (items#1 is symbol) { return [] }
 	first = spelling_written(items#1)
 	if language.patterns.has(first) and #items > 1 and items#2 is symbol and not is_hole(items#2) { return [first + "/" + spelling_written(items#2), first] }
@@ -158,7 +158,7 @@ cycle_refused(language: Language, rules: Rules, head: text, path: list) := {
 rules_on(rules: Rules, heads: list) as list := heads.filter(head => rules.by_head.has(head)).map(head => rules.by_head[head]).fold([], (a, b) -> a + b)
 
 # the heads of every node a template spells (not the code its holes bring)
-template_heads(language: Language, n: Node) as list := match n {
+template_heads(language: Language, n: Node) as list<text> := match n {
 	List(items, bracket, separator) => heads_of(language, n) + items.map(item => template_heads(language, item)).fold([], (a, b) -> a + b)
 	Key(left, op, right) => (if op == Op.None and pattern_called(language, left) != ø then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
 	_ => []
@@ -250,7 +250,10 @@ spread_items(result: Node) as list? := match result {
 group_kept(result: Node, bracket: Bracket) as Node := if is_phrase(result) and spread_items(result) == ø then List([result], bracket, Separator.None) else result
 is_phrase(n: Node) as bool := match n { List(items, Bracket.None, Separator.Space) => yes; _ => no }
 # a spliced item keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
-with_rule_of(item: Node, sequence: Node) as Node := if fact_of(sequence, RULE) == ø then item else with_fact(item, RULE, fact_of(sequence, RULE))
+with_rule_of(item: Node, sequence: Node) as Node := {
+	rule = fact_of(sequence, RULE)
+	if rule == ø then item else with_fact(item, RULE, rule)
+}
 one_phrase(language: Language, items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(language, items#1) == ø
 
 rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {

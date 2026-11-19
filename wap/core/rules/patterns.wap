@@ -81,7 +81,10 @@ typed_hole(hole: Node, type: Node) as Node := with_fact(hole, TYPE_FACT, type)
 # ---- compiling
 
 # a normalized pattern compiled to its matcher; a declared pattern written as a call, `If($c, $a, $b)`, is its shape
-compiled_pattern(language: Language, n: Node) as Matcher := if repeated_part(n) != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(language, ungrouped(repeated_part(n)))]) else shape_matcher(language, n)
+compiled_pattern(language: Language, n: Node) as Matcher := {
+	repeated = repeated_part(n)
+	if repeated != ø then Matcher(Test.Repeat, rest: yes, parts: [compiled_pattern(language, ungrouped(repeated))]) else shape_matcher(language, n)
+}
 shape_matcher(language: Language, n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(language, hole_type(n)), pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else Matcher(Test.Literal, literal: n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => if pattern_called(language, head) != ø then compiled_pattern(language, instance(language, pattern_called(language, head), arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
