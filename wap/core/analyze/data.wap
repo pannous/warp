@@ -35,14 +35,14 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 # map"): `person({name: "Ann", age: "40"})` calls the function the typing stage writes once for the record,
 # from_map(person)(m) := person{name: text(m["name"]), age: int(m["age"])}, so the map is read once, each field its
 # entry, `keys` too
-instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
+instance_from_map(n: Node, record: Node, source: Node, s: TypingState) as Node := {
 	name = name_once("${FROM_MAP_WORD}(${record_name(record)})", n, s)
 	if definitions_named(text(name), s) is empty {
-		reads = parameters_of(name, [value_type(map)])
+		reads = parameters_of(name, [value_type(source)])
 		fields = fields_of(record).map(field => placed_like(Key(declared_name(field), Op.Colon, field_made(field, placed_like(Item(reads#1, Text(text(declared_name(field)))), n), s)), n))
 		dispatcher_made(name, reads, placed_like(Key(record_type(record), Op.None, List(fields, Bracket.Curly, Separator.Comma)), n), [record_type(record)], s)
 	}
-	word_called(n, text(name), [map], record_type(record), s)
+	word_called(n, text(name), [source], record_type(record), s)
 }
 # a field's value made into the field's type by that type's maker, `int(m["age"])`
 field_made(field: Node, value: Node, s: TypingState) as Node := {
@@ -66,7 +66,7 @@ field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := m
 # unknown item type the first use that adds to it settles.
 list_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if items.any(item => rest_named(item) != ø) { return spread_typed(n, items, separator, s, f, expected) }
-	wanted = item_type(expected)
+	wanted = item_type(base_or_self(expected))
 	typed = items.map(item => typed_form(item, s, f, wanted))
 	item = if items is empty then wanted ?? unknown_type(s) else common_type(typed, wanted, s)
 	if item == ø or not all_fit(typed, item, s) { refused(n, "a list's items are of one type") }
@@ -95,7 +95,7 @@ spread_typed(n: Node, items: list, separator: Separator, s: TypingState, f: Type
 # `[[1], []]` is a list<list<int>> and settles the empty list's item type
 common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	if wanted != ø and all_fit(values, wanted, s) { return wanted }
-	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).filter(type => type != ø)
+	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).compact()
 	for type in types.filter(type => not has_unknowns(type)) + types.filter(has_unknowns) { if all_fit(values, type, s) { return type } }
 	if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_type(a, b, s))
 }
@@ -107,9 +107,10 @@ all_fit(values: list, wanted: Node, s: TypingState) as bool := values.all(value 
 # A map written as data, `{yes: 1, no: 0}`: its keys words, so texts, its values each expected of the value type its
 # place wants; all of one type V, or all fitting the value type its place wants, the map is a map<text, V>
 map_typed(n: Node, items: list, separator: Separator, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	typed = items.map(item => entry_typed(item, held_type(expected), s, f))
+	wanted = held_type(base_or_self(expected))
+	typed = items.map(item => entry_typed(item, wanted, s, f))
 	values = typed.map(entry_value)
-	held = common_type(values, held_type(expected), s)
+	held = common_type(values, wanted, s)
 	if held == ø or not all_fit(values, held, s) { refused(n, "a map's values are of one type") }
 	read = typed.map(entry => match entry { Key(key, Op.Colon, value) => refitted(Key(key, Op.Colon, read_as(value, held, s)), entry); _ => refused(entry, NOT_AN_ENTRY) })
 	with_type_of(refitted(List(read, Bracket.Curly, separator), n), map_type(symbol(TEXT_TYPE), held))
@@ -128,7 +129,7 @@ entry_read_typed(n: Node, map: Node, key: Node, s: TypingState) as Node := word_
 
 # A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
 # the call `#(x, i)`, as a Range answers it
-get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s)
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := as_found(n, item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s), s, f)
 # the item of a typed subject at a typed place
 item_got(n: Node, held: Node, place: Node, s: TypingState) as Node := {
 	item = item_type(value_type(held))

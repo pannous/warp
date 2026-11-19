@@ -89,7 +89,10 @@ seen_in_function(name: text, scope: Scope, depth: int) as bool := {
 late_reads_checked(program: Node) as Node := {
 	changes = global_changes(program, no)
 	match program {
-		Block(statements) => for statement in statements { if function_defined_by(statement) != ø { late_reads_of(function_defined_by(statement), line_of(statement), [], changes) } }
+		Block(statements) => for statement in statements {
+			function = function_defined_by(statement)
+			if function != ø { late_reads_of(function, line_of(statement) ?? refused(statement, "a definition has its line"), [], changes) }
+		}
 		_ => ø
 	}
 	program
@@ -114,7 +117,7 @@ is_change(place: Node) as bool := is_bound(place, DefinitionKind.Global) and not
 same_place(a: Node, b: Node) as bool := line_of(a) == line_of(b) and column_of(a) == column_of(b)
 
 # the reads in a function, defined at line, of program variables that change after it, refused unless declared
-late_reads_of(n: Node?, line: int, declared: list, changes: list) := match n {
+late_reads_of(n: Node, line: int, declared: list, changes: list) := match n {
 	Symbol(name) => if is_bound(n, DefinitionKind.Global) and not declared.contains(name) and changes_after(name, line, changes) { refused(n, "the program changes ${name} after this function is defined: write `global ${name}` in the function, so it reads ${name} as it is when called") }
 	Set(place, value) => late_reads_of(value, line, declared, changes)
 	Block(statements) => for statement in statements { late_reads_of(statement, line, declared + globals_named(n), changes) }

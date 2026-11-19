@@ -124,7 +124,7 @@ class TypeFrame {
 	variables: list<Binding> = []
 	result: Node? = ø
 	# the types its returns give, ø for a bare return
-	returns: list = []
+	returns: list<Node?> = []
 	# the generic letters its parameters bound (core/analyze/calls.wap)
 	letters: list<Binding> = []
 	# what the conditions around find of their variables: an optional one present, read as its value; one any or a
@@ -158,10 +158,12 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	}
 	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
+	settled_late = s.functions.drop(typed_before)
+	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
 	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
-	late = s.functions.drop(typed_before).filter(each => not (each.function.key in library_keys)).map(each => each.define)
+	late = settled_late.filter(each => not (each.function.key in library_keys) and s.functions.any(kept => kept === each)).map(each => each.define)
 	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
@@ -175,7 +177,9 @@ gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valu
 value_of(n: Node, wanted: text) as Node := value_type(n) ?? refused(n, text_of(fact_of(n, RESULT_UNKNOWN)) ?? "this gives no value ${wanted}")
 # a fact's text, ø for none
 text_of(fact: Node?) as text? := match fact { Text(value) => value; _ => ø }
-valued_type(type: Node?) as bool := type != ø and type != symbol(EMPTY_TYPE)
+valued_type(type: Node?) as bool := value_bearing(type) != ø
+# a type that holds a value, ø for none or ø's own
+value_bearing(type: Node?) as Node? := if type == symbol(EMPTY_TYPE) then ø else type
 jumps(n: Node) as bool := has_fact(n, JUMPS)
 jumping(n: Node) as Node := with_fact(n, JUMPS, True)
 # n typed as the code it gives the value of: of its type, or jumping with it, `{ x = 1; return x }`
@@ -198,7 +202,10 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Break() => jumping(n)
 	Continue() => jumping(n)
 	# `{}`: the map its place wants, else a map of texts to an unknown type its first entry settles, as `[]`
-	EmptyMap() => with_type_of(n, if key_type(expected) != ø then expected else map_type(symbol(TEXT_TYPE), unknown_type(s)))
+	EmptyMap() => {
+		wanted = base_or_self(expected)
+		with_type_of(n, if key_type(wanted) != ø then wanted else map_type(symbol(TEXT_TYPE), unknown_type(s)))
+	}
 	Record(name, fields, variants) => n
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)
@@ -292,7 +299,7 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 }
 # a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
 receiver_field(name: Node) as Node := {
-	receiver = with_fact(with_binding(symbol(SELF_WORD), DefinitionKind.Parameter), DEFINED_AT, fact_of(name, DEFINED_AT))
+	receiver = with_fact(with_binding(symbol(SELF_WORD), DefinitionKind.Parameter), DEFINED_AT, fact_of(name, DEFINED_AT) ?? refused(name, "a receiver's field is bound"))
 	placed_like(Get(receiver, Text(text(name))), name)
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
@@ -315,7 +322,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 
 # a list's item or a record's field given a value of its type; the Set itself gives none
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
-	wanted = value_type(place)
+	wanted = value_of(place, "as a place")
 	given = converted(typed_form(value, s, f, wanted), wanted, s, n, "the place holds a")
 	# a place read by a call of `#`, a map's entry, is given its value by a call of `set` with the same parts
 	match place {
@@ -366,15 +373,25 @@ as_found(n: Node, read: Node, s: TypingState, f: TypeFrame) as Node := {
 	known = found_type(path_key(n) ?? return read, f.present) ?? return read
 	if base_of_optional(value_type(read)) != ø then with_type_of(word_called(n, REQUIRED_WORD, [read], ø, s), known) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
-# A path a condition may find, its key: a variable's own, `x`, and a field of a path, `m.pattern`; ø for any other
-# form. A path is found until something gives it, or a path it is part of, a new value.
+# A path a condition may find, its key: a variable's own, `x`, a field of a path, `m.pattern`, and an item of a path at
+# a written place, `types#1`; ø for any other form. A path is found until something gives it, or a path it is part
+# of, a new value.
 path_key(n: Node) as text? := match n {
 	Symbol(name) => if is_variable(n) then place_key(defined_at(n)) else ø
-	Get(subject, key) => if key is text then "${path_key(subject) ?? return ø}.${text(key)}" else ø
+	Get(subject, key) => "${path_key(subject) ?? return ø}${path_step(key) ?? return ø}"
 	_ => ø
 }
+# the step from a path into one of its parts: `.field`, or `#place` for a written place
+path_step(key: Node) as text? := match key {
+	Number(value) => if value is int then "${ITEM_STEP}${text(key)}" else ø
+	_ => if key is text then "${FIELD_STEP}${text(key)}" else ø
+}
+FIELD_STEP = "."
+ITEM_STEP = "#"
+# whether a path is this one or part of it, `x.inner` and `x#1` within `x`
+part_of(key: text, path: text) as bool := key == path or [FIELD_STEP, ITEM_STEP].any(step => key.starts_with(path + step))
 # what conditions found, without this path and the paths within it, which a new value changes
-forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => known.key != key and not known.key.starts_with(key + ".")) }
+forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => not part_of(known.key, key)) }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
 names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #definition_at(definer, s).parameters == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
@@ -397,7 +414,7 @@ defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "th
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
-case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+case_call_typed(n: Node, called: Node, arguments: list<Node>, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => field_checked(typed_form(arguments#at, s, f, declared_type(fields#at)), fields#at, arguments#at, s))

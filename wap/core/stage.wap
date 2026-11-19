@@ -227,6 +227,13 @@ TYPE = "type"
 SIGNATURE = "signature"
 # A list's places by name, for a list that only grows or is changed in place, as the typing state's definitions and a
 # program's records are: indexed up to `count`, extended for the items added since
+# the items of a list of optionals that hold a value: `[1, ø, 3]` gives [1, 3] (here until old warp, which compiles
+# the compiler, retires: then the preload's)
+compact(xs: list<T?>) as list<T> := {
+	out: list<T> = []
+	for x in xs { if x != ø { out += [x] } }
+	out
+}
 class NameIndex { places: map<text, list<int>> = {}, count: int = 0 }
 # the items of a name in the order written; a place past the list's end, or an item at an indexed place that bears
 # another name now, is refused: the list changed other than by growing or in place
@@ -263,7 +270,7 @@ fields_of(record: Record) as list := match record { Record(name, fields, variant
 cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 # the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
-case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
+case_fields(case: Node) as list<Node> := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling
 case_declaring(records: Records, name: Node) as Node := declaring(records, name)#2

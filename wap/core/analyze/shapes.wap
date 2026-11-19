@@ -23,13 +23,13 @@ OTHER_SHAPE = "this value is of another shape than the"
 narrowed_type(type: Node?) as Node? := if type == ø then ø else fact_of(type, NARROWS)
 # the type a shape narrows, refused for any other type
 shape_narrows(type: Node) as Node := narrowed_type(type) ?? refused(type, "a shape narrows a type")
-# A written type with its shape known: a declared pattern's name narrows Node, the name of a case of one enum that
-# enum (`Define` is a pattern, though Op has a case of that name); a record's own name, or any other type, is as
-# written
+# A written type with its shape known: a declared pattern's name narrows Node, the name of a case with fields of one
+# enum that enum (`Define` is a pattern, though Op has a case of that name; a case without fields is a value, no type,
+# so LexemeKind's Key leaves `Key` Node's); a record's own name, or any other type, is as written
 shaped(type: Node, s: TypingState) as Node := {
 	if not type is symbol or record_named(s.records, type) != ø or fact_of(type, NARROWS) != ø { return type }
 	if form_named(type, s) != ø { return with_fact(type, NARROWS, symbol(NODE_TYPE)) }
-	holders = s.records.items.filter(record => cases_of(record).any(case => text(case_name(case)) == text(type)))
+	holders = s.records.items.filter(record => cases_of(record).any(case => text(case_name(case)) == text(type) and case_fields(case) is not empty))
 	if #holders == 1 then with_fact(type, NARROWS, record_type(holders#1)) else type
 }
 # definitions with the shapes their written types name, each shaped once
