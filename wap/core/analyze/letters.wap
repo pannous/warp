@@ -13,8 +13,8 @@ use "fits.wap"
 # for the type its argument gives, every T of one signature the same; `list<T>` takes a list of any one item type. A
 # letter the program declares as a class or an enum is that type.
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-is_letter(type: Node?, records: list) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type)) and record_named(records, type) == ø
-has_letters(type: Node?, records: list) as bool := is_letter(type, records) or (type_parts(type) ?? []).any(part => has_letters(part, records))
+is_letter(type: Node?, records: Records) as bool := type is symbol and #text(type) == 1 and LETTERS.contains(text(type)) and record_named(records, type) == ø
+has_letters(type: Node?, records: Records) as bool := is_letter(type, records) or (type_parts(type) ?? []).any(part => has_letters(part, records))
 # An empty list's item type before a use settles it, α1, α2 … (data.wap list_typed): bound like a letter by the calls
 # that use the list, `xs + [1]` settles it to int; settled everywhere once the program is typed, any where none did
 UNKNOWN_MARK = "α"

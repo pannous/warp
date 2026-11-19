@@ -1,6 +1,8 @@
 # The road to self-build, measured (notes/wap.md "Road to self-build"): the compiler's own stages (wap/core/pipeline.wap)
 # run on wap source files, statement by statement where a stage allows, every refusal printed as: stage <tab> message;
-# typing also function by function, so one refusal hides no other; a total line at the end (test/wap/test_census.sh).
+# a total line at the end (test/wap/test_census.sh). The counts come from two paths: "functions typed" from one
+# typing state shared by the whole run, each module's forms typed once, a refusal rolled back; "typed whole" from the
+# compiler's own typed_file path, once for each closure; a closure holding a smaller one that refuses is refused with it.
 #   warp --no-window scripts/wap-census.warp $(git ls-files "wap/*.wap")
 use "../wap/core/pipeline.wap"
 use "../wap/core/emit/emitter.wap"
@@ -9,14 +11,113 @@ use "../wap/core/language.wap"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
 library_scope = declarations_of(preload).flat_map(library_words)
-library = statements_in(library_code_of(language, preload))
+library_code = library_code_of(language, preload)
+library = statements_in(library_code)
+
+# Each module read, declared and prepared once a run, shared by every file and function probe that uses it: a file's
+# modules are the same values whichever file reaches them, as the compiler makes them (core/pipeline.wap
+# declared_modules, prepared, typed_file)
+class Shared { operated: map = {}, declared: map = {}, prepared: map = {} }
+shared = Shared()
+operated_once(file: text) as Node := {
+	global shared
+	if not shared.operated.has(file) { shared.operated[file] = operated_file(language, file) }
+	shared.operated[file]
+}
+declared_once(module: Node) as Node := {
+	global shared
+	key = file_of(module) ?? ""
+	if not shared.declared.has(key) { shared.declared[key] = declared_operated(language, module) }
+	shared.declared[key]
+}
+# a file with the modules it uses, theirs first, as declared_modules gives them
+modules_of(file: text) as list := {
+	code = operated_once(file)
+	(modules_used(code, operated_once) + [code]).map(declared_once)
+}
+prepared_once(module: Node, modules: list) as list := {
+	global shared
+	key = file_of(module) ?? ""
+	if not shared.prepared.has(key) { shared.prepared[key] = statements_in(prepared(language, module, modules, preload)) }
+	shared.prepared[key]
+}
+# One typing state for the run, as the compiler types a program: the library's definitions and records, then each
+# module's joined once, its top-level values typed, then its functions typed alone, so a form is typed once and its
+# callees' types are there for the next. A refusal leaves the state as it was before the form, so it changes how no
+# other form types; a top-level statement's refusal is kept with its module.
+class Run { state: TypingState, frame: TypeFrame, joined: list<text> = [], refusals: map = {}, probed: map = {} }
+run = Run(typing_state(library), TypeFrame())
+typing_joined(modules: list) := {
+	global run
+	for module in modules {
+		key = file_of(module) ?? ""
+		if not (key in run.joined) {
+			run.joined += [key]
+			run.refusals[key] = []
+			statements = prepared_once(module, modules)
+			run.state.definitions += statements.filter(statement => statement is Define)
+			run.state.records = added_records(run.state.records, statements)
+			for statement in statements.filter(statement => not (statement is Define) and not (statement is Record)) {
+				before = copied(run.state)
+				try typed_form(statement, run.state, run.frame, ø) catch e {
+					run.state = rolled_back(before)
+					run.refusals[key] += ["a top-level statement: " + e.message]
+				}
+			}
+		}
+	}
+}
+# a module's refusals so far, typed in the run's state
+refusals_of(key: text) as list<text> := if run.refusals.has(key) then run.refusals[key] else []
+
+# How a file's program fared typed and emitted whole: the first refusal stops both, as in the compiler
+class Whole { typed: bool = no, emitted: bool = no, refusal: text = "" }
+whole_typed(file: text) as Whole := {
+	outcome = Whole()
+	try {
+		code = typed_whole(file)
+		outcome.typed = yes
+		emitted(code)
+		outcome.emitted = yes
+	} catch e { outcome.refusal = e.message }
+	outcome
+}
+# A file typed whole as the compiler types it; the files of one closure, a cycle of modules that use each other, make
+# one program, typed once a run. A smaller closure inside it that refuses refuses it too, its refused form being
+# part of it (assumed: the bigger program's other definitions could add an overload that the refused call takes), so
+# the big closures are not typed again once a closure they hold refuses.
+closures: map = {}
+whole_once(file: text) as Whole := {
+	global closures
+	keys = modules_of(file).map(module => file_of(module) ?? "")
+	key = keys.sorted().join(" ")
+	if closures.has(key) { return closures[key] }
+	for inner in keys {
+		held = modules_of(inner).map(module => file_of(module) ?? "")
+		if #held < #keys and held.all(each => each in keys) {
+			refused = whole_once(inner)
+			if not refused.typed {
+				closures[key] = Whole(no, no, "as ${inner}, which it holds: " + refused.refusal)
+				return closures[key]
+			}
+		}
+	}
+	closures[key] = whole_typed(file)
+	closures[key]
+}
+# the file typed whole with the modules it uses, as typed_file types it
+typed_whole(file: text) as Block := {
+	modules = modules_of(file)
+	whole = Block(modules.flat_map(module => prepared_once(module, modules)))
+	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
+}
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
 
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
-		modules = declared_modules(language, file)
+		modules = modules_of(file)
 		return used_declarations(modules#(#modules), modules).flat_map(library_words)
 	} catch e { report("declare", e.message) }
 	[]
@@ -42,22 +143,17 @@ probe(file: text) as Tally := {
 	for statement in lowered_ok {
 		try { bound_ok = bound_ok + [bound(statement, scope, PROGRAM_DEPTH)] } catch e { report("bind", e.message) }
 	}
-	# typing and emitting run on the whole file, as the compiler runs them: the first refusal stops them; a preload
-	# file is no program of its own but every program's library, typed function by function below
-	typed = no
-	emitted_ok = no
-	if not in_preload(file) {
-		try {
-			code = typed_file(language, file, preload)
-			typed = yes
-			emitted(code)
-			emitted_ok = yes
-		} catch e { report(if typed then "emit" else "type", e.message) }
-	}
-	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${typed}, emitted: ${emitted_ok}"
-	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, " + whole
+	# typing: each function alone in the run's state (functions_probe), then the whole file as the compiler types it
+	# and emits it when no module of its closure refuses a form (whole_once); a preload file is no program of its own
+	# but every program's library, typed function by function
 	counted = functions_probe(file)
-	Tally(1, if typed then 1 else 0, counted.functions, counted.typed, counted.anys)
+	outcome = if in_preload(file) then Whole() else whole_once(file)
+	if outcome.refusal != "" { report(if outcome.typed then "emit" else "type", outcome.refusal) }
+	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${outcome.typed}, emitted: ${outcome.emitted}"
+	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, " + whole
+	for line in counted.lines { print line }
+	print "functions\ttyped ${counted.typed} of ${counted.functions} functions (${counted.by_calls} typed by their calls), ${counted.anys} places typed any"
+	Tally(1, if outcome.typed then 1 else 0, counted.functions, counted.typed, counted.anys)
 }
 
 # whether a file is one of the preload's, the library every program is compiled with
@@ -71,56 +167,78 @@ anys_in(n: Node) as int := (if holds_any(fact_of(n, TYPE)) then 1 else 0) + part
 holds_any(type: Node?) as bool := type == symbol(ANY_TYPE) or (type_parts(type) ?? []).any(holds_any)
 parts_of(n: Node) as list := match n { Key(left, op, right) => [left, right]; List(items, bracket, separator) => items; _ => [] }
 
-# Each function of the file whose parameters are typed, typed alone, as the compiler types it in its block
-# (core/analyze/types.wap block_typed), in a copy of the typing state after the program's top-level statements, so a
-# refusal names its function and hides no other; a function of letters or untyped parameters is typed by its calls
-functions_probe(file: text) as Tally := {
-	modules = []
-	try modules = declared_modules(language, file) catch e { report("declare", e.message); return Tally() }
-	prepared_modules = []
-	try prepared_modules = modules.map(module => statements_in(prepared(language, module, modules, preload))) catch e { report("bind", e.message); return Tally() }
-	program = prepared_modules.flat_map(statements => statements)
-	own = if in_preload(file) then library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":")) else prepared_modules.last.filter(statement => statement is Define)
-	typed_alone = 0
-	by_calls = 0
-	anys = 0
-	# a preload file's functions are the library's already: typed with it alone, so none has a second copy
-	base = typing_state(library, if in_preload(file) then [] else program)
+# Each function of a module whose parameters are typed, typed alone, as the compiler types it in its block
+# (core/analyze/types.wap block_typed), in the run's state, so a refusal names its function and hides no other; a
+# function of letters or untyped parameters is typed by its calls. What it finds is printed with the module's file.
+class Probed { functions: int = 0, typed: int = 0, by_calls: int = 0, anys: int = 0, lines: list<text> = [] }
+module_probed(key: text, own: list) as Probed := {
+	global run
+	if run.probed.has(key) { return run.probed[key] }
+	p = Probed()
+	p.lines = refusals_of(key).map(refusal => "type\t" + refusal.replace("\n", " "))
 	for definition in own {
-		s = copied(base)
-		if not all_typed(definition, s.records) { by_calls += 1 } else {
+		name = declared_name(written_name(definition))
+		if not all_typed(definition, run.state.records) { p.by_calls += 1 } else {
+			p.functions += 1
+			before = copied(run.state)
 			try {
-				typed = function_typed(definition, written_types(definition), s, definition)
+				typed = function_typed(definition, written_types(definition), run.state, definition)
 				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
 				# the other functions that fill it, as the whole program types it
 				found = anys_in(typed.define)
-				all_settled(s)
-				typed_alone += 1
-				if found > 0 { report("any", "${declared_name(written_name(definition))}: ${found} places typed any") }
-				anys += found
-			} catch e { report("type", "${declared_name(written_name(definition))}: " + e.message) }
+				all_settled(run.state)
+				p.typed += 1
+				if found > 0 { p.lines += ["any\t${name}: ${found} places typed any"] }
+				p.anys += found
+			} catch e {
+				run.state = rolled_back(before)
+				p.lines += ["type\t${name}: " + e.message.replace("\n", " ")]
+			}
 		}
 	}
-	print "functions\ttyped ${typed_alone} of ${#own - by_calls} functions (${by_calls} typed by their calls), ${anys} places typed any"
-	Tally(0, 0, #own - by_calls, typed_alone, anys)
+	run.probed[key] = p
+	p
 }
-# a typing state that knows the library's and the program's definitions and records, the program's top-level values
-# typed as far as they go
-typing_state(library: list, program: list) as TypingState := {
+# A file's functions probed, with those of every module of its closure, which decide whether it is typed whole; a
+# preload file's functions are the library's, in the run's state from its start: none has a second copy
+functions_probe(file: text) as Probed := {
+	modules = []
+	try modules = modules_of(file) catch e { report("declare", e.message); return Probed() }
+	try {
+		if in_preload(file) { return module_probed(file, library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":"))) }
+		typing_joined(modules)
+		for module in modules { module_probed(file_of(module) ?? "", prepared_once(module, modules).filter(statement => statement is Define)) }
+	} catch e { report("bind", e.message); return Probed() }
+	run.probed[file_of(modules.last) ?? ""]
+}
+# a typing state that knows the library's definitions and records
+typing_state(library: list) as TypingState := {
 	s = TypingState()
-	s.definitions = (library + program).filter(statement => statement is Define)
-	s.records = (library + program).filter(statement => statement is Record)
-	frame = TypeFrame()
-	for statement in program.filter(statement => not (statement is Define) and not (statement is Record)) {
-		try typed_form(statement, s, frame, ø) catch e { }
-	}
+	s.definitions = library.filter(statement => statement is Define)
+	s.records = added_records(Records(), library)
 	s
+}
+# The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
+# shared with the state that refused, forget the places past them
+rolled_back(before: TypingState) as TypingState := {
+	truncated(before.definition_names, #before.definitions)
+	truncated(before.definition_keys, #before.definitions)
+	truncated(before.records.names, #before.records.items)
+	before
+}
+truncated(index: NameIndex, count: int) := {
+	if index.count > count {
+		for name in index.places.keys { index.places[name] = index.places[name].filter(place => place < count) }
+		index.count = count
+	}
 }
 # a typing state that starts where another stands, its lists its own: what one function's typing adds stays its own
 copied(base: TypingState) as TypingState := {
 	s = TypingState()
 	s.definitions = base.definitions + []
-	s.records = base.records + []
+	s.definition_names = base.definition_names
+	s.definition_keys = base.definition_keys
+	s.records = base.records
 	s.functions = base.functions + []
 	s.globals = base.globals + []
 	s.lambdas = base.lambdas + []
