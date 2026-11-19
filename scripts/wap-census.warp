@@ -223,8 +223,6 @@ module_probed(key: text, own: list) as Probed := {
 				p.anys += found
 			} catch e {
 				run.state = rolled_back(before)
-				key_typed = function_key_of(definition)
-				if not run.state.refusals.any(each => each.key == key_typed) { run.state.refusals += [Refusal(key_typed, e.message)] }
 				p.lines += ["type\t${name}: " + e.message.replace("\n", " ")]
 			}
 		}
