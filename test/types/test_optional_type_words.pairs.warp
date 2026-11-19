@@ -10,3 +10,4 @@
 'class car { year: date? }; car(2024-06-01).year.year'	2024
 'class P { n: nat }; P(3).n'	3
 'd: date? = 3; d'	error
+'b(n: int) as list<int>? := { if n > 5 { return [n] }; ø }; [b(2) == ø, b(7)]'	[true, [7]]
