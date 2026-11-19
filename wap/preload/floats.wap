@@ -2,15 +2,12 @@
 # All numbers are exact numbers by default. If we want floats, we need to mark them explicitly e.g. a:float = 3.14f 
 # f32 and f64 are technical terms / types which are allowed but should be avoided in user space 
 # The words the preload's floats are made of, which programs do not see: a float's bits, the truncated quotient and
-# remainder of ints (warp's ÷ and % floor; they come later on top of these), and a float's shortest text, the warp
+# remainder of ints (warp's ÷ and % are Euclidean; they come later on top of these), and a float's shortest text, the warp
 # runtime's algorithm (core/runtime/floats.warp)
 
 float_of_bits(bits: int): float := prim f64_reinterpret_i64(bits)
 quotient(a: int, b: int): int := prim i64_div_s(a, b)
 truncated_remainder(a: int, b: int): int := prim i64_rem_s(a, b)
-# whether a quotient truncated toward zero lies one above the floored one: a remainder left of the dividend's sign,
-# not the divisor's
-truncated_above_floor(a: int, b: int): bool := truncated_remainder(a, b) != 0 and (truncated_remainder(a, b) < 0) != (b < 0)
 # a to the power b ≥ 0 by squaring, from one, the 1 or 1.0 of a's type: the prelude's ^
 powered(a: T, b: int, one: T): T := {
 	if b == 0 { return one }
