@@ -94,9 +94,9 @@ helper_called(form: Node, operands: list, key: text, build: function, p: Program
 given_layout(form: Node, p: Program) as list := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
-	for each in p.helpers { if each#1 == operation { return each#2 } }
+	if p.helpers.has(operation) { return p.helpers[operation] }
 	index = build(p)
-	p.helpers += [[operation, index]]
+	p.helpers[operation] = index
 	index
 }
 

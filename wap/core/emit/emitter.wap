@@ -84,8 +84,8 @@ class Program {
 	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
 	pending: list<Node> = []
-	# the helper functions primitives call, each [operation, index]
-	helpers: list = []
+	# the helper functions primitives call: operation → index
+	helpers: map<text, int> = {}
 	# the Records the program declares, which lay out their instances
 	records: Records = Records()
 }
