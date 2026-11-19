@@ -103,12 +103,12 @@ signature_value_index(type: Node, m: WasmModule, records: Records) as int? := {
 	if function == ø then ø else added_type(m, struct_type([field_type(nullable(function), IMMUTABLE), field_type(ANYREF, IMMUTABLE)]))
 }
 signature_function_index(type: Node, m: WasmModule, records: Records) as int? := {
-	parts = function_type_parts(type)
+	parts = signature(type)
 	if parts == ø { return ø }
 	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
 }
-signature_parameters(parts: FunctionParts, m: WasmModule, records: Records) as list<list<int>> := parts.parameters.map(parameter => known_layout(parameter, m, records))
-signature_results(parts: FunctionParts, m: WasmModule, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [known_layout(parts.result, m, records)]
+signature_parameters(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := parts.parameters.map(parameter => known_layout(parameter, m, records))
+signature_results(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [known_layout(parts.result, m, records)]
 # a type's layout, refused when the emitter has none for it yet
 known_layout(type: Node, m: WasmModule, records: Records) as list<int> := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for the type ${type} yet")
 

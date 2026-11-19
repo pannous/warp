@@ -51,8 +51,7 @@ key_text(language: Language, key: Node) as text := if is_loose(language, key) th
 is_loose(language: Language, n: Node) as bool := group_written(language, n) != "" and group_written(language, n) != glue_group
 
 # a key before more items of a phrase, written tight, `a:1 b:2`: `a: 1 b: 2` would make `1 b: 2` the value
-tight_key_text(language: Language, key: Node, value: Node) as text :=
-	key_text(language, key) + ":" + (if is_loose(language, value) then "(" + formatted(language, value) + ")" else formatted(language, value))
+tight_key_text(language: Language, key: Node, value: Node) as text := key_text(language, key) + ":" + key_text(language, value)
 
 # an operator call in its notation; a call of anything else as `f(a, b)`
 call_text(language: Language, call: Node, called: Node, arguments: list) as text := {

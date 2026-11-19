@@ -81,10 +81,11 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if same_type(given, wanted) or bare_fit(given, wanted, s.records) { return Conversion.Same }
 	# a shape's value is a value of the type it narrows: a Record where a Node is
 	if narrowed_type(given) != ø and conversion(narrowed_type(given), wanted, s) == Conversion.Same { return Conversion.Same }
-	if narrowed_type(wanted) != ø and same_type(given, narrowed_type(wanted)) { return Conversion.Narrowed }
+	narrowing = narrowed_type(wanted)
+	if narrowing != ø and same_type(given, narrowing) { return Conversion.Narrowed }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
 	optional = base_of_optional(wanted)
-	if reads_as(base_or_self(wanted), given) { return Conversion.Read }
+	if reads_as(optional ?? wanted, given) { return Conversion.Read }
 	# an optional where one is wanted whose value is as it is: a list<int>? where a list? is
 	if optional != ø and base_of_optional(given) != ø and conversion(base_of_optional(given), optional, s) == Conversion.Same { return Conversion.Same }
 	if optional != ø and (given == symbol(EMPTY_TYPE) or conversion(given, optional, s) == Conversion.Same) { return Conversion.Wrapped }
@@ -122,7 +123,9 @@ as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 	if wanted == symbol(LIST_TYPE) { return item_type(given) != ø }
 	if wanted == symbol(FUNCTION_WORD) { return function_value_parts(given) != ø }
-	wanted == symbol(ENUM_TYPE) and record_named(records, given) != ø and not cases_of(record_named(records, given)) is empty
+	if wanted != symbol(ENUM_TYPE) { return no }
+	record = record_named(records, given) ?? return no
+	not cases_of(record) is empty
 }
 # any value where any is wanted, an int or a float where a number is
 boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
