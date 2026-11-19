@@ -20,7 +20,6 @@ use "../../kernel/forms.wap"
 use "../parse/atoms.wap"
 use "../analyze/declarations.wap"
 use "lines.wap"
-use "../analyze/declarations.wap"
 use "../language.wap"
 
 RULE_WORD = "rule"
