@@ -8,6 +8,8 @@ use "../parse/operator_table.wap"
 use "../../preload/operators.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
+use "../parse/atoms.wap"
 use "../../kernel/forms.wap"
 
 # whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
