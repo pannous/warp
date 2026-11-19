@@ -105,6 +105,11 @@ items_of(n: Node) as list := match n {
 	List(items, bracket, separator) => items
 	_ => []
 }
+# a list with these items instead, its bracket and separator kept; any other node as it is
+with_items(n: Node, items: list) as Node := match n {
+	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
+	_ => n
+}
 file_of(n: Node) as text? := match fact_of(n, SOURCE_FILE) {
 	Text(name) => name
 	_ => ø
