@@ -214,7 +214,7 @@ with_captures(function: Node, scope: Scope, depth: int) as Node := {
 }
 # the defining names of the captures read anywhere in n
 captured_definers(n: Node) as list<Node> := match n {
-	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [fact_of(n, DEFINED_AT)] else []
+	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [defined_at(n)] else []
 	_ => direct_parts(n).flat_map(captured_definers)
 }
 # whether a defining name belongs to a function around the one at depth, not to the program or the library
