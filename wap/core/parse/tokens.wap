@@ -60,7 +60,7 @@ spelling_of(run: list, i: int, length: int) as text := {
 	spelled
 }
 
-known_spelling(language: Language, spelled: text) as bool := operator_spelled(language, spelled) != ø or aliases.any(alias => alias.spelling == spelled) or compound_assignment(language, spelled) != ""
+known_spelling(language: Language, spelled: text) as bool := operator_spelled(language, spelled) != ø or aliases_spelled(spelled) is not empty or compound_assignment(language, spelled) != ""
 
 # An operator glued to the bracket group after it, with nothing glued before it, is called like any `f(x)`:
 # `+(a, b)` is the glued head Key(+, None, (a, b)), whatever fixities + has; `a-(b)` stays a subtraction
