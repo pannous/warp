@@ -242,3 +242,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - atoms-as-code-wiki (user, 2026-11-19): wiki/conversion.md "Atoms as code" approved (two examples, no show(3) line).
 - glued-operator-call (user, 2026-11-19): an operator glued to brackets is a call: `#(x).y` reads like `f(x).y`, i.e. (#(x)).y; likewise -(x).y, not(x).y. Footguns line approved.
 - kernel-no-emptymap (2026-11-19, audit finding 7): `{}` is Empty with the map type wanted, settled by typing like `[]`; the EmptyMap kernel form goes.
+- wap-census-only (user, 2026-11-19): until wap compiles itself, wap work comes only from the self-build census; anything else is one Debts line in notes/backbone.md, no work, no question.
