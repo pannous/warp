@@ -1,5 +1,5 @@
-# Functions: a definition waits until its first call or its block's end, then
-# its body becomes a wasm function; function values and their captures; calls.
+# Functions: each a block defines is placed at the block's start, its body emitted where its definition stands;
+# function values and their captures; calls.
 
 use "emitter.wap"
 use "primitives.wap"
@@ -16,10 +16,6 @@ use "patterns.wap"
 use "places.wap"
 use "function_values.wap"
 
-# the function a name defines, its body emitted now if it waits
-pending_function(p: Program, called: Node) as Placed? := waiting_function(p, defining_key(called))
-# A function waits until it is placed: its body is emitted then, so a call inside its own body finds it placed
-waiting_function(p: Program, key: text) as Placed? := if p.pending.has(key) and placed_by_key(p.functions, key) == ø then function_placed(p.pending[key], p) else ø
 defined_name(form: Define) as Node := match form { Define(name, parameters, body) => declared_name(name) }
 function_key(form: Define) as text := place_key(defined_name(form))
 
@@ -28,33 +24,42 @@ slotted(f: Frame, parameter: Node, type: list<int>) as Placed := {
 	f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, type, [], yes)]
 	f.slots.last
 }
-# A function: its parameters the first slots of a new frame, its body's value its result
+# A function placed by its signature, as the typing stage gives it, so any call finds it before its body is emitted
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
-	f = Frame(function: yes)
-	for parameter in items_of(parameters) { slotted(f, parameter, parameter_type(parameter, p)) }
-	f.parameter_count = #f.slots
-	types = f.slots.map(slot => slot.type)
+	types = items_of(parameters).map(parameter => parameter_type(parameter, p))
 	signed = signed_result(declared_name(name), p)
-	results = if valued(signed) then [signed] else []
-	placed = Placed(place_key(declared_name(name)), reserved_function(p.m, types, results), signed, types)
+	p.functions += [Placed(place_key(declared_name(name)), reserved_function(p.m, types, if valued(signed) then [signed] else []), signed, types)]
+	p.functions.last
+} }
+# A function's body: its parameters the first slots of a new frame, its body's value its result
+function_bodied(form: Define, p: Program) := match form { Define(name, parameters, body) => {
+	placed = placed_by_key(p.functions, function_key(form)) ?? refused(name, "this function was never placed")
+	f = Frame(function: yes)
+	for at in 1 to #placed.parameters { slotted(f, items_of(parameters)#at, placed.parameters#at) }
+	f.parameter_count = #f.slots
+	signed = placed.type
 	f.signed = signed
-	p.functions += [placed]
 	loaded = captures_loaded(form, items_of(parameters), p, f)
 	value = signed_fit(code(body, p, f), body, f, p)
 	given = result_type(name, value, f)
 	if valued(signed) and given != signed and given != NEVER { refused(name, "this function's body gives another type than its signature says") }
 	finished_body = if valued(signed) or given == NEVER then value.instructions else dropped(value)
 	bodied(p.m, placed.index, f.slots[f.parameter_count ..].map(slot => slot.type), loaded + finished_body)
-	placed
 } }
+# a function kept in place, emitted only where it is taken as a value
+in_place_function(name: Node, p: Program) as Placed? := {
+	key = defining_key(name)
+	if not p.in_place.has(key) { return ø }
+	definition = p.in_place[key]
+	placed = function_placed(definition, p)
+	function_bodied(definition, p)
+	placed
+}
 # The layout of a function's result as its signature, which the typing stage writes on its name, says: none for ø
 SIGNATURE_LESS = "this function reached the emitter without its signature"
 # a typed function's parameter and result types, as typing signed it
 signed_parts(name: Node) as Signature := signature(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
-signed_result(name: Node, p: Program) as list<int> := {
-	result = signed_parts(name).result
-	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
-}
+signed_result(name: Node, p: Program) as list<int> := result_layout(signed_parts(name).result, p)
 # A value of a type where any holds it: the GC type it is held as, a plain value's box or its own reference type, and
 # the instructions that take the value out once cast
 class Held { type_index: int, taken: list<int> }
@@ -89,7 +94,7 @@ parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name
 call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not names_function(called)) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
-	kept = if names_function(called) and p.in_place.has(defining_key(called)) then p.in_place[defining_key(called)] else ø
+	kept = if names_function(called) and p.in_place.has(defining_key(called)) then in_place_body(p.in_place[defining_key(called)]) else ø
 	if kept is Prim { return match kept { Prim(operation, given) => primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p) } }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
@@ -98,22 +103,23 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
 }
 # A function whose body is only a primitive of its parameters in their order, `byte_at(t, at) := prim array_get_u(t,
-# at)`: that body kept by its key, typed as the function's signature says (a generic body's own type is its type
-# variable). A call compiles to its arguments, fitted to the primitive's operands, then the primitive in place, as a
+# at)`: a call compiles to its arguments, fitted to the primitive's operands, then the primitive in place, as a
 # built-in's header line keeps its body for an importer (wiki/wasm-representation.md); the function itself is emitted
 # only as a function value.
-kept_in_place(definition: Define, key: text, p: Program) := match definition { Define(name, parameters, body) => match body {
-	Prim(operation, given) => if given.all(each => each is symbol) and given.map(each => text(each)) == items_of(parameters).map(parameter => text(declared_name(parameter))) {
-		result = signed_parts(declared_name(name)).result
-		p.in_place[key] = if text(result) == EMPTY_TYPE_WORD then body else with_fact(body, TYPE, result)
-	}
-	_ => ø
+is_in_place(definition: Define) as bool := match definition { Define(name, parameters, body) => match body {
+	Prim(operation, given) => given.all(each => each is symbol) and given.map(each => text(each)) == items_of(parameters).map(parameter => text(declared_name(parameter)))
+	_ => no
+} }
+# its primitive, typed as the function's signature says (a generic body's own type is its type variable)
+in_place_body(definition: Define) as Node := match definition { Define(name, parameters, body) => {
+	result = signed_parts(declared_name(name)).result
+	if text(result) == EMPTY_TYPE_WORD then body else with_fact(body, TYPE, result)
 } }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
 passes(given: list<int>, taken: list<int>, m: WasmModule) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	if not names_function(called) { refused(form, "the emitter calls functions, not a ${binding_of(called)} yet") }
-	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
+	placed_for(p.functions, called) ?? refused(form, "this function was never placed")
 }
 

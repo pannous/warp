@@ -317,9 +317,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
   Paid off when values show themselves through the runtime's show words, boxed into a $Node.
 - **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), though the typing stage gives
-  each one: it reads only the parameters' types. A function's body is emitted at its first call, and a function
-  calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed" (the types
-  are there, but read late). Paid off when the emitter reads each form's `type` fact.
+  each one: it reads the functions' signatures, but an `if` still joins its arms' types and a primitive takes its
+  operands' emitted layouts. Bends "meaning is typed" (the types are there, but read late). Paid off when the emitter
+  reads each form's `type` fact.
 - **A written result type is not declared** (wap/core/analyze/declarations.wap): `f(a): int := …` declares
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.

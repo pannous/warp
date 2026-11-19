@@ -34,7 +34,7 @@ arms_code(form: Node, arms: list<Node>, held: Placed, p: Program, f: Frame) as C
 		Arm(pattern, result) => {
 			if names_any(pattern) or #arms == 1 and fact_of(form, TYPE) != ø and only_names(pattern, p) { return arm_taken(form, pattern, result, held, p, f) }
 			test = Code(I32, pattern_test(pattern, fetched(held), held.type, p))
-			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(form, pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)))
+			if_code(form, test, labelled(f, [OTHER_LABEL], () => arm_taken(form, pattern, result, held, p, f)), labelled(f, [OTHER_LABEL], () => arms_code(form, arms[1 ..], held, p, f)), p)
 		}
 		_ => refused(arms#1, "a match's arm is written pattern => result")
 	}
