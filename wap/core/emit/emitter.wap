@@ -10,10 +10,9 @@
 #
 # Names arrive bound (core/analyze/scope.wap): each carries what it refers to and the name that defined it, so the
 # emitter never looks a name up by its spelling; a call's name refers to the one typed function it means
-# (core/analyze/types.wap). The emitter reads only the parameters' types yet: a value's type is known once its code is
-# emitted, so a function's body is emitted at its first call (its globals set by then), or at the end of its block
-# when nothing calls it. What is still unknown, a function calling itself or a global read before it is set, is
-# refused, never guessed.
+# (core/analyze/types.wap). A function is placed by the signature typing gave it, at the start of its block, and its
+# body emitted where its definition stands; a global a body reads before its statement sets it takes its type from
+# typing too.
 #
 # The emitter knows no library word: the preload's functions the program calls (wap/preload/prelude.wap) come before
 # the program's statements, emitted like its own functions, and a built-in's body is a Prim
@@ -84,9 +83,7 @@ class Program {
 	host: map<text, int> = {}
 	functions: list<Placed> = []
 	globals: list<Placed> = []
-	# the Defines met so far, by their function key: each waits until it is placed
-	pending: map<text, Node> = {}
-	# the functions whose calls compile to their primitive in place: key → that primitive
+	# the functions whose calls compile to their primitive in place, by their function key
 	in_place: map<text, Node> = {}
 	# the helper functions primitives call: operation → index
 	helpers: map<text, int> = {}
@@ -119,7 +116,7 @@ class Placed {
 # the code of a kernel form
 code(form: Node, p: Program, f: Frame) as Code := match form {
 	Block(statements) => block_code(statements, p, f)
-	Define(name, parameters, body) => Code()
+	Define(name, parameters, body) => if p.in_place.has(function_key(form)) then Code() else { function_bodied(form, p); Code() }
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	Try(body, handler) => try_code(form, body, handler, p, f)
@@ -141,18 +138,11 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
 }
 
-# Statements run in order, the value the last one's, every other value dropped. The functions the block defines wait
-# from its start, so a call before a definition's line finds it; those nothing called are emitted at its end. A
-# definition itself leaves no value.
+# Statements run in order, the value the last one's, every other value dropped. The functions the block defines are
+# placed at its start, so a call before a definition's line finds it; a definition emits its body and leaves no value.
 block_code(statements: list<Node>, p: Program, f: Frame) as Code := {
-	defined = statements.filter(s => s is Define)
-	keys = defined.map(function_key)
-	for at in 1 to #defined {
-		p.pending[keys#at] = defined#at
-		kept_in_place(defined#at, keys#at, p)
-	}
+	for definition in statements.filter(s => s is Define) { if is_in_place(definition) then p.in_place[function_key(definition)] = definition else function_placed(definition, p) }
 	codes = statements.map(s => code(s, p, f))
-	for key in keys { if not p.in_place.has(key) { waiting_function(p, key) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }

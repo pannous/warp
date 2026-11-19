@@ -55,7 +55,7 @@ is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => 
 # the one its DEFINED_AT names, typed for the signature; a λ takes the captures cast to their struct, a function's name
 # none
 adapting_function(form: Node, own: Node, p: Program) as int := {
-	function = placed_for(p.functions, form) ?? pending_function(p, form) ?? refused(form, "the typing stage typed no function for this value")
+	function = placed_for(p.functions, form) ?? in_place_function(form, p) ?? refused(form, "the typing stage typed no function for this value")
 	parts = value_signature(form)
 	parameters = signature_parameters(parts, p.m, p.records)
 	captures = if is_lambda(form) then local_get(0) + heap_instruction(REF_CAST_NULL, closure_of_type(own, form, p)) else []
