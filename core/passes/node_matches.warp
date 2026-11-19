@@ -14,7 +14,9 @@ use "../analysis/words.warp"
 # the node cases: the type a case tests as (a List is any group) and the reader of each part, in order
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
-	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"]}
+	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"], "Meta": ["itself", "itself"]}
+# a node's position rides with it unseen, so no node is a Meta: its arm matches none, never a list of its parts
+unseen_cases = ["Meta"]
 subject_name = HiddenWord.MatchSubject as text
 # the subject's kind bits, read once before the arms test them: every case arm reading them anew was node_text's whole
 # own time, 7.8% of a self build (card node-kind-bits). No arm is tested after another arm's value runs, so a match
@@ -159,6 +161,7 @@ marked_name(name: text, quoted: bool) as list := {
 
 kind_test(case_name: text, subject: Node) as Node := {
 	if case_name in case_types { return type_test_of(subject, case_types[case_name]) }
+	if case_name in unseen_cases { return no }
 	Key(applied("bracket_of", subject), Op.Ne, ø)
 }
 # `subject is type`: by the kind bits the match read where the subject is the match's own (matched_subject, set only
