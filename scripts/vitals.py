@@ -9,7 +9,7 @@ landing's compiler builds, read from the build records in the store (STORE). All
 (scripts/integrate/nightly.sh) calls it; a Claude session (the Integrator after a landing) republishes the page to its
 artifact URL, https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c.
 """
-import collections, concurrent.futures, datetime, glob, json, os, re, shutil, subprocess, sys, tempfile
+import collections, concurrent.futures, datetime, glob, json, os, re, shutil, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CENSUS_JOB = "--census" in sys.argv  # the detached census job the hourly run starts, which writes no page
@@ -70,9 +70,6 @@ JOB_SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job-slot.sh
 WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
-# warp caches a program file's compile by its path (~/Library/Caches/warp/compiled, flattened path in the name): a copy of
-# wap/ in a folder never used before is compiled cold, and its cache entry is deleted after
-WARP_COMPILE_CACHE = os.path.expanduser("~/Library/Caches/warp/compiled")
 WAP_TESTS_SUMMARY = os.path.join(REPO, "data/wap-tests/summary.txt")  # written by test/wap/run.sh
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
 CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound(?:, typed: (\w+), emitted: (\w+))?")  # a preload file has no typed/emitted: it is typed by function
@@ -230,21 +227,15 @@ def census_due(censuses, tree):
 
 def wap_hello():
     """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed: the wap compiler built by warp,
-    always cold (a copy of wap/ in a new folder, compiled the first time); hello by wap, always warm (wap compiling hello and
+    always cold (--no-cache: compiled anew, nothing kept); hello by wap, always warm (wap compiling hello and
     that run, the compiler's compile cached by then)."""
     folder = wap_extracted("hello")
     source, module = (os.path.join(folder, name) for name in ("hello.wap", "hello.wasm"))
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
-    fresh = tempfile.mkdtemp(dir=folder)
-    try:
-        shutil.copytree(os.path.join(folder, "wap"), os.path.join(fresh, "wap"))
-        compile_hello = [os.path.join(fresh, "wap/compiler.wap"), source, module]
-        cold = cheapest_cost(WARP, compile_hello, "", 1)
-        warm, run = cheapest_cost(WARP, compile_hello, ""), cheapest_cost(WARP, [module], "Hello")
-    finally:
-        for entry in glob.glob(os.path.join(WARP_COMPILE_CACHE, f"*{os.path.basename(fresh)}*")):
-            os.remove(entry)
+    compile_hello = [os.path.join(folder, "wap/compiler.wap"), source, module]
+    cold = cheapest_cost(WARP, ["--no-cache", *compile_hello], "", 1)
+    warm, run = cheapest_cost(WARP, compile_hello, ""), cheapest_cost(WARP, [module], "Hello")
     if None in (cold, warm, run):
         return None
     return {"build": [round(cold[i] - warm[i], 2) for i in (0, 1)], "hello": [round(warm[i] + run[i], 2) for i in (0, 1)]}
