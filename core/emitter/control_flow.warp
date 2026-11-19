@@ -36,6 +36,9 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	a = nested(body, statements_block(yes_branch), 1)
 	if not has_else { return unmatched(body, c, a, yes_branch is number, leaves(yes_branch) or raises_error(yes_branch)) }
 	b = nested(body, statements_block(no_branch), 1)
+	# a branch that jumps to its loop's end gives no value: the if gives the other's, `w = f(x) ?? continue`
+	if a.kind == no_kind and ends_by(yes_branch, n => is_loop_jump(n)) { a = TypedCode(b.kind, a.code + [op.unreachable]) }
+	if b.kind == no_kind and ends_by(no_branch, n => is_loop_jump(n)) { b = TypedCode(a.kind, b.code + [op.unreachable]) }
 	# both branches leave by a return: the if gives no value, the function's result is its
 	# returns' alone, `if x > 2 { return "big" } else { return "small" }` a text
 	if a.kind == never and b.kind == never and leaves(yes_branch) and leaves(no_branch) { return TypedCode(never, c + [op.if, no_value] + a.code + [op.else] + b.code + [op.end, op.unreachable]) }
@@ -48,13 +51,16 @@ def conditional(body: Body, test: Node, yes_branch: Node, no_branch: Node, has_e
 	TypedCode(kind, c + [op.if] + value_type(kind) + converted(a, kind) + [op.else] + converted(b, kind) + [op.end])
 }
 # a branch that leaves its function: its last statement a return, or an if/else each branch of which leaves it
-def leaves(branch: Node) as bool {
-	if is_return(branch) { return yes }
+def leaves(branch: Node) as bool { ends_by(branch, n => is_return(n)) }
+# a branch that ends by `ending`: its last statement, or each branch of an if/else that is
+def ends_by(branch: Node, ending: function) as bool {
+	if ending(branch) { return yes }
 	# `else if …`: the nested if/else itself
-	if is_key(branch, Op.Else) and is_key(key_of(branch), Op.Then) and is_key(key_of(key_of(branch)), Op.If) { return leaves(value_of(key_of(branch))) and leaves(value_of(branch)) }
+	if is_key(branch, Op.Else) and is_key(key_of(branch), Op.Then) and is_key(key_of(key_of(branch)), Op.If) { return ends_by(value_of(key_of(branch)), ending) and ends_by(value_of(branch), ending) }
 	parts = block_statements(statements_block(branch))
-	#parts > 0 and parts.last != branch and leaves(parts.last)
+	#parts > 0 and parts.last != branch and ends_by(parts.last, ending)
 }
+is_loop_jump(n: Node) as bool := n == symbol("break") or n == symbol("continue")
 is_return(n: Node) as bool := n == symbol("return") or (is_group(n) and bracket_of(n) == "" and #n == 2 and n#1 == symbol("return"))
 # `if c then a` without else: a, or when c fails the 0 of a number or yes/no, else ø
 # (`leaving`: the branch returns or raises, its kind `never`, which is the same kind as pending: no call to wait on)
