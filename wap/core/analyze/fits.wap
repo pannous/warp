@@ -93,7 +93,7 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	if jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
-	if way == Conversion.Read { return as_text(n, s) }
+	if way == Conversion.Read { return as_read(n, s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
 	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
@@ -110,7 +110,7 @@ unboxed(n: Node) as Node := match n {
 as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 	if wanted == ø or jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s)
-	if way == Conversion.Read then as_text(n, s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+	if way == Conversion.Read then as_read(n, s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
 # a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
 bare_fit(given: Node, wanted: Node, records: Records) as bool := {

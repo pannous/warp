@@ -39,8 +39,6 @@ FLOAT_TYPE = "float"
 TEXT_TYPE = "text"
 CHAR_TYPE = "char"
 BOOL_TYPE = "bool"
-# the function that gives a value's text: a character passed where a text is wanted becomes its text through it
-TEXT_FUNCTION = "text"
 EMPTY_TYPE = "ø"
 # the result a built-in writes when it never returns, `raise(message: text): never`: its calls jump, of no type
 NEVER_RESULT = "never"
