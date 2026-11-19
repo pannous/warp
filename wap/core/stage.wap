@@ -210,8 +210,8 @@ SIGNATURE = "signature"
 # A list's places by name, for a list that only grows or is changed in place, as the typing state's definitions and a
 # program's records are: indexed up to `count`, extended for the items added since
 class NameIndex { places: map<text, list<int>> = {}, count: int = 0 }
-# the items of a name in the order written; an item at an indexed place that bears another name now is refused, the
-# list having changed other than in place
+# the items of a name in the order written; a place past the list's end, or an item at an indexed place that bears
+# another name now, is refused: the list changed other than by growing or in place
 items_named(index: NameIndex, items: list<T>, name: text, name_of: (T) -> text) as list<T> := {
 	while index.count < #items {
 		key = name_of(items[index.count])
@@ -219,7 +219,7 @@ items_named(index: NameIndex, items: list<T>, name: text, name_of: (T) -> text) 
 		index.count += 1
 	}
 	places = if index.places.has(name) then index.places[name] else []
-	places.map(place => if name_of(items[place]) == name then items[place] else refused(items[place], "this item is no longer named ${name}: the list it is indexed in changed other than in place"))
+	places.map(place => if place >= #items then refused(symbol(name), "the list indexed for ${name} shrank: it may only grow or change in place") else if name_of(items[place]) == name then items[place] else refused(items[place], "this item is no longer named ${name}: the list it is indexed in changed other than in place"))
 }
 # The Records a program declares, in the order written, found by name through their index; added_records is their
 # only writer, so the index keeps up with the list
