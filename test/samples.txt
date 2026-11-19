@@ -1,4 +1,4 @@
-# 046c9c323b 2026-11-19 07:15 297/299 99.3%
+# ff28348ab6 2026-11-19 11:18 295/299 98.7%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -284,8 +284,6 @@ ok   samples/web/page_elements.warp
 ok   samples/web/select_binding.warp
 ok   samples/web/typed_form.warp
 ok   samples/world/polymarket_odds.warp
-ok   samples/world/strong_quakes.warp
-ok   samples/world/wikipedia_edits.warp
 EXP  samples/errors/errors.warp: `]` closes the group opened at 5:9, which needs `}`
 WIN  samples/graphics/raylib_circle.warp
 WIN  samples/graphics/raylib_mouse_circle.warp
@@ -298,3 +296,5 @@ SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
 FAIL samples/objects/sorted_leaderboard.warp: wasm trap: call stack exhausted at 12:22
+FAIL samples/world/strong_quakes.warp: lib/text.warp:42:56 text of node
+FAIL samples/world/wikipedia_edits.warp: wikipedia_edits.warp:9:2 no field bot
