@@ -44,3 +44,5 @@ f(parse("(a, b)"))'	"7"
 'width(m: hex) := 7
 f(n) := match n { Key(key, op, width): width as text, _: "none" }
 f(parse("a: 3"))'	"3"
+# a Meta arm is a node case, never a list of its parts: a list of three items falls through to the next arm
+'n = parse("a b c"); match n { Meta(node, data): "meta"; List(items, bracket, separator): "list ${#items}"; _: "other" }'	"list 3"
