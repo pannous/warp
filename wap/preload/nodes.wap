@@ -56,6 +56,10 @@ OTHER_SPELLING := "·other"
 
 # the symbol of a name: `symbol("x")` is the word x
 symbol(name: text): Node := Symbol(name)
+# an atom as its case, read so wherever a Node is wanted: `n: Node = 'a'` is Char('a'), 3 is Number(3), "a" Text("a")
+Node(c: char): Node := Char(c)
+Node(n: number): Node := Number(n)
+Node(t: text): Node := Text(t)
 
 # where n was written, ø for a node without a position
 line_of(n: Node) := written_part(n, META_LINE)

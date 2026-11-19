@@ -132,9 +132,12 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	called_reads(chosen, n, s, f)
 	result_of(calling(refitted(Get(typed, key), n), chosen), chosen)
 }
-# a value where the type it reads as is wanted, by that type's word: a written character is its text, any other value
-# the call text(c), a range list(r)
-as_read(n: Node, s: TypingState) as Node := if n is Char then char_text(n) else word_called(n, type_word(read_type(value_type(n)) ?? refused(n, "this value reads as no other type")), [n], ø, s)
+# a value where the type it reads as is wanted, by that type's word: a written character where a text is wanted is
+# its text, any other value the call text(c), a range list(r), an atom Node('a')
+as_read(n: Node, wanted: Node, s: TypingState) as Node := {
+	read = read_type(value_type(n), wanted) ?? refused(n, "this value reads as no other type")
+	if n is Char and read == symbol(TEXT_TYPE) then char_text(n) else word_called(n, type_word(read), [n], ø, s)
+}
 char_text(character: Node) as Node := with_type(refitted(Text(text(character)), character), TEXT_TYPE)
 # a call's typed arguments as their parameters (their letters bound by the call) have them: a char read as its text,
 # a plain value boxed for an any or an optional
