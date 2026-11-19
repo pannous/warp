@@ -28,19 +28,24 @@ filled(language: Language, template: Node, bindings: map<text, Node>) as Node :=
 	# a word the template spells itself is the rule's: a function it names yields to the program's (analyze/calls.wap ranked)
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else with_fact(symbol(name), DERIVED, True)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
-		pattern = pattern_called(language, head)
-		if pattern == ø { Key(built(language, head, bindings), Op.None, grown(built_items(language, arguments, bindings), Bracket.Round, separator)) } else { instance(language, pattern, built_items(language, arguments, bindings)) }
+		items = built_items(language, arguments, bindings)
+		called_built(language, head, items, grown(items, Bracket.Round, separator), bindings)
 	}
-	# a literal called by its case's name, `False()` (kernel/forms.wap literal_named)
-	Key(head, Op.None, Empty) => {
-		literal = if head is symbol then literal_named(text(head)) else []
-		if literal is empty then Key(built(language, head, bindings), Op.None, Empty) else literal#1
-	}
+	Key(head, Op.None, Empty) => called_built(language, head, [], Empty, bindings)
 	Key(left, op, right) => Key(built(language, left, bindings), op, built(language, right, bindings))
 	List(items, bracket, separator) => grown(built_items(language, items, bindings), bracket, separator)
 	Text(value) => Text(interpolated(value, bindings))
 	Number(value) => Number(value)
 	_ => template
+}
+
+# A call the template writes, `If(…)`, `Break()`: a declared pattern called by name builds its node, a literal called
+# by its case's name its case, `False()` (kernel/forms.wap literal_named); any other head is called with the group
+called_built(language: Language, head: Node, arguments: list<Node>, group: Node, bindings: map<text, Node>) as Node := {
+	pattern = pattern_called(language, head)
+	if pattern != ø { return instance(language, pattern, arguments) }
+	literal = if head is symbol and arguments is empty then literal_named(text(head)) else []
+	if literal is empty then Key(built(language, head, bindings), Op.None, group) else literal#1
 }
 
 # a template text, each hole in it replaced by the spelling of what it took, the longest name first ($fx before $f)

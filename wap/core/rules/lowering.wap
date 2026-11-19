@@ -23,7 +23,6 @@
 #   global x, let x          a variable named without a value: no statement, the fact on its Block which x it means
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
-#   break, continue, return  a statement alone → Break(), Continue(), Return(ø)
 #   (If c a b)               a kernel form a rule built (preload/sugar: `if c then a else b`, `c ? a : b`, `a if c`,
 #                            `unless c { a }`, `while c { b }`, `return x`), its parts lowered
 # A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
@@ -38,10 +37,6 @@ use "../language.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
-# the words that are a kernel form alone: the statements that leave a loop or a function, and empty braces, until
-# rules of one word write them (preload/sugar/; the literals' words are preload/sugar/literals.wap)
-WORD_FORMS = {"break": Break(), "continue": Continue(), "return": Return(Empty)}
-WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
 VARIABLE_WORDS = {"let": DefinitionKind.Local, "global": DefinitionKind.Global}
@@ -74,7 +69,8 @@ lowered_form(language: Language, n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	Symbol(name) => if WORD_FORMS.has(name) then WORD_FORMS[name] else n
+	# empty braces, a map with no entries yet
+	Symbol(name) => if name == EMPTY_BRACES then EmptyMap() else n
 	Call(called, arguments) => operator_lowered(language, n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(language, items, separator, n)) else not_lowered(n)
 	# a type written with its parts, `list<Node>`, stays as written: a named argument's or a case's field's type
@@ -84,7 +80,8 @@ lowered_form(language: Language, n: Node) as Node := match n {
 	List(items, Bracket.Square, separator) => List(items.map(item => lowered(language, item)), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(language, items, separator, n) else lowered_block(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Comma) => List(items.map(item => lowered(language, item)), Bracket.Square, Separator.Comma)
-	List(items, Bracket.Round, separator) => if separator == Separator.Space and pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, Separator.Space) else group_lowered(language, statements_of(List(items, Bracket.None, separator)))
+	# a kernel form a rule built, `(If c a b)`, `(Break)`, its parts lowered; any other group its statements
+	List(items, Bracket.Round, separator) => if (separator == Separator.Space or #items == 1) and pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, Separator.Space) else group_lowered(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(language, items, n)
 	# a word written against what follows it, `...rest`, as a phrase
 	List(items, Bracket.None, Separator.None) => phrase_lowered(language, items, n)
