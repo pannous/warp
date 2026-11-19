@@ -390,6 +390,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   a template's glued call of an enum's fieldless case builds that case. Reason: templates are built before the
   preload's Records are declared, so they can't look the cases up. Paid off when templates see the declared Records:
   the table goes for that lookup.
+
 - **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
   drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
   List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
