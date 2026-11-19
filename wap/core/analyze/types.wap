@@ -77,6 +77,9 @@ class TypingState {
 	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
 	dispatchers: list<Node> = []
 	captured: list<text> = []
+	# what the conditions around a function value find of the variables it captures, by its function's key: the
+	# captures are copied when the value is made, so its body reads them as found there (core/analyze/function_values.wap)
+	found_in: map<text, list<Finding>> = {}
 	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled
 	unknowns: int = 0
 	settled: list<Binding> = []

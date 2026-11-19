@@ -375,6 +375,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	typed.unknown_result = "a function that calls itself and gives a value needs its full result type: write `${declared_name(name)}(…): ${full_type_hint(declared_type(name))} := …`"
 	s.functions += [typed]
 	frame = TypeFrame()
+	frame.present = if s.found_in.has(key) then s.found_in[key] else []
 	frame.result = typed.result
 	frame.letters = letters
 	frame.function = declared_name(name)
