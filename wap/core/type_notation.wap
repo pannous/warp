@@ -16,7 +16,7 @@ parts_of_type(word: text, type: Node?) as list? := match type {
 type_parts(type: Node?) as list? := {
 	base = base_of_optional(type)
 	if base != ø { return [symbol(OPTIONAL_MARK), base] }
-	function = function_type_parts(type)
+	function = signature(type)
 	if function != ø { return [symbol(FUNCTION_ARROW)] + function.parameters + [function.result] }
 	match type {
 		Key(name, Op.None, List(items, Bracket.Less, separator)) => [name] + items
@@ -28,11 +28,12 @@ type_built(word: text, parts: list) as Node := if word == OPTIONAL_MARK then opt
 # A function type, `(int, text) -> bool`: the parameters' types in round brackets, an arrow, the result's type
 FUNCTION_ARROW = "->"
 function_type_of(parameters: list, result: Node) as Node := Call(symbol(FUNCTION_ARROW), [List(parameters, Bracket.Round, Separator.Comma), result])
-# a function type's parameter types and result type, in round brackets or not; ø for any other type
-class FunctionParts { parameters: list<Node>, result: Node }
-function_type_parts(type: Node?) as FunctionParts? := match type {
-	Call(called, items) => if text(called) == FUNCTION_ARROW and #items == 2 then FunctionParts(items_or_one(items#1), items#2) else ø
-	List(items, Bracket.Round, separator) => if #items == 1 then function_type_parts(items#1) else ø
+# A function's signature, its parameter types and its result type, as a function type writes them, in round brackets or
+# not; ø for any other type
+class Signature { parameters: list<Node>, result: Node }
+signature(type: Node?) as Signature? := match type {
+	Call(called, items) => if text(called) == FUNCTION_ARROW and #items == 2 then Signature(items_or_one(items#1), items#2) else ø
+	List(items, Bracket.Round, separator) => if #items == 1 then signature(items#1) else ø
 	_ => ø
 }
 # what a rest or repetition took; none taken is Empty, as the host gives an empty list
