@@ -24,6 +24,9 @@ STANDARD_ERROR := 2
 
 memory_byte(at: int): int := prim memory_byte(at)
 memory_word(at: int): int := prim memory_word(at)
+# a text of `count` zero bytes, and one of them set: how a text is made from bytes
+text_made(count: int): text := prim text_made(count)
+set_text_byte(t: text, at: int, b: int) := prim text_byte_set(t, at, b)
 set_memory_word(at: int, word: int) := prim memory_set_word(at, word)
 # the memory grown to hold `count` bytes from BYTES_AT; a text's bytes placed there; a text written to a file, a line
 # end after it when `line` says so
