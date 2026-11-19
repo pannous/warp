@@ -29,11 +29,11 @@ function_value_typed(n: Node, parameters: Node, body: Node, s: TypingState, f: T
 }
 # the function of a function value, made once: named and placed where the value is written
 lambda_of(n: Node, parameters: Node, body: Node, s: TypingState) as Function := {
-	name = placed_like(symbol(LAMBDA_NAME), n)
+	name = name_for(LAMBDA_NAME, n)
 	definition_keyed(place_key(name), s) ?? lambda_made(name, n, parameters, body, s)
 }
 lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) as Function := {
-	lambda = refitted(Define(name, with_items(parameters, [placed_like(symbol(CLOSURE_NAME), n)] + items_of(parameters)), body), n)
+	lambda = refitted(Define(name, with_items(parameters, [name_for(CLOSURE_NAME, n)] + items_of(parameters)), body), n)
 	s.lambdas += [lambda]
 	function_added(lambda, s)
 }
@@ -86,7 +86,7 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState, wanted: Node) as Node := {
 	definition = typed.function
 	word = definition.name
-	name = placed_like(symbol("${word}(${parts.parameters.map(text).join(", ")})"), value)
+	name = name_once("${word}(${parts.parameters.map(text).join(", ")})", value, s)
 	made = definitions_named(text(name), s)
 	reads = parameters_of(name, parts.parameters)
 	taking = if made is empty then dispatcher_made(name, reads, named_call(word, [definition], reads, name), [typed.result], s) else made#1

@@ -67,4 +67,6 @@ check "an operator glued to brackets is a call, as f(x) is" "$(ran glued_operato
 next(n: int) as int := n + 1
 xs = [1, 2, 3]
 print(text(-(3).squared) + " " + text(#(xs).next) + " " + text(#((xs).filter(x => x > 1))) + " " + text(#xs.filter(x => x > 1)))')" "9 4 2 2"
+# a rule's word before an operator is an operand, as any word is
+format_check '2 * no + 1' '2 * no + 1'
 exit $((failures > 0))
