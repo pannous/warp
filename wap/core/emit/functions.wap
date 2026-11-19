@@ -94,7 +94,7 @@ parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
-	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
+	if (not called is symbol or not names_function(called)) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
@@ -105,8 +105,7 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
 passes(given: list<int>, taken: list<int>, m: Module) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
-	binding = binding_of(called)
-	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }
+	if not names_function(called) { refused(form, "the emitter calls functions, not a ${binding_of(called)} yet") }
 	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")
 }
 

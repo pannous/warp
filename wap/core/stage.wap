@@ -155,17 +155,18 @@ signature_key(definer: Node) as text := if fact_of(definer, SIGNATURE) == ø the
 # name refers to, one of the binding words below as a Symbol; DEFINED_AT the name that defined it, positioned.
 BINDING = "binding"
 DEFINED_AT = "defined_at"
-BOUND_LOCAL = "local"
-BOUND_PARAMETER = "parameter"
-BOUND_CAPTURE = "capture"
-BOUND_GLOBAL = "global"
-BOUND_FUNCTION = "function"
-BOUND_LIBRARY = "library"
-# a case of an enum, `Dime`, `Circle` (its Record defines it)
-BOUND_CASE = "case"
-# a field of a method's receiver named bare, `c` for `self.c` inside `inc(self: Counter)` (core/analyze/scope.wap);
-# DEFINED_AT is the self parameter
-BOUND_FIELD = "field"
+# What a definition is, and so what a name bound to it refers to: a block's or the program's variable, a parameter, a
+# variable of the function around (captured), a function of the program or of the library (the preload's or a used
+# module's), a case of an enum (`Dime`, its Record defines it), a field of a method's receiver named bare (`c` for
+# `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a record, a used module. On a name its BINDING
+# fact is the kind's word, `local`, `global` …
+enum DefinitionKind { Local, Parameter, Capture, Global, Function, Library, Case, Field, Record, Module }
+kind_word(kind: DefinitionKind) as text := lower(text(kind))
+is_kind_word(word: Node?, kind: DefinitionKind) as bool := word == symbol(kind_word(kind))
+with_binding(n: Node, kind: DefinitionKind) as Node := with_fact(n, BINDING, symbol(kind_word(kind)))
+is_bound(n: Node, kind: DefinitionKind) as bool := is_kind_word(fact_of(n, BINDING), kind)
+# whether a name names a function, the program's or the library's
+names_function(n: Node) as bool := is_bound(n, DefinitionKind.Function) or is_bound(n, DefinitionKind.Library)
 SELF_WORD = "self"
 # on a Define a rule wrote for every class, as its show: typed only when something calls it, so a class whose field
 # has no show of its own is not refused for a show nothing uses
@@ -207,8 +208,8 @@ rest_named(item: Node) as Node? := match item {
 	Call(called, names) => if text(called) == REST_WORD and #names == 1 then names#1 else ø
 	_ => ø
 }
-# on an assignment, the variable it ASSIGNS when the program said so: BOUND_LOCAL a new one in its block (`let x = 1`),
-# BOUND_GLOBAL the program's (`global x = 1`); without it, the variable the function sees, or a new one
+# on an assignment, the variable it ASSIGNS when the program said so: a local, a new one in its block (`let x = 1`),
+# a global, the program's (`global x = 1`); without it, the variable the function sees, or a new one
 ASSIGNS = "assigns"
 # on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
 # program's in the whole block, `let x` a new one of the block's

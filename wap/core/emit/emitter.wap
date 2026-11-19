@@ -43,7 +43,7 @@ EXIT_LABEL = "exit"
 NEXT_LABEL = "next"
 OTHER_LABEL = "other"
 # the bindings whose variables live in the function's frame
-FRAME_BINDINGS = [BOUND_LOCAL, BOUND_PARAMETER, BOUND_CAPTURE]
+FRAME_BINDINGS = [DefinitionKind.Local, DefinitionKind.Parameter, DefinitionKind.Capture]
 
 # The module of a program: its statements become the body of `main`, which the host runs. The typing stage made the
 # program print its value, `print(show(it))`, so main gives nothing back.

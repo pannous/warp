@@ -8,7 +8,7 @@ use "scope.wap"
 use "names.wap"
 use "declarations.wap"
 # the words of the modules a program uses, each module named too
-modules_scope(modules: list) as list<Definition> := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+modules_scope(modules: list) as list<Definition> := modules.flat_map(module => [Definition(module_name(module), DefinitionKind.Module, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
 module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
 # the names a module declares itself: its functions, variables and types, not their fields or cases
@@ -38,10 +38,10 @@ declared_alike(declaration: Node) as text := match declaration {
 module_word(n: Node, subject: Node, key: text, scope: Scope) as Node? := {
 	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
 	for definition in named_in(scope, text(subject)) {
-		if definition.kind == MODULE_KIND {
+		if definition.kind == DefinitionKind.Module {
 			named = module_names(definition.definer).filter(name => text(name) == key)
 			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
-			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
+			found = with_binding(placed_like(symbol(key), n), DefinitionKind.Library)
 			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(with_fact(found, DEFINED_AT, Empty), CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 		}
 	}

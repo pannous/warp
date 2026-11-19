@@ -57,7 +57,7 @@ value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: Type
 	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
 	name = declared_name(written_name(definition))
 	given = if is_lambda_key(key, s) then [called] + arguments else arguments
-	call_typed(n, with_fact(with_fact(name, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, name), given, s, f, expected)
+	call_typed(n, with_fact(with_binding(name, DefinitionKind.Function), DEFINED_AT, name), given, s, f, expected)
 }
 # A call of a value of a function type, `helpers#1(x)` of a list<(int) -> int>: a call of whichever function it holds,
 # at run time, each argument of the type's parameter type, giving its result type
@@ -110,7 +110,7 @@ function_named_typed(n: Node) as Node := {
 }
 # whether what a call calls is a value, a name holding one or any other code giving one, `make(1)(2)`, rather than a
 # function's name
-holds_value(called: Node) as bool := not called is symbol or fact_of(called, BINDING) != ø and not (text(fact_of(called, BINDING)) in [BOUND_FUNCTION, BOUND_LIBRARY])
+holds_value(called: Node) as bool := not called is symbol or fact_of(called, BINDING) != ø and not names_function(called)
 # whether a value given to a name changes a variable a function value has captured
 changes_capture(name: Node, s: TypingState) as bool := {
 	place_key(defined_at(name)) in s.captured and not is_definer(name)

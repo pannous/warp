@@ -45,7 +45,7 @@ preload_scope(preload: list) as list<Definition> := preload.flat_map(declaration
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
 library_words(declaration: Node, depth: int) as list<Definition> := match declaration {
-	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, depth)]
+	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then DefinitionKind.Global else DefinitionKind.Library, name, depth)]
 	Record(name, fields, variants) => definitions_made_by(declaration, Scope(), depth)
 	_ => refused(declaration, "a library declares names and records")
 }
@@ -56,7 +56,7 @@ bound(n: Node, scope: Scope, depth: int) as Node := match n {
 	Block(statements) => block_bound(n, statements, within(scope, named_variables(n, scope, depth)), depth)
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
-	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
+	Set(place, value) => refitted(Set(bound(place, if is_kind_word(fact_of(n, ASSIGNS), DefinitionKind.Global) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
 	Call(called, arguments) => module_call(n, called, arguments, scope, depth) ?? if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
@@ -85,7 +85,7 @@ bound(n: Node, scope: Scope, depth: int) as Node := match n {
 # A written type with each record name in it bound to the Record its scope sees, `Box` of `b: Box` or `list<Box>?`
 type_bound(type: Node, scope: Scope) as Node := match type {
 	Symbol(name) => {
-		for definition in named_in(scope, name) { if definition.kind == RECORD_KIND { return with_fact(type, DECLARED_BY, record_declared(definition.definer)) } }
+		for definition in named_in(scope, name) { if definition.kind == DefinitionKind.Record { return with_fact(type, DECLARED_BY, record_declared(definition.definer)) } }
 		type
 	}
 	List(items, bracket, separator) => refitted(List(items.map(item => type_bound(item, scope)), bracket, separator), type)
@@ -111,7 +111,7 @@ pattern_bound(pattern: Node, scope: Scope, depth: int) as Node := match pattern 
 # among them (core/analyze/types.wap pattern_typed); any other name as anywhere
 pattern_name_bound(name: Node, scope: Scope, depth: int) as Node := {
 	if not names_case(name, scope) { return resolved(name, scope, depth) }
-	with_fact(with_fact(name, BINDING, symbol(BOUND_CASE)), DEFINED_AT, definitions_meant(text(name), scope)#1.definer)
+	with_fact(with_binding(name, DefinitionKind.Case), DEFINED_AT, definitions_meant(text(name), scope)#1.definer)
 }
 # the shape a declared pattern's call stands for, `Pair(a, b)` as its builder takes it apart
 pattern_shape(called: Node, fields: list, scope: Scope) as Node := pattern_taken(called, fields, pattern_builder_meant(called, scope) ?? refused(called, "no declared pattern builds this shape"))
@@ -127,7 +127,7 @@ pattern_builder_meant(called: Node, scope: Scope) as Node? := {
 # whether a name means a case of an enum where it stands
 names_case(name: Node, scope: Scope) as bool := {
 	meant = definitions_meant(text(name), scope)
-	not meant is empty and meant#1.kind == BOUND_CASE
+	not meant is empty and meant#1.kind == DefinitionKind.Case
 }
 # whether a name means functions and no type: a type's word is a type test even beside a function of that name,
 # `3 is int` beside int(t: text)
@@ -135,7 +135,7 @@ names_predicate(name: Node, scope: Scope) as bool := {
 	# a type's or a declared pattern's name after `is` is its test, never a call of its builder: `n is Record`
 	if TYPE_WORDS.contains(text(name)) or shape_called(name, scope) { return no }
 	meant = definitions_meant(text(name), scope)
-	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
+	not meant is empty and meant.all(definition => definition.kind == DefinitionKind.Function or definition.kind == DefinitionKind.Library)
 }
 arm_result(arm: Arm) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> := match pattern {
@@ -196,14 +196,14 @@ receiver_fields(parameters: List, scope: Scope, depth: int) as list<Definition> 
 	type = declared_type(receiver) ?? return []
 	if text(parameter_name(receiver)) != SELF_WORD { return [] }
 	for definition in named_in(scope, text(type)) {
-		if definition.kind == RECORD_KIND {
-			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), BOUND_FIELD, parameter_name(receiver), depth))
+		if definition.kind == DefinitionKind.Record {
+			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), DefinitionKind.Field, parameter_name(receiver), depth))
 		}
 	}
 	[]
 }
 parameter_definitions(parameters: List, depth: int) as list<Definition> := match parameters {
-	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), BOUND_PARAMETER, parameter_name(p), depth))
+	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), DefinitionKind.Parameter, parameter_name(p), depth))
 }
 
 # A function with the fact `captures`: the names of the functions around it that its body reads, a nested function's
@@ -218,7 +218,7 @@ with_captures(function: Node, scope: Scope, depth: int) as Node := {
 }
 # the defining names of the captures read anywhere in n
 captured_definers(n: Node) as list<Node> := match n {
-	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [defined_at(n)] else []
+	Symbol(name) => if is_bound(n, DefinitionKind.Capture) then [defined_at(n)] else []
 	_ => direct_parts(n).flat_map(captured_definers)
 }
 # whether a defining name belongs to a function around the one at depth, not to the program or the library
@@ -243,9 +243,9 @@ called_bound(called: Node, given: int, scope: Scope, depth: int) as Node := if c
 resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
 	meant = definitions_meant(text(name), scope)
 	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
-	innermost = if meant#1.kind == BOUND_CASE then unambiguous_case(name, meant#1, given, scope) else meant#1
-	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else BOUND_CAPTURE
-	bound = with_fact(name, BINDING, symbol(kind))
+	innermost = if meant#1.kind == DefinitionKind.Case then unambiguous_case(name, meant#1, given, scope) else meant#1
+	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else DefinitionKind.Capture
+	bound = with_binding(name, kind)
 	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
 }
 # the depths of these definitions, each once, innermost first as they come
@@ -257,10 +257,10 @@ depths_of(definitions: list) as list := {
 # A case named by its enum, `Side.Right`: that enum's case, bound as the bare name `Right` would be, even where a case
 # of another enum has the enum's name (LexemeKind.Separator beside the enum Separator); ø for any other part of a value
 qualified_case(n: Node, subject: Node, key: Node, scope: Scope) as Node? := {
-	if not subject is symbol or not key is text or not definitions_meant(text(subject), scope).all(definition => definition.kind == BOUND_CASE) { return ø }
+	if not subject is symbol or not key is text or not definitions_meant(text(subject), scope).all(definition => definition.kind == DefinitionKind.Case) { return ø }
 	for definition in named_in(scope, text(key)) {
-		if definition.kind == BOUND_CASE and definition.owner == text(subject) {
-			return with_fact(with_fact(placed_like(symbol(text(key)), n), BINDING, symbol(BOUND_CASE)), DEFINED_AT, definition.definer)
+		if definition.kind == DefinitionKind.Case and definition.owner == text(subject) {
+			return with_fact(with_binding(placed_like(symbol(text(key)), n), DefinitionKind.Case), DEFINED_AT, definition.definer)
 		}
 	}
 	ø
@@ -269,7 +269,7 @@ qualified_case(n: Node, subject: Node, key: Node, scope: Scope) as Node? := {
 # preload's Node.Key beside a used module's fieldless LexemeKind.Key; with none taking them the innermost of the name;
 # two such of one depth read two ways and are refused naming both
 unambiguous_case(name: Node, meant: Definition, given: int?, scope: Scope) as Definition := {
-	named = named_in(scope, text(name)).filter(definition => definition.kind == BOUND_CASE)
+	named = named_in(scope, text(name)).filter(definition => definition.kind == DefinitionKind.Case)
 	taking = named.filter(definition => definition.fields == given)
 	depth = if taking is empty then meant.depth else taking.map(definition => definition.depth).fold(taking#1.depth, (a, b) -> if a > b then a else b)
 	cases = (if taking is empty then named else taking).filter(definition => definition.depth == depth)

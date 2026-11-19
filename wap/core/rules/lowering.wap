@@ -46,7 +46,7 @@ WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue
 WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
-VARIABLE_WORDS = {"let": BOUND_LOCAL, "global": BOUND_GLOBAL}
+VARIABLE_WORDS = {"let": DefinitionKind.Local, "global": DefinitionKind.Global}
 
 # the program as one Block of its statements
 lowered_program(language: Language, program: Node) as Block := staged(program, whole => lowered_block(language, statements_of(whole)))
@@ -63,7 +63,7 @@ names_a_variable(statement: Node) as bool := match statement {
 	_ => no
 }
 variable_named(statement: Node) as Node := match statement {
-	List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)]))
+	List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(kind_word(VARIABLE_WORDS[text(items#1)])))
 	_ => refused(statement, "this statement names no variable")
 }
 
@@ -121,7 +121,7 @@ assigned(language: Language, place: Node, value: Node, n: Node) as Node := match
 	List(items, Bracket.None, Separator.Space) => if #items == 2 then with_fact(Set(items#2, value), ASSIGNS, symbol(variable_named_by(items#1, n))) else not_lowered(n)
 	_ => Set(lowered(language, place), value)
 }
-variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then VARIABLE_WORDS[text(word)] else not_lowered(n)
+variable_named_by(word: Node, n: Node) as text := if VARIABLE_WORDS.has(text(word)) then kind_word(VARIABLE_WORDS[text(word)]) else not_lowered(n)
 
 # `f(x) := body` defines a function, `n := 1` a constant; `f(x): int := body` names its result type with the name
 defined(language: Language, n: Node, head: Node, body: Node) as Node := match head {
