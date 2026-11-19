@@ -26,10 +26,10 @@ TAG_FIELD = field_type(I32, IMMUTABLE)
 ENUM_WORD = "enum"
 
 # the GC type of a text: its UTF-8 bytes
-text_type(m: Module) as int := added_type(m, array_type(field_type(I8, MUTABLE)))
+text_type(m: WasmModule) as int := added_type(m, array_type(field_type(I8, MUTABLE)))
 
 # the code of a literal, or ø for a node that is none
-literal(n: Node, m: Module) as Code? := match n {
+literal(n: Node, m: WasmModule) as Code? := match n {
 	Number(value) => if value is int then Code(I64, i64_const(value)) else Code(F64, f64_const(value))
 	Char(value) => Code(I32, i32_const(ord(value)))
 	True => Code(I32, i32_const(1))
@@ -42,7 +42,7 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
 # a shape, `Record`, laid out as the type it narrows (core/analyze/shapes.wap)
-layout_of(type_name: Node, m: Module, records: Records) as list<int>? := match type_name {
+layout_of(type_name: Node, m: WasmModule, records: Records) as list<int>? := match type_name {
 	Symbol(written) => {
 		type = fact_of(type_name, NARROWS) ?? type_name
 		name = text(type)
@@ -57,7 +57,7 @@ layout_of(type_name: Node, m: Module, records: Records) as list<int>? := match t
 
 # The GC type of a map, `map<text, int>`: a struct of two lists of one count, its keys and its values (lists.wap); ø
 # for a type that is no map
-map_index(type: Node, m: Module, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
+map_index(type: Node, m: WasmModule, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
 # a map type's key type and value type: its keys' array is field 0, its values' field 1
 map_parts(type: Node) as list<Node> := [key_type(type), held_type(type)].map(part => part ?? refused(type, "a map type names its key and value types, `map<text, int>`"))
 MAP_KEYS = 0
@@ -65,7 +65,7 @@ MAP_VALUES = 1
 
 # The wasm type of an optional, `T?`, ø its null: a reference type's own layout; a plain value's (int, float, bool,
 # char) a reference to its box, a struct of the value. ø for a type that is no optional.
-optional_layout(type: Node, m: Module, records: Records) as list<int>? := {
+optional_layout(type: Node, m: WasmModule, records: Records) as list<int>? := {
 	base = base_of_optional(type)
 	if base == ø { return ø }
 	held = known_layout(base, m, records)
@@ -75,7 +75,7 @@ PLAIN_VALUES = [I32, I64, F64]
 # The box of a plain value of a type, `int`: a struct of the value, one type for each type word, so a value in an `any`
 # is told apart by its box at run time. The boxes are declared together in one recursion group, which keeps a yes/no's
 # box apart from a character's though both hold an i32, and keeps every box apart from any other struct of one field.
-box_index(m: Module, word: text) as int := added_group(m, BOXED_WORDS.map(each => struct_type([field_type(WORD_LAYOUTS[each], IMMUTABLE)]))) + index_where(BOXED_WORDS, each => each == word) - 1
+box_index(m: WasmModule, word: text) as int := added_group(m, BOXED_WORDS.map(each => struct_type([field_type(WORD_LAYOUTS[each], IMMUTABLE)]))) + index_where(BOXED_WORDS, each => each == word) - 1
 BOXED_WORDS = WORD_LAYOUTS.keys.filter(word => WORD_LAYOUTS[word] in PLAIN_VALUES)
 # the type the typing stage gave a node, which every node reaching the emitter has
 type_of(n: Node) as Node := fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped")
@@ -87,7 +87,7 @@ plain_word(form: Node) as text := {
 
 # The GC type of a function value: a struct of what it captures, in the order its type writes them; ø for a type that
 # is none. Its function is the one its type names, called directly.
-function_value_index(type: Node, m: Module, records: Records) as int? := {
+function_value_index(type: Node, m: WasmModule, records: Records) as int? := {
 	parts = function_value_parts(type)
 	if parts == ø then ø else added_type(m, struct_type(parts[1 ..].map(capture => field_type(known_layout(capture, m, records), IMMUTABLE))))
 }
@@ -98,54 +98,54 @@ function_value_index(type: Node, m: Module, records: Records) as int? := {
 VALUE_FUNCTION_AT = 0
 VALUE_CAPTURES_AT = 1
 EMPTY_TYPE_WORD = "ø"
-signature_value_index(type: Node, m: Module, records: Records) as int? := {
+signature_value_index(type: Node, m: WasmModule, records: Records) as int? := {
 	function = signature_function_index(type, m, records)
 	if function == ø then ø else added_type(m, struct_type([field_type(nullable(function), IMMUTABLE), field_type(ANYREF, IMMUTABLE)]))
 }
-signature_function_index(type: Node, m: Module, records: Records) as int? := {
+signature_function_index(type: Node, m: WasmModule, records: Records) as int? := {
 	parts = signature(type)
 	if parts == ø { return ø }
 	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
 }
-signature_parameters(parts: Signature, m: Module, records: Records) as list<list<int>> := parts.parameters.map(parameter => known_layout(parameter, m, records))
-signature_results(parts: Signature, m: Module, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [known_layout(parts.result, m, records)]
+signature_parameters(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := parts.parameters.map(parameter => known_layout(parameter, m, records))
+signature_results(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [known_layout(parts.result, m, records)]
 # a type's layout, refused when the emitter has none for it yet
-known_layout(type: Node, m: Module, records: Records) as list<int> := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for the type ${type} yet")
+known_layout(type: Node, m: WasmModule, records: Records) as list<int> := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for the type ${type} yet")
 
 # The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the
 # count spare (lists.wap); ø for a type that is no list. Every list's type extends the list base, its count alone, so
 # `#` of any list reads it.
-list_index(type: Node, m: Module, records: Records) as int? := {
+list_index(type: Node, m: WasmModule, records: Records) as int? := {
 	items = items_index(type, m, records)
 	if items == ø then ø else added_type(m, open_type([list_base(m)], struct_type([LIST_COUNT_FIELD, field_type(nullable(items), MUTABLE)])))
 }
-list_base(m: Module) as int := added_type(m, open_type([], struct_type([LIST_COUNT_FIELD])))
+list_base(m: WasmModule) as int := added_type(m, open_type([], struct_type([LIST_COUNT_FIELD])))
 LIST_COUNT_FIELD = field_type(I32, MUTABLE)
 LIST_COUNT_AT = 0
 LIST_ITEMS_AT = 1
 # the GC array of a list's items, ø for a type that is no list
-items_index(type: Node, m: Module, records: Records) as int? := {
+items_index(type: Node, m: WasmModule, records: Records) as int? := {
 	item = layout_of(item_type(type) ?? return ø, m, records) ?? return ø
 	added_type(m, array_type(field_type(item, MUTABLE)))
 }
 # The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
 # its cases, its tag first; a case with fields extends it with them.
-struct_of(record: Node, m: Module, records: Records) as int := {
+struct_of(record: Node, m: WasmModule, records: Records) as int := {
 	fields = field_layouts(fields_of(record), m, records)
 	if cases_of(record) is empty then added_type(m, struct_type(fields)) else added_type(m, open_type([enum_base(m)], struct_type([TAG_FIELD] + fields)))
 }
 # the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
-enum_base(m: Module) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
-tagged(m: Module) as list<int> := instruction(STRUCT_GET, [enum_base(m), 0])
-field_layouts(fields: list<Node>, m: Module, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
-case_struct_of(record: Node, case: Node, m: Module, records: Records) as int := {
+enum_base(m: WasmModule) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
+tagged(m: WasmModule) as list<int> := instruction(STRUCT_GET, [enum_base(m), 0])
+field_layouts(fields: list<Node>, m: WasmModule, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
+case_struct_of(record: Node, case: Node, m: WasmModule, records: Records) as int := {
 	base = struct_of(record, m, records)
 	fields = field_layouts(fields_of(record) + case_fields(case), m, records)
 	added_type(m, open_type([base], struct_type([TAG_FIELD] + fields)))
 }
 
 # a text's bytes kept in a passive segment, copied into a new array where the program meets it
-text_literal(t: text, m: Module) as Code := {
+text_literal(t: text, m: WasmModule) as Code := {
 	type = text_type(m)
 	Code(nullable(type), i32_const(0) + i32_const(#t.bytes) + instruction(ARRAY_NEW_DATA, [type, added_text(m, t.bytes)]))
 }

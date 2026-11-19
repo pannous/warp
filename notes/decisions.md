@@ -238,3 +238,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - module-clash (user, 2026-11-19): two used modules defining one word: different parameter types are overloads; the same parameter types are a loud clash naming both places, unless both definitions are identical (wiki/use.md "which word a name means").
 - atom-into-node (user, 2026-11-19): a plain atom given where a Node is wanted becomes its case: `n: Node = 'a'` is Char('a'), likewise Number, Text, in arguments, assignments and branch arms.
 - operator-todos (2026-11-19, preload TODOs): Other(sign) payload parked; compound assignment for all operators is done (compound_assignment).
+- enum-case-unambiguous (user, 2026-11-19, card enum-case-shadowing): a bare enum case name means the case only where nothing else of that name is in scope or the expected type is the enum (`k: Kind = Record`); elsewhere `Kind.Record`.
+- atoms-as-code-wiki (user, 2026-11-19): wiki/conversion.md "Atoms as code" approved (two examples, no show(3) line).

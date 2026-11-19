@@ -84,7 +84,7 @@ result_type(name: Node, body: Code, f: Frame) as list<int> := {
 	result
 }
 # the wasm function of a frame and its body, its value the result: its index
-function_of(m: Module, parameters: list<list<int>>, body: Code, f: Frame) as int := {
+function_of(m: WasmModule, parameters: list<list<int>>, body: Code, f: Frame) as int := {
 	results = if valued(body.type) then [body.type] else []
 	added_function(m, parameters, results, f.slots[f.parameter_count ..].map(slot => slot.type), body.instructions)
 }
@@ -103,7 +103,7 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
-passes(given: list<int>, taken: list<int>, m: Module) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
+passes(given: list<int>, taken: list<int>, m: WasmModule) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	if not names_function(called) { refused(form, "the emitter calls functions, not a ${binding_of(called)} yet") }
 	placed_for(p.functions, called) ?? pending_function(p, called) ?? refused(form, "a function that calls itself needs its result type, which the typing stage will give")

@@ -26,10 +26,9 @@
 #   use "path"               a module brought in: no statement, read by the declare stage (core/analyze/declarations.wap)
 #   prim print_text(t)       a built-in's body, only in the preload → Prim(print_text, [t])
 #   break, continue, return  a statement alone → Break(), Continue(), Return(ø)
-#   (If c a b)               a kernel form a rule built (preload/sugar: `if c then a else b`, `unless c { a }`,
-#                            `while c { b }`, `return x`), its parts lowered
-# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered. Not lowered yet, rules for
-# the rule engine: `c ? a : b`, `a if c`.
+#   (If c a b)               a kernel form a rule built (preload/sugar: `if c then a else b`, `c ? a : b`, `a if c`,
+#                            `unless c { a }`, `while c { b }`, `return x`), its parts lowered
+# A form not lowered yet is refused, naming it: never passed on to the emitter unlowered.
 
 use "../analyze/declarations.wap"
 use "../errors.wap"
