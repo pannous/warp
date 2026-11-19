@@ -39,7 +39,7 @@ HOST_FUNCTIONS = {
 host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the module did not import this host function")
 
 # a raise: its text thrown, for the innermost Try around it to catch (kernel-try)
-raising_function(p: Program) as int := added_function(p.m, [nullable(text_type(p.m))], [], [], local_get(0) + instruction(THROW, [RAISED_TAG]))
+raising_function(p: Program) as int := added_function(p.m, [text_layout(p.m)], [], [], local_get(0) + instruction(THROW, [RAISED_TAG]))
 # a raise no Try caught, its text on the stack: written to stderr and a line end, the program ended
 uncaught(p: Program) as list<int> := i64_const(STDERR) + i32_const(1) + instruction(CALL, [helper(p, "text_written", writing_function)]) + i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")])
 # a raise of the text on the stack from inside a helper
@@ -73,7 +73,7 @@ writing_function(p: Program) as int := {
 	written = int_local(1) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")])
 	failed = written + moved + I32_EQZ + I32_OR + IF + VOID_BLOCK + UNREACHABLE + END
 	rest = BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + done + length + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + failed + done + moved + I32_ADD + local_set(4) + instruction(BRANCH, [0]) + END + END
-	added_function(p.m, [nullable(text_type(p.m)), I64, I32], [], [I32, I32], placed + line_end + rest)
+	added_function(p.m, [text_layout(p.m), I64, I32], [], [I32, I32], placed + line_end + rest)
 }
 # The helper of memory_held: the memory grown to hold that many bytes from BYTES_ADDRESS. Its locals: 0 the count, 1
 # the pages short.

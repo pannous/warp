@@ -27,6 +27,8 @@ ENUM_WORD = "enum"
 
 # the GC type of a text: its UTF-8 bytes
 text_type(m: WasmModule) as int := added_type(m, array_type(field_type(I8, MUTABLE)))
+# the wasm type of a text's value: a reference to its bytes, null where it is missing
+text_layout(m: WasmModule) as list<int> := nullable(text_type(m))
 
 # the code of a literal, or ø for a node that is none
 literal(n: Node, m: WasmModule) as Code? := match n {
@@ -47,7 +49,7 @@ layout_of(type_name: Node, m: WasmModule, records: Records) as list<int>? := mat
 		type = fact_of(type_name, NARROWS) ?? type_name
 		name = text(type)
 		record = record_named(records, type)
-		if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then nullable(text_type(m)) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record == ø then ø else nullable(struct_of(record, m, records))
+		if WORD_LAYOUTS.has(name) then WORD_LAYOUTS[name] else if name == "text" then text_layout(m) else if name == LIST_TYPE then nullable(list_base(m)) else if name == ENUM_WORD then nullable(enum_base(m)) else if record == ø then ø else nullable(struct_of(record, m, records))
 	}
 	_ => {
 		index = list_index(type_name, m, records) ?? function_value_index(type_name, m, records) ?? signature_value_index(type_name, m, records) ?? map_index(type_name, m, records)

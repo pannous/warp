@@ -45,10 +45,14 @@ MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 # i32 it gives extended to an int; an operand of another type than it takes is refused
 class WasmOperation { takes: list<list<int>>; gives: list<list<int>>; code: list<int> }
 memory_operations(p: Program) as map<text, WasmOperation> := {
-	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
-	"array_get_u": WasmOperation([nullable(text_type(p.m)), I32], [I32], instruction(ARRAY_GET_U, [text_type(p.m)])),
-	"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
-	"text_made": WasmOperation([I32], [nullable(text_type(p.m))], instruction(ARRAY_NEW_DEFAULT, [text_type(p.m)])), "text_byte_set": WasmOperation([nullable(text_type(p.m)), I32, I32], [], instruction(ARRAY_SET, [text_type(p.m)]))
+	bytes = text_type(p.m)
+	text = text_layout(p.m)
+	{
+		"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
+		"array_get_u": WasmOperation([text, I32], [I32], instruction(ARRAY_GET_U, [bytes])),
+		"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
+		"text_made": WasmOperation([I32], [text], instruction(ARRAY_NEW_DEFAULT, [bytes])), "text_byte_set": WasmOperation([text, I32, I32], [], instruction(ARRAY_SET, [bytes]))
+	}
 }
 # the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
 # i32 it gives extended to the int its definition writes
@@ -118,7 +122,10 @@ joining_function(p: Program) as int := {
 
 # The helper of array_slice(t, from, count): a new text of count bytes of t, from the place `from` counting from 0.
 # Its locals: 0 the text, 1 from, 2 count, 3 the new text. A slice past the end traps.
-slicing_function(p: Program) as int := added_function(p.m, [nullable(text_type(p.m)), I64, I64], [nullable(text_type(p.m))], [nullable(text_type(p.m))], slice_copied(text_type(p.m), local_get(0)) + local_get(3))
+slicing_function(p: Program) as int := {
+	text = text_layout(p.m)
+	added_function(p.m, [text, I64, I64], [text], [text], slice_copied(text_type(p.m), local_get(0)) + local_get(3))
+}
 # a slice's new array of an array type in local 3: `count` (local 2) items copied from the array `source` gives, from
 # the place `from` (local 1), both ints
 slice_copied(array: int, source: list<int>) as list<int> := int_local(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + source + int_local(1) + int_local(2) + instruction(ARRAY_COPY, [array, array])
