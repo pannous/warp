@@ -83,28 +83,28 @@ is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIS
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
 # missing one traps. A value any or a number holds, known of its type, is cast to it first.
 # an any's value as an any, `x!` of an any (an any? is an any), is the any itself, missing raising
-optional_value(form: Node, p: Program) as list := if layout_of(first_operand_type(form), p.m, p.records) == ANYREF then (if given_layout(form, p) == ANYREF then REF_AS_NON_NULL else held_value(fact_of(form, TYPE), form, p)) else if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
+optional_value(form: Node, p: Program) as list<int> := if layout_of(first_operand_type(form), p.m, p.records) == ANYREF then (if given_layout(form, p) == ANYREF then REF_AS_NON_NULL else held_value(fact_of(form, TYPE), form, p)) else if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
 # the array type of a primitive's first operand
 array_operand(form: Node, arguments: list) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
 # a packed array's item at a place counted from 0, an unsigned byte as an int
-unsigned_item(form: Node, array: int, p: Program) as list := {
+unsigned_item(form: Node, array: int, p: Program) as list<int> := {
 	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
 	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
 }
 # the code of a primitive its helper function performs
 helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
-given_layout(form: Node, p: Program) as list := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
+given_layout(form: Node, p: Program) as list<int> := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
 # the helper function of an operation, added by `build` the first time
 helper(p: Program, operation: text, build: function) as int := {
-	for each in p.helpers { if each#1 == operation { return each#2 } }
+	if p.helpers.has(operation) { return p.helpers[operation] }
 	index = build(p)
-	p.helpers += [[operation, index]]
+	p.helpers[operation] = index
 	index
 }
 
 # the body run for each count from 0 while it stays below the limit, the count in that local
-counted(local: int, limit: list, body: list) as list := {
+counted(local: int, limit: list, body: list) as list<int> := {
 	count = instruction(LOCAL_GET, [local])
 	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
 }

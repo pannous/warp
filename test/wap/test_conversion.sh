@@ -26,4 +26,7 @@ check "an instance whose class says nothing counts as yes" "$(ran plain_instance
 print(if Box() then "yes" else "no")')" "yes"
 check "a range where a list is wanted" "$(ran range_as_list 'size(xs: list) := #xs
 print text(size(1 to 3))')" "3"
+check "a text and a number join" "$(ran text_plus_number 'print("a" + 3)
+print("x·" + 12)')" "a3
+x·12"
 exit $((failures > 0))
