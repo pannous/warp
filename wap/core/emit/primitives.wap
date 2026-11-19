@@ -58,7 +58,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	operands = arguments.flat_map(argument => argument.instructions)
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
+	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p).type_index)) }
 	if name == BOXED_VALUE { return Code(given_layout(form, p), operands + instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
 	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
@@ -73,7 +73,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	refused(form, "no primitive of this name")
 }
 # an array's operations given a list work on its items: operation → the list's
-ON_LISTS = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
+ON_LISTS: map<text, text> = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
 # the operation a primitive performs: the one it names, or the list's for an array's operation given a list
 operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
 # the plain value a box holds
