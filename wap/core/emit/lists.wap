@@ -135,9 +135,9 @@ list_layout(type: Node, p: Program) as list := nullable(list_struct(type, p))
 items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
 item_layout(type: Node, p: Program) as list := layout_of(item_type(type), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
 # the count or the items array of the list in a local, or of the one on the stack for ø
-count_in(type: Node, local: int?, p: Program) as list := held_list(local) + instruction(STRUCT_GET, [list_struct(type, p), LIST_COUNT_AT])
-items_in(type: Node, local: int?, p: Program) as list := held_list(local) + instruction(STRUCT_GET, [list_struct(type, p), LIST_ITEMS_AT])
-held_list(local: int?) as list := if local == ø then [] else local_get(local)
+count_in(type: Node, local: int?, p: Program) as list := list_field(type, local, LIST_COUNT_AT, p)
+items_in(type: Node, local: int?, p: Program) as list := list_field(type, local, LIST_ITEMS_AT, p)
+list_field(type: Node, local: int?, at: int, p: Program) as list := (if local == ø then [] else local_get(local)) + instruction(STRUCT_GET, [list_struct(type, p), at])
 # the list in local 0 counted up or down by one
 counted_by(type: Node, step: int, p: Program) as list := local_get(0) + count_in(type, 0, p) + i32_const(step) + I32_ADD + instruction(STRUCT_SET, [list_struct(type, p), LIST_COUNT_AT])
 # a map's struct, a reference to it, the types of its lists of keys and of values, and one of them in the map in local 0
