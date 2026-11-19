@@ -384,6 +384,3 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a
   second mechanism (warp-simplifier measured it, 2026-11-19). Paid off when old warp no longer reads wap's source: Op
   then comes from the table.
-- **wap has no `first`; lookups write item_named** (wap/core/stage.wap): old warp's prelude `first` (xs#1, raising on
-  an empty list) shadows a preload `first` when old warp runs wap's source, so wap writes item_named. Paid off when
-  old warp no longer reads wap's source: a preload `first` giving ø for an empty list.

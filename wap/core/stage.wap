@@ -217,11 +217,6 @@ items_named(index: NameIndex, items: list<T>, name: text, name_of: (T) -> text) 
 	places = if index.places.has(name) then index.places[name] else []
 	places.map(place => if place >= #items then refused(symbol(name), "the list indexed for ${name} shrank: it may only grow or change in place") else if name_of(items[place]) == name then items[place] else refused(symbol(name), "an item indexed under ${name} bears another name now: the list it is indexed in changed other than in place"))
 }
-# the first item of a name, ø when none bears it
-item_named(index: NameIndex, items: list<T>, name: text, name_of: (T) -> text) as T? := {
-	named = items_named(index, items, name, name_of)
-	if named is empty then ø else named#1
-}
 # The Records a program declares, in the order written, found by name through their index; added_records is their
 # only writer, so the index keeps up with the list
 class Records { items: list<Node> = [], names: NameIndex = NameIndex() }

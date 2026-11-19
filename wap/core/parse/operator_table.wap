@@ -147,7 +147,8 @@ compound_assignment(language: Language, spelling: text) as text := {
 
 # the operator of that canonical spelling, ø when there is none
 operator_spelled(language: Language, spelling: text) as Operator? := {
-	item_named(language.operator_names, language.operators, spelling, operator => operator.spelling)
+	found = items_named(language.operator_names, language.operators, spelling, operator => operator.spelling)
+	if found is empty then ø else found#1
 }
 
 # the group an operator spelled so has in that fixity, "" when it has no such fixity
