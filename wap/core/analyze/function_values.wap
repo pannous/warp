@@ -57,7 +57,7 @@ value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: Type
 	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
 	name = declared_name(written_name(definition))
 	given = if is_lambda_key(key, s) then [called] + arguments else arguments
-	call_typed(n, with_fact(with_binding(name, DefinitionKind.Function), DEFINED_AT, name), given, s, f, expected)
+	call_typed(n, with_fact(with_binding(name, DefinitionKind.ProgramFunction), DEFINED_AT, name), given, s, f, expected)
 }
 # A call of a value of a function type, `helpers#1(x)` of a list<(int) -> int>: a call of whichever function it holds,
 # at run time, each argument of the type's parameter type, giving its result type

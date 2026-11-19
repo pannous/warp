@@ -32,8 +32,8 @@ defined_in(statements: list, scope: Scope, depth: int) as list<Definition> := {
 	made
 }
 definitions_made_by(n: Node, scope: Scope, depth: int) as list<Definition> := match n {
-	Define(name, parameters, body) => [Definition(text(declared_name(name)), DefinitionKind.Function, declared_name(name), depth)]
-	Record(name, fields, variants) => [Definition(text(name), DefinitionKind.Record, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), DefinitionKind.Case, case_name(case), depth, text(name), #case_fields(case)))
+	Define(name, parameters, body) => [Definition(text(declared_name(name)), DefinitionKind.ProgramFunction, declared_name(name), depth)]
+	Record(name, fields, variants) => [Definition(text(name), DefinitionKind.Declaration, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), DefinitionKind.EnumCase, case_name(case), depth, text(name), #case_fields(case)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
@@ -73,7 +73,7 @@ outer_variable(name: text, scope: Scope, depth: int) as Definition? := {
 	named = named_in(scope, name)
 	if named is empty { return ø }
 	nearest = named#1
-	if nearest.depth >= PROGRAM_DEPTH and nearest.depth < depth and nearest.kind != DefinitionKind.Function then nearest else ø
+	if nearest.depth >= PROGRAM_DEPTH and nearest.depth < depth and nearest.kind != DefinitionKind.ProgramFunction then nearest else ø
 }
 local_kind(depth: int) as DefinitionKind := if depth == PROGRAM_DEPTH then DefinitionKind.Global else DefinitionKind.Local
 seen_in_function(name: text, scope: Scope, depth: int) as bool := {

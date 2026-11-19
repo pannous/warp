@@ -31,7 +31,7 @@ RESULT_UNKNOWN = "result_unknown"
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
 call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	if is_bound(called, DefinitionKind.Case) { return case_call_typed(n, called, arguments, s, f) }
+	if is_bound(called, DefinitionKind.EnumCase) { return case_call_typed(n, called, arguments, s, f) }
 	if called is symbol and text(called) == TYPE_TEST_WORD and fact_of(called, BINDING) == ø { return type_test_typed(n, arguments, s, f) }
 	if rest_named(n) != ø { refused(n, "a list's items spread, `...xs`, stand only in a list, `[...xs, 4]`") }
 	if holds_value(called) { return value_call_typed(n, called, arguments, s, f, expected) }
@@ -157,7 +157,7 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 definitions_named(name: text, s: TypingState) as list := items_named(s.definition_names, s.definitions, name, definition_name)
 definition_name(definition: Define) as text := text(declared_name(written_name(definition)))
 # a call's function, or a Get that calls one, marked with the function it calls
-calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_binding(called, DefinitionKind.Function), DEFINED_AT, declared_name(chosen.signed))
+calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_binding(called, DefinitionKind.ProgramFunction), DEFINED_AT, declared_name(chosen.signed))
 # a class's maker given one map that none of its definitions takes, `person({name: "Ann"})`: the instance made from it
 # field by field (core/analyze/data.wap instance_from_map); ø for any other call
 made_from_map(n: Node, called: Node, candidates: list, given: list, s: TypingState) as Node? := {

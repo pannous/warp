@@ -25,11 +25,11 @@ every_definition(scope: Scope) as list<Definition> := scope.layers.flat_map(laye
 definitions_meant(name: text, scope: Scope) as list<Definition> := {
 	meant = []
 	for definition in named_in(scope, name) {
-		if definition.kind != DefinitionKind.Record and definition.kind != DefinitionKind.Module {
+		if definition.kind != DefinitionKind.Declaration and definition.kind != DefinitionKind.UsedModule {
 			if not is_function(definition) { return if meant is empty then [definition] else meant }
 			meant = meant + [definition]
 		}
 	}
 	meant
 }
-is_function(definition: Definition) as bool := definition.kind == DefinitionKind.Function or definition.kind == DefinitionKind.Library
+is_function(definition: Definition) as bool := definition.kind == DefinitionKind.ProgramFunction or definition.kind == DefinitionKind.LibraryFunction

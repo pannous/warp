@@ -97,7 +97,7 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 	tested = arguments#2
 	# a shape, `n is Record`, by its pattern (core/analyze/shapes.wap)
 	if narrowed_type(shaped(tested, s)) != ø { return typed_form(shape_test(subject, shaped(tested, s), n, s), s, f, ø) }
-	if is_bound(tested, DefinitionKind.Case) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
+	if is_bound(tested, DefinitionKind.EnumCase) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
 	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	typed = typed_form(subject, s, f, ø)
 	type = value_of(typed, "to test")

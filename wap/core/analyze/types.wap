@@ -304,7 +304,7 @@ called_reads(chosen: TypedFunction, at: Node, s: TypingState, f: TypeFrame) := {
 }
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	if is_bound(n, DefinitionKind.Case) { return case_call_typed(n, n, [], s, f) }
+	if is_bound(n, DefinitionKind.EnumCase) { return case_call_typed(n, n, [], s, f) }
 	if is_bound(n, DefinitionKind.Field) { return typed_form(receiver_field(n), s, f, ø) }
 	if names_function(n) { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
 	type = variable_type(n, s, f)

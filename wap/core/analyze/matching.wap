@@ -162,9 +162,9 @@ pattern_text(pattern: Node) as text := match pattern {
 	_ => text(pattern)
 }
 # a pattern that fits every value: a name that is no case, or _
-fits_any(pattern: Node) as bool := pattern is symbol and not is_bound(pattern, DefinitionKind.Case)
+fits_any(pattern: Node) as bool := pattern is symbol and not is_bound(pattern, DefinitionKind.EnumCase)
 # a case's bare name: as a pattern it fits the case whatever its fields hold
-is_case_name(pattern: Node) as bool := pattern is symbol and is_bound(pattern, DefinitionKind.Case)
+is_case_name(pattern: Node) as bool := pattern is symbol and is_bound(pattern, DefinitionKind.EnumCase)
 pattern_of(arm: Arm) as Node := match arm { Arm(pattern, result) => pattern }
 
 # a case pattern's name, the case of that name in the subject's enum when it has one (two enums may share the name)
