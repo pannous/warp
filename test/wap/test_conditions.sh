@@ -166,4 +166,8 @@ print(text(b) + " " + text([1, ø].contains(ø)))')" "no items
 items
 a text
 no yes"
+check "a shape test narrows an optional value to the shape, as it does a present one" "$(ran optional_shape 'f(n: Node?) as text := if n is Text { match n { Text(value) => value } } else "other"
+print f(Text("a"))
+print f(ø)')" "a
+other"
 exit $((failures > 0))

@@ -72,7 +72,7 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	ending = instructions => Code(typed_layout(form, p), operands + instructions)
 	if INSTRUCTIONS.has(name) { return ending(INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == BOXED_TEST { return ending(heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p).type_index)) }
+	if name == BOXED_TEST { return ending(heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED) ?? refused(form, "this type test reached the emitter without its type"), form, p).type_index)) }
 	if name == BOXED_VALUE { return ending(instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
 	if name == CHECKED_CAST { return finished(ending(cast_called(typed_layout(form, p), text(type_of(form)), form, p))) }
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
