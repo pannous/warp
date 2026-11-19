@@ -37,7 +37,7 @@ arm_typed(arm: Arm, subject: Node, type: Node, s: TypingState, f: TypeFrame, exp
 	Arm(pattern, result) => {
 		tested = pattern_typed(pattern, type, s, f)
 		shape = if fact_of(pattern, SHAPE_OF) == ø then ø else shaped(symbol(text(fact_of(pattern, SHAPE_OF))), s)
-		known = if shape != ø and is_variable(subject) and narrowed_type(shape) != ø then [[place_key(defined_at(subject)), shape]] else []
+		known = if shape != ø and is_variable(subject) and narrowed_type(shape) != ø then [Finding(place_key(defined_at(subject)), 1, shape)] else []
 		given = present_typed(result, known, s, f, expected)
 		typed_like(refitted(Arm(tested, given), arm), given)
 	}
