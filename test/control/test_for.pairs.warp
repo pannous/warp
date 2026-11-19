@@ -16,3 +16,5 @@
 'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; out = []; for x in C(3) { out += [x] }; out'	[3, 2, 1]
 'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; s = 0; for x in C(5) { if x == 4 { continue }; s += x }; s'	11
 'class C{n:int; next() := { if n <= 0 { return ø }; n -= 1; n + 1 }}; c = C(4); s = 0; for x in c { if x == 2 { break }; s += x }; s'	7
+'f(x: int) as int? := if x > 1 then x else ø; ws = []; for x in [1, 2, 3] { w = f(x) ?? continue; ws += [w + 0] }; ws'	[2, 3]
+'ws = []; for x in [3, 1, 2] { w = if x < 2 then break else x; ws += [w] }; ws'	[3]
