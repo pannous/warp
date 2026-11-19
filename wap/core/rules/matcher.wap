@@ -21,7 +21,7 @@ matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match m.test 
 	_ => item_matches(m, grouped_item(n) ?? n, bindings)
 }
 item_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match m.test {
-	Test.Literal => same_atom(m.literal, n)
+	Test.Literal => same_atom(m, n)
 	Test.Repeat => repeat_matches(m.parts#1, [n], bindings)
 	Test.Pair => match n { Key(left, op, right) => op == m.op and matches(m.parts#1, left, bindings) and matches(m.parts#2, right, bindings); _ => no }
 	_ => refused(n, "this matcher tests no single item")
@@ -34,9 +34,10 @@ hole_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := {
 	yes
 }
 
-same_atom(literal: Node, n: Node) as bool := match literal {
-	Symbol(name) => match n { Symbol(other) => canonical_word(other) == canonical_word(name); _ => no }
-	_ => "${literal}" == "${n}"
+# whether code is a literal matcher's atom: a word spelled by any alias of it, anything else written alike
+same_atom(m: Matcher, n: Node) as bool := match m.literal {
+	Symbol(name) => match n { Symbol(other) => canonical_word(other) == m.spelled; _ => no }
+	_ => "${n}" == m.spelled
 }
 canonical_word(spelling: text) as text := aliased(spelling, Fixity.Anywhere)
 
