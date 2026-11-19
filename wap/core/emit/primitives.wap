@@ -56,15 +56,17 @@ TAG_EQUAL = "tag_equal"
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
 	name = operation_of(form)
 	operands = arguments.flat_map(argument => argument.instructions)
-	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
+	# the value the operands and these instructions after them give
+	ending = instructions => Code(given_layout(form, p), operands + instructions)
+	if INSTRUCTIONS.has(name) { return ending(INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
-	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
-	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
-	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
-	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
-	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
-	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
+	if name == BOXED_TEST { return ending(heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
+	if name == CHECKED_CAST { return finished(ending(cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
+	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
+	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
+	if name == LIST_COUNT { return ending(counted_items(p)) }
+	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
+	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
 	if ARRAY_HELPERS.has(name) {
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
