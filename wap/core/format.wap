@@ -62,7 +62,7 @@ call_text(language: Language, call: Node, called: Node, arguments: list) as text
 	if #arguments == 2 and group_of(language, spelling, Fixity.Infix) != "" {
 		left = if spelling == DEFINE_SPELLING then definition_head_text(language, arguments#1) else operand_text(language, arguments#1, call, Side.Left)
 		gap = if group_of(language, spelling, Fixity.Infix) == glue_group then "" else " "
-		if arguments#1 == symbol(OPEN_SIDE) or arguments#2 == symbol(OPEN_SIDE) { return open_text(language, arguments, call, spelling) }
+		if two_sided(language, spelling) and (arguments#1 == symbol(OPEN_SIDE) or arguments#2 == symbol(OPEN_SIDE)) { return open_text(language, arguments, call, spelling) }
 		return left + gap + spelling + gap + operand_text(language, arguments#2, call, Side.Right)
 	}
 	if #arguments == 1 and group_of(language, spelling, Fixity.Prefix) != "" { return spelling + word_gap(spelling) + operand_text(language, arguments#1, call, Side.Right) }
@@ -70,7 +70,7 @@ call_text(language: Language, call: Node, called: Node, arguments: list) as text
 	spelling + "(" + arguments.map(argument => formatted(language, argument)).join(", ") + ")"
 }
 
-# an operator read before or after one operand, its open side written as nothing: `2 ..`, `.. 3`
+# an operator read before or after one operand, its open side written as nothing: `2 ..`, `.. 3`; `x = ø` keeps its ø
 open_text(language: Language, arguments: list, call: Node, spelling: text) as text :=
 	if arguments#1 == symbol(OPEN_SIDE) then spelling + " " + operand_text(language, arguments#2, call, Side.Right) else operand_text(language, arguments#1, call, Side.Left) + " " + spelling
 
