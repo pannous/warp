@@ -10,7 +10,7 @@
 #   operators notation → operated   core/parse/operators.wap, by the table in preload/operators.wap
 #   shape     operated → surface    core/rules/stages.wap, the rules of kernel/forms.wap, preload/sugar/ and the program
 #   declare   operated → declared   core/analyze/declarations.wap, the names the top level defines, as facts
-#   lower     declared → kernel     core/rules/lowering.wap, by hand until the rule engine runs
+#   lower     declared → kernel     core/rules/lowering.wap, the forms no rule writes yet
 #   bind      kernel → bound        core/analyze/scope.wap, what each name refers to, as facts
 #   type      bound → typed         core/analyze/types.wap, each value's type and the function each call means, as facts
 #   typed rules typed → typed       core/rules/typed.wap, rules with holes of value types, typed again after each round

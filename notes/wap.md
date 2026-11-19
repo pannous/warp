@@ -51,17 +51,15 @@ never two joined by an underscore.
 
 ```
 wap/
-  compiler.wap                the entry and the pipeline: the stages in order, nothing else
+  compiler.wap                the entry: the stages in order (core/pipeline.wap), the command line, nothing else
                               warp wap/compiler.wap <program> <module.wasm>
 
   kernel/                     the kernel layer: the emitter's whole input language
     forms.wap                 the kernel forms, each a named pattern of Node
-    primitives.wap            the primitives: name → wasm instruction, conversion, constructor, runtime or host word
-
-  preload/                    the standard language every program gets, whole definitions with their bodies
-    prelude.wap               the built-ins (print …), each a function whose body may be a Prim
 
   core/                       the machinery: mechanisms only, no names of a domain
+    pipeline.wap              one function per step from source to typed program, shared by compiler and census
+    language.wap              the language a program is read in: operator table, rule words, the rules of each stage
     stage.wap                 the one walker every stage runs through; positions and provenance of new nodes
     bindings.wap              the facts binding learns of a name: what it refers to, assignments, captures
     type_notation.wap         types as written: list<int>, int?, (int) -> text, built and taken apart
@@ -69,56 +67,79 @@ wap/
     format.wap                code → canonical warp text (`format`): operators in their notation, spacing spelled out
     paths.wap                 a used file's path beside the file using it, `.` and `..` resolved
 
-    parse/                    text → notation
-      reader.wap              the pure notation reader: atoms, keys, lists, phrases (milestone 1: warp's `parse`)
+    parse/                    text → notation → operated
+      reader.wap              the pure notation reader: atoms, keys, lists, phrases
       lexemes.wap             the reader's state and its tokens
       atoms.wap               pass 1: names, numbers, glyphs, texts with their holes
       layout.wap              pass 1: brackets, separators, indentation
       cascade.wap             pass 2: tokens → notation by the separator cascade
       operators.wap           notation → operated by the table of preload/operators.wap: precedence groups sorted
                               topologically, the minus rule, aliases to canonical words; unrelated mixes refused
+      operator_table.wap      the operator table as the operator stage reads it
+      tokens.wap              a phrase's tokens as the operator stage reads them: what each touches
 
     rules/                    the rule engine
       patterns.wap            a rule's pattern declared and compiled to a Matcher: holes, typed holes, rests, guards
       matcher.wap             running a compiled Matcher against code, its holes bound; and specificity
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
-      stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
-      lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the rule files
+      stages.wap              shape rules (stage 1): rules indexed by head, run over operated code
+      lines.wap               a program's lines as the rules read them: a line led by a rule word
+      typed.wap               typed rules (stage 3): holes of value types, typed again after each round
+      lowering.wap            declared → kernel by hand: phrases, statements, the forms no rule writes yet
 
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
+      modules.wap             the modules a program uses, by file name, as binding sees them
       scope.wap               the one binding analysis: what each name refers to
       names.wap               what a name may mean: the scope's layers, each finding its definitions by name
       variables.wap           which variable each assignment gives a value to, in written order; late reads
-      types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
+      types.wap               bidirectional typing of kernel code; the dispatch over forms
       calls.wap               a call's function chosen among its overloads, typed once per tuple of argument types
       letters.wap             generic letters a call binds; an empty list's unknown item type, settled by a use
+      dispatch.wap            calls on dynamic values: a run-time choice where the type is not known
       conditions.wap          conditions, the narrowing they give their arms, type tests
       matching.wap            match: patterns typed, whether the arms fit every value
+      shapes.wap              shapes as types: an enum's case, `List` of Node, a declared pattern
       fits.wap                how types meet: fitting, sameness, the joined type of two
       data.wap                lists, maps and instances written as data
       function_values.wap     function values and what they capture
 
     emit/                     typed kernel → bytes
       emitter.wap             one case per kernel form; any other node refused; blocks, if, loops, labels
-      functions.wap           definitions waiting for their first call, function values, calls
+      functions.wap           definitions waiting for their first call, calls
+      function_values.wap     Fn: function values, their captures, calls of them
       patterns.wap            Case: arms, pattern tests, a case's own value
       places.wap              a typed form's layout, fields and items reached, variables
       primitives.wap          what each Prim operation emits; a longer one is a helper function of the module
-      closures.wap            Fn: closure conversion
+      host.wap                the primitives that ask the host (WASI): printing, raising, files, the command line
+      lists.wap               growable lists and the maps built on them
+      equality.wap            whether two values of one type are equal, for `==` and a map's key search
       values.wap              the value layout (notes/self_hosting.md "Value layout"), reused as it is
       wasm.wap                the wasm binary format: modules, sections, instructions; knows no warp form
+      opcodes.wap             the format's codes: section ids, value and heap types, opcodes
 
-  preload/                    the standard language every program gets: data and rules, no mechanism
+  preload/                    the standard language every program gets: whole definitions, data and rules
+    prelude.wap               the built-ins (print …), each a function whose body may be a Prim
     operators.wap             the operator table: precedence groups and their relations, operators, aliases
+    nodes.wap                 warp's Node, case for case as core/node.warp declares it, and the words over it
+    lists.wap                 list words over function values: map, filter, contains …
+    texts.wap                 text words over a text's UTF-8 bytes
+    numbers.wap               number words over the prelude's comparisons
+    floats.wap                float, the fast variant of exact real numbers
+    host.wap                  the host machinery the file and command-line words use, hidden from programs
     sugar/                    the rules of the surface spellings wap's own source uses, one file per topic
-      loops.wap               for, until, loop, n times → While
+      calls.wap               x.f(y), x.f → calls and Get
       conditions.wap          unless, a if c, a ? b : c → If
+      data.wap                xs#2 and other reaches → Get
+      definitions.wap         definitions written other ways
+      loops.wap               for, until, loop, n times, break, return → While and Return
+      matching.wap            match x { … } → Case
+      ranges.wap              a to b, a upto b → Range
+      records.wap             class, enum → Record
+      types.wap               list of int, x as text → bracketed types and conversions
 
-  extensions/                 rule files no compiler needs, one per topic, loaded like modules: no hook table
-    units.wap                 3km, 90km/h: a unit multiplied in
-    durations.wap             2 weeks, 3ms
-    …                         one file per topic as the forms arrive (inline html, other languages' spellings …)
+  extensions/                 rule files no compiler needs, one per topic, loaded like modules: no hook table; none yet
+                              (units 3km, durations 2 weeks, inline html … as the forms arrive)
 
 lib/                          the library, warp's own, shared and used as it is
 test/wap/                     wap's outcome tests: a program compiled by wap, run, its output checked
@@ -170,39 +191,19 @@ deletions, nothing rewritten; the handoff names what was trimmed.
 
 ## State
 
-Milestone 1 in progress. Built: compiler.wap, kernel/forms.wap (Call, Block, as patterns), core/parse/reader.wap (warp's
-`parse`), core/rules/lowering.wap (by hand: phrases and statements), core/emit/emitter.wap, core/emit/values.wap (the literals' value layout) and core/emit/wasm.wap (a general
-module builder: GC struct and array types, locals, globals, passive data, instruction encoding); the emitter takes Define, Set, Call and names by their binding facts. `print "Hello"` and several such lines run through wap's own stages; `print` is the
-preload's (wap/preload/prelude.wap), a built-in whose body is the primitive print_text.
+Milestone 1 (Hello) reached 2026-11-17; milestone 2 (wap builds itself, notes/backbone.md "Milestones") in progress.
+Every stage of the pipeline runs (core/pipeline.wap); lowering.wap still writes by hand the forms no rule writes yet
+(stage 2, the signature rules, comes next).
 
-Test: `bash test/wap/test_hello.sh` (WARP names the warp to run with).
-
-Next, in order:
-1. kernel/primitives.wap, the list of primitives, once there are several
-2. core/stage.wap with positions, and core/errors.wap: a refusal names the user's line
-3. Define and Name, then If and While, each with an outcome test
-4. core/rules/ taking over lowering.wap; the first rule files in preload/sugar/ and extensions/
+Tests: `bash test/wap/run.sh` (every test/wap script), `bash test/wap/test_guardrails.sh`.
 
 ## Road to self-build
 
-Measured 2026-11-18 (main 05ae82852f) by scripts/wap-census.warp, which runs the compiler's own stages
-(wap/core/pipeline.wap, the shape rules included) on each of wap's 21 program files (762 top-level statements; the 8
-rule files, kernel/forms.wap and preload/sugar/, pass every stage). Lowering and binding run statement by statement, each
-file bound with the names its `use`d modules define; a statement stops at its first refusal, so each row counts the
-statements a missing piece blocks first. Typing and emitting run on the whole file with its modules, as the compiler
-does: 705 statements lower, 359 bind, no program file types yet.
-
-| blocks first | stage that should handle it | what is missing |
-|---|---|---|
-| 15 of 21 files' typing | preload functions | the runtime's word `line_of`: errors.wap's `refused`, used by every stage, so it stops them all |
-| ~90 statements | kernel + binding | a match arm of a constructor: `List(items, bracket, separator)` (39), `Symbol(name)` (16), `Key(…)` (16), Define, Call, Block, Arm, Get |
-| ~75 | kernel | Record: enums (`Fixity`, `LexemeKind`, `Separator`, `Bracket`) and their cases `a, b`, class fields `name: text`, constructors `Code`, `Block`, `Text`, `Key` |
-| ~40 | preload functions | operators `??` (19), `is` (17), `..`, `===` |
-| ~55 | preload + closures | list words taking a function: `map` (14), `filter` (10), `contains` (10), `has`, `all`, `add`, `flat_map`, `find`, `ends_with` |
-| ~30 | preload functions | the runtime's words: `symbol` (10), `text`, `line_of` (6), `attributes_of`, `positioned`, `is_digit`, `is_alpha`, `args` |
-| 4 files' typing | lowering | the range `0 upto width` (wasm.wap) |
-
-Rerun after a landing: `for f in $(git ls-files "wap/*.wap"); do echo "== $f"; warp scripts/wap-census.warp $f; done`.
+The gauge is scripts/wap-census.warp: it runs the compiler's own stages on every wap file and counts the functions
+typed alone; it also ranks the refusals that block the rest, the first a function meets, by family. On 2026-11-19
+(main 4d51aa08b2) wap types 997 of 1157 functions, 15 of 69 files whole, and no place of its own source is typed any.
+test/wap/ratchet_census.sh holds those numbers: the files typed whole may only rise, the untyped functions (cap 160)
+may only fall. Rerun after each landing: `test/wap/run.sh --wait test/wap/ratchet_census.sh`; the census's ranking names what to build next.
 
 ## Size
 
