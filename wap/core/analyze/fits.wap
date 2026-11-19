@@ -100,6 +100,11 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 # a plain value put where a reference is wanted, an any, a number or an optional, in its box: `prim box(3)`; any
 # other value as it is, a reference already
 boxed(n: Node, wanted: Node) as Node := if is_plain(value_type(n)) then with_type_of(placed_like(Prim(symbol(BOXED_VALUE), [n]), n), wanted) else n
+# the value a box holds, any other value as it is
+unboxed(n: Node) as Node := match n {
+	Prim(name, arguments) => if name == symbol(BOXED_VALUE) then arguments#1 else n
+	_ => n
+}
 # a value as the type wanted has it, where it needs no check: a character where a text is wanted read as its text,
 # `if c then 'a' else ""`, a plain value where a reference is wanted boxed, any other value as it is
 as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
