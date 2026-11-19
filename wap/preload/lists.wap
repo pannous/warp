@@ -72,6 +72,8 @@ find(xs: list<T>, fits: (T) -> bool): T? := {
 	for x in xs { if fits(x) { return x } }
 	ø
 }
+# the first item, ø when there is none: `[1, 2].first` is 1
+first(xs: list<T>): T? := if xs is empty then ø else xs#1
 # each item's list of results, joined: `[1, 2].flat_map(x => [x, x])` is [1, 1, 2, 2]
 flat_map(xs: list<T>, f: (T) -> list<U>): list<U> := {
 	out: list<U> = []
