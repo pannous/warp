@@ -28,6 +28,7 @@ use "function_values.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 
 # the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
@@ -48,10 +49,11 @@ emitted(program: Block) as Module := {
 	m = Module()
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
+	added_tag(m, [nullable(text_type(m))])
 	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
 	f = Frame()
 	body = code(program, p, f)
-	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], dropped(body)), f))
+	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], uncaught_ended(dropped(body), p)), f))
 	exported(m, "memory", MEMORY_KIND, 0)
 	m
 }
@@ -114,6 +116,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => Code()
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
+	Try(body, otherwise) => try_code(form, body, otherwise, p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
@@ -150,9 +153,23 @@ block_code(statements: list, p: Program, f: Frame) as Code := {
 if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code := {
 	checked_condition(form, condition)
 	type = joined(then_part.type, else_part.type)
-	if valued(type) { return Code(type, condition.instructions + IF + type + then_part.instructions + ELSE + else_part.instructions + END) }
-	Code(type, condition.instructions + IF + VOID_BLOCK + dropped(then_part) + ELSE + dropped(else_part) + END)
+	Code(type, condition.instructions + IF + block_type(type) + kept(then_part, type) + ELSE + kept(else_part, type) + END)
 }
+# The body's value, or the otherwise part's when a raise in the body is thrown (kernel-try); the raise's text dropped
+#   block (done)  block (caught: text)  try_table (raise → caught)  body  end  br done  end  drop  otherwise  end
+try_code(form: Node, body: Node, otherwise: Node, p: Program, f: Frame) as Code := {
+	tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
+	instead = arm_code(form, otherwise, p, f)
+	type = joined(tried.type, instead.type)
+	caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
+	Code(type, BLOCK + block_type(type) + caught + DROP + kept(instead, type) + END)
+}
+# the program's code, a raise no Try caught written and the program ended
+uncaught_ended(body: list, p: Program) as list := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + instruction(CALL, [helper(p, "uncaught", uncaught_function)])
+# a structured instruction's type: the value it leaves, or none
+block_type(type: list) as list := if valued(type) then type else VOID_BLOCK
+# a part's code where its choice has the type: its value kept, or dropped when the choice has none
+kept(part: Code, type: list) as list := if valued(type) then part.instructions else dropped(part)
 arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitted(choice, labelled(f, [OTHER_LABEL], () => code(part, p, f)), part, p)
 # a part's value made to fit its choice's type, an If's or a Case's: 3 in `if b then 3 else ø`, an int?, is boxed
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {

@@ -191,4 +191,21 @@ print(h(1))
 print text(f(-1))')" "51
 one
 negative"
+check "a function with no written result joins its returns as an if joins its arms: return ø beside a Node gives a Node?, in one giving nothing it just returns" "$(ran return_join 'found(x: int) := {
+	if x > 2 { return ø }
+	Text("small")
+}
+print(if found(1) then "some" else "none")
+print(if found(5) then "some" else "none")
+class R { error: text = "" }
+fail(r: R, why: text) := {
+	if r.error != "" { return ø }
+	r.error = why
+}
+r = R()
+fail(r, "one")
+fail(r, "two")
+print(r.error)')" "some
+none
+one"
 exit $((failures > 0))
