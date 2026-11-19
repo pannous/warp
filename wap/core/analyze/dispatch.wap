@@ -94,7 +94,7 @@ tests_of(definition: Node, reads: list, types: list, s: TypingState, at: Node) a
 test_of(read: Node, type: Node, at: Node, s: TypingState) as Node := if narrowed_type(type) != ø then shape_test(read, type, at, s) else with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
 # a call of one of these definitions, chosen among them as any call is
 named_call(word: text, definitions: list, arguments: list, at: Node) as Node := {
-	called = with_fact(with_binding(placed_like(symbol(word), at), DefinitionKind.ProgramFunction), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+	called = with_fact(with_binding(placed_like(symbol(word), at), DefinitionKind.Function), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 	placed_like(Call(called, arguments), at)
 }
 raised(message: text, at: Node, s: TypingState) as Node := raising(Text(message), at, s)

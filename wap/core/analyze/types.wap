@@ -302,11 +302,22 @@ called_reads(chosen: TypedFunction, at: Node, s: TypingState, f: TypeFrame) := {
 	pending = chosen.late.filter(name => place_key(defined_at(name)) in s.unset)
 	if pending { refused(at, "this call runs code that reads ${pending#1} before the statement that gives it its value") }
 }
+# the case a name names of the enum expected, `k: Kind = Box` beside a class Box; ø where no enum is expected or it
+# has no case of that name
+expected_case(n: Node, expected: Node?, s: TypingState) as Node? := {
+	enum = base_or_self(expected) ?? return ø
+	record = record_named(s.records, enum) ?? return ø
+	if cases_of(record).any(case => text(case_name(case)) == text(n)) then case_bound(n, enum, s) else ø
+}
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	if is_bound(n, DefinitionKind.EnumCase) { return case_call_typed(n, n, [], s, f) }
+	if is_bound(n, DefinitionKind.Case) { return case_call_typed(n, n, [], s, f) }
 	if is_bound(n, DefinitionKind.Field) { return typed_form(receiver_field(n), s, f, ø) }
-	if names_function(n) { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
+	if names_function(n) {
+		case = expected_case(n, expected, s)
+		if case != ø { return case_call_typed(case, case, [], s, f) }
+		return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n)
+	}
 	type = variable_type(n, s, f)
 	# a global a function reads before the statement that gives it its value is read when the function is called
 	# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
