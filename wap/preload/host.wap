@@ -44,7 +44,7 @@ fd_close(file: int): int := prim fd_close(file)
 # the memory's bytes from an address, as a text
 memory_text(at: int, count: int): text := {
 	t = text_made(count)
-	for place in 0 upto count { set_text_byte(t, place, memory_byte(at + place)) }
+	for offset in 0 upto count { set_text_byte(t, offset, memory_byte(at + offset)) }
 	t
 }
 # the memory's bytes from an address up to the first zero, as a text
