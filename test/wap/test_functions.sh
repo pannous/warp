@@ -214,4 +214,30 @@ print text(try f(-1) else 0)
 print text(try f(5) else 0)')" "7
 0
 5"
+check "a refused function ends only itself: its siblings are typed anyway, each caller is refused naming it, all said together" "$(ran refused_alone 'bad(x: int) as int := x + "a"
+worse(x: int) as int := bad(x) + 1
+also(x: int) as text := 3
+good(x: int) as int := x * 2
+print(text(good(21)))' | grep -o 'line [0-9]*:\|calls bad' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: "
+check "a program statement wap refuses still lets the functions beside it be typed: all refusals said together" "$(ran refused_beside 'bad(x: int) as int := x + "a"
+worse(x: int) as int := bad(x) + 1
+also(x: int) as text := 3
+print(text(worse(21)))' | grep -o 'line [0-9]*:\|calls [a-z]*' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: line 4: calls worse "
+check "try's handler takes the caught Error, its message the raised text, and runs in the function around it: its return returns from that function" "$(ran try_catch 'print(try { raise "boom" } catch e { e.message })
+print(text(try { raise "y" } catch { 3 }))
+safe(t: text) as int := {
+	n = try { if t == "bad" { raise "no" }; 5 } catch e { return 0 }
+	n + 1
+}
+print(text(safe("ok")))
+print(text(safe("bad")))')" "boom
+3
+6
+0"
+check "an empty catch inside a block drops the error and goes on, as an empty then part does" "$(ran empty_catch 'f(x: int) := if x < 0 then raise("neg") else x
+g(c: bool) := { if c { try f(-1) catch e { } }; print "went on" }
+g(yes)
+if no { }
+print "done"')" "went on
+done"
 exit $((failures > 0))

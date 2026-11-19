@@ -90,7 +90,7 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 # argument of a text parameter
 text_read(n: Node, wanted: Node?, s: TypingState) as Node := if wanted != ø and conversion(value_type(n), wanted, s) == Conversion.Read then as_text(n, s) else n
 # a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
-bare_fit(given: Node, wanted: Node, records: list) as bool := {
+bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 	if wanted == symbol(LIST_TYPE) { return item_type(given) != ø }
 	if wanted == symbol(FUNCTION_WORD) { return function_value_parts(given) != ø }
 	wanted == symbol(ENUM_TYPE) and record_named(records, given) != ø and not cases_of(record_named(records, given)) is empty
