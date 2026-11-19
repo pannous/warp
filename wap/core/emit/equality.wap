@@ -36,9 +36,9 @@ equality(type: list, p: Program) as list := {
 # takes its place before its code is written, so its code may call it again
 class Compared { locals: list; code: list }
 parts_compared(p: Program, key: text, layout: list, compared: function) as list := {
-	for each in p.helpers { if each#1 == key { return instruction(CALL, [each#2]) } }
+	if p.helpers.has(key) { return instruction(CALL, [p.helpers[key]]) }
 	index = reserved_function(p.m, [layout, layout], [I32])
-	p.helpers += [[key, index]]
+	p.helpers[key] = index
 	made = compared()
 	bodied(p.m, index, made.locals, made.code + i32_const(1))
 	instruction(CALL, [index])
