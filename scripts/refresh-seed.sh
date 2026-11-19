@@ -32,6 +32,12 @@ export WARP_WINDOW=0
 tree_options=(--lib "$tree/lib" --no-hints)
 scratch=$(mktemp -d "${TMPDIR:-/tmp}/refresh-seed.XXXXXX") || exit 2
 trap 'rm -rf "$scratch"' EXIT
+# a failed stage's log outlives the scratch folder, which the exit removes: kept_log <log> is the kept copy's path
+KEPT_LOGS=$HOME/Library/Logs/warp/refresh-seed
+kept_log() {
+	local kept=$KEPT_LOGS/$(date +%Y-%m-%d-%H%M)-$(basename "$1")
+	mkdir -p "$KEPT_LOGS" && cp "$1" "$kept" && echo "$kept"
+}
 # stage <compiler> <output>: `warp rebuild pure` with <compiler> as the seed, the one thing a seed is asked to do (a seed
 # older than the harness may lack its newer commands: the seed of 14:52 traps in `warp self build` since the build
 # moved into compiler.warp, 2026-10-28). It leaves the tree's lib/ compilers those of the last stage's rebuild.
@@ -57,7 +63,7 @@ stage() {
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
   # the line's messages (stderr) go with the output: the cpu file holds only time's line
   { time (WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" "${tree_options[@]}" --seed "$1" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
-    [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed" >&2; exit 1; }
+    [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed, its log kept in $(kept_log "$scratch/rebuild.log")" >&2; exit 1; }
   cp "$built" "$2"
   local seconds instructions
   seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
