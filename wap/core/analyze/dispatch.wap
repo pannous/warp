@@ -94,7 +94,7 @@ tested_reads(definition: Function, reads: list, types: list, s: TypingState) as 
 	places = tested_places(definition, types, s)
 	(1 to #reads).map(at => if at in places then with_type_of(reads#at, definition.parameters#at) else reads#at)
 }
-tests_of(definition: Function, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, definition.parameters#place, at, s))
+tests_of(definition: Function, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, definition.parameters#place ?? refused(at, "a tested parameter has its type"), at, s))
 # whether an any's value is of the type, `x is int`, or a value of a shape (core/analyze/shapes.wap)
 test_of(read: Node, type: Node, at: Node, s: TypingState) as Node := if narrowed_type(type) != ø then shape_test(read, type, at, s) else with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
 # a call of one of these definitions, chosen among them as any call is
