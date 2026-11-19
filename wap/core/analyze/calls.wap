@@ -222,7 +222,7 @@ fewest_conversions(definitions: list<Function>, given: list, s: TypingState) as 
 }
 conversions_taken(definition: Function, given: list, s: TypingState) as int := {
 	types = definition.parameters
-	#(1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s))
+	#((1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s)))
 }
 # whether a definition takes these arguments, each one fitting its parameter
 # (a parameter typed by generic letters takes an argument whose type binds them alike, and one of a function type a
