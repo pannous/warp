@@ -1143,13 +1143,13 @@ def interned_symbol(body: Body, word: text) as TypedCode {
 	index = relocatable(relocated.globals, declared_global("symbol·" + word, "node")#1)
 	kept_once("symbol·" + word, index, () => runtime_call("symbol_node", [text_value_of(word)]).code)
 }
-# `key·node(a, "+", b)` of an operator written out: its code, found at the first run and kept in the global `op·+`
+# `key·node(a, "+", b)` of an operator written out, or a key of quoted data (extensions/quotes.warp): its code, found at the first run and kept in the global `op·+`
 # (its code + 1, 0 until found), so a key built is no scan of the spellings (runtime nodes.warp operator_code)
-def coded_key(body: Body, left: Node, spelling: text, right: Node) as TypedCode {
+def coded_key(left: TypedCode, spelling: text, right: TypedCode) as TypedCode {
 	index = relocatable(relocated.globals, declared_global("op·" + spelling, ValueKind.Int)#1)
 	found = runtime_call("operator_code", [text_value_of(spelling)]).code + [op.i64_const, 1, op.i64_add, op.global_set] + index
 	code = [op.global_get] + index + [op.i64_eqz, op.if, no_value] + found + [op.end, op.global_get] + index + [op.i64_const, 1, op.i64_sub]
-	runtime_call("coded_key", [as_node(expression_code(body, left)), TypedCode(ValueKind.Int, code), as_node(expression_code(body, right))])
+	runtime_call("coded_key", [left, TypedCode(ValueKind.Int, code), right])
 }
 # a value made once and kept in a global, an interned symbol, an enum's case or the classes an instance test takes: each such global's one function
 # `kept·<global>` makes it at its first call (until then the global holds a node of another kind) and gives it, so a
@@ -1304,7 +1304,7 @@ def group_expression(body: Body, n: Node) as TypedCode {
 		# a late word, made once the module's classes are known (an extension's dispatcher asking a foreign instance)
 		if word in late_words { return intrinsic_of(body, word, n[1..].map(x => as_node(expression_code(body, x)))) }
 		if word == "symbol_node" and #n == 2 and n#2 is text { return interned_symbol(body, n#2) }
-		if word == "key_node" and #n == 4 and (n#3 is text or n#3 is codepoint) { return coded_key(body, n#2, text(n#3), n#4) }
+		if word == "key_node" and #n == 4 and (n#3 is text or n#3 is codepoint) { return coded_key(as_node(expression_code(body, n#2)), text(n#3), as_node(expression_code(body, n#4))) }
 		# `x as Angle`: the number held unboxed as its type's number, an exact 0.5 as the float an Angle is, with its
 		# mark, carried statically (decision marks-unboxed-first)
 		if word == "marked_int" and #n == 3 and n#3 is int {
