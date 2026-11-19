@@ -31,5 +31,6 @@ same-shape wap/core/format.wap 1
 same-shape wap/core/parse/atoms.wap 1
 same-shape wap/core/parse/operators.wap 2
 same-shape wap/core/rules/lines.wap 2
-same-shape wap/core/stage.wap 5
+same-shape wap/core/stage.wap 4
+same-shape wap/core/type_notation.wap 1
 same-shape wap/preload/nodes.wap 1
