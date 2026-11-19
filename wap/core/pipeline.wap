@@ -64,16 +64,15 @@ prepared(language: Language, module: Module, modules: list<Module>, preload: Nod
 modules_of_uses(module: Module, modules: list<Module>) as list<Module> := module.uses.map(file => module_of(file, modules))
 # the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
+# the statements of the modules in their order, each prepared, as one block
+modules_prepared(language: Language, modules: list<Module>, preload: Node) as Block := Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
 # the preload's code with the modules it uses, whose words only the preload sees
-library_code_of(language: Language, preload: Node) as Block := {
-	modules = used_modules(language, preload) + [module_declared(preload)]
-	Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
-}
+library_code_of(language: Language, preload: Node) as Block := modules_prepared(language, used_modules(language, preload) + [module_declared(preload)], preload)
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
 # functions are there for any caller; typed, then rewritten by the typed rules
 typed_file(language: Language, file: text, preload: Node) as Block := {
 	modules = declared_modules(language, file)
-	whole = Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
+	whole = modules_prepared(language, modules, preload)
 	library_code = library_code_of(language, preload)
 	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
 }
