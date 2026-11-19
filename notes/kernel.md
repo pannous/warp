@@ -74,6 +74,7 @@ Three details:
 | Block | `statements`, its own scope | `{…}`, `(a; b)`, indented lines |
 | While | `cond body` | `while`, `until`, `for`, `n times`, `loop` |
 | Break, Continue, Return | none, none, `value` | the same words |
+| Variable | `name kind`, which variable a name means in its block: `local`, a new one here, or `global`, the program's; a statement alone, or an assignment's place | `global x`, `let x = 1` |
 | Record | `name fields variants`, the one form that declares a type (user-approved 2026-11-17) | `class`, `enum`, `type X = A \| B` |
 | Case | `subject arms` | `match`, `x is T` |
 | Try | `body handler`, the handler a Fn of the caught Error; `raise` throws one wasm exception tag, Try is a try_table catching it into the handler (user-approved 2026-11-19) | `try … catch`, `try x else y`, `except` |
