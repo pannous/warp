@@ -87,6 +87,7 @@ wap/
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
       scope.wap               the one binding analysis: what each name refers to
+      names.wap               what a name may mean: the scope's layers, each finding its definitions by name
       variables.wap           which variable each assignment gives a value to, in written order; late reads
       types.wap               bidirectional typing of kernel code; overloads chosen by parameter or return type
       calls.wap               a call's function chosen among its overloads, typed once per tuple of argument types
