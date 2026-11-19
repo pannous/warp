@@ -205,7 +205,8 @@ while_code(form: Node, condition: Node, body: Node, p: Program, f: Frame) as Cod
 return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	if not f.function { refused(form, "a return leaves a function; the program has none to leave") }
 	given = if value is Empty and not valued(f.signed) then Code() else signed_fit(code(value, p, f), value, f, p)
-	f.returns += [given.type]
+	# a value that never finishes, `return refused(n, …)`, gives nothing back
+	if given.type != NEVER { f.returns += [given.type] }
 	Code(NEVER, given.instructions + RETURN)
 }
 

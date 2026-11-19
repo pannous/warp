@@ -254,4 +254,13 @@ first_name(items: list<T>, name_of: (T) -> text) as text := name_of(items#1)
 pair_name(pair: Pair) as text := "a pair"
 items: list<Node> = [Pair(Text("a"), Number(1))]
 print first_name(items, pair_name)')" "a pair"
+check "a return of a call that never finishes gives nothing back, beside the function's own values" "$(ran return_raising 'refusing(n: int) := raise "no ${n}"
+doubled(n: int) as int := {
+	if n < 0 { return refusing(n) }
+	n * 2
+}
+print text(doubled(8))')" "16"
+check "a function value giving a shape fits where one giving its type is wanted" "$(ran shape_result 'pattern Pair = (Pair $left: Node $right: Node)
+applied(n: Node, rewrite: (Node) -> Node) as Node := rewrite(n)
+print text(applied(Text("a"), whole => Pair(whole, Number(1))))')" "(Pair \"a\" 1)"
 exit $((failures > 0))
