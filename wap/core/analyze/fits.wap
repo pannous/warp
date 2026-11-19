@@ -64,8 +64,10 @@ fits_type(n: Node, wanted: Node) as bool := {
 }
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? fact_of(fact_of(n, DEFINED_AT) ?? return ø, SIGNATURE)
 same_types(these: list<Node>, those: list<Node>) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
+# a field's type, which every field writes
+field_type(field: Node) as Node := declared_type(field) ?? refused(field, "a field has a type")
 # a value given to a field as the field's type has it, refused when it cannot get there; value is the code that gave it
-field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, declared_type(field) ?? refused(field, "a field has a type"), s, value, "the field holds a")
+field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, field_type(field), s, value, "the field holds a")
 # What `x as T` does where nothing is written (wiki/conversion.md "Fitting" and "Repacking"): checked is the cast,
 # every other way repacks; written, `x as T` is the maker T(x) ("Making").
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
