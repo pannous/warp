@@ -58,7 +58,9 @@ operator_code(written: text) as int := {
 # floor division's other spelling as its table's (node_cases.warp other_spellings)
 canonical_operator(spelled: text) as text := if text_order(spelled, "/!") == 0 then "÷" else if text_order(spelled, "/!=") == 0 then "÷=" else spelled
 # `key(1, "⊕", 2)`: a key of any operator, its spelling kept
-key_node(left: Node, operator: Node, right: Node) as Node := keyed(operator_code(node_text(operator)) * KindUnit.Info + Kind.Key, left, right)
+key_node(left: Node, operator: Node, right: Node) as Node := coded_key(left, operator_code(node_text(operator)), right)
+# a key of an operator's code, an operator written out found once (emitter.warp coded_key)
+coded_key(left: Node, code: int, right: Node) as Node := keyed(code * KindUnit.Info + Kind.Key, left, right)
 # the case of a node part's code among the cases by code, an operator past them (Op.Other) its own spelling
 coded_case(cases: list, code: int, n: Node) as any := if code < #cases then cases#(code + 1) else key_operator(n)
 # `as_code(data e)`: e marked as code, of the type code; the kind field without the code mark:
