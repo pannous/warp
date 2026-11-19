@@ -71,7 +71,7 @@ left_by(language: Language, statement: Node) as list? := match statement {
 	_ => ø
 }
 
-declaration_taken(language: Language, called: text, arguments: list) as list? := {
+declaration_taken(language: Language, called: text, arguments: list) as list<Node>? := {
 	if #arguments != 2 { return ø }
 	words = phrase_items(arguments#1)
 	if #words < 2 or not (words#1 is symbol) { return ø }
@@ -265,7 +265,7 @@ rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 	while steps is not empty {
 		fired[0] = yes
 		if steps#1 is Empty { return steps#1 }
-		current = staged(current, code => steps#1)
+		current = replaced(current, steps#1)
 		steps = rule_applied(language, rules, current)
 	}
 	current

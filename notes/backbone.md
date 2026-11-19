@@ -416,3 +416,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
   and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
   off when wap compiles itself: that branch lands.
+- **stage.wap's `replaced` is `staged`'s Node form, named apart** (wap/core/stage.wap): old warp cannot tell a Node
+  parameter from a function-typed one, so `staged(n, built: Node)` beside `staged(n, rewrite: (Node) -> Node)` is
+  refused. Paid off when old warp retires: one overloaded `staged`.
+- **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
+  `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
+  defaults_given passes the ø on unchecked. Paid off when old warp retires: a missing default is refused there.
