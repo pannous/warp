@@ -139,7 +139,7 @@ precedence_below = ["has", "precedence", "below"]
 
 aliases = [
 	# symbols
-	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
+	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"), Alias("⦼", "rem"),
 	Alias("‐", "-"), Alias("‑", "-"), Alias("‒", "-"), Alias("–", "-"), Alias("—", "-"), Alias("―", "-"),
 	Alias("≤", "<="), Alias("≥", ">="), Alias("≠", "!="),
 	Alias("...", "to", Fixity.Infix), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),
