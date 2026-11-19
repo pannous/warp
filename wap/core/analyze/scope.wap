@@ -24,6 +24,7 @@ use "../../kernel/forms.wap"
 use "../rules/patterns.wap"
 use "modules.wap"
 use "names.wap"
+use "declarations.wap"
 
 # depth of the program's own statements: names defined there are globals and top-level functions
 PROGRAM_DEPTH = 0
@@ -34,12 +35,13 @@ PRELOAD_DEPTH = -2
 
 # the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
 # two modules defining one name are refused, used or not
-bound_program(program: Block, preload: list, modules: list) as Block := {
-	clashes_refused(modules)
-	late_reads_checked(bound(program, scope_around(preload, modules), PROGRAM_DEPTH))
+bound_program(program: Block, preload: list, modules: list<Module>) as Block := {
+	codes = codes_of(modules)
+	clashes_refused(codes)
+	late_reads_checked(bound(program, scope_around(preload, codes), PROGRAM_DEPTH))
 }
 # the words around a program: the modules it uses, then the preload's, outermost
-scope_around(preload: list, modules: list) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
+scope_around(preload: list, modules: list<Node>) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
 # the preload's words, outermost
 preload_scope(preload: list) as list<Definition> := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
