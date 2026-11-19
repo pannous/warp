@@ -78,7 +78,7 @@ typing_joined(modules: list<Module>) := {
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
 bound_alone(module: Module, modules: list<Module>) as list := {
-	words = scope_around(library_around(module.code, preload), modules_of_uses(module, modules).map(used => used.code))
+	words = scope_around(library_around(module.code, preload), codes_of(modules_of_uses(module, modules)))
 	statements = statements_in(lowered_program(language, module.code))
 	bound_each(statements, within(words, defined_in(statements, words, PROGRAM_DEPTH)), no)
 }
@@ -173,7 +173,7 @@ declaration_word(declaration: Node) as text := match declaration {
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return modules_scope(modules_of_uses(modules#(#modules), modules).map(module => module.code))
+		return modules_scope(codes_of(modules_of_uses(modules#(#modules), modules)))
 	} catch e { report("declare", e.message) }
 	[]
 }

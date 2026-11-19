@@ -36,7 +36,7 @@ PRELOAD_DEPTH = -2
 # the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
 # two modules defining one name are refused, used or not
 bound_program(program: Block, preload: list, modules: list<Module>) as Block := {
-	codes = modules.map(module => module.code)
+	codes = codes_of(modules)
 	clashes_refused(codes)
 	late_reads_checked(bound(program, scope_around(preload, codes), PROGRAM_DEPTH))
 }
