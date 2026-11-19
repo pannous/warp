@@ -59,7 +59,7 @@ layout_of(type_name: Node, m: Module, records: Records) as list<int>? := match t
 # for a type that is no map
 map_index(type: Node, m: Module, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
 # a map type's key type and value type: its keys' array is field 0, its values' field 1
-map_parts(type: Node) as list := [key_type(type), held_type(type)]
+map_parts(type: Node) as list<Node> := [key_type(type), held_type(type)].map(part => part ?? refused(type, "a map type names its key and value types, `map<text, int>`"))
 MAP_KEYS = 0
 MAP_VALUES = 1
 
