@@ -128,7 +128,26 @@ typed_whole(file: text) as Block := {
 	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
 }
 
-report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
+report(stage: text, message: text) := print "${stage}\t" + (message + use_missing(message)).replace("\n", " ")
+# A name nothing in scope defines, though a module the census read declares it: a missing `use`, which old warp's
+# transitive use hides from the suite; the refusal names the module (the name is what the refusal ends with)
+NOTHING_DEFINES = "nothing defines this name"
+use_missing(message: text) as text := {
+	if not message.contains(NOTHING_DEFINES) { return "" }
+	file = defining_file(message.split(": ").last)
+	if file == "" then "" else "; it is defined in ${file}, which this file does not use"
+}
+defining_file(name: text) as text := {
+	for key in shared.declared.keys {
+		if declarations_of(shared.declared[key]).any(declaration => declared_word(declaration) == name) { return key }
+	}
+	""
+}
+declared_word(declaration: Node) as text := match declaration {
+	Key(name, op, signature) => text(name)
+	Record(name, fields, variants) => text(name)
+	_ => ""
+}
 
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {

@@ -54,7 +54,7 @@ ARROW = "->"
 
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
 class TypingState {
-	definitions: list = []
+	definitions: list<Node> = []
 	# the definitions' places by name, for definitions_named, and by the key of the place each is written at, for
 	# definition_keyed (core/analyze/calls.wap)
 	definition_names: NameIndex = NameIndex()
