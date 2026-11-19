@@ -50,7 +50,7 @@ instance_code(form: Node, record: Node, items: list<Node>, p: Program, f: Frame)
 # the instructions of a value given to a field, made to fit the field's type
 field_filled(field: Node, value: Node, p: Program, f: Frame) as list<int> := {
 	given = code(value, p, f)
-	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p).instructions
+	fitted(given, known_layout(field_declared(field), p.m, p.records), value, p).instructions
 }
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value; _ => refused(field, NOT_A_FIELD) }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
