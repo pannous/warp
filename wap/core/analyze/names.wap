@@ -3,14 +3,10 @@
 
 use "../stage.wap"
 
-# a class a Block declares, seen by the methods beside it for their receiver's fields; never a name's meaning
-RECORD_KIND = "record"
-# a used module, by its file's name, `a` for "lib/a.wap", which `a.twice` reads one word of; never a name's meaning
-MODULE_KIND = "module"
 # What a name refers to: its kind as seen from the function that defined it, and the defining name itself
 # (owner: a case's enum)
 # a case's owner is its enum, its fields how many values it takes
-class Definition { name: text; kind: text; definer: Node; depth: int; owner: text = ""; fields: int = 0 }
+class Definition { name: text; kind: DefinitionKind; definer: Node; depth: int; owner: text = ""; fields: int = 0 }
 # The definitions a name may mean, layer by layer, innermost first: a block's, a function's parameters …, the
 # program's, then the used modules' and the preload's; each layer finds its definitions of a name through its index
 class Layer { definitions: list<Definition>; index: NameIndex = NameIndex() }
@@ -29,11 +25,11 @@ every_definition(scope: Scope) as list<Definition> := scope.layers.flat_map(laye
 definitions_meant(name: text, scope: Scope) as list<Definition> := {
 	meant = []
 	for definition in named_in(scope, name) {
-		if definition.kind != RECORD_KIND and definition.kind != MODULE_KIND {
+		if definition.kind != DefinitionKind.TypeRecord and definition.kind != DefinitionKind.UsedModule {
 			if not is_function(definition) { return if meant is empty then [definition] else meant }
 			meant = meant + [definition]
 		}
 	}
 	meant
 }
-is_function(definition: Definition) as bool := definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY
+is_function(definition: Definition) as bool := definition.kind == DefinitionKind.ProgramFunction or definition.kind == DefinitionKind.LibraryFunction

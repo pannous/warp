@@ -74,23 +74,22 @@ set_code(form: Node, place: Node, given: Node, p: Program, f: Frame) as Code := 
 # a name's value: a parameter, local, capture or global, or a function's name as a value (an empty struct)
 name_code(name: Node, p: Program, f: Frame) as Code := {
 	if is_case(name) { return case_value_code(name, name, [], p, f) }
-	if binding_of(name) in [BOUND_FUNCTION, BOUND_LIBRARY] { return function_value_code(name, p, f) }
+	if names_function(name) { return function_value_code(name, p, f) }
 	# a global a function reads before the statement that sets it, the function emitted where its value is taken: the
 	# global made here, its statement setting it later
-	held = variable_of(name, p, f) ?? (if binding_of(name) == BOUND_GLOBAL then added_variable(name, layout(name, p), p, f) else refused(name, "this name is read before any value is given to it"))
+	held = variable_of(name, p, f) ?? (if is_bound(name, DefinitionKind.Global) then added_variable(name, layout(name, p), p, f) else refused(name, "this name is read before any value is given to it"))
 	Code(held.type, fetched(held))
 }
 
 # The variable a bound name refers to, ø while nothing has given it a value: a local or parameter lives in the
 # frame, a global in the module
 variable_of(name: Node, p: Program, f: Frame) as Placed? := {
-	binding = binding_of(name)
-	if binding in FRAME_BINDINGS { return placed_for(f.slots, name) }
-	if binding == BOUND_GLOBAL { return placed_for(p.globals, name) }
-	refused(name, "the emitter reads and sets parameters, locals and globals, not a ${binding} yet")
+	if FRAME_BINDINGS.any(kind => is_bound(name, kind)) { return placed_for(f.slots, name) }
+	if is_bound(name, DefinitionKind.Global) { return placed_for(p.globals, name) }
+	refused(name, "the emitter reads and sets parameters, locals and globals, not a ${binding_of(name)} yet")
 }
 added_variable(name: Node, type: list<int>, p: Program, f: Frame) as Placed := {
-	if binding_of(name) == BOUND_GLOBAL {
+	if is_bound(name, DefinitionKind.Global) {
 		p.globals += [Placed(defining_key(name), added_global(p.m, type, MUTABLE, default_of(type)), type)]
 		return p.globals.last
 	}

@@ -13,11 +13,11 @@ use "../../kernel/forms.wap"
 # `global x` the program's x, which the block then reads and changes as its own
 named_variables(block: Node, scope: Scope, depth: int) as list<Definition> := fact_items(block, VARIABLES).map(naming => named_variable(naming, scope, depth))
 named_variable(naming: Node, scope: Scope, depth: int) as Definition := match naming {
-	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then Definition(text(name), BOUND_GLOBAL, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
+	Key(name, Op.Colon, kind) => if is_kind_word(kind, DefinitionKind.Global) then Definition(text(name), DefinitionKind.Global, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
 	_ => refused(naming, "a variable is named name: kind")
 }
 program_variable(name: Node, scope: Scope) as Definition := {
-	for definition in named_in(scope, text(name)) { if definition.depth <= PROGRAM_DEPTH and definition.kind == BOUND_GLOBAL { return definition } }
+	for definition in named_in(scope, text(name)) { if definition.depth <= PROGRAM_DEPTH and definition.kind == DefinitionKind.Global { return definition } }
 	refused(name, "the program has no variable of this name")
 }
 
@@ -32,8 +32,8 @@ defined_in(statements: list, scope: Scope, depth: int) as list<Definition> := {
 	made
 }
 definitions_made_by(n: Node, scope: Scope, depth: int) as list<Definition> := match n {
-	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
-	Record(name, fields, variants) => [Definition(text(name), RECORD_KIND, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth, text(name), #case_fields(case)))
+	Define(name, parameters, body) => [Definition(text(declared_name(name)), DefinitionKind.ProgramFunction, declared_name(name), depth)]
+	Record(name, fields, variants) => [Definition(text(name), DefinitionKind.TypeRecord, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), DefinitionKind.EnumCase, case_name(case), depth, text(name), #case_fields(case)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []
@@ -52,9 +52,9 @@ definitions_made_by(n: Node, scope: Scope, depth: int) as list<Definition> := ma
 # program or of a function around, defined before it, reads two ways, so the assignment is refused naming both; one
 # defined only later is no variable yet, so the assignment makes its own.
 assigned_variables(set: Node, place: Node, scope: Scope, depth: int) as list<Definition> := {
-	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
+	if not place is symbol or is_kind_word(fact_of(set, ASSIGNS), DefinitionKind.Global) { return [] }
 	name = text(place)
-	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
+	if not is_kind_word(fact_of(set, ASSIGNS), DefinitionKind.Local) {
 		if seen_in_function(name, scope, depth) { return [] }
 		outer = outer_variable(name, scope, depth)
 		if outer != ø and written_before(outer.definer, place) { refused(place, "this could change the ${outer.kind} ${name} (line ${line_of(outer.definer)}:${column_of(outer.definer)}) or make a new variable here: write `let ${name} = …` for a new one" + global_reading(outer, name)) }
@@ -67,15 +67,15 @@ written_before(earlier: Node, later: Node) as bool := {
 	b = position_of(later) ?? return yes
 	a.line < b.line or a.line == b.line and a.column < b.column
 }
-global_reading(outer: Definition, name: text) as text := if outer.kind == BOUND_GLOBAL then ", `global ${name} = …` for the program's" else ""
+global_reading(outer: Definition, name: text) as text := if outer.kind == DefinitionKind.Global then ", `global ${name} = …` for the program's" else ""
 # the variable of that name the program or a function around the one at depth defines, ø when the name is none
 outer_variable(name: text, scope: Scope, depth: int) as Definition? := {
 	named = named_in(scope, name)
 	if named is empty { return ø }
 	nearest = named#1
-	if nearest.depth >= PROGRAM_DEPTH and nearest.depth < depth and nearest.kind != BOUND_FUNCTION then nearest else ø
+	if nearest.depth >= PROGRAM_DEPTH and nearest.depth < depth and nearest.kind != DefinitionKind.ProgramFunction then nearest else ø
 }
-local_kind(depth: int) as text := if depth == PROGRAM_DEPTH then BOUND_GLOBAL else BOUND_LOCAL
+local_kind(depth: int) as DefinitionKind := if depth == PROGRAM_DEPTH then DefinitionKind.Global else DefinitionKind.Local
 seen_in_function(name: text, scope: Scope, depth: int) as bool := {
 	for definition in named_in(scope, name) { if definition.depth == depth { return yes } }
 	no
@@ -109,12 +109,12 @@ global_changes(n: Node, in_function: bool) as list := match n {
 	_ => direct_parts(n).flat_map(part => global_changes(part, in_function))
 }
 # whether a place given a value is a program variable given another value than its first
-is_change(place: Node) as bool := fact_of(place, BINDING) == symbol(BOUND_GLOBAL) and not same_place(place, defined_at(place))
+is_change(place: Node) as bool := is_bound(place, DefinitionKind.Global) and not same_place(place, defined_at(place))
 same_place(a: Node, b: Node) as bool := line_of(a) == line_of(b) and column_of(a) == column_of(b)
 
 # the reads in a function, defined at line, of program variables that change after it, refused unless declared
 late_reads_of(n: Node?, line: int, declared: list, changes: list) := match n {
-	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_GLOBAL) and not declared.contains(name) and changes_after(name, line, changes) { refused(n, "the program changes ${name} after this function is defined: write `global ${name}` in the function, so it reads ${name} as it is when called") }
+	Symbol(name) => if is_bound(n, DefinitionKind.Global) and not declared.contains(name) and changes_after(name, line, changes) { refused(n, "the program changes ${name} after this function is defined: write `global ${name}` in the function, so it reads ${name} as it is when called") }
 	Set(place, value) => late_reads_of(value, line, declared, changes)
 	Block(statements) => for statement in statements { late_reads_of(statement, line, declared + globals_named(n), changes) }
 	Key(left, op, right) => { late_reads_of(left, line, declared, changes); late_reads_of(right, line, declared, changes) }
@@ -127,6 +127,6 @@ changes_after(name: text, line: int, changes: list) as bool := {
 }
 # the names a Block declares the program's, `global x`
 globals_named(block: Node) as list<text> := fact_items(block, VARIABLES).flat_map(naming => match naming {
-	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then [text(name)] else []
+	Key(name, Op.Colon, kind) => if is_kind_word(kind, DefinitionKind.Global) then [text(name)] else []
 	_ => []
 })
