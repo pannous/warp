@@ -94,7 +94,8 @@ The languages, each a set of Node shapes:
   statements bring in (core/analyze/declarations.wap). Each used file is declared once, after the files it uses; a
   program is bound inside the preload's declarations and those of the modules it uses itself, and the modules'
   statements run before its own. Modules may use each other: a cycle is cut where it closes, so of two such modules
-  the one reached first runs last.
+  the one reached first runs last. A used `.wasm` that wap compiled is declared from its wap section, the module's
+  declarations as warp text (wiki/wasm-representation.md; card wasm-module-import).
 - **kernel:** only the forms of kernel/forms.wap, literals (`Number`, `Char`, `Text`, `True`, `False`, `Empty`) and
   `Symbol` as a name. Every phrase decided: no phrase, no operator word, no keyword is left.
 - **bound kernel:** kernel, unchanged, plus two facts on each name: `binding`, what it refers to (`local`,
