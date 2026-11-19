@@ -10,7 +10,7 @@ use "../wap/core/language.wap"
 
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = declarations_of(preload).flat_map(library_words)
+library_scope = preload_scope(declarations_of(preload))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 
@@ -71,7 +71,7 @@ typing_joined(modules: list) := {
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
 bound_alone(module: Node, modules: list) as list := {
-	words = (library_around(module, preload) + used_declarations(module, modules)).flat_map(library_words)
+	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
 	statements = statements_in(lowered_program(language, module))
 	bound_each(statements, defined_in(statements, words, PROGRAM_DEPTH) + words, no)
 }
@@ -87,9 +87,9 @@ bound_each(statements: list, scope: list, shown: bool) as list := {
 refusals_of(key: text) as list<text> := if run.refusals.has(key) then run.refusals[key] else []
 
 # How a file's program fared typed and emitted whole: the first refusal stops both, as in the compiler
-class Whole { typed: bool = no, emitted: bool = no, refusal: text = "" }
-whole_typed(file: text) as Whole := {
-	outcome = Whole()
+class Outcome { typed: bool = no, emitted: bool = no, refusal: text = "", file: text = "", modules: int = 0, ms: int = 0 }
+whole_typed(file: text) as Outcome := {
+	outcome = Outcome()
 	try {
 		code = typed_whole(file)
 		outcome.typed = yes
@@ -103,7 +103,7 @@ whole_typed(file: text) as Whole := {
 # part of it (assumed: the bigger program's other definitions could add an overload that the refused call takes), so
 # the big closures are not typed again once a closure they hold refuses.
 closures: map = {}
-whole_once(file: text) as Whole := {
+whole_once(file: text) as Outcome := {
 	global closures
 	keys = modules_of(file).map(module => file_of(module) ?? "")
 	key = keys.sorted().join(" ")
@@ -113,12 +113,16 @@ whole_once(file: text) as Whole := {
 		if #held < #keys and held.all(each => each in keys) {
 			refused = whole_once(inner)
 			if not refused.typed {
-				closures[key] = Whole(no, no, "as ${inner}, which it holds: " + refused.refusal)
+				closures[key] = Outcome(no, no, "as ${inner}, which it holds: " + refused.refusal)
 				return closures[key]
 			}
 		}
 	}
+	started = wall_clock_ms()
 	closures[key] = whole_typed(file)
+	closures[key].file = file
+	closures[key].modules = #keys
+	closures[key].ms = wall_clock_ms() - started
 	closures[key]
 }
 # the file typed whole with the modules it uses, as typed_file types it
@@ -128,13 +132,41 @@ typed_whole(file: text) as Block := {
 	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
 }
 
-report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
+report(stage: text, message: text) := {
+	global front_refused
+	if stage in FRONT_STAGES { front_refused += 1 }
+	print "${stage}\t" + (message + use_missing(message)).replace("\n", " ")
+}
+# Wap's own source stays something wap reads: a spelling the front cannot read or lower, or a name it cannot bind (a
+# missing use), fails the census, so the source never drifts ahead of the compiler that has to read it; typing's
+# refusals are the road still ahead
+FRONT_STAGES = ["read", "lower", "declare", "bind"]
+front_refused = 0
+# A name nothing in scope defines, though a module the census read declares it: a missing `use`, which old warp's
+# transitive use hides from the suite; the refusal names the module (the name is what the refusal ends with)
+NOTHING_DEFINES = "nothing defines this name"
+use_missing(message: text) as text := {
+	if not message.contains(NOTHING_DEFINES) { return "" }
+	file = defining_file(message.split(": ").last)
+	if file == "" then "" else "; it is defined in ${file}, which this file does not use"
+}
+defining_file(name: text) as text := {
+	for key in shared.declared.keys {
+		if declarations_of(shared.declared[key]).any(declaration => declaration_word(declaration) == name) { return key }
+	}
+	""
+}
+declaration_word(declaration: Node) as text := match declaration {
+	Key(name, op, signature) => text(name)
+	Record(name, fields, variants) => text(name)
+	_ => ""
+}
 
 # the names the modules a file uses define, as the compiler binds them
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return used_declarations(modules#(#modules), modules).flat_map(library_words)
+		return modules_scope(modules_of_uses(modules#(#modules), modules))
 	} catch e { report("declare", e.message) }
 	[]
 }
@@ -159,7 +191,7 @@ probe(file: text) as Tally := {
 	# and emits it when no module of its closure refuses a form (whole_once); a preload file is no program of its own
 	# but every program's library, typed function by function
 	counted = functions_probe(file)
-	outcome = if in_preload(file) then Whole() else whole_once(file)
+	outcome = if in_preload(file) then Outcome() else whole_once(file)
 	if outcome.refusal != "" { report(if outcome.typed then "emit" else "type", outcome.refusal) }
 	whole = if in_preload(file) then "typed: as every program's library, by function" else "typed: ${outcome.typed}, emitted: ${outcome.emitted}"
 	print "ok\t${#statements} statements, ${#lowered_ok} lowered, ${#bound_ok} bound, " + whole
@@ -234,6 +266,8 @@ typing_state(library: list) as TypingState := {
 # The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
 # shared with the state that refused, forget the places past them
 rolled_back(before: TypingState) as TypingState := {
+	# what was refused stays known: a function refused once is refused to every caller after it, as the typing says
+	before.refusals = run.state.refusals
 	truncated(before.definition_names, #before.definitions)
 	truncated(before.definition_keys, #before.definitions)
 	truncated(before.records.names, #before.records.items)
@@ -259,6 +293,9 @@ copied(base: TypingState) as TypingState := {
 	s.unknowns = base.unknowns
 	s.settled = base.settled + []
 	s.deferred = base.deferred + []
+	s.unset = base.unset + []
+	s.dispatchers = base.dispatchers + []
+	s.refusals = base.refusals + []
 	s
 }
 
@@ -267,4 +304,36 @@ for file in args {
 	print "== ${file}"
 	total = added(total, probe(file))
 }
+# The refusals that block the most functions, most first: a root, a refusal of a function's own, with the functions
+# refused for calling it, directly or through one another ("this calls …, which wap refuses", core/analyze/calls.wap)
+CALLS_REFUSED = ", which wap refuses"
+CALLS = "this calls "
+class Family { root: Refusal, name: text, size: int = 1 }
+refused_name(refusal: Refusal) as text := {
+	definition = definition_keyed(refusal.key, run.state)
+	if definition == ø then refusal.key else definition_name(definition)
+}
+called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
+family_of(root: Refusal, refusals: list) as Family := {
+	family = Family(root, refused_name(root))
+	blocked = [family.name]
+	grown = yes
+	while grown {
+		callers = refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked))
+		blocked = blocked + callers.map(refused_name).unique
+		grown = callers is not empty
+	}
+	family.size = #blocked
+	family
+}
+families = run.state.refusals.filter(each => called_refused(each) == "").map(root => family_of(root, run.state.refusals)).sorted(by: family => -family.size)
+# each closure typed and emitted whole, the slowest first: where a faster compiler pays most
+for whole in closures.values.filter(each => each.file != "").sorted(by: each => -each.ms) {
+	print "closure\t${whole.ms} ms\t${whole.file} and the ${whole.modules - 1} modules it reaches, typed: ${whole.typed}"
+}
+for family in families { print "family\t${family.size} blocked by ${family.name}: " + family.root.message.replace("\n", " ") }
 print "total\t${total.whole} of ${total.files} files typed whole, ${total.typed} of ${total.functions} functions typed, ${total.anys} places typed any"
+if front_refused > 0 {
+	print "front\t${front_refused} refusals of reading, lowering or binding wap's own source"
+	raise "wap cannot compile what it is written in: ${front_refused} refusals of reading, lowering or binding its own source"
+}

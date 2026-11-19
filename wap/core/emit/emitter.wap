@@ -77,11 +77,11 @@ primitives_in(n: Node) as list := match n {
 class Program {
 	m: Module
 	# the host functions imported: name → index
-	host: map = {}
-	functions: list = []
-	globals: list = []
+	host: map<text, int> = {}
+	functions: list<Placed> = []
+	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
-	pending: list = []
+	pending: list<Node> = []
 	# the helper functions primitives call, each [operation, index]
 	helpers: list = []
 	# the Records the program declares, which lay out their instances

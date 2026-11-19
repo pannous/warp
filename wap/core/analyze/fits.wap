@@ -26,15 +26,22 @@ joined_of(n: Node, parts: list, s: TypingState) as Node := {
 }
 # the type that holds all of these, ø for none
 joined_all(types: list, s: TypingState) as Node? := if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_settling(a, b, s))
-# the type that holds both: either when they are one, `T?` for a T and ø (or a T?), the wider
-# where one fits the other, else any, the dynamic type: `["a", 1]` is a list<any>; ø when either has none
+# the type that holds both: either when they are one, `T?` for a T and ø (or a T?), the type two shapes of it narrow,
+# the wider where one fits the other, else any, the dynamic type: `["a", 1]` is a list<any>; ø when either has none
 joined_type(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if a == ø or b == ø { return ø }
 	if same_type(a, b) { return a }
 	if a == symbol(EMPTY_TYPE) { return optional_type(b) }
 	if b == symbol(EMPTY_TYPE) { return optional_type(a) }
-	if conversion(b, a, s) in STATIC_CONVERSIONS then a else if conversion(a, b, s) in STATIC_CONVERSIONS then b else symbol(ANY_TYPE)
+	shared = shape_base(a) ?? return wider(a, b, s)
+	if shape_base(b) == ø or not same_type(shared, shape_base(b)) { return wider(a, b, s) }
+	# two shapes of one type join as that type, `Define` and `Fn?` as a Node?
+	if base_of_optional(a) != ø or base_of_optional(b) != ø then optional_type(shared) else shared
 }
+# the type of two where one fits the other: the wider, else any
+wider(a: Node, b: Node, s: TypingState) as Node := if conversion(b, a, s) in STATIC_CONVERSIONS then a else if conversion(a, b, s) in STATIC_CONVERSIONS then b else symbol(ANY_TYPE)
+# the type a shape narrows, `Node` of `Define` or of `Fn?`; ø for any other type
+shape_base(type: Node) as Node? := narrowed_type(base_of_optional(type) ?? type)
 
 # Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
 # `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.
