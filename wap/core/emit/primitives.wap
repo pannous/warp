@@ -36,27 +36,24 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
-# The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
-# instructions after the operands, and the helpers they call, one for each array type
-ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
-ARRAY_HELPERS = {"array_slice": slicing_function}
+HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "array_slice": slicing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 # the lists a map holds, not copied: its keys and its values, an entry the same place in both
 MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
-# The operations on the module's memory and on a text being made, each by the wasm types it takes and gives and its
+# The operations on the module's memory and on a text's bytes, each by the wasm types it takes and gives and its
 # instructions, as a host function's call by HOST_FUNCTIONS: an int given where it takes an i32 is wrapped to one, an
-# i32 it gives extended to an int
+# i32 it gives extended to an int; an operand of another type than it takes is refused
 class WasmOperation { takes: list<list<int>>; gives: list<list<int>>; code: list<int> }
 memory_operations(p: Program) as map<text, WasmOperation> := {
 	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
+	"array_get_u": WasmOperation([nullable(text_type(p.m)), I32], [I32], instruction(ARRAY_GET_U, [text_type(p.m)])),
 	"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
 	"text_made": WasmOperation([I32], [nullable(text_type(p.m))], instruction(ARRAY_NEW_DEFAULT, [text_type(p.m)])), "text_byte_set": WasmOperation([nullable(text_type(p.m)), I32, I32], [], instruction(ARRAY_SET, [text_type(p.m)]))
 }
 # the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
 # i32 it gives extended to the int its definition writes
 wasm_called(form: Node, arguments: list<Code>, operation: WasmOperation, p: Program) as Code := {
-	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else []))
+	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == operation.takes#at then [] else if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else refused(form, "operand ${at} of this primitive is not of the wasm type it takes")))
 	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_U else []))
 }
 
@@ -79,11 +76,6 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	if name == LIST_COUNT { return ending(counted_items(p)) }
 	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
 	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
-	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
-	if ARRAY_HELPERS.has(name) {
-		array = array_operand(form, arguments)
-		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
-	}
 	if HOST_FUNCTIONS.has(name) { return wasm_called(form, arguments, WasmOperation(HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2, instruction(CALL, [host(p, name)])), p) }
 	operations = memory_operations(p)
 	if operations.has(name) { return wasm_called(form, arguments, operations[name], p) }
@@ -96,13 +88,6 @@ first_operand_type(form: Prim) as Node := match form { Prim(operation, given) =>
 # missing one traps. A value any or a number holds, known of its type, is cast to it first.
 # an any's value as an any, `x!` of an any (an any? is an any), is the any itself, missing raising
 optional_value(form: Node, p: Program) as list<int> := if layout_of(first_operand_type(form), p.m, p.records) == ANYREF then (if given_layout(form, p) == ANYREF then REF_AS_NON_NULL else held_value(type_of(form), form, p)) else if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
-# the array type of a primitive's first operand
-array_operand(form: Node, arguments: list<Code>) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
-# a packed array's item at a place counted from 0, an unsigned byte as an int
-unsigned_item(form: Node, array: int, p: Program) as list<int> := {
-	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
-	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
-}
 # the code of a primitive its helper function performs
 helper_called(form: Node, operands: list<int>, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
@@ -121,11 +106,10 @@ counted(local: int, limit: list<int>, body: list<int>) as list<int> := {
 	i32_const(0) + local_set(local) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + local_set(local) + instruction(BRANCH, [0]) + END + END
 }
 
-# The helper of text_joined: a new text of the first's bytes, then the second's
-joining_function(p: Program) as int := arrays_joining_function(p, text_type(p.m))
-# The helper of text_joined, for an array type: a new array of the first's items, then the second's. Its locals: 0 and
-# 1 the arrays, 2 the new one.
-arrays_joining_function(p: Program, type: int) as int := {
+# The helper of text_joined: a new text of the first's bytes, then the second's. Its locals: 0 and 1 the texts, 2 the
+# new one.
+joining_function(p: Program) as int := {
+	type = text_type(p.m)
 	items_in = local => local_get(local) + ARRAY_LEN
 	joined = local_get(2)
 	copy = (at, local) => joined + at + local_get(local) + i32_const(0) + items_in(local) + instruction(ARRAY_COPY, [type, type])
@@ -133,9 +117,9 @@ arrays_joining_function(p: Program, type: int) as int := {
 	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(items_in(0), 1) + joined)
 }
 
-# The helper of array_slice(xs, from, count): a new array of count items of xs, from the place `from` counting from 0.
-# Its locals: 0 the array, 1 from, 2 count, 3 the new array. A slice past the end traps.
-slicing_function(p: Program, type: int) as int := added_function(p.m, [nullable(type), I64, I64], [nullable(type)], [nullable(type)], slice_copied(type, local_get(0)) + local_get(3))
+# The helper of array_slice(t, from, count): a new text of count bytes of t, from the place `from` counting from 0.
+# Its locals: 0 the text, 1 from, 2 count, 3 the new text. A slice past the end traps.
+slicing_function(p: Program) as int := added_function(p.m, [nullable(text_type(p.m)), I64, I64], [nullable(text_type(p.m))], [nullable(text_type(p.m))], slice_copied(text_type(p.m), local_get(0)) + local_get(3))
 # a slice's new array of an array type in local 3: `count` (local 2) items copied from the array `source` gives, from
 # the place `from` (local 1), both ints
 slice_copied(array: int, source: list<int>) as list<int> := int_local(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + source + int_local(1) + int_local(2) + instruction(ARRAY_COPY, [array, array])
