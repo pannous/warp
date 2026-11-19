@@ -98,6 +98,9 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, s) }
 	wanted_function = function_type_parts(wanted)
 	if wanted_function != ø and function_value_parts(given) != ø { return function_value_bound(wanted_function, given, bound, s) }
+	# a value binds as the type it reads as, a range's `T` of a list<T> an int
+	read = read_type(given)
+	if read != ø and type_parts(read) != ø and type_parts(wanted) != ø { return unified(wanted, read, bound, s) }
 	wanted_parts = type_parts(wanted)
 	given_parts = type_parts(given)
 	# a type that fits as it is binds nothing: a shape's value where its type is wanted, a Call where a Node is
@@ -112,8 +115,14 @@ bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
 	if same_type(held, type) or reads_as(held, type) { return bound }
 	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
 }
-# whether a value of the given type is read as one of the held type: a char as its text
-reads_as(held: Node, given: Node) as bool := same_type(held, symbol(TEXT_TYPE)) and given == symbol(CHAR_TYPE)
+# the type a value of the given type reads as where that type is wanted, by that type's word (calls.wap as_read): a
+# char as its text, a range as its list of ints (wiki/conversion.md "a range is a list of its numbers"); ø for others
+read_type(given: Node?) as Node? := if given == symbol(CHAR_TYPE) then symbol(TEXT_TYPE) else if given == symbol(RANGE_TYPE) then list_type(symbol(INT_TYPE)) else ø
+# whether a value of the given type is read as one of the held type: a char as its text, a range as a list
+reads_as(held: Node, given: Node) as bool := {
+	read = read_type(given) ?? return no
+	same_type(held, read) or same_type(held, symbol(type_word(read)))
+}
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
 function_value_bound(wanted: FunctionParts, value: Node, bound: list, s: TypingState) as list? := {
