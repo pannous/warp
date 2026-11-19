@@ -101,7 +101,10 @@ declared_fixity(operator: Operator) as Fixity :=
 
 # the group of an operator in its first fixity: infix, then prefix, then postfix
 group_of_any(language: Language, spelling: text) as text := {
-	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] { if group_of(language, spelling, fixity) != "" { return group_of(language, spelling, fixity) } }
+	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] {
+		group = group_of(language, spelling, fixity)
+		if group != "" { return group }
+	}
 	""
 }
 
@@ -109,7 +112,8 @@ group_of_any(language: Language, spelling: text) as text := {
 
 # the canonical word of a spelling written in that fixity: the spelling itself when no alias applies
 canonical(language: Language, spelling: text, fixity: Fixity) as text := {
-	if aliased(spelling, fixity) != spelling { return aliased(spelling, fixity) }
+	written = aliased(spelling, fixity)
+	if written != spelling { return written }
 	compound = compound_assignment(language, spelling)
 	if compound != "" { return compound }
 	spelling
