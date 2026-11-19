@@ -273,7 +273,7 @@ rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 
 # the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits; two equally
 # specific ones are refused
-rule_applied(language: Language, rules: Rules, n: Node) as list := {
+rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 	best: Rule? = ø
 	best_bindings = {}
 	for head in heads_of(language, n) {
@@ -281,14 +281,15 @@ rule_applied(language: Language, rules: Rules, n: Node) as list := {
 			for rule in rules.by_head[head] {
 				bindings = {}
 				if matches(rule.matcher, n, bindings) {
-					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: " + best.written + " and " + rule.written) }
+					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: ${best.written} and ${rule.written}") }
 					if best == ø or rule.specificity > best.specificity { best = rule; best_bindings = bindings }
 				}
 			}
 		}
 	}
 	if best == ø { return [] }
-	if refusal_of(best.template) != ø { refused(n, refusal_of(best.template)) }
+	refusal = refusal_of(best.template)
+	if refusal != ø { refused(n, refusal) }
 	result = built(language, best.template, with_fresh_names(best_bindings, best.fresh))
 	[if result is Empty then result else with_fact(result, RULE, best.written)]
 }
