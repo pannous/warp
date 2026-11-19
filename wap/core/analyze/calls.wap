@@ -202,7 +202,7 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if dispatcher != ø { return dispatcher }
 	fitting = candidates.filter(definition => takes(definition, given, s, (argument, wanted) -> fits(argument, wanted, s)))
 	exact = fitting.filter(definition => takes(definition, given, s, (argument, wanted) -> fits_exactly(argument, wanted, s)))
-	if #fitting > 1 and exact { fitting = exact }
+	if #fitting > 1 { fitting = if exact then exact else fewest_conversions(fitting, given, s) }
 	if #fitting > 1 { fitting = most_specific(fitting, s.records) }
 	if #fitting > 1 { fitting = innermost(fitting, scopes) }
 	if #fitting > 1 and expected != ø { fitting = fitting.filter(definition => declared_type(written_name(definition)) != ø and same_type(declared_type(written_name(definition)), expected)) }
@@ -210,8 +210,19 @@ chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: No
 	if #fitting > 1 { refused(n, "this reads as a call of each of ${candidates_text(fitting)}; write the arguments' types or the type wanted") }
 	fitting#1
 }
-# whether a definition takes these arguments, each one fitting its parameter; a definition they fit exactly wins over
-# one they fit only by a conversion (`text('é')` is text(c: char), not text(t: text))
+# A definition the arguments fit exactly wins over one they fit only by a conversion (`text('é')` is text(c: char),
+# not text(t: text)); of those they fit by conversions, those converting the fewest (`t == "?"` compares texts, not
+# Nodes)
+fewest_conversions(definitions: list, given: list, s: TypingState) as list := {
+	counts = definitions.map(definition => conversions_taken(definition, given, s))
+	least = counts.fold(counts#1, (a, b) -> if b < a then b else a)
+	(1 to #definitions).filter(at => counts#at == least).map(at => definitions#at)
+}
+conversions_taken(definition: Node, given: list, s: TypingState) as int := {
+	parameters = parameters_in(definition)
+	#(1 to #given).filter(at => at <= #parameters and not fits_exactly(given#at, type_given(parameters#at), s))
+}
+# whether a definition takes these arguments, each one fitting its parameter
 # (a parameter typed by generic letters takes an argument whose type binds them alike, and one of a function type a
 # function value whose function gives that type's result for its parameters, see letters_bound); the arguments known
 # whole where no letter is wanted are fitted first, so a function value is never typed for a definition that takes
