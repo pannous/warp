@@ -416,6 +416,13 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
   and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
   off when wap compiles itself: that branch lands.
+- **An overloaded function is not a value yet**: `parts.map(text)` types only as `parts.map(each => text(each))`
+  (shape_taking in analyze/function_values.wap). Reason: a value of a name with several definitions is refused until
+  a written function type picks one; the self-build census needs the function typed now. Paid off when the expected
+  `(Node) -> text` picks the overload: shape_taking goes back to `.map(text)`.
+- **A local named like a method shadows it**: a parameter `map` made `fields_of(record).map(…)` call the Node, so
+  instance_from_map (analyze/data.wap) names its map `source`. Reason: the self-build census needs the function typed
+  now. Paid off when `xs.map(…)` finds the list's method past a local of that name: the parameter is `map` again.
 - **A function read from a map traps when its parameter calls it twice** (found 2026-11-19, off-census):
   `steps: map<text, (int) -> int> = {"inc": inc}`, then `twice(f: (int) -> int, x: int) := f(f(x))` with
   `twice(steps["inc"], 3)` traps with a null reference; `f(x)` once works, and `twice(inc, 3)` does too. Paid off
@@ -429,6 +436,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
   defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
+- **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
+  can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
+  preload/lists.wap with a test_lists line.
 - **Helpers named apart from same-named ones** (wap/core/analyze: `within` became part_of beside names.wap's scope
   `within`, `valued` value_bearing beside the emitter's): a
   program's definitions dispatch across all its modules, and a Node parameter dispatches as any, so analyze's

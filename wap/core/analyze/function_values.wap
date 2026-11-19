@@ -87,7 +87,7 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState, wanted: Node) as Node := {
 	definition = typed.function
 	word = definition.name
-	name = name_once("${word}(${parts.parameters.map(text).join(", ")})", value, s)
+	name = name_once("${word}(${parts.parameters.map(each => text(each)).join(", ")})", value, s)
 	made = definitions_named(text(name), s)
 	reads = parameters_of(name, parts.parameters)
 	taking = if made is empty then dispatcher_made(name, reads, named_call(word, [definition], reads, name), [typed.result], s) else made#1
@@ -101,7 +101,13 @@ written_function_type(type: Node?, s: TypingState) as Node? := {
 	definition = definition_keyed(key, s) ?? return ø
 	taken = parameters_in(definition.definer)[(if is_lambda_key(key, s) then 1 else 0) ..]
 	result = definition.result ?? return ø
-	if taken.all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), s.records)) then function_type_of(taken.map(type_given), result) else ø
+	types: list<Node> = []
+	for parameter in taken {
+		given = type_given(parameter) ?? return ø
+		if has_letters(given, s.records) { return ø }
+		types += [given]
+	}
+	function_type_of(types, result)
 }
 # A function's name as a value, `apply(inc, 2)`: of a type of its own like a function value's, capturing nothing, so a
 # call of the value is a call of that function; a name of several functions is one only for a written function type

@@ -35,14 +35,14 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 # map"): `person({name: "Ann", age: "40"})` calls the function the typing stage writes once for the record,
 # from_map(person)(m) := person{name: text(m["name"]), age: int(m["age"])}, so the map is read once, each field its
 # entry, `keys` too
-instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
+instance_from_map(n: Node, record: Node, source: Node, s: TypingState) as Node := {
 	name = name_once("${FROM_MAP_WORD}(${record_name(record)})", n, s)
 	if definitions_named(text(name), s) is empty {
-		reads = parameters_of(name, [value_type(map)])
+		reads = parameters_of(name, [value_type(source)])
 		fields = fields_of(record).map(field => placed_like(Key(declared_name(field), Op.Colon, field_made(field, placed_like(Item(reads#1, Text(text(declared_name(field)))), n), s)), n))
 		dispatcher_made(name, reads, placed_like(Key(record_type(record), Op.None, List(fields, Bracket.Curly, Separator.Comma)), n), [record_type(record)], s)
 	}
-	word_called(n, text(name), [map], record_type(record), s)
+	word_called(n, text(name), [source], record_type(record), s)
 }
 # a field's value made into the field's type by that type's maker, `int(m["age"])`
 field_made(field: Node, value: Node, s: TypingState) as Node := {
