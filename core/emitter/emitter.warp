@@ -986,6 +986,8 @@ def assignment(body: Body, target: Node, value: TypedCode) as TypedCode {
 # `n: nat = v`, `r: rational = v`: a whole number of any size, an exact number, held boxed (decision nat-and-int)
 admitted_numbers = {nat: "nat_admitted", rational: "rational_admitted"}
 declared_kinds = {int: ValueKind.Int, float: ValueKind.Float, text: ValueKind.Text, list: ValueKind.List, bool: ValueKind.Bool, char: ValueKind.Char}
+# `xs: ints = v`, `xs: list of text = v`, `xs: list<int>? = v`: a list as `list` declares it
+declared_kind_word(type_name: text) as text := if is_list_type(type_name) then "list" else type_name
 # a variable whose type admits an Error, `r: int?`, `r: int or error`, keeps one (decision errors-one-rule)
 kept_if_admitting_errors(body: Body, name: text, type_name: text) := { if union_members(type_name).any(member => member.ends_with("?") or member == "error") { body.kept[name] = yes } }
 def declaration(body: Body, name: text, written_type: text, value: TypedCode) as TypedCode {
@@ -998,8 +1000,7 @@ def declaration(body: Body, name: text, written_type: text, value: TypedCode) as
 	if type_name.ends_with("?") { return optional_declaration(body, name, without_optional_mark(type_name), value) }
 	if type_name in module.classes { return typed_declaration(body, name, type_name, value) }
 	if is_union(type_name) { return union_declaration(body, name, type_name, value) }
-	# `xs: ints = v`, `xs: list of text = v`: a list as `list` declares it
-	kind_word = if is_list_type(type_name) then "list" else type_name
+	kind_word = declared_kind_word(type_name)
 	if kind_word not in declared_kinds { return if has_type_test(type_name) then assignment(body, symbol(name), type_checked(body, type_name, value)) else refuse("a variable declared " + type_name) }
 	body.declared[name] = declared_kinds[kind_word]
 	assignment(body, symbol(name), value)
@@ -1028,7 +1029,8 @@ is_int_member(member: text) as bool := aliased_type(member.remove_suffix("?")) =
 # `x: int? = v` (`line: int? = try n.line else ø`): a T or ø, so x holds a node; a value known
 # only at run time is not checked yet, a value of another kind is refused; `x: Node? = v` (any node
 # annotation, a class too: an object or ø) holds the node as it is
-def optional_declaration(body: Body, name: text, type_name: text, value: TypedCode) as TypedCode {
+def optional_declaration(body: Body, name: text, written_name: text, value: TypedCode) as TypedCode {
+	type_name = declared_kind_word(written_name)
 	if type_name in node_annotations or type_name in module.classes {
 		if value.kind != ValueKind.Node and value.kind != pending and type_name in module.classes { return refuse("a " + kind_spelling(value.kind) + " given to a variable declared " + type_name + "?") }
 		return assignment(body, symbol(name), value)
