@@ -71,13 +71,12 @@ decoded(t: text, start: int, end: int): int := {
 }
 
 # whether a text has no characters: `t is empty`
+empty(t: text): bool := t == ""
 # an int's decimal digits, `-` before a negative one's; counted on the int made negative, so the smallest int has its
 # digits too
-text(n: int): text := if n < 0 then "-" + digits_below(n) else digits_below(0 - n)
+text(n: int): text := if n < 0 then "-" + negated_digits(n) else negated_digits(0 - n)
 # the digits of a negative int's size, or of 0
-digits_below(n: int): text := if n > -10 then bytes_between(DIGITS, 0 - n, 1 - n) else digits_below((n - n rem 10) ÷ 10) + digits_below(n rem 10)
-
-empty(t: text): bool := t == ""
+negated_digits(n: int): text := if n > -10 then bytes_between(DIGITS, 0 - n, 1 - n) else negated_digits((n - n rem 10) ÷ 10) + negated_digits(n rem 10)
 # how many characters t holds: `#"héllo"` is 5
 #(t: text): int := {
 	count = 0
