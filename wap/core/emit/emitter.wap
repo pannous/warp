@@ -91,7 +91,7 @@ class Program {
 }
 # The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
 class Frame {
-	slots: list = []
+	slots: list<Placed> = []
 	parameter_count: int = 0
 	# a function's frame takes returns, the program's does not; the types of the values returned so far
 	function: bool = no
@@ -99,7 +99,7 @@ class Frame {
 	# the layout of the function's result as its signature says, which a returned value is made to fit
 	signed: list = []
 	# the labels open around the code being emitted, the innermost last
-	labels: list = []
+	labels: list<text> = []
 }
 # A definition where wasm keeps it: its index, the type of its value (a function's result) and, for a function,
 # its parameters' types. Its key is where it was defined: file, line and column.
@@ -250,7 +250,7 @@ items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map
 # a function's value made to fit its signed result, a frame without one leaving it as it is
 signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p) else given
 # code emitted inside wasm's structured instructions, which open these labels
-labelled(f: Frame, labels: list, emit: function) as Code := {
+labelled(f: Frame, labels: list<text>, emit: function) as Code := {
 	f.labels += labels
 	emitted_code = emit()
 	f.labels = f.labels[.. #f.labels - #labels]
