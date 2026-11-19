@@ -38,4 +38,23 @@ turned: Node = match k { 1 => Symbol("many"); 2 => 2; _ => "one" }
 print shown(c) + " " + shown(3) + " " + shown("hi") + " " + show(arm) + " " + show(turned) + " " + show(if k > 1 then 2.5 else Symbol("x"))')" "Char('a') Number(3) Text(\"hi\") Number(2) Number(2) Number(2.5)"
 check "a text of one character is that character" "$(ran char_of_text 'c = "é" as codepoint
 print(text(c) + " " + text(c == char(233)))')" "é yes"
+# the decided conversions and truthiness (wiki/conversion.md, wiki/truthiness.md)
+BAG='class Bag { items: list<int> = [] }
+empty(b: Bag): bool := #b.items == 0'
+check "an instance made from a map, each field made into its type" "$(ran from_map 'class person { name: text; age: int }
+print text(person({name: "Ann", age: "40"}).age + 1)')" "41"
+check "a word with several results gives the one that is wanted" "$(ran wanted_result 'hi() as int := 42
+hi() as text := "fourtytwo"
+t = hi() as int
+print text(t)')" "42"
+check "a class says when it is empty, and every test follows" "$(ran own_empty "$BAG"'
+a = Bag()
+b = Bag([1])
+print(if a then "full" else "empty")
+print(if b then "full" else "empty")
+print(if a is empty then "empty" else "full")
+print(if not b then "empty" else "full")')" "empty
+full
+empty
+full"
 exit $((failures > 0))
