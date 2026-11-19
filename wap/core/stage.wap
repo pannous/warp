@@ -240,8 +240,9 @@ record_named(records: Records, type: Node?) as Node? := {
 	named = items_named(records.names, records.items, text(type), record => record_name(record))
 	# the one its code sees, else the one declared last: a program's own class, or a used module's, shadows the preload's
 	declared = fact_of(type, DECLARED_BY)
-	for record in named { if declared != ø and place_key(record_declared(record)) == place_key(declared) { return record } }
-	if named is empty then ø else named.last
+	if declared == ø { return if named is empty then ø else named.last }
+	for record in named { if place_key(record_declared(record)) == place_key(declared) { return record } }
+	refused(type, "this type names a record its scope declared at ${place_key(declared)}, but the program's records hold no record from that place")
 }
 record_name(record: Record) as text := text(record_declared(record))
 record_declared(record: Record) as Node := match record { Record(name, fields, variants) => name }
