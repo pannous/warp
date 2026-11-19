@@ -93,4 +93,7 @@ check "a missing value is in a list that holds a missing value" "$(ran missing_i
 print(text(found(0) in [found(1), found(0)]) + " " + text(found(0) in [found(1)]))')" "yes no"
 check "a list finds its first item that fits a test, none when no item does" "$(ran list_find 'xs = [1, 2, 3]
 print(text(xs.find(x => x > 1) ?? 0) + " " + text(xs.find(x => x > 5) ?? 0) + " " + (["a", "bc"].find(t => #t == 2) ?? "none"))')" "2 0 bc"
+check "a list of optional ints takes an int, which it holds as an int?" "$(ran add_optional 'ys = [ø, 2]
+ys.add(3)
+print(text(#ys) + " " + text(ys#3 ?? 0))')" "3 3"
 exit $((failures > 0))
