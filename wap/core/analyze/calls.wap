@@ -327,14 +327,18 @@ names_bare_kind(type: Node?) as bool := {
 full_type_hint(written: Node?) as text := if names_bare_kind(written) then text(base_or_self(written)) + "<…>" else "int"
 # types as a message names them, `int, text?`
 types_text(types: list) as text := types.map(type_text).join(", ")
-candidates_text(definitions: list<Function>) as text := definitions.map(definition => "${written_name(definition.definer)}(${parameters_in(definition.definer).join(", ")}), line ${line_of(definition.definer)} of ${definition.module.split("/").last}").join("; ")
+candidates_text(definitions: list<Function>) as text := definitions.map(definition => "${written_name(definition.definer)}(${parameters_in(definition.definer).join(", ")}), ${written_at(definition)}").join("; ")
+# where a function is written, as a message names it: `line 18 of equality.wap`
+written_at(definition: Function) as text := "line ${line_of(definition.definer)} of ${definition.module.split("/").last}"
+# a function as a refusal names it, its place telling apart the functions of one name and the function values, each a λ
+called_name(definition: Function) as text := "${definition.name} (${written_at(definition)})"
 
 # A function typed for these argument types, its written types' shapes known first, so it types alike however it is
 # reached: from a block, a call, or alone
 # It ends alone when wap refuses it: refused once, and each caller is refused naming it
 function_typed(definition: Function, argument_types: list, s: TypingState, at: Node) as TypedFunction := {
 	key = definition.key
-	name = definition.name
+	name = called_name(definition)
 	if s.refusals.any(each => each.key == key) { refused(at, "this calls ${name}, which wap refuses") }
 	try shaped_typed(shaped_once(definition, s), argument_types, s, at) catch e {
 		s.refusals += [Refusal(key, e.message)]
