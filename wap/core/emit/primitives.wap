@@ -20,10 +20,6 @@ use "../type_notation.wap"
 use "places.wap"
 use "host.wap"
 
-# an int's text: at most 19 digits and a sign; the code points of a digit 0 and of a minus
-INT_TEXT_BYTES = 20
-DIGIT_ZERO = 48
-MINUS = 45
 # a character's UTF-8 bytes: the code point below which it takes 1, 2 or 3 bytes, the lead byte's mark for each count,
 # a following byte's mark, and the bits each following byte holds
 UTF8_LIMITS = [0x80, 0x800, 0x10000]
@@ -47,7 +43,7 @@ INSTRUCTIONS = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "arguments": arguments_function, "bytes_written": bytes_writing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "int_text": int_text_function, "char_text": char_text_function}
+HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "arguments": arguments_function, "bytes_written": bytes_writing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "char_text": char_text_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
@@ -131,24 +127,6 @@ slicing_function(p: Program, type: int) as int := {
 	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [3])
 	copied = sliced + i32_const(0) + instruction(LOCAL_GET, [0]) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
 	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
-}
-
-# The helper of int_text: an int's digits, written from the last into a buffer, then copied into a text of their
-# length. It counts on the int made negative, so the smallest int has its digits too. Its locals: 0 the int, 1 whether
-# it was negative, 2 the buffer, 3 the place of the first digit so far, 4 the text.
-int_text_function(p: Program) as int := {
-	type = text_type(p.m)
-	n = instruction(LOCAL_GET, [0])
-	place = instruction(LOCAL_GET, [3])
-	buffer = instruction(LOCAL_GET, [2])
-	written_before = byte => buffer + place + i32_const(1) + I32_SUB + instruction(LOCAL_TEE, [3]) + byte + instruction(ARRAY_SET, [type])
-	negated = n + i64_const(0) + I64_LT_S + instruction(LOCAL_TEE, [1]) + I32_EQZ + IF + VOID_BLOCK + i64_const(0) + n + I64_SUB + instruction(LOCAL_SET, [0]) + END
-	made = i32_const(INT_TEXT_BYTES) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2]) + i32_const(INT_TEXT_BYTES) + instruction(LOCAL_SET, [3])
-	digits = LOOP + VOID_BLOCK + written_before(i32_const(DIGIT_ZERO) + n + i64_const(10) + I64_REM_S + I32_WRAP_I64 + I32_SUB) + n + i64_const(10) + I64_DIV_S + instruction(LOCAL_TEE, [0]) + i64_const(0) + I64_NE + instruction(BRANCH_IF, [0]) + END
-	sign = instruction(LOCAL_GET, [1]) + IF + VOID_BLOCK + written_before(i32_const(MINUS)) + END
-	length = i32_const(INT_TEXT_BYTES) + place + I32_SUB
-	copied = length + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_TEE, [4]) + i32_const(0) + buffer + place + length + instruction(ARRAY_COPY, [type, type]) + instruction(LOCAL_GET, [4])
-	added_function(p.m, [I64], [nullable(type)], [I32, nullable(type), I32, nullable(type)], negated + made + digits + sign + copied)
 }
 
 # The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
