@@ -62,7 +62,6 @@ wasm_called(form: Node, arguments: list<Code>, signature: list, code: list<int>,
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
-BYTE_TEXT = "byte_text"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) as Code := {
@@ -78,7 +77,6 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
 	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
 	if name == LIST_COUNT { return ending(counted_items(p)) }
-	if name == BYTE_TEXT { return ending(I32_WRAP_I64 + instruction(ARRAY_NEW_FIXED, [text_type(p.m), 1])) }
 	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
 	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
