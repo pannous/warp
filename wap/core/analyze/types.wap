@@ -95,6 +95,10 @@ class TypedFunction {
 	late: list = []
 	# whether it never returns: its result written `never`, or its body jumps and nothing returns
 	jumps: bool = no
+	# whether its body calls it before its result is known: such a call gives no value, so the function may give none;
+	# and what to write where a value is wanted of such a call
+	called_unknown: bool = no
+	unknown_result: text = ""
 }
 # What a condition finds of a variable: its key, the arm it holds in (1 then, 2 else), the type it reads as there
 class Finding { key: text; arm: int; type: Node }
@@ -148,6 +152,11 @@ refused_all(s: TypingState, more: list) := raise (s.refusals.map(each => each.me
 # whether a typed form gives a value: not none, not a jump that never comes back
 gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valued_type(value_type(n))
 # whether a type is one of a value: not none, not ø alone
+# a typed form's value type, refused where it gives none, saying where the value is wanted: "to pass", "to test" …; a
+# call of a function whose result is not known yet says what to write
+value_of(n: Node, wanted: text) as Node := value_type(n) ?? refused(n, text_of(fact_of(n, RESULT_UNKNOWN)) ?? "this gives no value ${wanted}")
+# a fact's text, ø for none
+text_of(fact: Node?) as text? := match fact { Text(value) => value; _ => ø }
 valued_type(type: Node?) as bool := type != ø and type != symbol(EMPTY_TYPE)
 jumps(n: Node) as bool := has_fact(n, JUMPS)
 jumping(n: Node) as Node := with_fact(n, JUMPS, True)
@@ -256,7 +265,7 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	given = typed_form(value, s, f, wanted)
 	# a global functions read before it is set from here on
 	s.unset = s.unset.filter(key => key != place_key(defined_at(name)))
-	type = value_type(given) ?? refused(n, "this gives no value to set")
+	type = value_of(given, "to set")
 	# a name given only ø so far holds an optional of a type its uses settle
 	if type == symbol(EMPTY_TYPE) and wanted == ø { type = optional_type(unknown_type(s)) }
 	if wanted != ø { given = converted(given, wanted, s, n, "the name holds a") }
@@ -335,7 +344,7 @@ case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeF
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 	typed = if given is empty and n === called then n else refitted(Call(called, given), n)
-	with_type_of(typed, symbol(record_name(enum_declaring(s.records, called))))
+	with_type_of(typed, record_type(enum_declaring(s.records, called)))
 }
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {

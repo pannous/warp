@@ -61,19 +61,21 @@ signed_result(name: Node, p: Program) as list := {
 	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
-# A value of a type where any holds it: [the GC type it is held as, a plain value's box or its own reference type,
-# the instructions that take the value out once cast]; at is the code that asks
-held_in_any(type: Node, at: Node, p: Program) as list := {
+# A value of a type where any holds it: the GC type it is held as, a plain value's box or its own reference type, and
+# the instructions that take the value out once cast
+class Held { type_index: int, taken: list<int> }
+# at is the code that asks
+held_in_any(type: Node, at: Node, p: Program) as Held := {
 	if text(type) in BOXED_WORDS {
 		box = box_index(p.m, text(type))
-		return [box, instruction(STRUCT_GET, [box, 0])]
+		return Held(box, instruction(STRUCT_GET, [box, 0]))
 	}
-	[referenced(layout_of(type, p.m, p.records) ?? []) ?? refused(at, "a value any holds is tested for references and plain values, not this type"), []]
+	Held(referenced(layout_of(type, p.m, p.records) ?? []) ?? refused(at, "a value any holds is tested for references and plain values, not this type"), [])
 }
 # a value any holds, known of a type: cast to it, a plain one taken out of its box
 held_value(type: Node, at: Node, p: Program) as list := {
 	held = held_in_any(type, at, p)
-	heap_instruction(REF_CAST, held#1) + held#2
+	heap_instruction(REF_CAST, held.type_index) + held.taken
 }
 # The type a function gives back: its body's value and every return's, all of one type
 result_type(name: Node, body: Code, f: Frame) as list := {

@@ -11,7 +11,7 @@ use "../parsing/phrase_blocks.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
 
-# a List's items: the node itself when it is a list, else its items as one: a curly block `{a}` is no list value
+# a List's items as a list, a curly block's too (`{a}` is no list to `is list`): the node's own items, never a copy
 listed_reader = "listed"
 # the node cases: the type a case tests as (a List is any group) and the reader of each part, in order
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
@@ -39,7 +39,7 @@ applied(word: text, argument: Node) as Node := List([symbol(word), argument], Br
 
 part_of(subject: Node, reader: text) as Node := {
 	if reader == "itself" { return subject }
-	if reader == listed_reader { return chosen(type_test_of(subject, "list"), subject, Key(subject, Op.As, symbol("list"))) }
+	if reader == listed_reader { return Key(subject, Op.As, symbol("list")) }
 	applied(reader, subject)
 }
 

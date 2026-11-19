@@ -42,7 +42,7 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
 # a shape, `Record`, laid out as the type it narrows (core/analyze/shapes.wap)
-layout_of(type_name: Node, m: Module, records: Records) as list? := match type_name {
+layout_of(type_name: Node, m: Module, records: Records) as list<int>? := match type_name {
 	Symbol(written) => {
 		type = fact_of(type_name, NARROWS) ?? type_name
 		name = text(type)
@@ -59,13 +59,13 @@ layout_of(type_name: Node, m: Module, records: Records) as list? := match type_n
 # for a type that is no map
 map_index(type: Node, m: Module, records: Records) as int? := if key_type(type) == ø then ø else added_type(m, struct_type(map_parts(type).map(part => field_type(nullable(list_index(list_type(part), m, records) ?? refused(part, "the emitter has no value layout for this type yet")), MUTABLE))))
 # a map type's key type and value type: its keys' array is field 0, its values' field 1
-map_parts(type: Node) as list := [key_type(type), held_type(type)]
+map_parts(type: Node) as list<Node> := [key_type(type), held_type(type)].map(part => part ?? refused(type, "a map type names its key and value types, `map<text, int>`"))
 MAP_KEYS = 0
 MAP_VALUES = 1
 
 # The wasm type of an optional, `T?`, ø its null: a reference type's own layout; a plain value's (int, float, bool,
 # char) a reference to its box, a struct of the value. ø for a type that is no optional.
-optional_layout(type: Node, m: Module, records: Records) as list? := {
+optional_layout(type: Node, m: Module, records: Records) as list<int>? := {
 	base = base_of_optional(type)
 	if base == ø { return ø }
 	held = layout_of(base, m, records) ?? refused(base, "the emitter has no value layout for this type yet")

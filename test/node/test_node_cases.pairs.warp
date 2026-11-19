@@ -48,3 +48,5 @@ f(parse("a: 3"))'	"3"
 'n = parse("a b c"); match n { Meta(node, data): "meta"; List(items, bracket, separator): "list ${#items}"; _: "other" }'	"list 3"
 # a List's items are a list, a curly block's too: `{a b}` gives its two items
 'f(n: Node) as list := match n { List(items, bracket, separator): items; _: [] }; #f(List([Symbol("a"), Symbol("b")], Bracket.Curly, Separator.None))'	2
+# a List arm inside a function value inside another List arm reads its items too
+'f(n: Node) as list := match n { List(scopes, bracket, separator): scopes.map(scope => match scope { List(items, inner, between): items; _: [] }); _: [] }; #f(List([List([Symbol("a")], Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))'	1

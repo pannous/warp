@@ -209,6 +209,9 @@ VARIABLES = "variables"
 # a name of several overloads gets CANDIDATES, their defining names in a list per scope, innermost first, instead of
 # DEFINED_AT; the typing stage picks one and sets DEFINED_AT
 CANDIDATES = "candidates"
+# a type's name bound to the name of the Record declaring it, as the code writing it sees it: a module's class hides
+# the preload's of one name only inside the module (core/analyze/scope.wap type_bound)
+DECLARED_BY = "declared_by"
 # a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
 CAPTURES = "captures"
 # a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
@@ -242,11 +245,17 @@ added_records(records: Records, added: list<Node>) as Records := Records(records
 # each a typed name `x: int` (declared_name, declared_type)
 record_named(records: Records, type: Node?) as Node? := {
 	if type == ø or not type is symbol { return ø }
-	# the one declared last: a program's own class, or a used module's, shadows the preload's of the same name
 	named = items_named(records.names, records.items, text(type), record => record_name(record))
-	if named is empty then ø else named.last
+	# the one its code sees, else the one declared last: a program's own class, or a used module's, shadows the preload's
+	declared = fact_of(type, DECLARED_BY)
+	if declared == ø { return if named is empty then ø else named.last }
+	for record in named { if place_key(record_declared(record)) == place_key(declared) { return record } }
+	refused(type, "this type names a record its scope declared at ${place_key(declared)}, but the program's records hold no record from that place")
 }
-record_name(record: Record) as text := match record { Record(name, fields, variants) => text(name) }
+record_name(record: Record) as text := text(record_declared(record))
+record_declared(record: Record) as Node := match record { Record(name, fields, variants) => name }
+# a record as a type, its name bound to it, so it means this record wherever another of its name is declared too
+record_type(record: Record) as Node := with_fact(symbol(record_name(record)), DECLARED_BY, record_declared(record))
 fields_of(record: Record) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
 # An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
 cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
