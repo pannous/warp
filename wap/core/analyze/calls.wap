@@ -387,10 +387,6 @@ with_signature(name: Node, types: list, result: Node?) as Node := with_name_fact
 # the parts of a Define, its parameters as a list of none or more
 written_name(definition: Define) as Node := match definition { Define(name, parameters, body) => name }
 parameters_in(definition: Define) as list := match definition { Define(name, parameters, body) => items_of(parameters) }
-with_items(n: Node, items: list) as Node := match n {
-	List(old, bracket, separator) => refitted(List(items, bracket, separator), n)
-	_ => n
-}
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
 all_typed(definition: Node, records: Records) as bool := parameters_in(definition).all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), records) and not takes_own_type(type_given(parameter), records))
