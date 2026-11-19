@@ -4,17 +4,34 @@
 # their signatures from this file, the emitter their bodies. A module it uses holds words programs do not see.
 
 use "floats.wap"
+use "host.wap"
 
 # a text written to the standard output, then a line end
-print(t: text) := prim print_text(t)
+print(t: text) := write_text(STANDARD_OUTPUT, t, yes)
 # a text written to the standard error, then a line end; the program goes on
-eprint(t: text) := prim error_text(t)
+eprint(t: text) := write_text(STANDARD_ERROR, t, yes)
 # a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
 hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
-read(path: text): text := prim read_text(path)
-# the command line: the program's file as it was named, then its arguments
-arguments(): list<text> := prim arguments()
+read(path: text): text := {
+	file = opened(path, 0, READ_AND_SEEK, "cannot read ")
+	fd_seek(file, 0, FROM_END, MOVED_AT)
+	size = memory_word(MOVED_AT)
+	fd_seek(file, 0, FROM_START, MOVED_AT)
+	memory_holding(size)
+	got = bytes_read(file, size)
+	fd_close(file)
+	memory_text(BYTES_AT, got)
+}
+# the command line: the program's file as it was named, then its arguments. WASI's args_sizes_get puts the count at 0
+# and the bytes' size at 4, args_get each one's address from BYTES_AT and their zero-ended bytes after them
+arguments(): list<text> := {
+	args_sizes_get(0, 4)
+	count = memory_word(0)
+	memory_holding(4 * count + memory_word(4))
+	args_get(BYTES_AT, BYTES_AT + 4 * count)
+	(0 upto count).map(at => zero_ended(memory_word(BYTES_AT + 4 * at)))
+}
 # the arguments after the program's file: `warp prog.wasm a b` gives ["a", "b"]
 args := arguments().drop(1)
 # the running program: its file, as the command line names it, and that file's folder
@@ -26,7 +43,15 @@ folder_of(file: text): text := {
 	if #parts == 1 then "." else parts[.. #parts - 1].join("/")
 }
 # bytes written to the file at a path, made anew or emptied first: what a compiler writes its module with
-write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
+write_bytes(path: text, bytes: list<int>) := {
+	file = opened(path, CREATED_OR_EMPTIED, WRITE_RIGHT, "write: cannot open ")
+	t = text_made(#bytes)
+	for at in 0 upto #bytes { set_text_byte(t, at, bytes[at]) }
+	write_text(file, t, no)
+	fd_close(file)
+	# TODO (card void-function-result) the return goes once a function without a written result type gives nothing
+	return
+}
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)
 
@@ -141,7 +166,7 @@ text(t: text): text := t
 int(n: int): int := n
 float(x: float): float := x
 bool(b: bool): bool := b
-text(c: char): text := prim char_text(c)
+text(c: char): text := encoded(ord(c), 1, 1)
 text(b: bool): text := if b then "yes" else "no"
 # an optional's text: its value's, or ø when it is missing
 text(x: T?): text := if missing(x) then "ø" else text(x!)
@@ -173,6 +198,12 @@ class Range { from: int; last: int }
 # it walks a list
 #(r: Range): int := r.last - r.from + 1
 #(r: Range, at: int): int := r.from + at - 1
+# a range's ints as a list, which it is read as wherever a list is wanted: `(1 to 3).filter(odd)` (wiki/conversion.md)
+list(r: Range): list<int> := {
+	out: list<int> = []
+	for at in r { out.add(at) }
+	out
+}
 # the largest int, where a range left open ends: `xs[2 ..]` is Range(2, LAST_INT), every item from the place 2 on
 LAST_INT := 0x7FFFFFFFFFFFFFFF
 # the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]

@@ -15,7 +15,6 @@ use "dispatch.wap"
 # the counting from 0 that `x[k]` writes, as the place k + 1
 PLUS = "+"
 # a range as an item key takes the items in it, `xs[1 .. 3]`, `xs[2 ..]`: the preload's slice
-RANGE_TYPE = "Range"
 SLICE = "slice"
 # the function that makes a record's instance from a map, `from_map(person)`, written once for each record
 FROM_MAP_WORD = "from_map"
@@ -49,7 +48,7 @@ instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
 field_made(field: Node, value: Node, s: TypingState) as Node := {
 	# a field of no written type holds the value as it is, its type the value's
 	type = declared_type(field) ?? return value
-	maker = text((type_parts(type) ?? [type])#1)
+	maker = type_word(type)
 	named_call(maker, definitions_named(maker, s), [value], value)
 }
 # the constructor's parameter that gives a field its default, ø when none does

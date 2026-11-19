@@ -57,7 +57,10 @@ base_of_optional(type: Node?) as Node? := match type {
 type_text(type: Node?) as text := if type == ø then "no type" else if base_of_optional(type) != ø then type_text(base_of_optional(type)) + OPTIONAL_MARK else "${type}"
 # a list's TYPE, `list<int>`, and its item type, ø for any other type
 LIST_TYPE = "list"
+RANGE_TYPE = "Range"
 list_type(item: Node) as Node := generic_type(LIST_TYPE, [item])
+# the word a type is named by, `list` of list<int>, `text` of text
+type_word(type: Node) as text := text((type_parts(type) ?? [type])#1)
 item_type(type: Node?) as Node? := only(parts_of_type(LIST_TYPE, type))
 # a map's TYPE, `map<text, int>`, and its keys' and values' types, ø for any other type
 MAP_TYPE = "map"

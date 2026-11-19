@@ -261,6 +261,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **A failed write traps without naming itself** (wap/core/emit/host.wap writing_function): a write that fails or
+  takes none (a closed stdout, `| head`) stops the program with wasm's bare "unreachable", not a raise naming it.
+  Reason: a raise there pulls its text and the raise helper into every program, hello 432 → 476 B. Paid off when a
+  raise from a helper costs a program nothing it does not use.
+
 - **Boxed `any` in wap's own source** (user 2026-11-19): a value of wap's source whose type typing can't name yet is
   boxed as `any` and checked where it enters a typed place, though the compiler's source should stay fully typed
   (first_principles.md). Only analyze/types.wap decides what is boxed; the emitter never infers it. Each boxed spot

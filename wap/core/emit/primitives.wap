@@ -20,13 +20,6 @@ use "../type_notation.wap"
 use "places.wap"
 use "host.wap"
 
-# a character's UTF-8 bytes: the code point below which it takes 1, 2 or 3 bytes, the lead byte's mark for each count,
-# a following byte's mark, and the bits each following byte holds
-UTF8_LIMITS = [0x80, 0x800, 0x10000]
-UTF8_LEADS = [0, 0xC0, 0xE0, 0xF0]
-UTF8_FOLLOWER = 0x80
-UTF8_BITS = 6
-
 # The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
 # its built-in's definition writes (wap/preload/prelude.wap).
 INSTRUCTIONS: map<text, list<int>> = {
@@ -43,13 +36,29 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "arguments": arguments_function, "bytes_written": bytes_writing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function, "char_text": char_text_function}
+HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function}
 # the lists a map holds, not copied: its keys and its values, an entry the same place in both
 MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
+
+# The operations on the module's memory and on a text being made, each by the wasm types it takes and gives and its
+# instructions, as a host function's call by HOST_FUNCTIONS: an int given where it takes an i32 is wrapped to one, an
+# i32 it gives extended to an int
+class WasmOperation { takes: list<list<int>>; gives: list<list<int>>; code: list<int> }
+memory_operations(p: Program) as map<text, WasmOperation> := {
+	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
+	"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
+	"text_made": WasmOperation([I32], [nullable(text_type(p.m))], instruction(ARRAY_NEW_DEFAULT, [text_type(p.m)])), "text_byte_set": WasmOperation([nullable(text_type(p.m)), I32, I32], [], instruction(ARRAY_SET, [text_type(p.m)]))
+}
+# the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
+# i32 it gives extended to the int its definition writes
+wasm_called(form: Node, arguments: list<Code>, operation: WasmOperation, p: Program) as Code := {
+	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else []))
+	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_U else []))
+}
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
@@ -75,6 +84,9 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
 	}
+	if HOST_FUNCTIONS.has(name) { return wasm_called(form, arguments, WasmOperation(HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2, instruction(CALL, [host(p, name)])), p) }
+	operations = memory_operations(p)
+	if operations.has(name) { return wasm_called(form, arguments, operations[name], p) }
 	refused(form, "no primitive of this name")
 }
 # an array's operations given a list work on its items: operation → the list's
@@ -137,13 +149,3 @@ slicing_function(p: Program, type: int) as int := {
 	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
 }
 
-# The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
-char_text_function(p: Program) as int := {
-	type = text_type(p.m)
-	c = local_get(0)
-	shifted = bits => c + i32_const(bits) + I32_SHR_U
-	follower = bits => shifted(bits) + i32_const(63) + I32_AND + i32_const(UTF8_FOLLOWER) + I32_OR
-	bytes = count => shifted(UTF8_BITS * (count - 1)) + i32_const(UTF8_LEADS#count) + I32_OR + (1 to count - 1).flat_map(i => follower(UTF8_BITS * (count - 1 - i))) + instruction(ARRAY_NEW_FIXED, [type, count])
-	shorter = (1 to UTF8_LIMITS.length).flat_map(count => c + i32_const(UTF8_LIMITS#count) + I32_LT_U + IF + VOID_BLOCK + bytes(count) + RETURN + END)
-	added_function(p.m, [I32], [nullable(type)], [], shorter + bytes(UTF8_LEADS.length))
-}
