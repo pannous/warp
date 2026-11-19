@@ -31,6 +31,6 @@ typed_by_rules(language: Language, typed: Block, library: list, preload: Block) 
 }
 # the program without the preload's functions typing put before it
 own_statements(program: Block, preload: Block) as Block := {
-	library_file = file_of(statements_in(preload)#1)
-	refitted(Block(statements_in(program).filter(statement => not (statement is Define and file_of(statement) == library_file))), program)
+	library_files = statements_in(preload).map(file_of)
+	refitted(Block(statements_in(program).filter(statement => not (statement is Define and library_files.contains(file_of(statement))))), program)
 }
