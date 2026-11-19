@@ -57,7 +57,7 @@ field_dispatching(key: Node, s: TypingState) as Node? := {
 # a dispatching function's parameters, x1 …, one of each type, as its body reads them
 parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
 	parameter = placed_like(symbol(PARAMETER_WORD + text(at)), name)
-	with_type_of(with_fact(with_fact(parameter, BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, parameter), types#at)
+	with_type_of(with_fact(with_binding(parameter, DefinitionKind.Parameter), DEFINED_AT, parameter), types#at)
 })
 # The dispatching function, kept with the typing stage's definitions and placed with the program's functions; its
 # result written when every choice writes its own, so a choice calling back through the dispatch finds it
@@ -94,7 +94,7 @@ tests_of(definition: Node, reads: list, types: list, s: TypingState, at: Node) a
 test_of(read: Node, type: Node, at: Node, s: TypingState) as Node := if narrowed_type(type) != ø then shape_test(read, type, at, s) else with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
 # a call of one of these definitions, chosen among them as any call is
 named_call(word: text, definitions: list, arguments: list, at: Node) as Node := {
-	called = with_fact(with_fact(placed_like(symbol(word), at), BINDING, symbol(BOUND_FUNCTION)), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+	called = with_fact(with_binding(placed_like(symbol(word), at), DefinitionKind.ProgramFunction), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 	placed_like(Call(called, arguments), at)
 }
 raised(message: text, at: Node, s: TypingState) as Node := raising(Text(message), at, s)
