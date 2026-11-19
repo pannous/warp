@@ -25,7 +25,8 @@ surface (any warp)
  │ declare                    core/analyze/declarations.wap
  ▼
 surface + declarations
- │ signature rules            core/rules/        stage 2: rules that ask declared signatures; every phrase decided
+ │ lower                      core/rules/lowering.wap   writes the kernel forms: glued, operator and phrase calls,
+ │                                              := = =>, data and blocks; a phrase stays a call, typing decides it
  ▼
 kernel (kernel/forms.wap)
  │ scope, typing              core/analyze/
@@ -195,8 +196,8 @@ deletions, nothing rewritten; the handoff names what was trimmed.
 ## State
 
 Milestone 1 (Hello) reached 2026-11-17; milestone 2 (wap builds itself, notes/backbone.md "Milestones") in progress.
-Every stage of the pipeline runs (core/pipeline.wap); lowering.wap still writes by hand the forms no rule writes yet
-(stage 2, the signature rules, comes next).
+Every stage of the pipeline runs (core/pipeline.wap); the sugar's rules write the kernel forms of words
+(preload/sugar/), lowering.wap the general ones (calls, definitions, data, blocks).
 
 Tests: `bash test/wap/run.sh` (every test/wap script), `bash test/wap/test_guardrails.sh`.
 

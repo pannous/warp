@@ -1,8 +1,9 @@
-# Operated code → kernel forms, by hand until the rule engine runs (notes/wap.md, notes/kernel.md "How a program
-# reaches the kernel"; the operated shapes it reads: notes/backbone.md "Stage languages").
+# Declared code → kernel forms (notes/wap.md "The pipeline", notes/kernel.md "How a program reaches the kernel";
+# the operated shapes it reads: notes/backbone.md "Stage languages").
 #
-# This is where the rule engine will run its three stages (shape, signature, kind). Until it exists, the few
-# spellings the milestones need are lowered here by hand, one arm per form:
+# The rules have written the kernel forms of words (preload/sugar/: yes, break, global, if, while …); this stage
+# writes the general ones, which no word names: calls, definitions, data and blocks, one arm per form. A phrase
+# becomes a call of its head; typing refuses one whose head holds no function.
 #   print "Hello"            a phrase, a word then its arguments → Call(print, ["Hello"])
 #   f(1, 2)                  a head glued to its arguments, Key(f, Op.None, (1, 2)) → Call(f, [1, 2])
 #   make(1)(2)               any head glued to them, a call of its value: Call(Call(make, [1]), [2])
