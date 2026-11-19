@@ -139,11 +139,11 @@ use_missing(message: text) as text := {
 }
 defining_file(name: text) as text := {
 	for key in shared.declared.keys {
-		if declarations_of(shared.declared[key]).any(declaration => declared_word(declaration) == name) { return key }
+		if declarations_of(shared.declared[key]).any(declaration => declaration_word(declaration) == name) { return key }
 	}
 	""
 }
-declared_word(declaration: Node) as text := match declaration {
+declaration_word(declaration: Node) as text := match declaration {
 	Key(name, op, signature) => text(name)
 	Record(name, fields, variants) => text(name)
 	_ => ""
