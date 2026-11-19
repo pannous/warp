@@ -27,5 +27,6 @@ at_least() { [ -n "$1" ] && [ "$1" -ge "$2" ] && echo yes || echo "${1:-no total
 
 check "the files wap types whole stay at least $FILES_TYPED_WHOLE ($total)" "$(at_least "$whole" $FILES_TYPED_WHOLE)" "yes"
 check "the functions wap types alone stay at least $FUNCTIONS_TYPED" "$(at_least "$typed" $FUNCTIONS_TYPED)" "yes"
+check "wap reads, lowers and binds its own source" "$(if [ -n "$total" ]; then grep '^front' "$report"; else echo "no total line"; fi)" ""
 check "no place of the compiler's own source is typed any" "$( [ -n "$total" ] && echo "$compiler_anys" || echo "no total line")" ""
 exit $((failures > 0))
