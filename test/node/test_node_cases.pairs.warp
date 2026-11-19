@@ -50,3 +50,5 @@ f(parse("a: 3"))'	"3"
 'f(n: Node) as list := match n { List(items, bracket, separator): items; _: [] }; #f(List([Symbol("a"), Symbol("b")], Bracket.Curly, Separator.None))'	2
 # a List arm inside a function value inside another List arm reads its items too
 'f(n: Node) as list := match n { List(scopes, bracket, separator): scopes.map(scope => match scope { List(items, inner, between): items; _: [] }); _: [] }; #f(List([List([Symbol("a")], Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))'	1
+'k = Key(Symbol("a"), Op.Add, Number(1)); [op_of(k) == Op.Add, text(k), op_of(Key(Symbol("x"), Op.Define, Symbol("y"))) == Op.Define]'	[yes, "a+1", yes]
+'ops = [Op.Mul, Op.Colon, Op.Mul]; ks = ops.map(o => Key(Symbol("a"), o, Symbol("b"))); ks.map(k => text(k))'	["a*b", "a: b", "a*b"]
