@@ -5,12 +5,10 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "scope.wap"
+use "names.wap"
 use "declarations.wap"
-
-# a used module, by its file's name, `a` for "lib/a.wap", which `a.twice` reads one word of; never a name's meaning
-MODULE_KIND = "module"
 # the words of the modules a program uses, each module named too
-modules_scope(modules: list) as list := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+modules_scope(modules: list) as list<Definition> := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
 module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
 # the names a module declares itself: its functions, variables and types, not their fields or cases
@@ -27,6 +25,7 @@ clashes_refused(modules: list) := for later in 2 to #modules {
 declaration_name(declaration: Node) as Node := match declaration {
 	Key(name, Op.Colon, signature) => name
 	Record(name, fields, variants) => name
+	_ => refused(declaration, "a module declares a name with its signature, or a type")
 }
 # a declaration as two modules may not both write it: `twice(int)`, a type's or a variable's bare name
 declared_alike(declaration: Node) as text := match declaration {
@@ -36,10 +35,10 @@ declared_alike(declaration: Node) as text := match declaration {
 # A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
 # that name the module declares, bound as the bare name would be were they the only ones; ø where the subject names no
 # module, or names something nearer, a variable `a`
-module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
+module_word(n: Node, subject: Node, key: text, scope: Scope) as Node? := {
 	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
-	for definition in scope {
-		if definition.kind == MODULE_KIND and definition.name == text(subject) {
+	for definition in named_in(scope, text(subject)) {
+		if definition.kind == MODULE_KIND {
 			named = module_names(definition.definer).filter(name => text(name) == key)
 			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
 			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
@@ -49,7 +48,7 @@ module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
 	ø
 }
 # a call of a used module's word, `a.twice(3)`, its other arguments bound; ø for any other call
-module_call(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node? := {
+module_call(n: Node, called: Node, arguments: list, scope: Scope, depth: int) as Node? := {
 	if not called is symbol or arguments is empty { return ø }
 	word = module_word(called, arguments#1, text(called), scope) ?? return ø
 	refitted(Call(word, all_bound(arguments.drop(1), scope, depth)), n)
