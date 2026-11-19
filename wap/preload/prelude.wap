@@ -7,9 +7,9 @@ use "floats.wap"
 use "host.wap"
 
 # a text written to the standard output, then a line end
-print(t: text) := write_text(STANDARD_OUTPUT, t, yes)
+print(t: text) := write(t, STANDARD_OUTPUT, yes)
 # a text written to the standard error, then a line end; the program goes on
-eprint(t: text) := write_text(STANDARD_ERROR, t, yes)
+eprint(t: text) := write(t, STANDARD_ERROR, yes)
 # a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
 hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
@@ -47,7 +47,7 @@ write_bytes(path: text, bytes: list<int>) := {
 	file = opened(path, CREATED_OR_EMPTIED, WRITE_RIGHT, "write: cannot open ")
 	t = text_made(#bytes)
 	for at in 0 upto #bytes { set_text_byte(t, at, bytes[at]) }
-	write_text(file, t, no)
+	write(t, file, no)
 	fd_close(file)
 	# TODO (card void-function-result) the return goes once a function without a written result type gives nothing
 	return

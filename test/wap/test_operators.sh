@@ -62,4 +62,5 @@ format_check 'if c
 	print "a"' 'if c {print "a"}'
 format_check 'r = 2..' 'r = 2 ..'
 format_check 'q = ..3' 'q = .. 3'
+format_check 'x = ø' 'x = ø'
 exit $((failures > 0))

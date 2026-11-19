@@ -85,6 +85,8 @@ class Program {
 	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
 	pending: list<Node> = []
+	# the functions whose calls compile to their primitive in place: key → that primitive
+	in_place: map<text, Node> = {}
 	# the helper functions primitives call: operation → index
 	helpers: map<text, int> = {}
 	# the Records the program declares, which lay out their instances
@@ -144,8 +146,9 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 block_code(statements: list<Node>, p: Program, f: Frame) as Code := {
 	defined = statements.filter(s => s is Define)
 	p.pending += defined
+	for definition in defined { kept_in_place(definition, p) }
 	codes = statements.map(s => code(s, p, f))
-	keys = defined.map(function_key)
+	keys = defined.map(function_key).filter(key => not p.in_place.has(key))
 	for waiting in p.pending.filter(w => function_key(w) in keys) { if function_key(waiting) in p.pending.map(function_key) { emitted_function(waiting, p) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)

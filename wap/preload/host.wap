@@ -32,7 +32,7 @@ set_memory_word(at: int, word: int) := prim memory_set_word(at, word)
 # end after it when `line` says so
 memory_holding(count: int) := prim memory_held(count)
 place(t: text) := prim text_placed(t)
-write_text(file: int, t: text, line: bool) := prim text_written(t, file, line)
+write(t: text, file: int, line: bool) := prim text_written(t, file, line)
 
 args_sizes_get(count_at: int, size_at: int): int := prim args_sizes_get(count_at, size_at)
 args_get(addresses_at: int, bytes_at: int): int := prim args_get(addresses_at, bytes_at)
