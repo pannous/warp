@@ -127,7 +127,7 @@ F64_CONVERT_I64_S = [0xB9]
 I64_REINTERPRET_F64 = [0xBD]
 F64_REINTERPRET_I64 = [0xBF]
 REF_NULL = [0xD0]
-# a reference to a function of the module, which a declarative element segment names (Module.referenced)
+# a reference to a function of the module, which a declarative element segment names (WasmModule.referenced)
 REF_FUNC = [0xD2]
 REF_IS_NULL = [0xD1]
 REF_EQ = [0xD3]
