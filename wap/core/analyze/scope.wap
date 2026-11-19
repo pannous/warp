@@ -56,6 +56,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
+	Try(body, otherwise) => refitted(Try(bound(body, scope, depth), bound(otherwise, scope, depth)), n)
 	Case(subject, arms) => refitted(Case(bound(subject, scope, depth), arms.map(arm => arm_bound(arm, scope, depth))), n)
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
