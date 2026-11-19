@@ -62,7 +62,10 @@ names_a_variable(statement: Node) as bool := match statement {
 	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 is symbol and items#2 is symbol and VARIABLE_WORDS.has(text(items#1))
 	_ => no
 }
-variable_named(statement: List) as Node := match statement { List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)])) }
+variable_named(statement: Node) as Node := match statement {
+	List(items, bracket, separator) => Key(items#2, Op.Colon, symbol(VARIABLE_WORDS[text(items#1)]))
+	_ => refused(statement, "this statement names no variable")
+}
 
 # code as a kernel form, placed where the code was written (core/stage.wap)
 lowered(language: Language, n: Node) as Node := staged(n, form => lowered_form(language, form))
@@ -168,7 +171,7 @@ group_lowered(language: Language, statements: list) as Node := if #statements ==
 
 # a sequence of statements gives each (core/analyze/declarations.wap), a group of one its item, any other node is the
 # one statement
-statements_of(n: Node) as list := match n {
+statements_of(n: Node) as list<Node> := match n {
 	Block(statements) => statements
 	List(items, Bracket.None, separator) => if #items == 1 then statements_of(items#1) else top_level_statements(n)
 	_ => [n]

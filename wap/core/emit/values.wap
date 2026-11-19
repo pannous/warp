@@ -13,8 +13,8 @@ use "../errors.wap"
 
 # Code that leaves one value of `type` on the stack; a form that leaves none has the type []
 class Code {
-	type: list = []
-	instructions: list = []
+	type: list<int> = []
+	instructions: list<int> = []
 }
 
 # the layouts of the types a word names that need no type of the module: `number` and `any` hold any value, a
@@ -105,9 +105,9 @@ signature_function_index(type: Node, m: Module, records: Records) as int? := {
 	if parts == ø { return ø }
 	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
 }
-signature_parameters(parts: FunctionParts, m: Module, records: Records) as list := parts.parameters.map(parameter => signed_layout(parameter, m, records))
-signature_results(parts: FunctionParts, m: Module, records: Records) as list := if text(parts.result) == EMPTY_TYPE_WORD then [] else [signed_layout(parts.result, m, records)]
-signed_layout(type: Node, m: Module, records: Records) as list := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for this type of a signature yet")
+signature_parameters(parts: FunctionParts, m: Module, records: Records) as list<list<int>> := parts.parameters.map(parameter => signed_layout(parameter, m, records))
+signature_results(parts: FunctionParts, m: Module, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [signed_layout(parts.result, m, records)]
+signed_layout(type: Node, m: Module, records: Records) as list<int> := layout_of(type, m, records) ?? refused(type, "the emitter has no value layout for this type of a signature yet")
 
 # The GC type of a list, `list<int>`: a struct of its count and an array of its items, the array's places past the
 # count spare (lists.wap); ø for a type that is no list. Every list's type extends the list base, its count alone, so
@@ -133,8 +133,8 @@ struct_of(record: Node, m: Module, records: Records) as int := {
 }
 # the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
 enum_base(m: Module) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
-tagged(m: Module) as list := instruction(STRUCT_GET, [enum_base(m), 0])
-field_layouts(fields: list, m: Module, records: Records) as list := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
+tagged(m: Module) as list<int> := instruction(STRUCT_GET, [enum_base(m), 0])
+field_layouts(fields: list, m: Module, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
 case_struct_of(record: Node, case: Node, m: Module, records: Records) as int := {
 	base = struct_of(record, m, records)
 	fields = field_layouts(fields_of(record) + case_fields(case), m, records)

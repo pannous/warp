@@ -61,12 +61,12 @@ emitted(program: Block) as Module := {
 }
 
 # the host functions the primitives of a program call, each once, in the order met
-host_calls(program: Node) as list := {
+host_calls(program: Node) as list<text> := {
 	names = RAISING_CALLS.map(name => name)
 	for operation in primitives_in(program).filter(operation => HOST_CALLS.has(operation)) { for name in HOST_CALLS[operation] { if not names.contains(name) { names.add(name) } } }
 	names
 }
-primitives_in(n: Node) as list := match n {
+primitives_in(n: Node) as list<text> := match n {
 	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
 	Get(subject, key) => primitives_in(subject) + primitives_in(key)
 	List(items, bracket, separator) => items.flat_map(primitives_in)
@@ -84,8 +84,8 @@ class Program {
 	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
 	pending: list<Node> = []
-	# the helper functions primitives call, each [operation, index]
-	helpers: list = []
+	# the helper functions primitives call: operation → index
+	helpers: map<text, int> = {}
 	# the Records the program declares, which lay out their instances
 	records: Records = Records()
 }
@@ -173,11 +173,11 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 	_ => refused(handler, "a Try's handler is a function written in place, `error => …`")
 }
 # the program's code, a raise no Try caught written and the program ended
-uncaught_ended(body: list, p: Program) as list := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + instruction(CALL, [helper(p, "uncaught", uncaught_function)])
+uncaught_ended(body: list, p: Program) as list<int> := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + instruction(CALL, [helper(p, "uncaught", uncaught_function)])
 # a structured instruction's type: the value it leaves, or none
-block_type(type: list) as list := if valued(type) then type else VOID_BLOCK
+block_type(type: list) as list<int> := if valued(type) then type else VOID_BLOCK
 # a part's code where its choice has the type: its value kept, or dropped when the choice has none
-kept(part: Code, type: list) as list := if valued(type) then part.instructions else dropped(part)
+kept(part: Code, type: list) as list<int> := if valued(type) then part.instructions else dropped(part)
 arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitted(choice, labelled(f, [OTHER_LABEL], () => code(part, p, f)), part, p)
 # a part's value made to fit its choice's type, an If's or a Case's
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
@@ -185,7 +185,7 @@ choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	if wanted == ø then given else fitted(given, wanted, part, p)
 }
 # the type of either of two values: the one that finishes, or the common one; none when they differ
-joined(a: list, b: list) as list := if a == NEVER then b else if b == NEVER or a == b then a else []
+joined(a: list, b: list) as list<int> := if a == NEVER then b else if b == NEVER or a == b then a else []
 valued(type: list) as bool := not type is empty and type != NEVER
 checked_condition(form: Node, condition: Code) := if condition.type != I32 { refused(form, "a condition is yes or no") }
 
@@ -239,10 +239,10 @@ checked_cast(p: Program, wanted: list, name: text, form: Node) as int := {
 	added_function(p.m, [ANYREF, nullable(text_type(p.m))], [wanted], [], fits + raised_with("${ANY_OF_ANOTHER_TYPE} ${name} wanted at ", local_get(1), p))
 }
 # a casting helper's call given the place, one helper for each type, the type's name for the raise
-cast_called(wanted: list, name: text, form: Node, p: Program) as list := text_literal(place_of_code(form), p.m).instructions + instruction(CALL, [helper(p, "cast to ${wanted} ${name}", q => checked_cast(q, wanted, name, form))])
+cast_called(wanted: list, name: text, form: Node, p: Program) as list<int> := text_literal(place_of_code(form), p.m).instructions + instruction(CALL, [helper(p, "cast to ${wanted} ${name}", q => checked_cast(q, wanted, name, form))])
 # where code was written, file:line:column
 place_of_code(form: Node) as text := "${file_of(form)}:${line_of(form)}:${column_of(form)}"
-items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p))
+items_fitted(type: Node, items: list, p: Program, f: Frame) as list<Code> := items.map(item => fitted(code(item, p, f), layout_of(type, p.m, p.records) ?? refused(item, "the emitter has no value layout for this type yet"), item, p))
 # a function's value made to fit its signed result, a frame without one leaving it as it is
 signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p) else given
 # code emitted inside wasm's structured instructions, which open these labels
@@ -261,7 +261,7 @@ jump(form: Node, f: Frame, label: text) as int := {
 }
 
 # the instructions of code whose value nobody takes
-dropped(c: Code) as list := c.instructions + (if valued(c.type) then DROP else [])
+dropped(c: Code) as list<int> := c.instructions + (if valued(c.type) then DROP else [])
 
 # code that never finishes ends unreachable, so wasm types what follows as any
 finished(c: Code) as Code := if c.type == NEVER then Code(NEVER, c.instructions + UNREACHABLE) else c

@@ -20,8 +20,11 @@ FRESH_MARK = "·"
 
 # the template with each hole replaced by its binding; a template that is a repetition, `($m := $b)...`, the statements
 # it writes, spliced where it stands
-built(language: Language, template: Node, bindings: map) as Node := if repeated_part(template) != ø then List(repeated(language, repeated_part(template), bindings), Bracket.None, Separator.Newline) else filled(language, template, bindings)
-filled(language: Language, template: Node, bindings: map) as Node := match template {
+built(language: Language, template: Node, bindings: map<text, Node>) as Node := {
+	repeated_by = repeated_part(template)
+	if repeated_by != ø then List(repeated(language, repeated_by, bindings), Bracket.None, Separator.Newline) else filled(language, template, bindings)
+}
+filled(language: Language, template: Node, bindings: map<text, Node>) as Node := match template {
 	# a word the template spells itself is the rule's: a function it names yields to the program's (analyze/calls.wap ranked)
 	Symbol(name) => if bindings.has(name) then bindings[name] else if bindings.has(name + REST_MARK) then taken_as_one(bindings[name + REST_MARK]) else with_fact(symbol(name), DERIVED, True)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
@@ -36,7 +39,7 @@ filled(language: Language, template: Node, bindings: map) as Node := match templ
 }
 
 # a template text, each hole in it replaced by the spelling of what it took, the longest name first ($fx before $f)
-interpolated(value: text, bindings: map) as text := {
+interpolated(value: text, bindings: map<text, Node>) as text := {
 	filled = value
 	for name in sorted(bindings.keys, name => -#name) { filled = filled.replace(name, text(bindings[name])) }
 	filled
@@ -47,13 +50,14 @@ interpolated(value: text, bindings: map) as text := {
 taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items); _ => taken }
 
 # items of a template, a rest hole replaced by the items it took
-built_items(language: Language, items: list, bindings: map) as list := {
-	all = []
+built_items(language: Language, items: list<Node>, bindings: map<text, Node>) as list<Node> := {
+	all: list<Node> = []
 	for item in items {
+		repeated_by = repeated_part(item)
 		if is_rest_hole(item) and bindings.has(hole_key(item)) {
 			all = all + items_or_one(bindings[hole_key(item)])
-		} else if repeated_part(item) != ø {
-			all = all + repeated(language, repeated_part(item), bindings)
+		} else if repeated_by != ø {
+			all = all + repeated(language, repeated_by, bindings)
 		} else {
 			all.add(built(language, item, bindings))
 		}
@@ -70,7 +74,7 @@ grown(items: list, bracket: Bracket, separator: Separator) as Node := {
 
 # `Arm($p, $r)...`: the part once per match of a repetition, each of its holes bound to its own match in turn; a part
 # in parentheses, `($f: $f)...`, is written without them, as a pattern reads it
-repeated(language: Language, part: Node, bindings: map) as list := {
+repeated(language: Language, part: Node, bindings: map<text, Node>) as list<Node> := {
 	sequences = holes_in(part).filter(hole => bindings.has(hole + REST_MARK)).unique
 	if sequences is empty { refused(part, "a repeated part names no hole of a repetition or rest") }
 	times = #items_or_one(bindings[sequences#1 + REST_MARK])
@@ -85,12 +89,12 @@ repeated(language: Language, part: Node, bindings: map) as list := {
 
 # Hygiene: a name the template binds itself, `m = $b`, is renamed fresh at each use (m·1, m·2 …), so it can neither
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.
-names_bound_in(language: Language, template: Node) as list := match template {
+names_bound_in(language: Language, template: Node) as list<text> := match template {
 	Call(called, arguments) => {
-		inner = arguments.map(argument => names_bound_in(language, argument)).fold([], (a, b) -> a + b)
+		inner = arguments.flat_map(argument => names_bound_in(language, argument))
 		if #arguments == 2 and assigning(language, called) and arguments#1 is symbol and not is_hole(arguments#1) then [spelling_written(arguments#1)] + inner else inner
 	}
-	List(items, bracket, separator) => items.map(item => names_bound_in(language, item)).fold([], (a, b) -> a + b)
+	List(items, bracket, separator) => items.flat_map(item => names_bound_in(language, item))
 	Key(left, op, right) => names_bound_in(language, left) + names_bound_in(language, right)
 	_ => []
 }
@@ -100,7 +104,7 @@ assigning(language: Language, called: Node) as bool := group_of(language, spelli
 
 fresh_count = [0]
 # the bindings with each name the template binds made fresh
-with_fresh_names(bindings: map, names: list) as map := {
+with_fresh_names(bindings: map<text, Node>, names: list<text>) as map<text, Node> := {
 	fresh_count[0] = fresh_count[0] + 1
 	for name in names { bindings[name] = with_fact(symbol(name + FRESH_MARK + fresh_count[0]), "fresh", symbol(name)) }
 	bindings
