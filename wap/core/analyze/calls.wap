@@ -401,7 +401,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else if chosen.result == ø and not chosen.done then with_fact(n, RESULT_UNKNOWN, Text(chosen.unknown_result)) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
-parameter_type(written: Node?, given: Node, letters: list<Binding>, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
+parameter_type(written: Node?, given: Node, letters: list<Binding>, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else type_substituted(written, letters)
 # whether a parameter of this written type is typed anew for each type given: a bare `list`, `enum` or `function`,
 # which take any list, enum or function value, a function type, whose function values each type it, and a protocol
 takes_own_type(written: Node, records: Records) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or signature(written) != ø or protocol_named(records, written) != ø

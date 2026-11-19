@@ -128,7 +128,7 @@ entry_read_typed(n: Node, map: Node, key: Node, s: TypingState) as Node := word_
 
 # A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
 # the call `#(x, i)`, as a Range answers it
-get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s)
+get_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := as_found(n, item_got(n, typed_form(subject, s, f, ø), typed_form(key, s, f, symbol(INT_TYPE)), s), s, f)
 # the item of a typed subject at a typed place
 item_got(n: Node, held: Node, place: Node, s: TypingState) as Node := {
 	item = item_type(value_type(held))

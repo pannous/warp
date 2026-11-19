@@ -366,15 +366,25 @@ as_found(n: Node, read: Node, s: TypingState, f: TypeFrame) as Node := {
 	known = found_type(path_key(n) ?? return read, f.present) ?? return read
 	if base_of_optional(value_type(read)) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
-# A path a condition may find, its key: a variable's own, `x`, and a field of a path, `m.pattern`; ø for any other
-# form. A path is found until something gives it, or a path it is part of, a new value.
+# A path a condition may find, its key: a variable's own, `x`, a field of a path, `m.pattern`, and an item of a path at
+# a written place, `types#1`; ø for any other form. A path is found until something gives it, or a path it is part
+# of, a new value.
 path_key(n: Node) as text? := match n {
 	Symbol(name) => if is_variable(n) then place_key(defined_at(n)) else ø
-	Get(subject, key) => if key is text then "${path_key(subject) ?? return ø}.${text(key)}" else ø
+	Get(subject, key) => "${path_key(subject) ?? return ø}${path_step(key) ?? return ø}"
 	_ => ø
 }
+# the step from a path into one of its parts: `.field`, or `#place` for a written place
+path_step(key: Node) as text? := match key {
+	Number(value) => if value is int then "${ITEM_STEP}${text(key)}" else ø
+	_ => if key is text then "${FIELD_STEP}${text(key)}" else ø
+}
+FIELD_STEP = "."
+ITEM_STEP = "#"
+# whether a path is this one or part of it, `x.inner` and `x#1` within `x`
+part_of(key: text, path: text) as bool := key == path or [FIELD_STEP, ITEM_STEP].any(step => key.starts_with(path + step))
 # what conditions found, without this path and the paths within it, which a new value changes
-forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => known.key != key and not known.key.starts_with(key + ".")) }
+forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => not part_of(known.key, key)) }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
 names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #definition_at(definer, s).parameters == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
