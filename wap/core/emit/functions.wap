@@ -64,7 +64,7 @@ signed_result(name: Node, p: Program) as list := {
 # A value of a type where any holds it: [the GC type it is held as, a plain value's box or its own reference type,
 # the instructions that take the value out once cast]; at is the code that asks
 held_in_any(type: Node, at: Node, p: Program) as list := {
-	if WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES {
+	if text(type) in BOXED_WORDS {
 		box = box_index(p.m, text(type))
 		return [box, instruction(STRUCT_GET, [box, 0])]
 	}
