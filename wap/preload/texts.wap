@@ -27,7 +27,7 @@ bytes_between(t: text, start: int, stop: int): text := prim array_slice(t, start
 byte_text(b: int): text := prim byte_text(b)
 # a code's UTF-8 bytes: the fewest that hold it, from `count` bytes up, scale the part of the code below the lead byte's
 # bits; the lead byte marked by its count, then the continuation bytes
-utf8_bytes(code: int, count: int, scale: int): text := if code < LEAD_BITS#count * scale or count == #LEAD_BITS then byte_text(256 - 2 * LEAD_BITS#count + code ÷ scale) + continuation_bytes(code, scale ÷ CONTINUATION_BITS) else utf8_bytes(code, count + 1, scale * CONTINUATION_BITS)
+encoded(code: int, count: int, scale: int): text := if code < LEAD_BITS#count * scale or count == #LEAD_BITS then byte_text(256 - 2 * LEAD_BITS#count + code ÷ scale) + continuation_bytes(code, scale ÷ CONTINUATION_BITS) else encoded(code, count + 1, scale * CONTINUATION_BITS)
 # the continuation bytes of a code from the one holding `scale`'s six bits down to the last
 continuation_bytes(code: int, scale: int): text := if scale == 0 then "" else byte_text(CONTINUATION_FROM + (code ÷ scale) rem CONTINUATION_BITS) + continuation_bytes(code, scale ÷ CONTINUATION_BITS)
 
