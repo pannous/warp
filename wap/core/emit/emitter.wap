@@ -10,10 +10,9 @@
 #
 # Names arrive bound (core/analyze/scope.wap): each carries what it refers to and the name that defined it, so the
 # emitter never looks a name up by its spelling; a call's name refers to the one typed function it means
-# (core/analyze/types.wap). The emitter reads only the parameters' types yet: a value's type is known once its code is
-# emitted, so a function's body is emitted at its first call (its globals set by then), or at the end of its block
-# when nothing calls it. What is still unknown, a function calling itself or a global read before it is set, is
-# refused, never guessed.
+# (core/analyze/types.wap). A function is placed by the signature typing gave it, at the start of its block, and its
+# body emitted where its definition stands; a global a body reads before its statement sets it takes its type from
+# typing too.
 #
 # The emitter knows no library word: the preload's functions the program calls (wap/preload/prelude.wap) come before
 # the program's statements, emitted like its own functions, and a built-in's body is a Prim
@@ -84,9 +83,7 @@ class Program {
 	host: map<text, int> = {}
 	functions: list<Placed> = []
 	globals: list<Placed> = []
-	# the Defines met so far, by their function key: each waits until it is placed
-	pending: map<text, Node> = {}
-	# the functions whose calls compile to their primitive in place: key → that primitive
+	# the functions whose calls compile to their primitive in place, by their function key
 	in_place: map<text, Node> = {}
 	# the helper functions primitives call: operation → index
 	helpers: map<text, int> = {}
@@ -119,11 +116,11 @@ class Placed {
 # the code of a kernel form
 code(form: Node, p: Program, f: Frame) as Code := match form {
 	Block(statements) => block_code(statements, p, f)
-	Define(name, parameters, body) => Code()
+	Define(name, parameters, body) => if p.in_place.has(function_key(form)) then Code() else { function_bodied(form, p); Code() }
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
 	Try(body, handler) => try_code(form, body, handler, p, f)
-	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
+	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f), p)
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
 	Return(value) => return_code(form, value, p, f)
@@ -131,7 +128,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
 	EmptyMap() => map_code(form, [], p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(type_of(form), items_fitted(item_type(type_of(form)), items, p, f), p))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(list_item(type_of(form)), items_fitted(item_type(type_of(form)), items, p, f), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
@@ -141,27 +138,20 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
 }
 
-# Statements run in order, the value the last one's, every other value dropped. The functions the block defines wait
-# from its start, so a call before a definition's line finds it; those nothing called are emitted at its end. A
-# definition itself leaves no value.
+# Statements run in order, the value the last one's, every other value dropped. The functions the block defines are
+# placed at its start, so a call before a definition's line finds it; a definition emits its body and leaves no value.
 block_code(statements: list<Node>, p: Program, f: Frame) as Code := {
-	defined = statements.filter(s => s is Define)
-	keys = defined.map(function_key)
-	for at in 1 to #defined {
-		p.pending[keys#at] = defined#at
-		kept_in_place(defined#at, keys#at, p)
-	}
+	for definition in statements.filter(s => s is Define) { if is_in_place(definition) then p.in_place[function_key(definition)] = definition else function_placed(definition, p) }
 	codes = statements.map(s => code(s, p, f))
-	for key in keys { if not p.in_place.has(key) { waiting_function(p, key) } }
 	if codes is empty { return Code() }
 	Code(codes.last.type, codes[.. #codes - 1].flat_map(dropped) + codes.last.instructions)
 }
 
-# A choice by a condition, yes or no (an i32). With both parts of one type (a part that never finishes fits any) it has
-# the chosen part's value, otherwise none: each part's value is dropped, as a missing else part's ø is.
-if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code := {
+# A choice by a condition, yes or no (an i32), of the type typing gives it: with none, each part's value is dropped, as
+# a missing else part's ø is.
+if_code(form: Node, condition: Code, then_part: Code, else_part: Code, p: Program) as Code := {
 	checked_condition(form, condition)
-	type = joined(then_part.type, else_part.type)
+	type = typed_layout(form, p)
 	Code(type, condition.instructions + IF + block_type(type) + kept(then_part, type) + ELSE + kept(else_part, type) + END)
 }
 # The body's value, or the handler's when a raise in the body is thrown (kernel-try): the handler's body runs in
@@ -173,7 +163,7 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
 		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
-		type = joined(tried.type, instead.type)
+		type = typed_layout(form, p)
 		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
 		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + local_set(error.index) + kept(instead, type) + END)
 	}
@@ -189,10 +179,8 @@ arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitte
 # a part's value made to fit its choice's type, an If's or a Case's
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
-	if wanted == ø then given else fitted(given, wanted, part, p)
+	if valued(wanted) then fitted(given, wanted, part, p) else given
 }
-# the type of either of two values: the one that finishes, or the common one; none when they differ
-joined(a: list<int>, b: list<int>) as list<int> := if a == NEVER then b else if b == NEVER or a == b then a else []
 valued(type: list<int>) as bool := not type is empty and type != NEVER
 checked_condition(form: Node, condition: Code) := if condition.type != I32 { refused(form, "a condition is yes or no") }
 

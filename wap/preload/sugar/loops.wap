@@ -1,8 +1,11 @@
-# Loops and the words that leave them, as While and Return (wiki/keyword.md): the spellings wap's own source uses. A
-# bare `return`, `break` or `continue` is a word form of lowering (core/rules/lowering.wap WORD_FORMS).
+# Loops and the words that leave them, as While, Break, Continue and Return (wiki/keyword.md): the spellings wap's own
+# source uses.
 
 rule while $condition... $body: Braces => While($condition, $body)
 rule return $value... => Return($value)
+rule return => Return(Empty())
+rule break => Break()
+rule continue => Continue()
 rule until $condition... $body: Braces => While(not $condition, $body)
 
 # A loop over each item of a list or each int of a range, as While (wiki/keyword.md for). Its count goes up before the

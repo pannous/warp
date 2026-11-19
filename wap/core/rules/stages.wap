@@ -33,6 +33,9 @@ DEFINITION = "="
 NO_HEAD = ""
 # the head of a pattern that is one word, before the word
 WORD_HEAD = "word "
+# what a rule writes that writes nothing, `=> ()`, a mark its list drops: not ø, a value a rule may write,
+# `rule ø => Empty()`
+NOTHING_WRITTEN = symbol("()")
 
 # code after a stage's rules, and whether any of them fired
 class Fired { code: Node, fired: bool }
@@ -84,11 +87,12 @@ declaration_taken(language: Language, called: text, arguments: list) as list? :=
 
 rule_added(language: Language, written: Node, pattern: Node, template: Node) := {
 	normal = normalized(ungrouped(pattern))
-	output = ungrouped(template)
+	writes_nothing = ungrouped(template) is Empty
+	output = if writes_nothing then NOTHING_WRITTEN else ungrouped(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	typed = asks_value_type(compiled_pattern(language, normal))
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
-	if typed { normal = lowered(language, normal); output = lowered(language, output) }
+	if typed { normal = lowered(language, normal); output = if writes_nothing then output else lowered(language, output) }
 	matcher = compiled_pattern(language, normal)
 	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher))
 	rules = if typed then language.typed_rules else language.shape_rules
@@ -203,7 +207,9 @@ parts_applied(language: Language, rules: Rules, whole: Node, fired: list) as Nod
 		else if bracket == Bracket.Square and items#1 is symbol and language.phrase_words.leading.has(spelling_written(items#1)) then List([rules_applied(language, rules, phrase, fired)], bracket, Separator.None)
 		else with_parts(whole, part => rules_applied(language, rules, part, fired))
 	}
-	List(items, bracket, separator) => with_facts_of(List(lines_of(language, items, separator).flat_map(part => spread(rules_applied(language, rules, part, fired), part)), bracket, separator), whole)
+	List(items, bracket, separator) => with_facts_of(List(lines_of(language, items, separator).flat_map(part => spread(rules_applied(language, rules, part, fired))), bracket, separator), whole)
+	# a key's word names, a field, a parameter or a map's key, `{yes: 1}`: no rule of one word takes it, its value is code
+	Key(left, Op.Colon, right) => if left is symbol then with_facts_of(Key(left, Op.Colon, rules_applied(language, rules, right, fired)), whole) else with_parts(whole, part => rules_applied(language, rules, part, fired))
 	_ => with_parts(whole, part => rules_applied(language, rules, part, fired))
 }
 # A phrase no rule fits whole, whose later word heads a rule that fits from there on, `print match x {…}`: that part
@@ -235,9 +241,8 @@ phrase_written(language: Language, phrase: Node) as Node := match phrase {
 declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symbol(PATTERN_WORD)
 
 # A rule's result as the items it stands for in its list or block: a statement sequence, `A; B`, its statements; a row a
-# rule wrote, `$a, $rest...`, its items; nothing for a rule that wrote nothing, `()`, where something was. Each item keeps
-# the rule that wrote it.
-spread(result: Node, written: Node) as list := if result is Empty and not (written is Empty) then [] else spread_items(result) ?? [result]
+# rule wrote, `$a, $rest...`, its items; none for a rule that wrote nothing, `()`. Each item keeps the rule that wrote it.
+spread(result: Node) as list := if result == NOTHING_WRITTEN then [] else spread_items(result) ?? [result]
 # the items a rule's sequence or row stands for, ø for any other result
 spread_items(result: Node) as list? := match result {
 	List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) or separator == Separator.Comma and fact_of(result, RULE) != ø then items.map(item => with_rule_of(item, result)) else ø
@@ -250,7 +255,7 @@ is_phrase(n: Node) as bool := match n { List(items, Bracket.None, Separator.Spac
 # a spliced item keeps the rule that wrote its sequence, so a later stage knows a rule wrote it
 with_rule_of(item: Node, sequence: Node) as Node := {
 	rule = fact_of(sequence, RULE)
-	if rule == ø then item else with_fact(item, RULE, rule)
+	if rule == ø or item is Empty then item else with_fact(item, RULE, rule)
 }
 one_phrase(language: Language, items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(language, items#1) == ø
 
@@ -266,8 +271,8 @@ rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 	current
 }
 
-# the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits (a rule may
-# write nothing, `()`, which is ø itself); two equally specific ones are refused
+# the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits; two equally
+# specific ones are refused
 rule_applied(language: Language, rules: Rules, n: Node) as list := {
 	best: Rule? = ø
 	best_bindings = {}

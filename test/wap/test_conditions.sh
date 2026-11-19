@@ -156,4 +156,14 @@ read(n: int) as int := {
 print(text(read(5)) + " " + text(read(0)) + " " + text(read(9)))')" "6 0 0"
 check "a condition of a test and a list, a and xs, is yes when the test holds and the list has items" "$(ran test_and_list 'kept(xs: list<text>, n: int) as text := if n > 0 and xs then "yes" else "no"
 print(kept(["a"], 1) + " " + kept([], 1) + " " + kept(["a"], 0))')" "yes no no"
+check "no before a value tests it for emptiness, no alone is the literal" "$(ran no_value 'xs: list<int> = []
+t = "a"
+if no xs { print "no items" }
+if no [1] { print "wrong" } else { print "items" }
+if no t then print "wrong" else print "a text"
+b = no
+print(text(b) + " " + text([1, ø].contains(ø)))')" "no items
+items
+a text
+no yes"
 exit $((failures > 0))

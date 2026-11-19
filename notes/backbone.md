@@ -109,6 +109,8 @@ The languages, each a set of Node shapes:
   A function whose parameters have no type stands as one Define per tuple of argument types it is called with; one
   nothing calls is gone. The program comes first after the preload's functions it calls: one Block
   (core/analyze/types.wap). Every node with a position also has its `file` (core/stage.wap `file_of`).
+- **emit** reads the typed kernel's `type` and `binding` facts and decides nothing about them: it may choose its code
+  by them, but computes no type (test_guardrails.sh emit-infers-type).
 
 **Facts live in Meta, never in the shape.** Positions (line, column), the rule or stage that built a node, a name's
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
@@ -316,9 +318,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   i64 result); a float would show the host's digits (0.1 as 0.10000000000000001), a char or yes/no as a number.
   Paid off when values show themselves through the runtime's show words, boxed into a $Node.
 - **The emitter learns a value's type by emitting it** (wap/core/emit/emitter.wap), though the typing stage gives
-  each one: it reads only the parameters' types. A function's body is emitted at its first call, and a function
-  calling itself or a global read before the statement that sets it is refused. Bends "meaning is typed" (the types
-  are there, but read late). Paid off when the emitter reads each form's `type` fact.
+  each one: it reads the functions' signatures, but an `if` still joins its arms' types and a primitive takes its
+  operands' emitted layouts. Bends "meaning is typed" (the types are there, but read late). Paid off when the emitter
+  reads each form's `type` fact.
 - **A written result type is not declared** (wap/core/analyze/declarations.wap): `f(a): int := …` declares
   `f: [a]`, so only the typing stage knows the result. Paid off when signature rules need it.
 - **Function values and captures are refused by the typing stage** (wap/core/analyze/types.wap), as by the emitter.
@@ -390,3 +392,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   a template's glued call of an enum's fieldless case builds that case. Reason: templates are built before the
   preload's Records are declared, so they can't look the cases up. Paid off when templates see the declared Records:
   the table goes for that lookup.
+
+- **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
+  drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
+  List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
+  mark becomes the empty sequence.
