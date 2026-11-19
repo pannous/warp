@@ -190,9 +190,7 @@ typed_from(key: text, s: TypingState) as text := {
 	for typed in s.functions { if place_key(declared_name(signed_name(typed))) == key { return typed.function.key } }
 	""
 }
-definition_keyed(key: text, s: TypingState) as Function? := {
-	items_named(s.definition_keys, s.definitions, key, definition => definition.key).first
-}
+definition_keyed(key: text, s: TypingState) as Function? := item_named(s.definition_keys, s.definitions, key, definition => definition.key)
 
 # The one definition that takes these typed arguments, by their types, then by the type expected; none or several
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
