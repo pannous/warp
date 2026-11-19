@@ -83,7 +83,7 @@ facts_in(data: list<Node>): list<Node> := {
 	at = META_FACTS - 1
 	while at < #data {
 		at += 1
-		facts = facts + [data#at]
+		facts.add(data#at)
 	}
 	facts
 }

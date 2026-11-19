@@ -45,7 +45,7 @@ remove_at(xs: list<T>, at: int): T := {
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
 	out: list<U> = []
-	for x in xs { out = out + [f(x)] }
+	for x in xs { out.add(f(x)) }
 	out
 }
 # each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
@@ -57,7 +57,7 @@ map(r: Range, f: (int) -> U): list<U> := {
 # the items that fit a test, in order
 filter(xs: list<T>, fits: (T) -> bool): list<T> := {
 	out: list<T> = []
-	for x in xs { if fits(x) { out = out + [x] } }
+	for x in xs { if fits(x) { out.add(x) } }
 	out
 }
 # each item's list of results, joined: `[1, 2].flat_map(x => [x, x])` is [1, 1, 2, 2]
