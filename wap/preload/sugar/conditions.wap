@@ -13,6 +13,9 @@ rule if $condition... then if $inner... else $else... => refuse "this else may b
 
 rule unless $c $body => If($c, ø, $body)
 
+# a value with its fallback for when it raises: `try parse(s) else 0`
+rule try $body... else $otherwise... => Try($body, $otherwise)
+
 # a choice written after its condition, `c ? a : b` (the operator table's choice, below every operator), and a
 # statement guarded after it, `print "a" if c`
 rule ($c ? $then : $else) => If($c, $then, $else)
