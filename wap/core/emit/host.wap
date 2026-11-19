@@ -1,6 +1,7 @@
 # The primitives that ask the host (WASI): printing, raising, reading and writing files, the command line. Each is a
 # helper function of the module, built here from WASI's calls on the module's memory; primitives.wap names them.
 
+use "emitter.wap"
 use "lists.wap"
 use "values.wap"
 use "wasm.wap"
