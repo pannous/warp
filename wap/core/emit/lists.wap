@@ -20,7 +20,6 @@ NO_SUCH_ITEM = "this list has no item at this place"
 POPPED_EMPTY = "pop of an empty list"
 LIST_ITEM = "list_item"
 LIST_SET = "list_set"
-LIST_ADD = "list_add"
 LIST_COUNT = "list_count"
 LIST_SLICE = "list_slice"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
