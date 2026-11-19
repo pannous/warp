@@ -70,14 +70,14 @@ writing_function(p: Program) as int := {
 	placed = local_get(0) + instruction(CALL, [helper(p, "text_placed", placing_function)]) + local_get(0) + ARRAY_LEN + local_set(3)
 	line_end = local_get(2) + IF + VOID_BLOCK + i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0]) + length + i32_const(1) + I32_ADD + local_set(3) + END
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + done + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + length + done + I32_SUB + instruction(I32_STORE, [2, 0])
-	written = local_get(1) + I32_WRAP_I64 + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")])
+	written = int_local(1) + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, "fd_write")])
 	failed = written + moved + I32_EQZ + I32_OR + IF + VOID_BLOCK + UNREACHABLE + END
 	rest = BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + done + length + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + failed + done + moved + I32_ADD + local_set(4) + instruction(BRANCH, [0]) + END + END
 	added_function(p.m, [nullable(text_type(p.m)), I64, I32], [], [I32, I32], placed + line_end + rest)
 }
 # The helper of memory_held: the memory grown to hold that many bytes from BYTES_ADDRESS. Its locals: 0 the count, 1
 # the pages short.
-memory_holding_function(p: Program) as int := added_function(p.m, [I64], [], [I32], memory_grown(local_get(0) + I32_WRAP_I64, 1))
+memory_holding_function(p: Program) as int := added_function(p.m, [I64], [], [I32], memory_grown(int_local(0), 1))
 # the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
 # short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
 memory_grown(length: list<int>, scratch: int) as list<int> := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + local_get(scratch) + instruction(MEMORY_GROW, [0]) + DROP + END

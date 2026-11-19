@@ -135,12 +135,10 @@ arrays_joining_function(p: Program, type: int) as int := {
 
 # The helper of array_slice(xs, from, count): a new list of count items of xs, from the place `from` counting from 0.
 # Its locals: 0 the list, 1 from, 2 count, 3 the new list. A slice past the end traps.
-slicing_function(p: Program, type: int) as int := {
-	given = nullable(type)
-	place = local => local_get(local) + I32_WRAP_I64
-	sliced = local_get(3)
-	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(3)
-	copied = sliced + i32_const(0) + local_get(0) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
-	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
-}
+slicing_function(p: Program, type: int) as int := added_function(p.m, [nullable(type), I64, I64], [nullable(type)], [nullable(type)], slice_copied(type, local_get(0)) + local_get(3))
+# a slice's new array of an array type in local 3: `count` (local 2) items copied from the array `source` gives, from
+# the place `from` (local 1), both ints
+slice_copied(array: int, source: list<int>) as list<int> := int_local(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + source + int_local(1) + int_local(2) + instruction(ARRAY_COPY, [array, array])
+# an int local as an i32
+int_local(slot: int) as list<int> := local_get(slot) + I32_WRAP_I64
 
