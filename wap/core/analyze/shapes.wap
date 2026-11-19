@@ -21,6 +21,8 @@ OTHER_SHAPE = "this value is of another shape than the"
 
 # the type a shape narrows, ø for any other type
 narrowed_type(type: Node?) as Node? := if type == ø then ø else fact_of(type, NARROWS)
+# the type a shape narrows, refused for any other type
+shape_narrows(type: Node) as Node := narrowed_type(type) ?? refused(type, "a shape narrows a type")
 # A written type with its shape known: a declared pattern's name narrows Node, the name of a case of one enum that
 # enum (`Define` is a pattern, though Op has a case of that name); a record's own name, or any other type, is as
 # written
@@ -58,7 +60,7 @@ form_taken(form: Function) as Node := fact_of(declared_name(written_name(form.de
 # the types of a declared pattern's holes, in order, their shapes known: its builder's parameters' types
 hole_types(form: Function, s: TypingState) as list := form.parameters.map(type => shaped(type ?? symbol(NODE_TYPE), s))
 # The patterns an arm's pattern has at the holes of a form's shape, in order; ø when it is not of that shape
-form_parts(taken: Node, pattern: Node) as list? := {
+form_parts(taken: Node, pattern: Node) as list<Node>? := {
 	if taken is symbol and text(taken).starts_with(HOLE_MARK) { return [pattern] }
 	match taken {
 		Get(subject, key) => if literal_text(taken) == literal_text(pattern) then [] else ø
@@ -70,9 +72,9 @@ form_parts(taken: Node, pattern: Node) as list? := {
 # a literal part of a shape as an arm writes it: a case read from its enum, `Bracket.Round` (the taken shape's
 # spelling), is the case, `Round` (the arm's, bound)
 literal_text(n: Node) as text := match n { Get(subject, key) => text(key); _ => text(n) }
-zipped_parts(shapes: list, patterns: list) as list? := {
+zipped_parts(shapes: list<Node>, patterns: list<Node>) as list<Node>? := {
 	if #shapes != #patterns { return ø }
-	parts = []
+	parts: list<Node> = []
 	for at in 1 to #shapes { parts = parts + (form_parts(shapes#at, patterns#at) ?? return ø) }
 	parts
 }
@@ -81,7 +83,7 @@ zipped_parts(shapes: list, patterns: list) as list? := {
 # each field, `List(_, _, _)`; a declared pattern's taken shape with `_` at its holes
 shape_pattern(type: Node, s: TypingState) as Node := {
 	form = form_named(type, s)
-	enum = narrowed_type(type) ?? refused(type, "a shape narrows a type")
+	enum = shape_narrows(type)
 	if form != ø { return with_fact(bound_shape(form_taken(form), enum, s), SHAPE_OF, type) }
 	Call(case_bound(type, enum, s), wildcards(#case_fields(case_declaring(s.records, case_bound(type, enum, s)))))
 }

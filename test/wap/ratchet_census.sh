@@ -9,8 +9,8 @@
 # default set: about 1 min more); the warp under test is WARP (default the warp on PATH)
 # files outside the preload: a preload file is no program but every program's library, typed function by function
 # (warp-lead, 2026-11-18)
-FILES_TYPED_WHOLE=14
-FUNCTIONS_UNTYPED=154
+FILES_TYPED_WHOLE=15
+FUNCTIONS_UNTYPED=144
 
 source "$(dirname "$0")/compile.sh"
 root="$(cd "$(dirname "$0")/../.." && pwd)"

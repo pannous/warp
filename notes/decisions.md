@@ -240,3 +240,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - operator-todos (2026-11-19, preload TODOs): Other(sign) payload parked; compound assignment for all operators is done (compound_assignment).
 - enum-case-unambiguous (user, 2026-11-19, card enum-case-shadowing): a bare enum case name means the case only where nothing else of that name is in scope or the expected type is the enum (`k: Kind = Record`); elsewhere `Kind.Record`.
 - atoms-as-code-wiki (user, 2026-11-19): wiki/conversion.md "Atoms as code" approved (two examples, no show(3) line).
+- glued-operator-call (user, 2026-11-19): an operator glued to brackets is a call: `#(x).y` reads like `f(x).y`, i.e. (#(x)).y; likewise -(x).y, not(x).y. Footguns line approved.
+- kernel-no-emptymap (2026-11-19, audit finding 7): `{}` is Empty with the map type wanted, settled by typing like `[]`; the EmptyMap kernel form goes.
