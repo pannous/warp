@@ -65,4 +65,9 @@ h = H([5, 6])
 h.xs[0] = 7
 print(text(h.xs[0] + h.xs[1]))')" "3
 13"
+check "a field of a class type takes ø" "$(ran field_null 'class Item { n: int }
+class Holder { item: Item? = ø }
+h = Holder(Item(1))
+h.item = ø
+print text(h.item == ø)')" "yes"
 exit $((failures > 0))

@@ -60,7 +60,7 @@ item_reached(subject: Node, key: Node, p: Program, f: Frame) as list<int> := cod
 
 # A value given to a place: a name, which then has that value, or a list's item, which leaves none
 assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
-	Get(subject, key) => written_code(place_of(subject, key, p, f), code(value, p, f))
+	Get(subject, key) => written_code(place_of(subject, key, p, f), fitted(code(value, p, f), layout(place, p), value, p))
 	_ => set_code(form, declared_name(place), value, p, f)
 }
 
