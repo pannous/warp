@@ -119,4 +119,6 @@ class lock { keys: int }
 print text(lock({keys: "3"}).keys)')" "41
 Bo
 3"
+check "an item's own index takes the item first, as a part's does" "$(ran item_index 'xs = [[1, 2, 3], [4]]
+print text(xs#1[1 ..])')" "[2, 3]"
 exit $((failures > 0))
