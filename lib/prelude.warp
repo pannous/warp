@@ -714,8 +714,9 @@ fits_key(value: any, pattern: any, bound: map, code: bool) as bool := {
 	left = key_of(pattern)
 	right = value_of(pattern)
 	if is_text_cut(pattern) and not code { return fits_text_cut(value, text_pieces(pattern), bound) }
-	// `x: int`, `$k: int`, `$n: > 0`: the part fits the condition, and the name takes it
-	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, bound, no) and fits_name(value, name_of(left), bound, code) }
+	// `x: int`, `$k: int`, `$n: > 0`, `$c: Call`: the part fits the condition, and the name takes it; a condition's own
+	// holes (a declared pattern's) bind apart, never meeting the outer pattern's names
+	if op == ":" and is_type(left, "symbol") { return fits_pattern(value, right, {}, no) and fits_name(value, name_of(left), bound, code) }
 	if op == "|" or op == "or" { return fits_alternative(value, left, bound, code) or fits_pattern(value, right, bound, code) }
 	// `Shape::Circle(r)`, `Shape.Circle(r)`: the case of its enum
 	if (op == "::" or op == ".") and not code and is_case_with_fields(right) { return fits_pattern(value, right, bound, code) }

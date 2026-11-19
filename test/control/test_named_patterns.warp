@@ -50,3 +50,8 @@ body_of(d: Definition): Node := value_of(d)
 body_of(parse("g := 2"))' 2
 is! 'use "../modules/used_patterns.warp"
 parse("f(x) := x") is Definition' true
+# a hole typed by a declared pattern tests the part by that pattern alone: its holes bind apart from the outer one's,
+# though both name a body
+is! 'pattern Fn = (Fn $parameters: List $body: Node)
+pattern Try = (Try $body: Node $handler: Fn)
+Try(Symbol("b"), Fn([Symbol("x")], Symbol("x"))) is Try' true
