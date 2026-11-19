@@ -20,9 +20,13 @@ joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	joined_type(substituted(a, s.settled), substituted(b, s.settled), s)
 }
 # Code of which one part runs, an if's or a match's arms: of the type joining those that finish, jumping when all jump
-joined_of(n: Node, parts: list, s: TypingState) as Node := {
-	finishing = parts.filter(part => not jumps(part))
-	if finishing is empty then jumping(n) else with_type_of(n, joined_all(finishing.map(value_type), s))
+joined_of(n: Node, parts: list, s: TypingState) as Node := if parts.all(jumps) then jumping(n) else with_type_of(n, parts_type(parts, s))
+# the type joining the parts that finish
+parts_type(parts: list, s: TypingState) as Node? := joined_all(parts.filter(part => not jumps(part)).map(value_type), s)
+# the parts that finish each as their joined type has it: `1` of `if c then 1 else ø` boxed as an int?
+parts_fitted(parts: list, s: TypingState) as list := {
+	type = parts_type(parts, s)
+	parts.map(part => as_wanted(part, type, s))
 }
 # the type that holds all of these, ø for none
 joined_all(types: list, s: TypingState) as Node? := if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_settling(a, b, s))
@@ -91,11 +95,23 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
 	if way == Conversion.Read { return as_text(n, s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
-	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else n
+	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
-# a character where a text is wanted read as its text, any other value as it is: `if c then 'a' else ""`, a char
-# argument of a text parameter
-text_read(n: Node, wanted: Node?, s: TypingState) as Node := if wanted != ø and conversion(value_type(n), wanted, s) == Conversion.Read then as_text(n, s) else n
+# a plain value put where a reference is wanted, an any, a number or an optional, in its box: `prim box(3)`; any
+# other value as it is, a reference already
+boxed(n: Node, wanted: Node) as Node := if is_plain(value_type(n)) then with_type_of(placed_like(Prim(symbol(BOXED_VALUE), [n]), n), wanted) else n
+# the value a box holds, any other value as it is
+unboxed(n: Node) as Node := match n {
+	Prim(name, arguments) => if name == symbol(BOXED_VALUE) then arguments#1 else n
+	_ => n
+}
+# a value as the type wanted has it, where it needs no check: a character where a text is wanted read as its text,
+# `if c then 'a' else ""`, a plain value where a reference is wanted boxed, any other value as it is
+as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
+	if wanted == ø or jumps(n) { return n }
+	way = conversion(value_type(n), wanted, s)
+	if way == Conversion.Read then as_text(n, s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+}
 # a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
 bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 	if wanted == symbol(LIST_TYPE) { return item_type(given) != ø }
@@ -104,6 +120,8 @@ bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 }
 # any value where any is wanted, an int or a float where a number is
 boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
+# whether a type's values are held as they are, not by reference: put where a reference is wanted, each goes in its box
+is_plain(type: Node?) as bool := type is symbol and text(type) in [INT_TYPE, FLOAT_TYPE, BOOL_TYPE, CHAR_TYPE]
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name
