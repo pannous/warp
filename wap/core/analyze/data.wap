@@ -36,7 +36,7 @@ instance_typed(n: Node, head: Node, items: list, separator: Separator, s: Typing
 # from_map(person)(m) := person{name: text(m["name"]), age: int(m["age"])}, so the map is read once, each field its
 # entry, `keys` too
 instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
-	name = placed_like(symbol("${FROM_MAP_WORD}(${record_name(record)})"), n)
+	name = name_once("${FROM_MAP_WORD}(${record_name(record)})", n, s)
 	if definitions_named(text(name), s) is empty {
 		reads = parameters_of(name, [value_type(map)])
 		fields = fields_of(record).map(field => placed_like(Key(declared_name(field), Op.Colon, field_made(field, placed_like(Item(reads#1, Text(text(declared_name(field)))), n), s)), n))

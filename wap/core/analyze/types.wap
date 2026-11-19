@@ -84,7 +84,14 @@ class TypingState {
 	deferred: list<Deferred> = []
 	# the functions wap refuses, each ended alone: its siblings are typed anyway, and its callers refused naming it
 	refusals: list<Refusal> = []
+	# the ids of the names typing writes once for the whole program (core/stage.wap DEFINER)
+	ids: Definers = Definers(".")
 }
+# A name typing writes for a definer, with that definer's id: a λ its Fn's, a dispatcher its first candidate's, a
+# dispatcher's parameters its own; the name tells it from the definer and its siblings
+name_for(word: text, definer: Node) as Node := with_fact(placed_like(symbol(word), definer), DEFINER, fact_of(definer, DEFINER) ?? refused(definer, "a definer without an id"))
+# a name typing writes once for the whole program, wherever it is wanted, with an id of its own
+name_once(word: text, at: Node, s: TypingState) as Node := identified(placed_like(symbol(word), at), s.ids)
 # a function wap refuses: its key and why
 class Refusal {
 	key: text
@@ -134,6 +141,7 @@ typed_shown(program: Block, preload: Block) as Block := typed_among(program, sta
 # the program typed, after the library's records and those of its definitions it calls
 typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()
+	s.ids = definers_of(program)
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines.map(function_of)
 	s.records = added_records(Records(), library)
