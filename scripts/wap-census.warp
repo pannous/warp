@@ -8,7 +8,7 @@ use "../wap/core/language.wap"
 
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = declarations_of(preload).flat_map(library_words)
+library_scope = preload_scope(declarations_of(preload))
 library = statements_in(library_code_of(language, preload))
 
 report(stage: text, message: text) := print "${stage}\t" + message.replace("\n", " ")
@@ -17,7 +17,7 @@ report(stage: text, message: text) := print "${stage}\t" + message.replace("\n",
 used_scope(file: text) as list := {
 	try {
 		modules = declared_modules(language, file)
-		return used_declarations(modules#(#modules), modules).flat_map(library_words)
+		return modules_scope(uses_of(modules#(#modules)).map(file => module_of(file, modules)))
 	} catch e { report("declare", e.message) }
 	[]
 }

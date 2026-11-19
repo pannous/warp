@@ -42,9 +42,11 @@ class Definition { name: text; kind: text; definer: Node; depth: int; owner: tex
 # two modules defining one name are refused, used or not
 bound_program(program: Block, preload: list, modules: list) as Block := {
 	clashes_refused(modules)
-	words = modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH))) + preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
-	late_reads_checked(bound(program, words, PROGRAM_DEPTH))
+	late_reads_checked(bound(program, modules_scope(modules) + preload_scope(preload), PROGRAM_DEPTH))
 }
+# the words of the modules a program uses, each module named too, and of the preload, outermost
+modules_scope(modules: list) as list := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+preload_scope(preload: list) as list := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
 library_words(declaration: Node, depth: int) as list := match declaration {
