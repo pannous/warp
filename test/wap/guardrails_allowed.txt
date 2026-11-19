@@ -21,7 +21,6 @@ emit-reads-type wap/core/emit/values.wap 1
 long-file wap/core/analyze/calls.wap 1
 long-file wap/core/analyze/types.wap 1
 long-file wap/core/rules/patterns.wap 1
-long-file wap/core/stage.wap 1
 repeated-code wap/core/analyze/calls.wap 1
 repeated-code wap/core/analyze/data.wap 1
 repeated-code wap/core/parse/atoms.wap 2
