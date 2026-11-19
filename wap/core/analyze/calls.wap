@@ -131,7 +131,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	if reader != ø { return typed_form(named_call(reader.name, [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
 	field = if record == ø then ø else field_named(record, key)
-	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
+	if field != ø { return as_found(n, with_type_of(refitted(Get(typed, key), n), declared_type(field)), s, f) }
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
@@ -362,7 +362,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	key = definition.key
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
-	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place, letters), letters, s.records))
+	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place ?? refused(at, "an argument reached typing without its type"), letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
 		if typed.function.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
@@ -379,6 +379,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	typed.unknown_result = "a function that calls itself and gives a value needs its full result type: write `${declared_name(name)}(…): ${full_type_hint(declared_type(name))} := …`"
 	s.functions += [typed]
 	frame = TypeFrame()
+	frame.present = if s.found_in.has(key) then s.found_in[key] else []
 	frame.result = typed.result
 	frame.letters = letters
 	frame.function = declared_name(name)

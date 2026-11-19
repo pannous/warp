@@ -66,7 +66,8 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 	if named != ø and narrows != ø and same_type(narrows, type) { holes_remembered(pattern, named, s, f) }
 	if list_pattern_items(pattern) != ø { return list_pattern_typed(pattern, type, s, f) }
 	# a case of an optional's value: `Text(name)` fits a Node? holding a text node, never ø
-	if base_of_optional(type) != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base_of_optional(type), s, f) }
+	base = base_of_optional(type)
+	if base != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base, s, f) }
 	tested = if pattern is Call then case_pattern_typed(pattern, type, s, f) else if is_case_name(pattern) then case_in_enum_typed(in_enum(pattern, type, s), s) else typed_form(pattern, s, f, type)
 	if not same_type(value_type(tested) ?? type, type) { refused(pattern, "this pattern can never fit a value of type ${type}") }
 	tested
@@ -88,7 +89,7 @@ holes_remembered(pattern: Node, shape: Node, s: TypingState, f: TypeFrame) := {
 }
 # A list pattern of a list's type: each item's pattern of its item type, a last `...name` holding the items after them
 list_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
-	items = list_pattern_items(pattern)
+	items = list_pattern_items(pattern) ?? refused(pattern, "a list pattern is a list of patterns")
 	item = item_type(type) ?? refused(pattern, "a list pattern fits a list, not a ${type}")
 	typed = (1 to #items).map(at => if rest_named(items#at) == ø then pattern_typed(items#at, item, s, f) else rest_typed(items#at, at == #items, type, s, f))
 	with_type_of(refitted(List(typed, Bracket.Square, Separator.Comma), pattern), type)
@@ -183,5 +184,5 @@ case_pattern_typed(pattern: Call, type: Node, s: TypingState, f: TypeFrame) as N
 	called = in_enum(written, type, s)
 	fields = case_fields(case_declaring(s.records, called))
 	if #parts != #fields { refused(pattern, "${called} names each of its fields: ${field_names(fields)}") }
-	case_typed_as(pattern, called, (1 to #parts).map(at => pattern_typed(parts#at, declared_type(fields#at), s, f)), s)
+	case_typed_as(pattern, called, (1 to #parts).map(at => pattern_typed(parts#at, declared_type(fields#at) ?? refused(fields#at, "a case's field has a type"), s, f)), s)
 } }

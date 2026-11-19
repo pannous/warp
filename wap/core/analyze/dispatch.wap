@@ -11,6 +11,7 @@ use "types.wap"
 use "calls.wap"
 use "fits.wap"
 use "letters.wap"
+use "../errors.wap"
 use "../stage.wap"
 use "../bindings.wap"
 use "../type_notation.wap"
@@ -47,7 +48,8 @@ dispatching(called: Node, candidates: list<Function>, types: list, s: TypingStat
 field_dispatching(key: Node, s: TypingState) as Function? := {
 	holders = s.records.items.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
 	if holders is empty { return ø }
-	name = name_for("${FIELD_MARK}${key}(${ANY_TYPE})", declared_name(field_named(holders#1, key)))
+	held = field_named(holders#1, key) ?? refused(key, "the record holding this field has none")
+	name = name_for("${FIELD_MARK}${key}(${ANY_TYPE})", declared_name(held))
 	known = definition_keyed(place_key(name), s)
 	if known != ø { return known }
 	read = parameters_of(name, [symbol(ANY_TYPE)])#1
@@ -82,7 +84,10 @@ chained(choices: list, last: Node, at: Node) as Node := {
 # argument's type: an `is` test there chooses it
 # a parameter's type a test chooses by: written, no any, no generic letter, none that takes its argument's own type
 dispatchable(type: Node?, records: Records) as bool := once_typed(type, records) and type != symbol(ANY_TYPE)
-tested_places(definition: Function, types: list, s: TypingState) as list := (1 to #types).filter(at => dispatchable(definition.parameters#at, s.records) and tested_fit(definition.parameters#at, types#at, s))
+tested_places(definition: Function, types: list, s: TypingState) as list := (1 to #types).filter(at => {
+	wanted = definition.parameters#at
+	wanted != ø and dispatchable(wanted, s.records) and tested_fit(wanted, types#at, s)
+})
 tested_fit(wanted: Node, given: Node, s: TypingState) as bool := boxed_fit(wanted, given) or conversion(given, wanted, s) == Conversion.Narrowed
 # the arguments as a definition's call reads them once its tests pass: each tested one of its parameter's type
 tested_reads(definition: Function, reads: list, types: list, s: TypingState) as list := {

@@ -43,7 +43,7 @@ found(condition: Node, tested: Node, s: TypingState, f: TypeFrame) as list<Findi
 	parts = both_parts(condition)
 	typed_parts = both_parts(tested)
 	if parts != ø and typed_parts != ø { return (found(parts.first, typed_parts.first, s, f) + found(parts.second, typed_parts.second, s, f)).filter(finding => finding.arm == parts.arm) }
-	one = present_tested(condition, s, f) ?? type_tested(tested)
+	one = present_tested(condition, tested, s, f) ?? type_tested(tested)
 	if one == ø then [] else [one]
 }
 # the two parts of `a and b`, If(a, b, no), with the arm where both hold, 1; of `a or b`, If(a, yes, b), with the arm
@@ -53,19 +53,35 @@ both_parts(n: Node) as BothParts? := match n {
 	If(first, second, otherwise) => if otherwise is False then BothParts(first, second, 1) else if second is True then BothParts(first, otherwise, 2) else ø
 	_ => ø
 }
-# the variable a condition finds present, of its value's type: `x != ø` and `if x` in the then-arm, `x == ø` in the
-# else-arm; ø for any other condition
-present_tested(condition: Node, s: TypingState, f: TypeFrame) as Finding? := match condition {
-	Symbol(name) => if is_variable(condition) and base_of_optional(variable_type(condition, s, f)) != ø then Finding(place_key(defined_at(condition)), 1, base_of_optional(variable_type(condition, s, f))) else ø
-	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then Finding(place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))) else ø
+# the path a condition finds present, of its value's type: `x != ø`, `m.pattern != ø` and `if x` in the then-arm,
+# `x == ø` in the else-arm; ø for any other condition
+present_tested(condition: Node, tested: Node, s: TypingState, f: TypeFrame) as Finding? := match condition {
+	Symbol(name) => if is_variable(condition) then found_present(condition, 1, variable_type(condition, s, f)) else ø
+	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then found_present(arguments#1, if text(called) == UNEQUAL_WORD then 1 else 2, first_argument_type(tested)) else ø
+	_ => ø
+}
+# a path found present in that arm, of the value an optional of this type holds; ø for a path of no optional's type
+found_present(path: Node, arm: int, type: Node?) as Finding? := {
+	key = path_key(path) ?? return ø
+	held = base_of_optional(type) ?? return ø
+	Finding(key, arm, held)
+}
+# the type of a typed call's first argument, `m.pattern` of `m.pattern != ø`
+first_argument_type(tested: Node) as Node? := match tested {
+	Call(called, arguments) => if arguments is empty then ø else value_type(arguments#1)
 	_ => ø
 }
 # the variable a typed condition finds of a type, in the then-arm: `x is int` of a number x, a shape's test of a Node
 # (core/analyze/shapes.wap shape_test)
 type_tested(tested: Node) as Finding? := match tested {
-	Prim(operation, arguments) => if text(operation) == BOXED_TEST and is_variable(arguments#1) then Finding(place_key(defined_at(arguments#1)), 1, fact_of(tested, TESTED)) else ø
-	Case(subject, arms) => if fact_of(tested, TESTED) != ø and is_variable(subject) then Finding(place_key(defined_at(subject)), 1, fact_of(tested, TESTED)) else ø
+	Prim(operation, arguments) => if text(operation) == BOXED_TEST then found_of_type(arguments#1, fact_of(tested, TESTED)) else ø
+	Case(subject, arms) => found_of_type(subject, fact_of(tested, TESTED))
 	_ => ø
+}
+# a path found of the type a test names, in the then-arm; ø for none
+found_of_type(path: Node, type: Node?) as Finding? := {
+	key = path_key(path) ?? return ø
+	Finding(key, 1, type ?? return ø)
 }
 is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø
 EQUAL_WORD = "=="
