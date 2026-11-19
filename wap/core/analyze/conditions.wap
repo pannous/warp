@@ -16,13 +16,17 @@ class Finding { key: text; arm: int; type: Node }
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
 # An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`; a variable tested of a
-# type, `x is int`, is of that type in the then-arm; `a and b` finds what both find.
+# type, `x is int`, is of that type in the then-arm; `a and b` finds what both find. Where one arm never finishes,
+# what the other finds holds after the If too, `if x == ø { return }` leaving x present for the statements after it;
+# a loop's body, a match's arm and a try's parts keep such findings to themselves, as an If's arm does.
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	tested = condition_typed(condition, s, f)
 	findings = found(condition, tested, s, f)
 	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, findings.filter(finding => finding.arm == at), s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
 	chosen = (1 to 2).map(at => text_read(typed#at, value_type(typed#(3 - at)), s))
+	finishing = (1 to 2).filter(at => not jumps(chosen#at))
+	if #finishing == 1 { f.present = f.present + findings.filter(finding => finding.arm == finishing#1).map(finding => [finding.key, finding.type]) }
 	joined_of(refitted(If(tested, chosen#1, chosen#2), n), chosen, s)
 }
 # an arm typed with what is known of its variables in it, each read there as its finding's type

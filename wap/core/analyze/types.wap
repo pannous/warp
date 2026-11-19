@@ -159,9 +159,9 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Call(called, arguments) => call_typed(n, called, arguments, s, f, expected)
 	Prim(operation, arguments) => prim_typed(n, operation, arguments, s, f)
 	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
-	While(condition, body) => refitted(While(condition_typed(condition, s, f), typed_form(body, s, f, ø)), n)
+	While(condition, body) => refitted(While(condition_typed(condition, s, f), present_typed(body, [], s, f, ø)), n)
 	# the body's value, or the otherwise part's where the body raises (wiki/Error.md "try"): joined as an if's arms
-	Try(body, handler) => try_typed(n, typed_form(body, s, f, expected), handler, s, f, expected)
+	Try(body, handler) => try_typed(n, present_typed(body, [], s, f, expected), handler, s, f, expected)
 	Case(subject, arms) => case_typed(n, typed_form(subject, s, f, ø), arms, s, f, expected)
 	Return(value) => return_typed(n, value, s, f)
 	Break() => jumping(n)
@@ -223,7 +223,7 @@ function_key_of(definition: Node) as text := place_key(declared_name(written_nam
 # its value the two joined
 try_typed(n: Node, body: Node, handler: Fn, s: TypingState, f: TypeFrame, expected: Node?) as Node := match handler { Fn(parameters, handling) => {
 	caught = items_of(parameters).map(parameter => parameter_typed(parameter, symbol(NODE_TYPE), f))
-	handled = typed_form(handling, s, f, expected)
+	handled = present_typed(handling, [], s, f, expected)
 	joined_of(refitted(Try(body, refitted(Fn(with_items(parameters, caught), handled), handler)), n), [body, handled], s)
 } }
 # The function left with a value, expected the function's written result type; the code after it never runs

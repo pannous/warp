@@ -88,4 +88,27 @@ print (if 0 then "t" else "f") + (if [1] then "t" else "f") + (if "" then "t" el
 ftf"
 check "an optional holding 0 is falsy" "$(ran optional_zero 'count: int? = 0
 print if count then "truthy" else "falsy"')" "falsy"
+check "a guard whose block never finishes leaves the variable present for the statements after it, in a loop's body too" "$(ran guard_narrows 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+read(n: int) as int := {
+	escape = found(n)
+	if escape == ø { return 0 }
+	escape.reads + 1
+}
+counted(n: int) as int := {
+	escape = found(n)
+	total = 0
+	while total < 6 {
+		if escape == ø { break }
+		total = total + escape.reads
+	}
+	total
+}
+print(text(read(5)))
+print(text(read(0)))
+print(text(counted(2)))
+print(text(counted(0)))')" "6
+0
+6
+0"
 exit $((failures > 0))
