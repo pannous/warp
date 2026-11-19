@@ -1,0 +1,56 @@
+# The modules a program uses, as the binding analysis sees them (core/analyze/scope.wap): each by its file's name,
+# two defining one name refused naming both, and a module's word named by the module, `a.twice`. Languages: bound.
+
+use "../errors.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "scope.wap"
+use "declarations.wap"
+
+# a used module, by its file's name, `a` for "lib/a.wap", which `a.twice` reads one word of; never a name's meaning
+MODULE_KIND = "module"
+# the words of the modules a program uses, each module named too
+modules_scope(modules: list) as list := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+# a module's name, its file's without the folder and the extension
+module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
+# the names a module declares itself: its functions, variables and types, not their fields or cases
+module_names(module: Node) as list := declarations_of(module).map(declaration_name)
+# Two used modules defining one word alike, refused naming both, even where nothing calls it: the same name taking the
+# same parameter types, or one type's or variable's name; words of one name taking other types are one word's overloads
+clashes_refused(modules: list) := for later in 2 to #modules {
+	for earlier in modules.take(later - 1) {
+		for declaration in declarations_of(modules#later) {
+			for other in declarations_of(earlier) { if declared_alike(other) == declared_alike(declaration) { refused(declaration_name(declaration), "${module_name(earlier)}.wap line ${line_of(declaration_name(other))} and ${module_name(modules#later)}.wap line ${line_of(declaration_name(declaration))} both define ${declared_alike(declaration)}: rename one") } }
+		}
+	}
+}
+declaration_name(declaration: Node) as Node := match declaration {
+	Key(name, Op.Colon, signature) => name
+	Record(name, fields, variants) => name
+}
+# a declaration as two modules may not both write it: `twice(int)`, a type's or a variable's bare name
+declared_alike(declaration: Node) as text := match declaration {
+	Key(name, Op.Colon, signature) => if signature == ø then text(name) else "${name}(${items_of(signature).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
+	_ => text(declaration_name(declaration))
+}
+# A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
+# that name the module declares, bound as the bare name would be were they the only ones; ø where the subject names no
+# module, or names something nearer, a variable `a`
+module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
+	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
+	for definition in scope {
+		if definition.kind == MODULE_KIND and definition.name == text(subject) {
+			named = module_names(definition.definer).filter(name => text(name) == key)
+			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
+			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
+			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(with_fact(found, DEFINED_AT, Empty), CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+		}
+	}
+	ø
+}
+# a call of a used module's word, `a.twice(3)`, its other arguments bound; ø for any other call
+module_call(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node? := {
+	if not called is symbol or arguments is empty { return ø }
+	word = module_word(called, arguments#1, text(called), scope) ?? return ø
+	refitted(Call(word, all_bound(arguments.drop(1), scope, depth)), n)
+}

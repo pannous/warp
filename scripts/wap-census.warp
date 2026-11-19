@@ -10,7 +10,7 @@ use "../wap/core/language.wap"
 
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = declarations_of(preload).flat_map(library_words)
+library_scope = preload_scope(declarations_of(preload))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 
@@ -71,7 +71,7 @@ typing_joined(modules: list) := {
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
 bound_alone(module: Node, modules: list) as list := {
-	words = (library_around(module, preload) + used_declarations(module, modules)).flat_map(library_words)
+	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
 	statements = statements_in(lowered_program(language, module))
 	bound_each(statements, defined_in(statements, words, PROGRAM_DEPTH) + words, no)
 }
@@ -128,7 +128,16 @@ typed_whole(file: text) as Block := {
 	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
 }
 
-report(stage: text, message: text) := print "${stage}\t" + (message + use_missing(message)).replace("\n", " ")
+report(stage: text, message: text) := {
+	global front_refused
+	if stage in FRONT_STAGES { front_refused += 1 }
+	print "${stage}\t" + (message + use_missing(message)).replace("\n", " ")
+}
+# Wap's own source stays something wap reads: a spelling the front cannot read or lower, or a name it cannot bind (a
+# missing use), fails the census, so the source never drifts ahead of the compiler that has to read it; typing's
+# refusals are the road still ahead
+FRONT_STAGES = ["read", "lower", "declare", "bind"]
+front_refused = 0
 # A name nothing in scope defines, though a module the census read declares it: a missing `use`, which old warp's
 # transitive use hides from the suite; the refusal names the module (the name is what the refusal ends with)
 NOTHING_DEFINES = "nothing defines this name"
@@ -153,7 +162,7 @@ declaration_word(declaration: Node) as text := match declaration {
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return used_declarations(modules#(#modules), modules).flat_map(library_words)
+		return modules_scope(modules_of_uses(modules#(#modules), modules))
 	} catch e { report("declare", e.message) }
 	[]
 }
@@ -316,3 +325,7 @@ family_of(root: Refusal, refusals: list) as Family := {
 families = run.state.refusals.filter(each => called_refused(each) == "").map(root => family_of(root, run.state.refusals)).sorted(by: family => -family.size)
 for family in families { print "family\t${family.size} blocked by ${family.name}: " + family.root.message.replace("\n", " ") }
 print "total\t${total.whole} of ${total.files} files typed whole, ${total.typed} of ${total.functions} functions typed, ${total.anys} places typed any"
+if front_refused > 0 {
+	print "front\t${front_refused} refusals of reading, lowering or binding wap's own source: wap cannot compile what it is written in"
+	exit(1)
+}
