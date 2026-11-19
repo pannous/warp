@@ -335,7 +335,7 @@ case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeF
 }
 case_typed_as(n: Node, called: Node, given: list, s: TypingState) as Node := {
 	typed = if given is empty and n === called then n else refitted(Call(called, given), n)
-	with_type_of(typed, symbol(record_name(enum_declaring(s.records, called))))
+	with_type_of(typed, record_type(enum_declaring(s.records, called)))
 }
 # a primitive's value is of the type its built-in's definition writes, none when it writes none
 prim_typed(n: Node, operation: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
