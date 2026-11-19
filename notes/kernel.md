@@ -76,7 +76,7 @@ Three details:
 | Break, Continue, Return | none, none, `value` | the same words |
 | Record | `name fields variants`, the one form that declares a type (user-approved 2026-11-17) | `class`, `enum`, `type X = A \| B` |
 | Case | `subject arms` | `match`, `x is T` |
-| Try | `body otherwise`; `raise` throws one wasm exception tag, Try is a try_table catching it into the otherwise part (user-approved 2026-11-19) | `try … catch`, `try x else y`, `except` |
+| Try | `body handler`, the handler a Fn of the caught Error; `raise` throws one wasm exception tag, Try is a try_table catching it into the handler (user-approved 2026-11-19) | `try … catch`, `try x else y`, `except` |
 
 How a few spellings reach the kernel:
 - `for x in xs { b }` is `Block([i = iterator(xs), While(has_next(i), Block([x = next(i), b]))])`.
