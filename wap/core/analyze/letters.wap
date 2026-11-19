@@ -84,7 +84,12 @@ letters_bound(definition: Node, types: list, s: TypingState) as list<Binding>? :
 	in_order = (1 to #types).filter(at => signature(type_given(parameters#at)) == ø) + (1 to #types).filter(at => signature(type_given(parameters#at)) != ø)
 	for at in in_order {
 		wanted = type_given(parameters#at)
-		if wanted != ø and (has_letters(wanted, s.records) or signature(wanted) != ø or has_unknowns(types#at) and not takes_own_type(wanted, s.records)) { bound = unified(wanted, types#at, bound, s) ?? return ø }
+		# a letter an earlier argument bound, wanted of a value that wraps into it, is checked by conversion as the call
+		# fits its arguments, not unified again: `add(xs, 3)` of a list<int?> takes the 3 as an int?. Other bound letters
+		# are unified again, which settles unknown item types
+		held = if is_letter(wanted, s.records) then type_keyed(text(wanted), bound) else ø
+		wraps = held != ø and conversion(types#at, held, s) == Conversion.Wrapped
+		if wanted != ø and not wraps and (has_letters(wanted, s.records) or signature(wanted) != ø or has_unknowns(types#at) and not takes_own_type(wanted, s.records)) { bound = unified(wanted, types#at, bound, s) ?? return ø }
 	}
 	bound
 }
