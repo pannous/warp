@@ -364,7 +364,7 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 # the type it is known to hold; as it is where nothing finds it
 as_found(n: Node, read: Node, s: TypingState, f: TypeFrame) as Node := {
 	known = found_type(path_key(n) ?? return read, f.present) ?? return read
-	if base_of_optional(value_type(read)) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
+	if base_of_optional(value_type(read)) != ø then with_type_of(word_called(n, REQUIRED_WORD, [read], ø, s), known) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
 # A path a condition may find, its key: a variable's own, `x`, and a field of a path, `m.pattern`; ø for any other
 # form. A path is found until something gives it, or a path it is part of, a new value.
