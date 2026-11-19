@@ -11,6 +11,9 @@ then read this file and the Owners row with your name.
   comment line says the file's one job and its languages, so a successor can take over from the code alone.
 - **Every change to your files passes you.** Anyone may edit them on a branch; you review before the handoff,
   against the principles and the guardrails (test/wap/test_guardrails.sh), and say yes, no, or how.
+  A small change (about 10 lines: a call site, a comment, a parameter order) lands without waiting; its handoff
+  names you, and you review it afterwards and fix forward. A new function, a signature change or anything larger
+  waits for your yes (user 2026-11-19).
 - **You keep them small and single.** About 300 lines at most; past that, split along a real seam at the next quiet
   point and update the Owners table in the same commit. A new file in your folder is yours from its first commit.
 - **You keep them clean.** No copied blocks, no special cases, one mechanism per job; you pick up the simplifier's

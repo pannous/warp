@@ -161,6 +161,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 <script>
 const DATA = __DATA__;
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
+const BLOCKER_SHOWN = 200;  // characters of a refusal shown; the census quotes whole function bodies, the rest is on hover
 const GROUP_COLORS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
 const WIDTH = 940, PAD = { left: 52, right: 12, top: 12, bottom: 26 };
 const rows = DATA.rows.map(([date, sha, subject, groups, delta, extensionsDelta, lib, test]) => ({ date, sha, subject, groups, delta, extensionsDelta, lib, test, core: groups.slice(0, -1).reduce((a, b) => a + b, 0), extensions: groups[groups.length - 1] }));
@@ -243,7 +244,7 @@ function tooltip(container, svg, x, describe) {
 }
 
 const commitLink = sha => `<a href="${COMMIT_URL}${sha}" target="_blank" rel="noopener">${sha}</a>`;
-const escape = text => text.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const escape = text => text.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const head = row => `<div class="tip-row"><span>${row.sha}</span><span>${row.date.slice(5)}</span></div>`;
 
 // one panel on its own time axis: a card with the latest value and a chart of <lines> ({name, points, index, color}, a
@@ -325,7 +326,7 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
     trendPanel(holder, { label: "road to self-build: files", value: `${latest.typed} typed whole, ${latest.emitted} emitted`, note: note([latest.commit, latest.time], ` · of ${latest.files} program files${latest.timed_out && latest.timed_out.length ? `, timed out: ${latest.timed_out.join(", ")}` : ""}${latest.missing ? `, ${latest.missing} without a result` : ""}`),
       lines: [{ name: "typed whole", points: census("typed"), index: 2, color: "--s1" }, { name: "emitted", points: census("emitted"), index: 2, color: "--s3" }], describe: describeCensus });
     document.getElementById("wap-blockers").innerHTML = latest.blockers.length ? `<thead><tr><th>Stage</th><th>Top blockers of the census at ${latest.commit}</th><th style="text-align:right">Count</th></tr></thead><tbody>` +
-      latest.blockers.map(([stage, message, count]) => `<tr><td>${stage}</td><td>${escape(message)}</td><td class="num">${count}</td></tr>`).join("") + "</tbody>" : "";
+      latest.blockers.map(([stage, message, count]) => `<tr><td>${stage}</td><td title="${escape(message)}">${escape(message.length > BLOCKER_SHOWN ? message.slice(0, BLOCKER_SHOWN) + " …" : message)}</td><td class="num">${count}</td></tr>`).join("") + "</tbody>" : "";
   } else noMeasurement("road to self-build");
   if (tests.length) {
     const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
