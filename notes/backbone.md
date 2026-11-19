@@ -264,6 +264,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **`use "m.wasm"` is not read yet** (card wasm-module-import, wiki/wasm-representation.md): a compiled module can't
+  be used as its source is. Reason: paused for the self-build census (user 2026-11-19). Branch wasm-module-import has
+  the exports and the `wap` section of header lines; the reader, the body-less `export` declaration and the import
+  are left (card note). Paid off once wap compiles itself.
+
 - **A failed write traps without naming itself** (wap/core/emit/host.wap writing_function): a write that fails or
   takes none (a closed stdout, `| head`) stops the program with wasm's bare "unreachable", not a raise naming it.
   Reason: a raise there pulls its text and the raise helper into every program, hello 432 → 476 B. Paid off when a
