@@ -28,6 +28,7 @@ use "function_values.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 
 # the type of code that never finishes, as a return or a break: it fits wherever a value of any type is wanted
