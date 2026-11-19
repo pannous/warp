@@ -1,0 +1,7 @@
+# The standard language every program gets (notes/wap.md "Layers"): its word files, included in place, so their
+# definitions are one library
+include "prelude.wap"
+include "lists.wap"
+include "texts.wap"
+include "numbers.wap"
+include "nodes.wap"
