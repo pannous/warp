@@ -39,8 +39,6 @@ FLOAT_TYPE = "float"
 TEXT_TYPE = "text"
 CHAR_TYPE = "char"
 BOOL_TYPE = "bool"
-# the function that gives a value's text: a character passed where a text is wanted becomes its text through it
-TEXT_FUNCTION = "text"
 EMPTY_TYPE = "ø"
 # the result a built-in writes when it never returns, `raise(message: text): never`: its calls jump, of no type
 NEVER_RESULT = "never"
@@ -49,6 +47,8 @@ NEVER_RESULT = "never"
 NUMBER_TYPE = "number"
 # the type words a type test may name besides records and letters
 TYPE_WORDS = [INT_TYPE, FLOAT_TYPE, TEXT_TYPE, CHAR_TYPE, BOOL_TYPE, ANY_TYPE, NUMBER_TYPE, LIST_TYPE, MAP_TYPE, ENUM_TYPE]
+# the types of the values a Node holds as its cases, read as a Node where one is wanted: `n: Node = 'a'` is Char('a')
+ATOM_TYPES = [CHAR_TYPE, INT_TYPE, FLOAT_TYPE, NUMBER_TYPE, TEXT_TYPE]
 # the operator a signature is written with: `(int, text) -> int`
 ARROW = "->"
 
