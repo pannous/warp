@@ -24,7 +24,10 @@ case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, exp
 	if narrowed_type(type) != ø and witness == ø and not arms.any(arm => fits_any(pattern_of(arm))) { typed = typed + [arm_typed(placed_like(Arm(symbol(WILDCARD), raised(other_shape(type, n), n, s)), n), subject, type, s, f, expected)] }
 	is_enum = record_named(s.records, type) != ø and not cases_of(record_named(s.records, type)) is empty
 	if witness != ø and (is_enum or expected != ø) { refused(n, "match on ${type} misses ${pattern_text(witness#1)}: add the missing arm or `_`${shape_offered(arms)}") }
-	if witness == ø then joined_of(refitted(Case(subject, typed), n), typed, s) else refitted(Case(subject, typed), n)
+	if witness != ø { return refitted(Case(subject, typed), n) }
+	type = parts_type(typed, s)
+	fitted = typed.map(arm => arm_as(arm, type, s))
+	joined_of(refitted(Case(subject, fitted), n), fitted, s)
 }
 # where every arm names one declared pattern, `Record(…)`, the fix-it of taking that shape instead
 shape_offered(arms: list) as text := {
@@ -42,6 +45,11 @@ arm_typed(arm: Arm, subject: Node, type: Node, s: TypingState, f: TypeFrame, exp
 		typed_like(refitted(Arm(tested, given), arm), given)
 	}
 }
+# an arm whose result is as the match's type has it, `10` of `1 => 10; _ => ø` boxed as an int?
+arm_as(arm: Arm, type: Node?, s: TypingState) as Node := match arm { Arm(pattern, result) => {
+	given = as_wanted(result, type, s)
+	typed_like(refitted(Arm(pattern, given), arm), given)
+} }
 # A pattern of a value of this type: a name holding the value, `_`, a case, `Dot`, a case with the patterns of its
 # fields, `Circle(r)`, `Two(Dot, 3)`, or a value it equals
 pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
