@@ -338,6 +338,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`x.f` finds only functions written in warp, not host words** (wap/core/analyze/types.wap part_typed): the key is
   text, so typing looks f up among the definitions it holds, and a library word declared by signature (`print`) is
   not one of them; `x.f(y)` is a plain call and finds both. Paid off when host words are definitions typing holds.
+- **A bare `break`, `continue` or `return` is lowering's word form, not a rule** (wap/core/rules/lowering.wap
+  `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/preload/sugar/loops.wap). Reason: a rule whose
+  pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
+  anywhere and refuses it. Paid off when a lone word is its own head. Paid off: S3, wap-rules-statements d313356f76.
 - **Ints have no `÷` or `%` yet** (wap/preload/floats.wap holds only the truncated quotient and rem, which programs do
   not see): warp's `÷` and its floored `%` (`-7 % 2` is 1) are to be defined on top of them, and `quotient` is warp's
   exact division (3.5), so the truncated one keeps that name hidden. Paid off when the preload defines `÷` and `%`.
