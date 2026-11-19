@@ -13,13 +13,17 @@
 #   boxed-any        `any` written as a type in wap's own source, outside preload/ (whose `any` is the language's
 #                    dynamic type, the Node enum's Data among them): each spot a debt, the list empty before milestone 2
 #                    (notes/decisions.md wap-boxed-any-debt); a place typing infers as any is ratchet_census.sh's
+#   emit-boxes       only typing decides what is boxed (types.wap writes `prim box`): no struct.new of a box in core/emit
+#                    outside that primitive; never allowlisted
 #   one-owner        every wap file and test/wap script falls under exactly one row of notes/wap.md "Owners": a path or
 #                    folder in its files column (wap/'s own paths written without it), or a row's "<folder> … no other
 #                    row names"; a clause in words, a role row's "any file", owns nothing
 # Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
 # the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
 # until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
-RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any one-owner"
+RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any emit-boxes one-owner"
+# the rules no allowlist line excuses: a spot of theirs is a failure at once
+UNLISTED="emit-boxes"
 OWNERS=notes/wap.md
 RELATION=conversion
 LONGEST=300
@@ -72,6 +76,9 @@ same_shape() {
 boxed_any() {
 	grep -nE "$ANY_TYPE" $(printf '%s\n' $wap_files | grep -v '^wap/preload/') | filed boxed-any | awk -F'\t' -v any="$ANY_TYPE" '{ code = $4; gsub(/"[^"]*"|#.*/, "", code) } code ~ any'
 }
+emit_boxes() {
+	grep -nE 'STRUCT_NEW.*\bbox|\bbox.*STRUCT_NEW' wap/core/emit/*.wap | grep -v 'name == BOXED_VALUE' | filed emit-boxes
+}
 # the owner rows' files, `<row> <path>` a line, a folder ending in /, and `<row> * <folder>` for a catch-all
 owned_paths() {
 	awk -F'|' '/^\| stage \| owner/ { table = 1; next } table && !/^\|/ { exit } table && $2 !~ /^-+$/ {
@@ -100,7 +107,7 @@ counts=$(printf '%s\n' "$found" | awk -F'\t' 'NF { print $1 " " $2 }' | sort | u
 listed=$(grep -vE '^(#|$)' "$allowed")
 for rule in $RULES; do
 	said=$(join -a1 -a2 -e0 -o 0,1.2,2.2 <(printf '%s\n' "$counts" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) \
-		<(printf '%s\n' "$listed" | awk -v r=$rule '$1 == r { print $2, $3 }' | sort) |
+		<(printf '%s\n' "$listed" | awk -v r=$rule -v unlisted=" $UNLISTED " '$1 == r && !index(unlisted, " " r " ") { print $2, $3 }' | sort) |
 		while read -r key count allows; do
 			if [ "$count" -gt "$allows" ]; then
 				printf '%s\n' "$found" | awk -F'\t' -v r=$rule -v k="$key" '$1 == r && $2 == k { print "  " $3 ": " $4 }'
@@ -109,6 +116,8 @@ for rule in $RULES; do
 				echo "  $rule: $key has $count, the allowlist still says $allows: lower it in test/wap/guardrails_allowed.txt"
 			fi
 		done)
+	case " $UNLISTED " in *" $rule "*) printf '%s\n' "$listed" | grep -q "^$rule " && said="$said
+  $rule takes no allowlist lines: remove them from test/wap/guardrails_allowed.txt" ;; esac
 	if [ -z "$said" ]; then echo "✓ $rule"; else printf '✗ %s\n%s\n' "$rule" "$said"; failures=$((failures + 1)); fi
 done
 exit $((failures > 0))
