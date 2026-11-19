@@ -199,10 +199,11 @@ receiver_fields(parameters: List, scope: Scope, depth: int) as list<Definition> 
 	receiver = match parameters { List(items, bracket, separator) => if items is empty then ø else items#1 }
 	if receiver == ø { return [] }
 	type = declared_type(receiver) ?? return []
-	if text(parameter_name(receiver)) != SELF_WORD { return [] }
+	self_name = parameter_name(receiver)
+	if text(self_name) != SELF_WORD { return [] }
 	for definition in named_in(scope, text(type)) {
 		if definition.kind == DefinitionKind.Record {
-			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), DefinitionKind.Field, parameter_name(receiver), depth))
+			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), DefinitionKind.Field, self_name, depth))
 		}
 	}
 	[]

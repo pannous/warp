@@ -166,4 +166,17 @@ print(text(b) + " " + text([1, ø].contains(ø)))')" "no items
 items
 a text
 no yes"
+check "a condition finds a field of a variable present as it finds the variable" "$(ran field_present 'class Inner { n: int }
+class Outer { inner: Inner? }
+o = Outer(Inner(3))
+if o.inner != ø { print(text(o.inner.n)) }
+p = Outer(ø)
+if p.inner == ø { print("none") } else { print(text(p.inner.n)) }')" "3
+none"
+check "what a condition finds of a variable holds in a function value that captures it" "$(ran captured_present 'class Box { n: int }
+pick(b: Box?, xs: list<int>) as list<int> := {
+	if b == ø { return [] }
+	xs.map(x => x + b.n)
+}
+print(text(pick(Box(10), [1, 2])))')" "[11, 12]"
 exit $((failures > 0))
