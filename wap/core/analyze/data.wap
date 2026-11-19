@@ -95,7 +95,7 @@ spread_typed(n: Node, items: list, separator: Separator, s: TypingState, f: Type
 # `[[1], []]` is a list<list<int>> and settles the empty list's item type
 common_type(values: list, wanted: Node?, s: TypingState) as Node? := {
 	if wanted != ø and all_fit(values, wanted, s) { return wanted }
-	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).filter(type => type != ø)
+	types = values.map(value => written_function_type(value_type(value), s) ?? value_type(value)).compact()
 	for type in types.filter(type => not has_unknowns(type)) + types.filter(has_unknowns) { if all_fit(values, type, s) { return type } }
 	if types is empty then ø else types.drop(1).fold(types#1, (a, b) -> joined_type(a, b, s))
 }
