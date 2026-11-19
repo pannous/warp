@@ -47,7 +47,7 @@ interpolated(value: text, bindings: map<text, Node>) as text := {
 
 # the items a rest hole took, written as one node where the template names it without dots: `$a` for `$a...` is the
 # phrase `print "a"` (core/parse/reader.wap phrase_of)
-taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items); _ => taken }
+taken_as_one(taken: Node) as Node := match taken { List(items, bracket, separator) => phrase_of(items, Separator.Space); _ => taken }
 
 # items of a template, a rest hole replaced by the items it took
 built_items(language: Language, items: list<Node>, bindings: map<text, Node>) as list<Node> := {

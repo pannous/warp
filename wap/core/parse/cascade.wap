@@ -65,11 +65,7 @@ level_items(parts: list<Lexeme>) as list<Node> := {
 }
 
 # a level as one node: Empty, its one item, or the list of its items
-level_node(parts: list<Lexeme>) as Node := {
-	items = level_items(parts)
-	if items.length == 0 { return Empty }
-	if items.length == 1 then items#1 else listed(items, Bracket.None, loosest_separator(parts))
-}
+level_node(parts: list<Lexeme>) as Node := phrase_of(level_items(parts), loosest_separator(parts))
 
 # the parts between the separators of this kind, the tighter separators kept inside each piece
 pieces_between(parts: list<Lexeme>, separator: Separator) as list := {
@@ -101,8 +97,8 @@ spaced(runs: list) as list<Node> := {
 	if split < 0 { return holes_typed(runs.map(glued_run)) }
 	run = runs[split]
 	before = runs[0 .. split]
-	value = phrase_of(spaced(runs[split + 1 .. runs.length]))
-	if run.length == 1 then [keyed(phrase_of(spaced(before)), last_of(run).op, value)] else spaced(before) + [keyed(glued_run(run[0 .. run.length - 1]), last_of(run).op, value)]
+	value = phrase_of(spaced(runs[split + 1 .. runs.length]), Separator.Space)
+	if run.length == 1 then [keyed(phrase_of(spaced(before), Separator.Space), last_of(run).op, value)] else spaced(before) + [keyed(glued_run(run[0 .. run.length - 1]), last_of(run).op, value)]
 }
 
 # Keys split by looseness: `=` and `:=` before `:`, so `x: int = 3` is (x: int) = 3 and `f(x): int := e` gives
@@ -133,8 +129,8 @@ holes_typed(items: list) as list := {
 untyped_hole(n: Node) as bool := match n { Key(hole, Op.Colon, Empty) => is_hole_word(hole); _ => no }
 hole_of(n: Node) as Node := match n { Key(hole, op, value) => hole; _ => n }
 
-# the items as one node: Empty for none, the item for one, else a phrase
-phrase_of(items: list) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, Separator.Space)
+# the items as one node: Empty for none, the item for one, else their list without brackets, by this separator
+phrase_of(items: list, separator: Separator) as Node := if items.length == 0 then Empty else if items.length == 1 then items#1 else listed(items, Bracket.None, separator)
 
 # A run without blanks: `x:40` and `a=1` split at their loosest key, the first of alike ones; a head glued to a bracket is the glue key
 # Key(head, Op.None, group), `f(x)` `a{x:1}` `xs[1]` `f(x)(y)` (Q1); a run of one part is that part, any other run a
@@ -152,7 +148,7 @@ glued_run(run: list) as Node := {
 			nodes = nodes[0 .. nodes.length - 1] + [keyed(nodes.last, Op.None, t.node)]
 		} else { nodes += [t.node] }
 	}
-	if nodes.length == 1 then nodes#1 else listed(nodes, Bracket.None, Separator.None)
+	phrase_of(nodes, Separator.None)
 }
 
 # an operator written as glyphs, `+` `..` `#`: no head a bracket can glue to
@@ -167,7 +163,7 @@ annotated(items: list) as list := {
 	waiting = []
 	for item in items {
 		if is_annotation(item) { waiting += [item] }
-		else if waiting.length > 0 { result += [with_fact(item, "meta", phrase_of(waiting.map(annotation_of)))]; waiting = [] }
+		else if waiting.length > 0 { result += [with_fact(item, "meta", phrase_of(waiting.map(annotation_of), Separator.Space))]; waiting = [] }
 		else { result += [item] }
 	}
 	result + waiting
@@ -182,7 +178,7 @@ is_annotation(n: Node) as bool := match n {
 
 # what an annotation says, without its `@`
 annotation_of(n: Node) as Node := match n {
-	List(items, Bracket.None, Separator.None) => if items.length == 2 then items#2 else listed(items[1 .. items.length], Bracket.None, Separator.None)
+	List(items, Bracket.None, Separator.None) => phrase_of(items[1 .. items.length], Separator.None)
 	List(items, Bracket.None, Separator.Space) => listed(items.map(annotation_of), Bracket.None, Separator.Space)
 	_ => n
 }
