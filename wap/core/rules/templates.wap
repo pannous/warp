@@ -87,12 +87,10 @@ repeated(language: Language, part: Node, bindings: map) as list := {
 # capture the program's m nor be captured by it. These are the names; their fresh spellings join the bindings.
 names_bound_in(language: Language, template: Node) as list := match template {
 	Call(called, arguments) => {
-		inner = arguments.map(argument => names_bound_in(language, argument)).fold([], (a, b) -> a + b)
+		inner = arguments.flat_map(argument => names_bound_in(language, argument))
 		if #arguments == 2 and assigning(language, called) and arguments#1 is symbol and not is_hole(arguments#1) then [spelling_written(arguments#1)] + inner else inner
 	}
-	List(items, bracket, separator) => items.map(item => names_bound_in(language, item)).fold([], (a, b) -> a + b)
-	Key(left, op, right) => names_bound_in(language, left) + names_bound_in(language, right)
-	_ => []
+	_ => direct_parts(template).flat_map(part => names_bound_in(language, part))
 }
 
 # whether a called operator is in the assignment group: `=`, `:=`, `+=` …

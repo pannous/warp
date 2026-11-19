@@ -107,9 +107,7 @@ global_changes(n: Node, in_function: bool) as list := match n {
 	Set(place, value) => (if is_change(place) then [Change(text(place), line_of(place), in_function)] else []) + global_changes(value, in_function)
 	Define(name, parameters, body) => global_changes(body, yes)
 	Fn(parameters, body) => global_changes(body, yes)
-	Key(left, op, right) => global_changes(left, in_function) + global_changes(right, in_function)
-	List(items, bracket, separator) => items.flat_map(item => global_changes(item, in_function))
-	_ => []
+	_ => direct_parts(n).flat_map(part => global_changes(part, in_function))
 }
 # whether a place given a value is a program variable given another value than its first
 is_change(place: Node) as bool := fact_of(place, BINDING) == symbol(BOUND_GLOBAL) and not same_place(place, fact_of(place, DEFINED_AT))

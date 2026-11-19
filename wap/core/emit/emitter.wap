@@ -66,10 +66,7 @@ host_calls(program: Node) as list := {
 }
 primitives_in(n: Node) as list := match n {
 	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
-	Get(subject, key) => primitives_in(subject) + primitives_in(key)
-	List(items, bracket, separator) => items.flat_map(primitives_in)
-	Key(left, op, right) => primitives_in(left) + primitives_in(right)
-	_ => []
+	_ => direct_parts(n).flat_map(primitives_in)
 }
 
 # What the emitter knows of the whole program: the module, the host functions it imported, and the functions and

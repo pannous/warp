@@ -65,6 +65,12 @@ with_parts(n: Node, f: (Node) -> Node) as Node := match n {
 	List(items, bracket, separator) => List(items.map(f), bracket, separator)
 	_ => n
 }
+# a node's direct parts: a key's two sides, a list's items; none of an atom
+direct_parts(n: Node) as list := match n {
+	Key(left, op, right) => [left, right]
+	List(items, bracket, separator) => items
+	_ => []
+}
 
 # the fact naming the rule that built a node: the rule's head, where it was written
 RULE = "rule"

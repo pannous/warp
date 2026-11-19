@@ -123,9 +123,7 @@ holes_in(n: Node) as list := hole_nodes(n).map(hole_key)
 # the holes themselves, each with its type as a fact
 hole_nodes(n: Node) as list := match n {
 	Symbol(name) => if is_hole(n) then [n] else []
-	List(items, bracket, separator) => items.flat_map(item => hole_nodes(item))
-	Key(left, op, right) => hole_nodes(left) + hole_nodes(right)
-	_ => []
+	_ => direct_parts(n).flat_map(hole_nodes)
 }
 
 # `pattern Name = shape`: the pattern joins the declared ones, so holes and templates can name it
