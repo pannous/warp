@@ -124,7 +124,7 @@ text(op: Op): text := match op {
 	Op.LogOf => "⌟"
 	Op.Shl => "<<"
 	Op.Shr => ">>"
-	# todo assignment change is a UNIVERSAL pattern a ⊕= b  => a = a ⊕ b  for ALL operators automatically!
+	# DONE (compound_assignment, core/parse/operator_table.wap) assignment change is a UNIVERSAL pattern a ⊕= b  => a = a ⊕ b  for ALL operators automatically!
 	Op.AddAssign => "+="
 	Op.SubAssign => "-="
 	Op.MulAssign => "*="
