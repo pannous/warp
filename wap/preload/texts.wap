@@ -63,6 +63,13 @@ codepoints(t: text): list<char> := {
 	}
 	out
 }
+# a text of one character as that character (wiki/char.md: a one-character text is a character): `"é" as codepoint`
+# is 'é'; any other text raises
+char(t: text): char := {
+	characters = codepoints(t)
+	if #characters != 1 { raise "only a text of one character is a char" }
+	characters#1
+}
 # the code of the character whose bytes lie between two offsets
 decoded(t: text, start: int, end: int): int := {
 	code = byte_at(t, start) % LEAD_BITS#(end - start)

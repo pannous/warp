@@ -26,4 +26,6 @@ check "an instance whose class says nothing counts as yes" "$(ran plain_instance
 print(if Box() then "yes" else "no")')" "yes"
 check "a range where a list is wanted" "$(ran range_as_list 'size(xs: list) := #xs
 print text(size(1 to 3))')" "3"
+check "a text of one character is that character" "$(ran char_of_text 'c = "é" as codepoint
+print(text(c) + " " + text(c == char(233)))')" "é yes"
 exit $((failures > 0))
