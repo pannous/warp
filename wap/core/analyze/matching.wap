@@ -17,7 +17,7 @@ use "dispatch.wap"
 # an enum that misses a case is refused naming it (wiki/pattern-matching.md "Every case"), any other only where its
 # value is wanted.
 case_typed(n: Node, subject: Node, arms: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	type = value_type(subject) ?? refused(subject, "this gives no value to match")
+	type = value_of(subject, "to match")
 	typed = arms.map(arm => arm_typed(arm, subject, type, s, f, expected))
 	witness = missing(arms.map(arm => [pattern_of(arm)]), [type], s)
 	# a shape's value of another shape, which only a narrowing gone wrong gives, raises naming the match

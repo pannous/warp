@@ -240,4 +240,13 @@ g(yes)
 if no { }
 print "done"')" "went on
 done"
+check "a function that calls itself and gives no value needs no written result type" "$(ran self_procedure 'countdown(n: int) := {
+	if n > 0 {
+		print(text(n))
+		countdown(n - 1)
+	}
+}
+countdown(3)')" "3
+2
+1"
 exit $((failures > 0))
