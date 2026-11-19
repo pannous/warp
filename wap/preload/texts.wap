@@ -7,6 +7,8 @@ CONTINUATION_FROM := 128
 CONTINUATION_UNTIL := 192
 # the characters a hex digit takes beyond the digits
 HEX_LETTERS := "abcdefABCDEF"
+# the decimal digits, each one byte, at the place of its value
+DIGITS := "0123456789"
 # the blanks trim takes off: space, tab, line feed, carriage return
 BLANK_BYTES := [32, 9, 10, 13]
 # the bytes of A and Z, and how far a lower case letter's byte lies above its capital's
@@ -69,6 +71,12 @@ decoded(t: text, start: int, end: int): int := {
 }
 
 # whether a text has no characters: `t is empty`
+# an int's decimal digits, `-` before a negative one's; counted on the int made negative, so the smallest int has its
+# digits too
+text(n: int): text := if n < 0 then "-" + digits_below(n) else digits_below(0 - n)
+# the digits of a negative int's size, or of 0
+digits_below(n: int): text := if n > -10 then bytes_between(DIGITS, 0 - n, 1 - n) else digits_below((n - n rem 10) ÷ 10) + digits_below(n rem 10)
+
 empty(t: text): bool := t == ""
 # how many characters t holds: `#"héllo"` is 5
 #(t: text): int := {
