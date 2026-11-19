@@ -280,8 +280,12 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 # a list's item or a record's field given a value of its type; the Set itself gives none
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
-	given = typed_form(value, s, f, wanted)
-	refitted(Set(place, converted(given, wanted, s, n, "the place holds a")), n)
+	given = converted(typed_form(value, s, f, wanted), wanted, s, n, "the place holds a")
+	# a place read by a call of `#`, a map's entry, is given its value by a call of `set` with the same parts
+	match place {
+		Call(called, parts) => if text(called) == PLACE_WORD then word_called(n, SET_WORD, parts + [given], ø, s) else refitted(Set(place, given), n)
+		_ => refitted(Set(place, given), n)
+	}
 }
 
 # A call's function known by its caller: a function calls the globals its callee reads late too; the program's call

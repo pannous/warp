@@ -69,7 +69,7 @@ lists_compared(type: Node, p: Program) as function := () => {
 # Two optionals: both ø, or both there and their values equal. Its locals: 0 and 1 the optionals.
 optionals_compared(type: Node, p: Program) as function := () => {
 	base = base_of_optional(type) ?? refused(type, "this is no optional type")
-	boxed = WORD_LAYOUTS.has(text(base)) and WORD_LAYOUTS[text(base)] in PLAIN_VALUES
+	boxed = text(base) in BOXED_WORDS
 	held = local => local_get(local) + (if boxed then instruction(STRUCT_GET, [box_index(p.m, text(base)), 0]) else [])
 	Compared([], missing_compared() + held(0) + held(1) + type_equality(base, p) + NO_UNLESS_YES)
 }

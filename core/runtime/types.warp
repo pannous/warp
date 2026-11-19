@@ -71,6 +71,8 @@ instance_of(n: Node, name: text) as bool := {
 }
 # `x is Animal`: an instance of one of the classes, Animal and those extending it
 instance_among(n: Node, classes: list) as bool := {
+	# only an entry is an instance: an enum's case or a text is none, before any class name is read
+	if is_null(n) or kind_code(n) != Kind.Key { return no }
 	for class_name in classes { if instance_of(n, class_name) { return yes } }
 	no
 }

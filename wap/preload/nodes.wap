@@ -78,15 +78,7 @@ attributes_of(n: Node): list<Node> := match n {
 	_ => []
 }
 # a Meta's data past its line and column
-facts_in(data: list<Node>): list<Node> := {
-	facts: list<Node> = []
-	at = META_FACTS - 1
-	while at < #data {
-		at += 1
-		facts = facts + [data#at]
-	}
-	facts
-}
+facts_in(data: list<Node>): list<Node> := data[META_FACTS - 1 ..]
 with_attribute(n: Node, fact: Node): Node := match n {
 	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
 	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))

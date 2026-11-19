@@ -82,7 +82,7 @@ type_of(n: Node) as Node := fact_of(n, TYPE) ?? refused(n, "this reached the emi
 # the type word of a plain value, from the type the typing stage gave its form
 plain_word(form: Node) as text := {
 	type = type_of(form)
-	if type is symbol and WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES then text(type) else refused(form, "this plain value reached the emitter without its type")
+	if type is symbol and text(type) in BOXED_WORDS then text(type) else refused(form, "this plain value reached the emitter without its type")
 }
 
 # The GC type of a function value: a struct of what it captures, in the order its type writes them; ø for a type that
