@@ -43,4 +43,5 @@ check "a character's code, and a float's 64 bits as an int" "$(ran codes "print 
 print text(float_bits(1.0))")" "97
 4607182418800017408"
 check "a value made into its own type is itself" "$(ran identity 'print text(int(3)) + " " + text(float(2.5)) + " " + text(bool(no)) + " " + text(4 as int) + " " + text("a b" as text)')" "3 2.5 no 4 a b"
+check "rem and ⦼ give the truncated remainder, of the dividend's sign (wiki/Footguns.md)" "$(ran truncated 'print text(-7 rem 3) + " " + text(-7 ⦼ 3) + " " + text(7 rem -3)')" "-1 -1 1"
 exit $((failures > 0))

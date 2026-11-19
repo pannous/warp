@@ -42,7 +42,9 @@ raise(message: text): never := prim raise_text(message)
 -(x: int): int := 0 - x
 # the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
 ÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
-%(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
+%(a: int, b: int): int := if truncated_above_floor(a, b) then truncated_remainder(a, b) + b else truncated_remainder(a, b)
+# the remainder of the truncated quotient, of the dividend's sign: `-7 rem 3` and `-7 ⦼ 3` are -1
+rem(a: int, b: int): int := truncated_remainder(a, b)
 ==(a: int, b: int): bool := prim i64_eq(a, b)
 !=(a: int, b: int): bool := prim i64_ne(a, b)
 <(a: int, b: int): bool := prim i64_lt_s(a, b)

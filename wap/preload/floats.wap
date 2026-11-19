@@ -7,15 +7,15 @@
 
 float_of_bits(bits: int): float := prim f64_reinterpret_i64(bits)
 quotient(a: int, b: int): int := prim i64_div_s(a, b)
-rem(a: int, b: int): int := prim i64_rem_s(a, b)
+truncated_remainder(a: int, b: int): int := prim i64_rem_s(a, b)
 # whether a quotient truncated toward zero lies one above the floored one: a remainder left of the dividend's sign,
 # not the divisor's
-truncated_above_floor(a: int, b: int): bool := rem(a, b) != 0 and (rem(a, b) < 0) != (b < 0)
+truncated_above_floor(a: int, b: int): bool := truncated_remainder(a, b) != 0 and (truncated_remainder(a, b) < 0) != (b < 0)
 # a to the power b ≥ 0 by squaring, from one, the 1 or 1.0 of a's type: the prelude's ^
 powered(a: T, b: int, one: T): T := {
 	if b == 0 { return one }
 	half = powered(a, quotient(b, 2), one)
-	if rem(b, 2) == 0 then half * half else half * half * a
+	if truncated_remainder(b, 2) == 0 then half * half else half * half * a
 }
 
 # The text of a float, its shortest digits that read back, positional from 1e-5 up to 1e15, else as 1.5e20 or 1e-7;
@@ -36,11 +36,11 @@ positive_float_text(x: float): text := {
 	count = digit_count(digits)
 	exponent = count - 1 - found#2
 	if exponent >= 15 or exponent < -5 {
-		rest = if count > 1 then "." + padded(rem(digits, power_of_ten(count - 1)), count - 1) else ""
+		rest = if count > 1 then "." + padded(truncated_remainder(digits, power_of_ten(count - 1)), count - 1) else ""
 		return text(quotient(digits, power_of_ten(count - 1))) + rest + "e" + text(exponent)
 	}
 	if exponent >= count - 1 { return text(digits) + zeros(exponent - count + 1) }
-	if exponent >= 0 { return text(quotient(digits, power_of_ten(count - 1 - exponent))) + "." + padded(rem(digits, power_of_ten(count - 1 - exponent)), count - 1 - exponent) }
+	if exponent >= 0 { return text(quotient(digits, power_of_ten(count - 1 - exponent))) + "." + padded(truncated_remainder(digits, power_of_ten(count - 1 - exponent)), count - 1 - exponent) }
 	"0." + zeros(-1 - exponent) + text(digits)
 }
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
@@ -72,7 +72,7 @@ float_digits(x: float): list<int> := { # todo:  ... :(digits:int, shift:int)  On
 	above = float_of_bits(float_bits(x) + 1) - x
 	if above == infinity() { above = below }
 	# an odd last bit excludes a halfway that is whole
-	odd = rem(float_bits(x), 2)
+	odd = truncated_remainder(float_bits(x), 2)
 	lowest = float_scaled(x, below * -1.0, shift)
 	low_lo = lowest#2
 	low = trunc(lowest#1) + trunc(ceil(low_lo))
@@ -86,12 +86,12 @@ float_digits(x: float): list<int> := { # todo:  ... :(digits:int, shift:int)  On
 	while quotient(low + power - 1, power) * power <= high { power = power * 10 }
 	power = quotient(power, 10)
 	# its multiple nearest x · 10^shift: the one below or the next, by twice the distance minus the power
-	multiple = whole - rem(whole, power)
+	multiple = whole - truncated_remainder(whole, power)
 	twice = float((whole - multiple) * 2 - power) + fraction * 2.0
-	if twice > 0.0 or (twice == 0.0 and rem(quotient(multiple, power), 2) == 1) { multiple = multiple + power }
+	if twice > 0.0 or (twice == 0.0 and truncated_remainder(quotient(multiple, power), 2) == 1) { multiple = multiple + power }
 	if multiple < low { multiple = multiple + power }
 	if multiple > high { multiple = multiple - power }
-	while rem(multiple, 10) == 0 {
+	while truncated_remainder(multiple, 10) == 0 {
 		multiple = quotient(multiple, 10)
 		shift = shift - 1
 	}
