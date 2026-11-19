@@ -28,6 +28,7 @@ slotted(f: Frame, parameter: Node, type: list<int>) as Placed := {
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
 	types = items_of(parameters).map(parameter => parameter_type(parameter, p))
 	signed = signed_result(declared_name(name), p)
+	if placed_by_key(p.functions, place_key(declared_name(name))) != ø { refused(name, "the typing stage wrote two definitions of this function for one type") }
 	p.functions += [Placed(place_key(declared_name(name)), reserved_function(p.m, types, if valued(signed) then [signed] else []), signed, types)]
 	p.functions.last
 } }
