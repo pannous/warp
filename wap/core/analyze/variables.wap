@@ -9,10 +9,7 @@ use "../../kernel/forms.wap"
 
 # The variables a Block names without a value (VARIABLES, core/rules/lowering.wap): `let x` a new one of the block,
 # `global x` the program's x, which the block then reads and changes as its own
-named_variables(block: Node, scope: list, depth: int) as list := match fact_of(block, VARIABLES) {
-	List(items, bracket, separator) => items.map(naming => named_variable(naming, scope, depth))
-	_ => []
-}
+named_variables(block: Node, scope: list, depth: int) as list := fact_items(block, VARIABLES).map(naming => named_variable(naming, scope, depth))
 named_variable(naming: Node, scope: list, depth: int) as Definition := match naming {
 	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then Definition(text(name), BOUND_GLOBAL, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
 	_ => refused(naming, "a variable is named name: kind")
@@ -127,7 +124,4 @@ changes_after(name: text, line: int, changes: list) as bool := {
 	no
 }
 # the names a Block declares the program's, `global x`
-globals_named(block: Node) as list := match fact_of(block, VARIABLES) {
-	List(items, bracket, separator) => items.filter(naming => text(naming.value) == BOUND_GLOBAL).map(naming => text(naming.key))
-	_ => []
-}
+globals_named(block: Node) as list := fact_items(block, VARIABLES).filter(naming => text(naming.value) == BOUND_GLOBAL).map(naming => text(naming.key))

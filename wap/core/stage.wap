@@ -89,6 +89,11 @@ fact_of(n: Node, name: text) as Node? := {
 	}
 	found
 }
+# the items of a fact that holds a list, none when no stage has learned it
+fact_items(n: Node, name: text) as list := match fact_of(n, name) {
+	List(items, bracket, separator) => items
+	_ => []
+}
 
 # Where a node was written: line_of and column_of its position, file_of the file the reader read it from (ø for a
 # node no file holds), a fact SOURCE_FILE the reader gives every node with a position
@@ -204,10 +209,7 @@ CAPTURES = "captures"
 # a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
 # as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
 FUNCTION_VALUE = "function_value"
-captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
-	List(items, bracket, separator) => items
-	_ => []
-}
+captures_of(function: Node) as list := fact_items(function, CAPTURES)
 
 # The facts of the typing stage, core/analyze/types.wap: a value's TYPE, `int`, as a program writes types; a function's
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means

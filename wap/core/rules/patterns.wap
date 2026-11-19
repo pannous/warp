@@ -162,7 +162,7 @@ hole_variable(hole: text) as text := if hole.ends_with(REST_MARK) then hole[1 ..
 shape_taken(language: Language, pattern: Declared) as Node := lowered(language, top_level_statements(shaped_program(language, operated_program(language, notation(shape_text(pattern.shape, hole => HOLE_SIGN + hole_variable(hole)), pattern.name))))#1)
 # A declared pattern's call in an arm, its parts at its holes in order, by the facts its builder's name carries
 pattern_taken(called: Node, parts: list, builder: Node) as Node := {
-	holes = items_of(fact_of(builder, PATTERN_HOLES))
+	holes = fact_items(builder, PATTERN_HOLES)
 	if #parts != #holes { refused(called, "${text(called)} takes ${#holes} parts, not ${#parts}") }
 	bindings = {}
 	for at in 1 to #parts { bindings[HOLE_SIGN + text(holes#at)] = parts#at }
