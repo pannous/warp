@@ -10,7 +10,7 @@ use "../wap/core/language.wap"
 
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = declarations_of(preload).flat_map(library_words)
+library_scope = preload_scope(declarations_of(preload))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 
@@ -71,7 +71,7 @@ typing_joined(modules: list) := {
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
 bound_alone(module: Node, modules: list) as list := {
-	words = (library_around(module, preload) + used_declarations(module, modules)).flat_map(library_words)
+	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
 	statements = statements_in(lowered_program(language, module))
 	bound_each(statements, defined_in(statements, words, PROGRAM_DEPTH) + words, no)
 }
@@ -166,7 +166,7 @@ declaration_word(declaration: Node) as text := match declaration {
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return used_declarations(modules#(#modules), modules).flat_map(library_words)
+		return modules_scope(modules_of_uses(modules#(#modules), modules))
 	} catch e { report("declare", e.message) }
 	[]
 }

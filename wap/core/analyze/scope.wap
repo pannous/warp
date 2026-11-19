@@ -22,11 +22,14 @@ use "types.wap"
 use "variables.wap"
 use "../../kernel/forms.wap"
 use "../rules/patterns.wap"
+use "modules.wap"
 
 # depth of the program's own statements: names defined there are globals and top-level functions
 PROGRAM_DEPTH = 0
-# depth of the library's words, around the program: the preload's declarations (core/analyze/declarations.wap)
-LIBRARY_DEPTH = -1
+# depth of the words of the modules the program uses, around it, and of the preload's declarations, around those
+# (core/analyze/declarations.wap): a name means the innermost, local > parameter > program > used module > preload
+MODULE_DEPTH = -1
+PRELOAD_DEPTH = -2
 # a class a Block declares, seen by the methods beside it for their receiver's fields; never a name's meaning
 RECORD_KIND = "record"
 
@@ -35,13 +38,21 @@ RECORD_KIND = "record"
 # a case's owner is its enum, its fields how many values it takes
 class Definition { name: text; kind: text; definer: Node; depth: int; owner: text = ""; fields: int = 0 }
 
-# the program bound inside the library, whose declarations (`name: signature`) it may use
-bound_program(program: Block, library: list) as Block := late_reads_checked(bound(program, library.flat_map(library_words), PROGRAM_DEPTH))
+# the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
+# two modules defining one name are refused, used or not
+bound_program(program: Block, preload: list, modules: list) as Block := {
+	clashes_refused(modules)
+	late_reads_checked(bound(program, scope_around(preload, modules), PROGRAM_DEPTH))
+}
+# the words around a program: the modules it uses, then the preload's, outermost
+scope_around(preload: list, modules: list) as list := modules_scope(modules) + preload_scope(preload)
+# the preload's words, outermost
+preload_scope(preload: list) as list := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
-library_words(declaration: Node) as list := match declaration {
-	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, LIBRARY_DEPTH)]
-	Record(name, fields, variants) => definitions_made_by(declaration, [], LIBRARY_DEPTH)
+library_words(declaration: Node, depth: int) as list := match declaration {
+	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, depth)]
+	Record(name, fields, variants) => definitions_made_by(declaration, [], depth)
 	_ => refused(declaration, "a library declares names and records")
 }
 
@@ -52,7 +63,7 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if fact_of(n, ASSIGNS) == symbol(BOUND_GLOBAL) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
-	Call(called, arguments) => if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
+	Call(called, arguments) => module_call(n, called, arguments, scope, depth) ?? if is_type_test(called, scope) then type_test_bound(n, called, arguments, scope, depth) else if rest_named(n) != ø then refitted(Call(called, all_bound(arguments, scope, depth)), n) else refitted(Call(called_bound(called, #arguments, scope, depth), arguments.map(argument => argument_bound(argument, scope, depth))), n)
 	Prim(operation, arguments) => refitted(Prim(operation, all_bound(arguments, scope, depth)), n)
 	If(condition, then_part, else_part) => refitted(If(bound(condition, scope, depth), bound(then_part, scope, depth), bound(else_part, scope, depth)), n)
 	While(condition, body) => refitted(While(bound(condition, scope, depth), bound(body, scope, depth)), n)
@@ -263,7 +274,7 @@ unambiguous_case(name: Node, meant: Definition, given: int?, scope: list) as Def
 definitions_meant(name: text, scope: list) as list := {
 	meant = []
 	for definition in scope {
-		if definition.name == name and definition.kind != RECORD_KIND {
+		if definition.name == name and definition.kind != RECORD_KIND and definition.kind != MODULE_KIND {
 			if not is_function(definition) { return if meant is empty then [definition] else meant }
 			meant = meant + [definition]
 		}
