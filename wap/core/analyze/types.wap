@@ -245,7 +245,8 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	typed = typed_form(value, s, f, f.result)
 	# a value returned is of the written result, as the body's is: `return ø` a P? of a function giving P?
 	given = if f.result == ø then typed else converted(typed, f.result, s, value, "the function says it gives a")
-	f.returns += [value_type(given)]
+	# a value that never finishes, `return refused(n, …)`, gives nothing back
+	if not jumps(given) { f.returns += [value_type(given)] }
 	jumping(refitted(Return(given), n))
 }
 

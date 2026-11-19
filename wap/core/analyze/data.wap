@@ -47,7 +47,9 @@ instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
 }
 # a field's value made into the field's type by that type's maker, `int(m["age"])`
 field_made(field: Node, value: Node, s: TypingState) as Node := {
-	maker = text((type_parts(declared_type(field)) ?? [declared_type(field)])#1)
+	# a field of no written type holds the value as it is, its type the value's
+	type = declared_type(field) ?? return value
+	maker = text((type_parts(type) ?? [type])#1)
 	named_call(maker, definitions_named(maker, s), [value], value)
 }
 # the constructor's parameter that gives a field its default, ø when none does
