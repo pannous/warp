@@ -92,7 +92,7 @@ bound_shape(taken: Node, enum: Node, s: TypingState) as Node := {
 		_ => taken
 	}
 }
-case_bound(name: Node, enum: Node, s: TypingState) as Node := with_fact(in_enum(name, enum, s), BINDING, symbol(BOUND_CASE))
+case_bound(name: Node, enum: Node, s: TypingState) as Node := with_binding(in_enum(name, enum, s), DefinitionKind.EnumCase)
 # A kind word after `is` on a value of an enum, `n is symbol` on a Node: the enum's case of that name in lower case,
 # as a shape (wiki/Footguns.md "Tiny surprises"); ø where the value is of no enum or no case is named so
 kind_named(word: Node, type: Node?, s: TypingState) as Node? := {

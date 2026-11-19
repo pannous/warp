@@ -258,11 +258,11 @@ return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := match place {
 	Get(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
 	Item(subject, key) => item_set_typed(n, typed_form(place, s, f, ø), value, s, f)
-	_ => if fact_of(place, BINDING) == symbol(BOUND_FIELD) then item_set_typed(n, typed_form(receiver_field(place), s, f, ø), value, s, f) else name_set_typed(n, place, value, s, f)
+	_ => if is_bound(place, DefinitionKind.Field) then item_set_typed(n, typed_form(receiver_field(place), s, f, ø), value, s, f) else name_set_typed(n, place, value, s, f)
 }
 # a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
 receiver_field(name: Node) as Node := {
-	receiver = with_fact(with_fact(symbol(SELF_WORD), BINDING, symbol(BOUND_PARAMETER)), DEFINED_AT, fact_of(name, DEFINED_AT))
+	receiver = with_fact(with_binding(symbol(SELF_WORD), DefinitionKind.Parameter), DEFINED_AT, fact_of(name, DEFINED_AT))
 	placed_like(Get(receiver, Text(text(name))), name)
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
@@ -304,20 +304,19 @@ called_reads(chosen: TypedFunction, at: Node, s: TypingState, f: TypeFrame) := {
 }
 # a name's value: a parameter, local or global, of the type given to it
 name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	binding = text(fact_of(n, BINDING))
-	if binding == BOUND_CASE { return case_call_typed(n, n, [], s, f) }
-	if binding == BOUND_FIELD { return typed_form(receiver_field(n), s, f, ø) }
-	if binding == BOUND_FUNCTION or binding == BOUND_LIBRARY { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
+	if is_bound(n, DefinitionKind.EnumCase) { return case_call_typed(n, n, [], s, f) }
+	if is_bound(n, DefinitionKind.Field) { return typed_form(receiver_field(n), s, f, ø) }
+	if names_function(n) { return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n) }
 	type = variable_type(n, s, f)
 	# a global a function reads before the statement that gives it its value is read when the function is called
 	# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
-	if type == ø and binding == BOUND_GLOBAL and f.function != ø {
+	if type == ø and is_bound(n, DefinitionKind.Global) and f.function != ø {
 		type = unknown_type(s)
 		remembered(n, type, s, f)
 		s.unset = s.unset + [place_key(defined_at(n))]
 	}
-	if binding == BOUND_GLOBAL and f.function != ø and place_key(defined_at(n)) in s.unset { f.late = f.late + [n] }
-	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
+	if is_bound(n, DefinitionKind.Global) and f.function != ø and place_key(defined_at(n)) in s.unset { f.late = f.late + [n] }
+	if type == ø and is_bound(n, DefinitionKind.Capture) { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	read = with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
 	known = found_type(place_key(defined_at(n)), f.present)
 	if known == ø then read else if base_of_optional(type) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
@@ -325,11 +324,11 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
 names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #parameters_in(definition_at(definer, s)) == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
-variables_of(name: Node, s: TypingState, f: TypeFrame) as list<Binding> := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
+variables_of(name: Node, s: TypingState, f: TypeFrame) as list<Binding> := if is_bound(name, DefinitionKind.Global) then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
 	variable = Binding(place_key(defined_at(name)), type)
 	f.present = f.present.filter(known => known.key != variable.key)
-	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
+	if is_bound(name, DefinitionKind.Global) { s.globals += [variable] } else { f.variables += [variable] }
 }
 variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := substituted(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s.settled)
 # the type of this key among these bindings

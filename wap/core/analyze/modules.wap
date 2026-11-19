@@ -7,21 +7,28 @@ use "../../kernel/forms.wap"
 use "scope.wap"
 use "names.wap"
 use "declarations.wap"
-# the words of the modules a program uses, each module named too
-modules_scope(modules: list) as list<Definition> := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+
+# the words of the modules a program uses, each module named too; a word an earlier module defines identically is
+# that module's, one word
+modules_scope(modules: list) as list<Definition> := (1 to #modules).flat_map(at => [Definition(module_name(modules#at), DefinitionKind.UsedModule, modules#at, MODULE_DEPTH)] + declarations_of(modules#at).filter(declaration => not modules.take(at - 1).any(earlier => defines_identically(earlier, modules#at, declaration))).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
 module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
 # the names a module declares itself: its functions, variables and types, not their fields or cases
 module_names(module: Node) as list := declarations_of(module).map(declaration_name)
 # Two used modules defining one word alike, refused naming both, even where nothing calls it: the same name taking the
-# same parameter types, or one type's or variable's name; words of one name taking other types are one word's overloads
+# same parameter types, or one type's or variable's name, unless both definitions are identical; words of one name
+# taking other types are one word's overloads
 clashes_refused(modules: list) := for later in 2 to #modules {
 	for earlier in modules.take(later - 1) {
 		for declaration in declarations_of(modules#later) {
-			for other in declarations_of(earlier) { if declared_alike(other) == declared_alike(declaration) { refused(declaration_name(declaration), "${module_name(earlier)}.wap line ${line_of(declaration_name(other))} and ${module_name(modules#later)}.wap line ${line_of(declaration_name(declaration))} both define ${declared_alike(declaration)}: rename one") } }
+			for other in declarations_of(earlier) { if declared_alike(other) == declared_alike(declaration) and not defines_identically(earlier, modules#later, declaration) { refused(declaration_name(declaration), "${module_name(earlier)}.wap line ${line_of(declaration_name(other))} and ${module_name(modules#later)}.wap line ${line_of(declaration_name(declaration))} both define ${declared_alike(declaration)}: rename one") } }
 		}
 	}
 }
+# whether an earlier module defines a module's declaration identically: alike, and its code read alike
+defines_identically(earlier: Node, module: Node, declaration: Node) as bool := declarations_of(earlier).any(other => declared_alike(other) == declared_alike(declaration)) and definition_text(earlier, declaration) == definition_text(module, declaration)
+# a module's definition of a declaration as code reads, without its places: two identical ones read alike
+definition_text(module: Node, declaration: Node) as text := text(top_level_statements(module).find(statement => declared_alike(declaration_of(statement) ?? Empty) == declared_alike(declaration)) ?? declaration)
 declaration_name(declaration: Node) as Node := match declaration {
 	Key(name, Op.Colon, signature) => name
 	Record(name, fields, variants) => name
@@ -38,10 +45,10 @@ declared_alike(declaration: Node) as text := match declaration {
 module_word(n: Node, subject: Node, key: text, scope: Scope) as Node? := {
 	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
 	for definition in named_in(scope, text(subject)) {
-		if definition.kind == MODULE_KIND {
+		if definition.kind == DefinitionKind.UsedModule {
 			named = module_names(definition.definer).filter(name => text(name) == key)
 			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
-			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
+			found = with_binding(placed_like(symbol(key), n), DefinitionKind.LibraryFunction)
 			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(with_fact(found, DEFINED_AT, Empty), CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 		}
 	}
