@@ -28,7 +28,11 @@ count(x: T): int := #x
 # (wiki/reference.md)
 copy(xs: list<T>): list<T> := xs[0 ..]
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
-+(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
++(a: list<T>, b: list<T>): list<T> := {
+	out = copy(a)
+	for x in b { out.add(x) }
+	out
+}
 # an item put at the end of a list, which grows in place: every name holding it sees the item
 add(xs: list<T>, item: T) := prim list_add(xs, item)
 # the last item taken off a list; an empty one raises
