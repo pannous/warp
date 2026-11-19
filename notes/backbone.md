@@ -416,3 +416,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
   and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
   off when wap compiles itself: that branch lands.
+- **A function read from a map traps when its parameter calls it twice** (found 2026-11-19, off-census):
+  `steps: map<text, (int) -> int> = {"inc": inc}`, then `twice(f: (int) -> int, x: int) := f(f(x))` with
+  `twice(steps["inc"], 3)` traps with a null reference; `f(x)` once works, and `twice(inc, 3)` does too. Paid off
+  when the nested call of such a parameter runs.
+- **A named function is refused where a function type is written for a variable** (found 2026-11-19, off-census):
+  `g: (int) -> int = inc` says it gives fn<"… inc">, while the same `inc` in a `map<text, (int) -> int>` literal is
+  taken. Paid off when a function's value fits a written function type wherever it is given.
