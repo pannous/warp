@@ -235,9 +235,9 @@ takes(definition: Node, given: list, s: TypingState, fit: function) as bool := {
 	letters = letters_bound(definition, given.map(value_type), s)
 	letters != ø and (1 to #given).all(at => argument_taken(given#at, parameters#at, letters, s, fit))
 }
-argument_taken(argument: Node, parameter: Node, letters: list, s: TypingState, fit: function) as bool := function_type_parts(type_given(parameter)) != ø or conforms(value_type(argument), type_given(parameter), s) or fit(with_letters(argument, letters), substituted(type_given(parameter), letters))
+argument_taken(argument: Node, parameter: Node, letters: list<Binding>, s: TypingState, fit: function) as bool := function_type_parts(type_given(parameter)) != ø or conforms(value_type(argument), type_given(parameter), s) or fit(with_letters(argument, letters), substituted(type_given(parameter), letters))
 # an argument of the type its letters' binding gives it, `xs` of a list<α1> the call settles as a list<int>
-with_letters(argument: Node, letters: list) as Node := {
+with_letters(argument: Node, letters: list<Binding>) as Node := {
 	type = substituted(value_type(argument), letters)
 	if type == value_type(argument) then argument else with_type_of(argument, type)
 }
@@ -396,12 +396,12 @@ shaped_typed(definition: Define, argument_types: list, s: TypingState, at: Node)
 result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else if chosen.result == ø and not chosen.done then with_fact(n, RESULT_UNKNOWN, Text(chosen.unknown_result)) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
-parameter_type(written: Node?, given: Node, letters: list, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
+parameter_type(written: Node?, given: Node, letters: list<Binding>, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
 # whether a parameter of this written type is typed anew for each type given: a bare `list`, `enum` or `function`,
 # which take any list, enum or function value, a function type, whose function values each type it, and a protocol
 takes_own_type(written: Node, records: Records) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or function_type_parts(written) != ø or protocol_named(records, written) != ø
 parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
-	frame.variables += [[place_key(declared_name(parameter)), type]]
+	frame.variables += [Binding(place_key(declared_name(parameter)), type)]
 	with_name_fact(parameter, TYPE, type)
 }
 # a function's name with its signature, `(int, text) -> int`; `()` for no parameters or no value

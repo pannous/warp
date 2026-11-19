@@ -37,26 +37,26 @@ settles(given: Node, wanted: Node, s: TypingState) as bool := {
 	yes
 }
 # the unknowns a call's binding settled, remembered for every later use
-settled_by(bound: list, s: TypingState) := {
-	for entry in bound { if is_unknown(symbol(entry#1)) and type_keyed(entry#1, s.settled) == ø { s.settled += [[entry#1, substituted(entry#2, bound)]] } }
+settled_by(bound: list<Binding>, s: TypingState) := {
+	for binding in bound { if is_unknown(symbol(binding.key)) and type_keyed(binding.key, s.settled) == ø { s.settled += [Binding(binding.key, type_substituted(binding.type, bound))] } }
 }
 # A call of a function for types an unknown still holds: typed once the unknowns settle, so no instance is made for a
 # guess; meanwhile of its written result type, which a function typed later must write
-deferred_typed(definition: Define, types: list, letters: list, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+deferred_typed(definition: Define, types: list, letters: list<Binding>, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
 	typed = TypedFunction(place_key(declared_name(name)), types)
 	typed.result = substituted(declared_type(name) ?? refused(at, UNSETTLED), letters)
 	typed.signed = with_signature(name, types, typed.result)
-	s.deferred += [[definition, types, at]]
+	s.deferred += [Deferred(definition, types, at)]
 	typed
 } }
 # every unknown settled, one nothing settled as any (it held no item that mattered), then the deferred calls' functions
 # typed for the settled types; a function's own deferred calls are typed in turn
 all_settled(s: TypingState) := {
 	while s.deferred or #s.settled < s.unknowns {
-		for at in 1 to s.unknowns { settled_by([[UNKNOWN_MARK + text(at), symbol(ANY_TYPE)]], s) }
+		for at in 1 to s.unknowns { settled_by([Binding(UNKNOWN_MARK + text(at), symbol(ANY_TYPE))], s) }
 		waiting = s.deferred
 		s.deferred = []
-		for call in waiting { function_typed(call#1, call#2.map(type => substituted(type, s.settled)), s, call#3) }
+		for call in waiting { function_typed(call.definition, call.types.map(type => type_substituted(type, s.settled)), s, call.at) }
 	}
 }
 # typed code with every unknown settled, the names its calls name too
@@ -78,7 +78,7 @@ facts_settled(n: Node, s: TypingState) as Node := {
 # fit them (a T bound to two types)
 # fit them (a T bound to two types). Function types come last: a function value's function is typed for parameter
 # types the other parameters bound, `map(xs: list<T>, f: (T) -> U)` binds U by typing f for T.
-letters_bound(definition: Node, types: list, s: TypingState) as list? := {
+letters_bound(definition: Node, types: list, s: TypingState) as list<Binding>? := {
 	bound = []
 	parameters = parameters_in(definition)
 	in_order = (1 to #types).filter(at => function_type_parts(type_given(parameters#at)) == ø) + (1 to #types).filter(at => function_type_parts(type_given(parameters#at)) != ø)
@@ -90,12 +90,13 @@ letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 }
 # the letters bound so far with those a wanted type binds against a given one, ø when they don't fit; code that never
 # gives a value, `return 0`, binds none
-unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
+unified(wanted: Node, given: Node?, bound: list<Binding>, s: TypingState) as list<Binding>? := {
 	if given == ø { return ø }
 	records = s.records
 	if is_letter(wanted, records) or is_unknown(wanted) { return bound_as(wanted, given, bound, s) }
 	if is_unknown(given) { return bound_as(given, wanted, bound, s) }
-	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, s) }
+	wanted_base = base_of_optional(wanted)
+	if wanted_base != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(wanted_base, given, bound, s) }
 	wanted_function = function_type_parts(wanted)
 	if wanted_function != ø and function_value_parts(given) != ø { return function_value_bound(wanted_function, given, bound, s) }
 	# a value binds as the type it reads as, a range's `T` of a list<T> an int
@@ -109,9 +110,9 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	bound
 }
 # the letters bound with a letter or an unknown bound to a type: as it is bound already, or bound now
-bound_as(letter: Node, type: Node, bound: list, s: TypingState) as list? := {
+bound_as(letter: Node, type: Node, bound: list<Binding>, s: TypingState) as list<Binding>? := {
 	held = type_keyed(text(letter), bound)
-	if held == ø { return if type == letter then bound else bound + [[text(letter), type]] }
+	if held == ø { return if type == letter then bound else bound + [Binding(text(letter), type)] }
 	if same_type(held, type) or reads_as(held, type) { return bound }
 	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
 }
@@ -130,7 +131,7 @@ reads_as(held: Node, given: Node) as bool := {
 }
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
-function_value_bound(wanted: FunctionParts, value: Node, bound: list, s: TypingState) as list? := {
+function_value_bound(wanted: FunctionParts, value: Node, bound: list<Binding>, s: TypingState) as list<Binding>? := {
 	parameters = wanted.parameters.map(type => substituted(type, bound))
 	if parameters.any(type => has_letters(type, s.records)) { return ø }
 	result = (value_function_typed(parameters, value, s) ?? return ø).result ?? return ø
@@ -150,14 +151,14 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed] + (if is_plain(parameters#at) then [] else [Conversion.Wrapped])) then typed else ø
 }
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
-# a type with its letters replaced by the types they are bound to
-substituted(type: Node?, bound: list) as Node? := {
-	if type == ø or bound is empty { return type }
+# a type with its letters replaced by the types they are bound to, none where none is given
+substituted(type: Node?, bound: list<Binding>) as Node? := if type == ø then ø else type_substituted(type, bound)
+type_substituted(type: Node, bound: list<Binding>) as Node := {
+	if bound is empty { return type }
 	if type is symbol {
-		held = type_keyed(text(type), bound)
-		return if held == ø or held == type then type else substituted(held, bound)
+		held = type_keyed(text(type), bound) ?? return type
+		return if held == type then type else type_substituted(held, bound)
 	}
-	parts = type_parts(type)
-	if parts == ø { return type }
-	type_built(text(parts#1), (2 to #parts).map(at => substituted(parts#at, bound)))
+	parts = type_parts(type) ?? return type
+	type_built(text(parts#1), (2 to #parts).map(at => type_substituted(parts#at, bound)))
 }
