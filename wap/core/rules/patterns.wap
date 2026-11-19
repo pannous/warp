@@ -113,7 +113,7 @@ pattern_called(language: Language, head: Node) as Declared? := match head {
 # a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
 instance(language: Language, pattern: Declared, parts: list) as Node := built(language, pattern.shape, bound_in_order(pattern.holes, parts))
 
-bound_in_order(holes: list, parts: list) as map := {
+bound_in_order(holes: list<text>, parts: list<Node>) as map<text, Node> := {
 	bindings = {}
 	for i in 1 to #holes {
 		hole = holes#i
@@ -175,7 +175,7 @@ pattern_taken(called: Node, parts: list, builder: Node) as Node := {
 	holes_filled(fact_of(builder, PATTERN_TAKEN), bindings)
 }
 # lowered code with each hole replaced by its binding; a `...` in it spreads a list, no repetition as in a template
-holes_filled(n: Node, bindings: map) as Node := match n {
+holes_filled(n: Node, bindings: map<text, Node>) as Node := match n {
 	Symbol(name) => if bindings.has(name) then bindings[name] else n
 	List(items, bracket, separator) => refitted(List(items.map(item => holes_filled(item, bindings)), bracket, separator), n)
 	_ => n
