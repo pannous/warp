@@ -67,6 +67,11 @@ filter(xs: list<T>, fits: (T) -> bool): list<T> := {
 	for x in xs { if fits(x) { out.add(x) } }
 	out
 }
+# the first item that fits a test, ø when none does: `[1, 2, 3].find(x => x > 1)` is 2
+find(xs: list<T>, fits: (T) -> bool): T? := {
+	for x in xs { if fits(x) { return x } }
+	ø
+}
 # each item's list of results, joined: `[1, 2].flat_map(x => [x, x])` is [1, 1, 2, 2]
 flat_map(xs: list<T>, f: (T) -> list<U>): list<U> := {
 	out: list<U> = []

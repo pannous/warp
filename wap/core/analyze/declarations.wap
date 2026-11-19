@@ -42,7 +42,7 @@ is_use(statement: Node) as bool := match statement {
 }
 used_path(statement: List) as text := match statement { List(items, bracket, separator) => text(items#2) }
 # the files a declared program uses, in the order written
-uses_of(program: Node) as list := fact_items(program, USES).map(text)
+uses_of(program: Node) as list<text> := fact_items(program, USES).map(item => text(item))
 
 # The modules a program uses, each file read once by read_file (text to operated code), the modules they use too,
 # every module after the ones it uses, so their rules are loaded before it is shaped. Modules may use each other: a
@@ -65,7 +65,10 @@ modules_reached(code: Node, read_file: function, reached: Reached) := {
 }
 # A declared module: its file, its code and the files its `use` lines name
 class Module { file: text; code: Node; uses: list<text> }
+# a declared program as a module
 module_declared(code: Node) as Module := Module(file_of(code) ?? "", code, uses_of(code))
+# the modules' code, in their order
+codes_of(modules: list<Module>) as list<Node> := modules.map(module => module.code)
 # the module of that file among the declared ones
 module_of(file: text, modules: list<Module>) as Module := {
 	for module in modules { if module.file == file { return module } }
