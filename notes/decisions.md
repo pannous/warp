@@ -231,3 +231,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - kind-word-is (wiki Footguns.md:180, 2026-11-18): on a Node, `n is symbol`/`n is text` tests the case, as `n is Symbol`.
 - never-type-dropped (user, 2026-11-18, fits.wap TODO): wap has no NEVER_TYPE; a jump (return, break, raise) gets no type and joins skip jumping arms.
 - conversion-is-implicit-as (user, 2026-11-18, fits.wap TODO): conversion(given, wanted) is what `x as T` would do where nothing is written (Checked = the cast, the rest repacking); no separate convert/cast functions; `x as T` stays `T(x)`.
+- wap-boxed-any-debt (user, 2026-11-19, via warp-supervisor): boxed `any` in wap's own source is a debt. Only types.wap decides what is boxed (never the emitter); each boxed spot is one entry in test_guardrails' allowlist, which only shrinks and is empty before milestone 2 is done. Programs' truly dynamic values stay dynamic (first_principles.md).
