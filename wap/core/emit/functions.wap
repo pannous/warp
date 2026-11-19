@@ -95,12 +95,27 @@ parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name
 call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
+	if binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY] and p.in_place.has(defining_key(called)) { return in_place_code(p.in_place[defining_key(called)], arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
 	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at, p.m)) { refused(form, "the arguments are not of the parameters' types") }
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
 }
+# A function whose body is only a primitive of its parameters in their order, `byte_at(t, at) := prim array_get_u(t,
+# at)`, kept by its key: its calls compile to the primitive in place, as a built-in's header line keeps its body for an
+# importer (wiki/wasm-representation.md); the function itself is emitted only as a function value.
+kept_in_place(definition: Define, p: Program) := match definition { Define(name, parameters, body) => match body {
+	Prim(operation, given) => if given.all(each => each is symbol) and given.map(text) == items_of(parameters).map(parameter => text(declared_name(parameter))) { p.in_place[function_key(definition)] = definition }
+	_ => ø
+} }
+# a call of such a function: the arguments, fitted to the primitive's operands, then the primitive, giving the type
+# the function's signature says, as its call would (a generic body's own type is its type variable)
+in_place_code(definition: Define, arguments: list<Node>, p: Program, f: Frame) as Code := match definition { Define(name, parameters, body) => match body { Prim(operation, given) => {
+	result = signed_parts(declared_name(name)).result
+	typed = if text(result) == EMPTY_TYPE_WORD then body else with_fact(body, TYPE, result)
+	primitive_code(typed, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p)
+} } }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
 passes(given: list<int>, taken: list<int>, m: Module) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
