@@ -38,8 +38,11 @@ operated_file(language: Language, file: text) as Node := operated_program(langua
 # a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
 declared_modules(language: Language, file: text) as list<Module> := {
 	code = operated_file(language, file)
-	(modules_used(code, file => operated_file(language, file)) + [code]).map(module => module_declared(declared_operated(language, module)))
+	used_modules(language, code) + [declared_module(language, code)]
 }
+# the modules operated code uses, theirs first, each declared
+used_modules(language: Language, code: Node) as list<Module> := modules_used(code, file => operated_file(language, file)).map(module => declared_module(language, module))
+declared_module(language: Language, code: Node) as Module := module_declared(declared_operated(language, code))
 # a declared module lowered and bound inside the modules it uses and the preload's declarations
 prepared(language: Language, module: Module, modules: list<Module>, preload: Node) as Block := bound_program(lowered_program(language, module.code), library_around(module.code, preload), modules_of_uses(module, modules))
 # the modules a declared module uses
@@ -48,7 +51,7 @@ modules_of_uses(module: Module, modules: list<Module>) as list<Module> := module
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
 # the preload's code with the modules it uses, whose words only the preload sees
 library_code_of(language: Language, preload: Node) as Block := {
-	modules = (modules_used(preload, file => operated_file(language, file)).map(module => declared_operated(language, module)) + [preload]).map(module_declared)
+	modules = used_modules(language, preload) + [module_declared(preload)]
 	Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
 }
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its

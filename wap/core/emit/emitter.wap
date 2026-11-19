@@ -32,6 +32,7 @@ use "function_values.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../bindings.wap"
 use "../type_notation.wap"
 use "../../kernel/forms.wap"
 

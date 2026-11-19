@@ -12,6 +12,7 @@ use "opcodes.wap"
 use "primitives.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../bindings.wap"
 use "../type_notation.wap"
 use "../../kernel/forms.wap"
 

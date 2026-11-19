@@ -18,6 +18,7 @@
 
 use "../errors.wap"
 use "../stage.wap"
+use "../bindings.wap"
 use "types.wap"
 use "variables.wap"
 use "../../kernel/forms.wap"

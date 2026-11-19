@@ -32,6 +32,9 @@ declared_once(module: Node) as Node := {
 	if not shared.declared.has(key) { shared.declared[key] = declared_operated(language, module) }
 	shared.declared[key]
 }
+# the files of modules, and the functions among statements as the typing stage holds them
+files_of(modules: list<Module>) as list<text> := modules.map(module => module.file)
+functions_in(statements: list) as list<Function> := statements.filter(statement => statement is Define).map(function_of)
 # a file with the modules it uses, theirs first, as declared_modules gives them
 modules_of(file: text) as list<Module> := {
 	code = operated_once(file)
@@ -55,7 +58,7 @@ class Run { state: TypingState, frame: TypeFrame, joined: map = {}, refusals: ma
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list<Module>) := {
 	global run
-	keys = modules.map(module => module.file)
+	keys = files_of(modules)
 	joining = keys.filter(key => not run.joined.has(key))
 	for module in modules.filter(module => module.file in joining) {
 		key = module.file
@@ -63,7 +66,7 @@ typing_joined(modules: list<Module>) := {
 		statements = []
 		try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
 		run.joined[key] = statements
-		run.state.definitions += statements.filter(statement => statement is Define).map(function_of)
+		run.state.definitions += functions_in(statements)
 		run.state.records = added_records(run.state.records, statements)
 	}
 	for key in joining {
@@ -112,11 +115,11 @@ whole_typed(file: text) as Outcome := {
 closures: map = {}
 whole_once(file: text) as Outcome := {
 	global closures
-	keys = modules_of(file).map(module => module.file)
+	keys = files_of(modules_of(file))
 	key = keys.sorted().join(" ")
 	if closures.has(key) { return closures[key] }
 	for inner in keys {
-		held = modules_of(inner).map(module => module.file)
+		held = files_of(modules_of(inner))
 		if #held < #keys and held.all(each => each in keys) {
 			refused = whole_once(inner)
 			if not refused.typed {
@@ -170,7 +173,7 @@ declaration_word(declaration: Node) as text := match declaration {
 }
 
 # the names the modules a file uses define, as the compiler binds them
-used_scope(file: text) as list := {
+used_scope(file: text) as list<Definition> := {
 	try {
 		modules = modules_of(file)
 		return modules_scope(codes_of(modules_of_uses(modules#(#modules), modules)))
@@ -222,19 +225,18 @@ parts_of(n: Node) as list := match n { Key(left, op, right) => [left, right]; Li
 # (core/analyze/types.wap block_typed), in the run's state, so a refusal names its function and hides no other; a
 # function of letters or untyped parameters is typed by its calls. What it finds is printed with the module's file.
 class Probed { functions: int = 0, typed: int = 0, by_calls: int = 0, anys: int = 0, lines: list<text> = [] }
-module_probed(key: text, own: list) as Probed := {
+module_probed(key: text, own: list<Function>) as Probed := {
 	global run
 	if run.probed.has(key) { return run.probed[key] }
 	p = Probed()
 	p.lines = refusals_of(key).map(refusal => refusal.replace("\n", " "))
-	for definition in own {
-		name = declared_name(written_name(definition))
-		held = function_of(definition)
+	for held in own {
+		name = held.name
 		if not all_typed(held, run.state.records) { p.by_calls += 1 } else {
 			p.functions += 1
 			before = copied(run.state)
 			try {
-				typed = function_typed(held, held.parameters, run.state, definition)
+				typed = function_typed(held, held.parameters, run.state, held.definer)
 				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
 				# the other functions that fill it, as the whole program types it
 				found = anys_in(typed.define)
@@ -256,18 +258,18 @@ module_probed(key: text, own: list) as Probed := {
 functions_probe(file: text) as Probed := {
 	modules = []
 	try modules = modules_of(file) catch e { report("declare", e.message); return Probed() }
-	if in_preload(file) { return module_probed(file, library.filter(statement => statement is Define and file_of(written_name(statement)) == file)) }
+	if in_preload(file) { return module_probed(file, functions_in(library).filter(function => function.module == file)) }
 	typing_joined(modules)
 	for module in modules {
 		key = module.file
-		module_probed(key, run.joined[key].filter(statement => statement is Define))
+		module_probed(key, functions_in(run.joined[key]))
 	}
 	run.probed[modules.last.file]
 }
 # a typing state that knows the library's definitions and records
 typing_state(library: list) as TypingState := {
 	s = TypingState()
-	s.definitions = library.filter(statement => statement is Define).map(function_of)
+	s.definitions = functions_in(library)
 	s.records = added_records(Records(), library)
 	s
 }
