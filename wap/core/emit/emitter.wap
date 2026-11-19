@@ -116,7 +116,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Define(name, parameters, body) => Code()
 	Set(place, value) => assigned_code(form, place, value, p, f)
 	Call(called, arguments) => call_code(form, called, arguments, p, f)
-	Try(body, otherwise) => try_code(form, body, otherwise, p, f)
+	Try(body, handler) => try_code(form, body, handler, p, f)
 	If(condition, then_part, else_part) => if_code(form, code(condition, p, f), arm_code(form, then_part, p, f), arm_code(form, else_part, p, f))
 	While(condition, body) => while_code(form, condition, body, p, f)
 	Case(subject, arms) => case_code(form, code(subject, p, f), arms, p, f)
@@ -155,14 +155,20 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 	type = joined(then_part.type, else_part.type)
 	Code(type, condition.instructions + IF + block_type(type) + kept(then_part, type) + ELSE + kept(else_part, type) + END)
 }
-# The body's value, or the otherwise part's when a raise in the body is thrown (kernel-try); the raise's text dropped
-#   block (done)  block (caught: text)  try_table (raise → caught)  body  end  br done  end  drop  otherwise  end
-try_code(form: Node, body: Node, otherwise: Node, p: Program, f: Frame) as Code := {
-	tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
-	instead = arm_code(form, otherwise, p, f)
-	type = joined(tried.type, instead.type)
-	caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
-	Code(type, BLOCK + block_type(type) + caught + DROP + kept(instead, type) + END)
+# The body's value, or the handler's when a raise in the body is thrown (kernel-try): the handler's body runs in
+# place, no closure made, its parameter a local of the frame holding the raise as a Node, Error(Text(text))
+#   block (done)  block (caught: text)  try_table (raise → caught)  body  end  br done  end  call error_node
+#   local.set error  handler  end
+try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code := match handler {
+	Fn(parameters, handling) => {
+		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
+		error = slotted(f, listed(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
+		instead = arm_code(form, handling, p, f)
+		type = joined(tried.type, instead.type)
+		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
+		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + instruction(LOCAL_SET, [error.index]) + kept(instead, type) + END)
+	}
+	_ => refused(handler, "a Try's handler is a function written in place, `error => …`")
 }
 # the program's code, a raise no Try caught written and the program ended
 uncaught_ended(body: list, p: Program) as list := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + instruction(CALL, [helper(p, "uncaught", uncaught_function)])
