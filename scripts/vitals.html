@@ -303,7 +303,7 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
 (function wap() {
   const { sizes, over, limit, stages, snapshots } = DATA.wap, holder = document.getElementById("wap");
   const censuses = snapshots.filter(s => s.kind === "census"), tests = snapshots.filter(s => s.kind === "tests");
-  const pointsOf = (list, ...fields) => list.map(s => [s.time, s.commit, ...fields.map(f => s[f])]);
+  const pointsOf = (list, ...fields) => list.filter(s => fields.every(f => typeof s[f] === "number")).map(s => [s.time, s.commit, ...fields.map(f => s[f])]);  // a snapshot from before a field was measured has no point
   const noMeasurement = label => { holder.insertAdjacentHTML("beforeend", `<div class="tier"><div class="label">${label}</div><div class="empty">no measurement yet</div></div>`); };
   const note = (point, extra = "") => `${point[1]} · ${point[0]}${extra}`;
   // sizes: [date, commit, total, per stage, core, files over the limit]
