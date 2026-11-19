@@ -25,18 +25,17 @@ function_value_typed(n: Node, parameters: Node, body: Node, s: TypingState, f: T
 	lambda = lambda_of(n, parameters, body, s)
 	captures = captures_of(n).map(definer => type_keyed(place_key(definer), f.variables) ?? refused(definer, "a function value reads this before any value is given to it"))
 	s.captured += captures_of(n).map(place_key)
-	with_type_of(n, function_value_type(function_key_of(lambda), captures))
+	with_type_of(n, function_value_type(key_of(lambda), captures))
 }
 # the function of a function value, made once: named and placed where the value is written
-lambda_of(n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
+lambda_of(n: Node, parameters: Node, body: Node, s: TypingState) as Function := {
 	name = placed_like(symbol(LAMBDA_NAME), n)
 	definition_keyed(place_key(name), s) ?? lambda_made(name, n, parameters, body, s)
 }
-lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) as Node := {
+lambda_made(name: Node, n: Node, parameters: Node, body: Node, s: TypingState) as Function := {
 	lambda = refitted(Define(name, with_items(parameters, [placed_like(symbol(CLOSURE_NAME), n)] + items_of(parameters)), body), n)
 	s.lambdas += [lambda]
-	s.definitions += [lambda]
-	lambda
+	function_added(lambda, s)
 }
 # The captures a function value's function reads, each [key, type], from its first parameter, the value; none for a
 # function of no function value
@@ -56,7 +55,7 @@ value_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: Type
 	parts = function_value_parts(type) ?? refused(called, "this holds a ${type ?? "nothing"}, no function to call")
 	key = text(parts#1)
 	definition = definition_keyed(key, s) ?? refused(called, "the typing stage found no function of this value")
-	name = declared_name(written_name(definition))
+	name = declared_name(written_name(definition.definer))
 	given = if is_lambda_key(key, s) then [called] + arguments else arguments
 	call_typed(n, with_fact(with_binding(name, DefinitionKind.Function), DEFINED_AT, name), given, s, f, expected)
 }
@@ -86,12 +85,12 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 # is called, as a direct call checks it
 shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState, wanted: Node) as Node := {
 	definition = definition_keyed(typed.key, s) ?? refused(value, "the typing stage found no definition of this function")
-	word = text(declared_name(written_name(definition)))
+	word = definition.name
 	name = placed_like(symbol("${word}(${parts.parameters.map(text).join(", ")})"), value)
 	made = definitions_named(text(name), s)
 	reads = parameters_of(name, parts.parameters)
 	taking = if made is empty then dispatcher_made(name, reads, named_call(word, [definition], reads, name), [typed.result], s) else made#1
-	called = declared_name(written_name(taking))
+	called = declared_name(written_name(taking.definer))
 	as_function_type(with_type_of(with_fact(placed_like(symbol(text(called)), value), DEFINED_AT, called), function_value_type(place_key(called), [])), wanted, s) ?? refused(value, "the function written for these shapes takes others")
 }
 # the function type a function value's written signature gives, `(int) -> int` of `inc(a: int) as int`: ø unless
@@ -99,8 +98,8 @@ shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState
 written_function_type(type: Node?, s: TypingState) as Node? := {
 	key = text((function_value_parts(type) ?? return ø)#1)
 	definition = definition_keyed(key, s) ?? return ø
-	taken = parameters_in(definition)[(if is_lambda_key(key, s) then 1 else 0) ..]
-	result = declared_type(written_name(definition)) ?? return ø
+	taken = parameters_in(definition.definer)[(if is_lambda_key(key, s) then 1 else 0) ..]
+	result = definition.result ?? return ø
 	if taken.all(parameter => type_given(parameter) != ø and not has_letters(type_given(parameter), s.records)) then function_type_of(taken.map(type_given), result) else ø
 }
 # A function's name as a value, `apply(inc, 2)`: of a type of its own like a function value's, capturing nothing, so a
