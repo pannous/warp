@@ -65,7 +65,7 @@ TAG_EQUAL = "tag_equal"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) as Code := {
-	name = operation_of(form)
+	name = text(operation)
 	operands = arguments.flat_map(argument => argument.instructions)
 	# the value the operands and these instructions after them give
 	ending = instructions => Code(given_layout(form, p), operands + instructions)
@@ -89,14 +89,9 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	if operations.has(name) { return wasm_called(form, arguments, operations[name], p) }
 	refused(form, "no primitive of this name")
 }
-# an array's operations given a list work on its items: operation → the list's
-ON_LISTS: map<text, text> = {"array_len": LIST_COUNT, "array_slice": "list_slice"}
-# the operation a primitive performs: the one it names, or the list's for an array's operation given a list
-operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
 # the plain value a box holds
 boxed_operand(form: Prim) as Node := match form { Prim(operation, given) => given#1 }
 first_operand_type(form: Prim) as Node := match form { Prim(operation, given) => if given is empty then refused(form, "this primitive takes an operand") else type_of(given#1) }
-is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIST_TYPE)
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
 # missing one traps. A value any or a number holds, known of its type, is cast to it first.
 # an any's value as an any, `x!` of an any (an any? is an any), is the any itself, missing raising
@@ -138,14 +133,12 @@ arrays_joining_function(p: Program, type: int) as int := {
 	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(items_in(0), 1) + joined)
 }
 
-# The helper of array_slice(xs, from, count): a new list of count items of xs, from the place `from` counting from 0.
-# Its locals: 0 the list, 1 from, 2 count, 3 the new list. A slice past the end traps.
-slicing_function(p: Program, type: int) as int := {
-	given = nullable(type)
-	place = local => local_get(local) + I32_WRAP_I64
-	sliced = local_get(3)
-	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(3)
-	copied = sliced + i32_const(0) + local_get(0) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
-	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
-}
+# The helper of array_slice(xs, from, count): a new array of count items of xs, from the place `from` counting from 0.
+# Its locals: 0 the array, 1 from, 2 count, 3 the new array. A slice past the end traps.
+slicing_function(p: Program, type: int) as int := added_function(p.m, [nullable(type), I64, I64], [nullable(type)], [nullable(type)], slice_copied(type, local_get(0)) + local_get(3))
+# a slice's new array of an array type in local 3: `count` (local 2) items copied from the array `source` gives, from
+# the place `from` (local 1), both ints
+slice_copied(array: int, source: list<int>) as list<int> := int_local(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + source + int_local(1) + int_local(2) + instruction(ARRAY_COPY, [array, array])
+# an int local as an i32
+int_local(slot: int) as list<int> := local_get(slot) + I32_WRAP_I64
 
