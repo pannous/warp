@@ -110,7 +110,6 @@ text(t: text): text := t
 int(n: int): int := n
 float(x: float): float := x
 bool(b: bool): bool := b
-text(n: int): text := prim int_text(n)
 text(c: char): text := prim char_text(c)
 text(b: bool): text := if b then "yes" else "no"
 # an optional's text: its value's, or ø when it is missing
