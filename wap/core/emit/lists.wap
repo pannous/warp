@@ -88,7 +88,7 @@ list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?
 # `list`, the list words exist once instead of once per item type, and wap's own lists (Nodes, texts) pay nothing.
 list_layout(type: Node, p: Program) as list := nullable(list_struct(type, p))
 items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
-item_layout(type: Node, p: Program) as list := layout_of(item_type(type), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+item_layout(type: Node, p: Program) as list := layout_of(item_type(type) ?? refused(type, "this list type names no item type"), p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
 # the count or the items array of the list in a local, or of the one on the stack for ø
 count_in(type: Node, local: int?, p: Program) as list := list_field(type, local, LIST_COUNT_AT, p)
 items_in(type: Node, local: int?, p: Program) as list := list_field(type, local, LIST_ITEMS_AT, p)

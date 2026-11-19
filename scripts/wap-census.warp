@@ -1,6 +1,6 @@
 # The road to self-build, measured (notes/wap.md "Road to self-build"): the compiler's own stages (wap/core/pipeline.wap)
 # run on wap source files, statement by statement where a stage allows, every refusal printed as: stage <tab> message;
-# a total line at the end (test/wap/test_census.sh). The counts come from two paths: "functions typed" from one
+# a total line at the end (test/wap/ratchet_census.sh). The counts come from two paths: "functions typed" from one
 # typing state shared by the whole run, each module's forms typed once, a refusal rolled back; "typed whole" from the
 # compiler's own typed_file path, once for each closure; a closure holding a smaller one that refuses is refused with it.
 #   warp --no-window scripts/wap-census.warp $(git ls-files "wap/*.wap")
@@ -8,6 +8,8 @@ use "../wap/core/pipeline.wap"
 use "../wap/core/emit/emitter.wap"
 use "../wap/core/language.wap"
 
+# the folder of the preload, as the census is given its files and as their places spell them
+PRELOAD_FOLDER = "wap/preload/"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
 library_scope = preload_scope(declarations_of(preload))
@@ -43,28 +45,33 @@ prepared_once(module: Node, modules: list) as list := {
 }
 # One typing state for the run, as the compiler types a program: the library's definitions and records, then each
 # module's joined once, its top-level values typed, then its functions typed alone, so a form is typed once and its
-# callees' types are there for the next. A refusal leaves the state as it was before the form, so it changes how no
-# other form types; a top-level statement's refusal is kept with its module. A module that cannot be bound whole joins
-# with the statements that bind alone, so a refusal hides only its statement (probe reports it with the file).
+# callees' types are there for the next. The modules of a closure join before any of their statements is typed, as the
+# compiler knows every record and definition before it types: modules that use each other (emit/lists.wap and
+# emitter.wap) see each other's records whichever comes first. A refusal leaves the state as it was before the form,
+# so it changes how no other form types; a top-level statement's refusal is kept with its module. A module that cannot
+# be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
+# with the file).
 class Run { state: TypingState, frame: TypeFrame, joined: map = {}, refusals: map = {}, probed: map = {} }
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list) := {
 	global run
-	for module in modules {
+	keys = modules.map(module => file_of(module) ?? "")
+	joining = keys.filter(key => not run.joined.has(key))
+	for module in modules.filter(module => (file_of(module) ?? "") in joining) {
 		key = file_of(module) ?? ""
-		if not run.joined.has(key) {
-			run.refusals[key] = []
-			statements = []
-			try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
-			run.joined[key] = statements
-			run.state.definitions += statements.filter(statement => statement is Define)
-			run.state.records = added_records(run.state.records, statements)
-			for statement in statements.filter(statement => not (statement is Define) and not (statement is Record)) {
-				before = copied(run.state)
-				try typed_form(statement, run.state, run.frame, ø) catch e {
-					run.state = rolled_back(before)
-					run.refusals[key] += ["type\ta top-level statement: " + e.message]
-				}
+		run.refusals[key] = []
+		statements = []
+		try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
+		run.joined[key] = statements
+		run.state.definitions += statements.filter(statement => statement is Define)
+		run.state.records = added_records(run.state.records, statements)
+	}
+	for key in joining {
+		for statement in run.joined[key].filter(statement => not (statement is Define) and not (statement is Record)) {
+			before = copied(run.state)
+			try typed_form(statement, run.state, run.frame, ø) catch e {
+				run.state = rolled_back(before)
+				run.refusals[key] += ["type\ta top-level statement: " + e.message]
 			}
 		}
 	}
@@ -201,7 +208,7 @@ probe(file: text) as Tally := {
 }
 
 # whether a file is one of the preload's, the library every program is compiled with
-in_preload(file: text) as bool := file.contains("/preload/") or file.starts_with("preload/")
+in_preload(file: text) as bool := file.starts_with(PRELOAD_FOLDER)
 # the files probed, those typed whole, the functions found, those typed alone, and the places in them typed any
 class Tally { files: int = 0, whole: int = 0, functions: int = 0, typed: int = 0, anys: int = 0 }
 added(a: Tally, b: Tally) as Tally := Tally(a.files + b.files, a.whole + b.whole, a.functions + b.functions, a.typed + b.typed, a.anys + b.anys)
@@ -248,7 +255,7 @@ module_probed(key: text, own: list) as Probed := {
 functions_probe(file: text) as Probed := {
 	modules = []
 	try modules = modules_of(file) catch e { report("declare", e.message); return Probed() }
-	if in_preload(file) { return module_probed(file, library.filter(statement => statement is Define and place_key(written_name(statement)).contains(file + ":"))) }
+	if in_preload(file) { return module_probed(file, library.filter(statement => statement is Define and file_of(written_name(statement)) == file)) }
 	typing_joined(modules)
 	for module in modules {
 		key = file_of(module) ?? ""
