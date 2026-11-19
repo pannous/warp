@@ -88,4 +88,62 @@ print (if 0 then "t" else "f") + (if [1] then "t" else "f") + (if "" then "t" el
 ftf"
 check "an optional holding 0 is falsy" "$(ran optional_zero 'count: int? = 0
 print if count then "truthy" else "falsy"')" "falsy"
+check "a guard whose block never finishes leaves the variable present for the statements after it, in a loop's body too" "$(ran guard_narrows 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+read(n: int) as int := {
+	escape = found(n)
+	if escape == ø { return 0 }
+	escape.reads + 1
+}
+counted(n: int) as int := {
+	escape = found(n)
+	total = 0
+	while total < 6 {
+		if escape == ø { break }
+		total = total + escape.reads
+	}
+	total
+}
+print(text(read(5)))
+print(text(read(0)))
+print(text(counted(2)))
+print(text(counted(0)))')" "6
+0
+6
+0"
+check "a guard inside a loop's body or a try's part narrows only there: after them the variable may still be missing" "$(ran guard_kept_inside 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+looped(n: int) as text := {
+	escape = found(n)
+	i = 0
+	while i < 0 {
+		if escape == ø { break }
+		i = i + 1
+	}
+	if escape == ø then "none" else "some"
+}
+tried(n: int) as text := {
+	escape = found(n)
+	r = try { if escape == ø { raise "none" }; escape.reads } else 0
+	if escape == ø then "none" else "some"
+}
+handled(n: int) as text := {
+	escape = found(n)
+	r = try { 1 } catch e { if escape == ø { return "raised" }; 2 }
+	if escape == ø then "none" else "some"
+}
+print(looped(0) + " " + looped(5))
+print(tried(0) + " " + tried(5))
+print(handled(0) + " " + handled(5))')" "none some
+none some
+none some"
+check "a variable given a new value after its guard may be missing again" "$(ran guard_reset 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+again(n: int) as text := {
+	escape = found(n)
+	if escape == ø { return "first" }
+	escape = found(n - 4)
+	if escape == ø then "none" else "some"
+}
+print(again(0) + " " + again(5) + " " + again(9))')" "first none some"
 exit $((failures > 0))
