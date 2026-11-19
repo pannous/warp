@@ -209,7 +209,8 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 	if typed is empty then block else typed_like(block, typed.last)
 }
 # each definition whose parameters all have their types typed, even when nothing calls it, unless TYPED_WHEN_CALLED;
-# one wap refuses ends alone, its refusal kept for the end
+# one wap refuses ends alone. The catch is empty because function_typed has already kept its refusal for the end:
+# only what function_typed raises may reach it, never a raise that skips that record
 typed_alone(statements: list, s: TypingState) := for statement in statements { if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø and all_typed(statement, s.records) { try function_typed(statement, written_types(statement), s, statement) catch e { } } }
 # the Defines each of these definitions became, in the order typed
 functions_typed_from(definitions: list, s: TypingState) as list := {
