@@ -16,12 +16,12 @@ use "../type_notation.wap"
 
 # the instructions that compare two values of a type on the stack, giving yes or no
 type_equality(type: Node, p: Program) as list<int> := {
-	if base_of_optional(type) != ø { return parts_compared(p, "optional_equal ${type}", layout_of(type, p.m, p.records), optionals_compared(type, p)) }
+	if base_of_optional(type) != ø { return parts_compared(p, "optional_equal ${type}", known_layout(type, p.m, p.records), optionals_compared(type, p)) }
 	if item_type(type) != ø { return parts_compared(p, "list_equal ${type}", list_layout(type, p), lists_compared(type, p)) }
 	record = record_named(p.records, type)
 	if text(type) == ENUM_WORD or record != ø and cases_of(record) is not empty { return parts_compared(p, "tag_equal", nullable(enum_base(p.m)), cases_compared(p)) }
 	if record != ø { return parts_compared(p, "record_equal ${type}", layout_of(type, p.m, p.records), records_compared(record, p)) }
-	equality(layout_of(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this type yet"), p)
+	equality(known_layout(type, p.m, p.records), p)
 }
 # the instructions that compare two values of a wasm type: an int, float, yes/no or character, a text, an `any`
 equality(type: list<int>, p: Program) as list<int> := {
@@ -68,7 +68,7 @@ lists_compared(type: Node, p: Program) as function := () => {
 }
 # Two optionals: both ø, or both there and their values equal. Its locals: 0 and 1 the optionals.
 optionals_compared(type: Node, p: Program) as function := () => {
-	base = base_of_optional(type)
+	base = base_of_optional(type) ?? refused(type, "this is no optional type")
 	boxed = WORD_LAYOUTS.has(text(base)) and WORD_LAYOUTS[text(base)] in PLAIN_VALUES
 	held = local => local_get(local) + (if boxed then instruction(STRUCT_GET, [box_index(p.m, text(base)), 0]) else [])
 	Compared([], missing_compared() + held(0) + held(1) + type_equality(base, p) + NO_UNLESS_YES)

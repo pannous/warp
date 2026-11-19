@@ -17,7 +17,7 @@ use "function_values.wap"
 
 # the layout of a typed form's value
 # the layout of a node's type, ø for a node the typing stage left untyped
-typed_layout(n: Node, p: Program) as list<int>? := if fact_of(n, TYPE) == ø then ø else layout_of(fact_of(n, TYPE), p.m, p.records)
+typed_layout(n: Node, p: Program) as list<int>? := if fact_of(n, TYPE) == ø then ø else layout_of(type_of(n), p.m, p.records)
 layout(n: Node, p: Program) as list<int> := layout_of(type_of(n), p.m, p.records) ?? refused(n, "the emitter has no value layout for the type ${type_of(n)} yet")
 # The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
 # reads it and the one that writes it

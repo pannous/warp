@@ -19,6 +19,7 @@ GROWTH = 4
 NO_SUCH_ITEM = "this list has no item at this place"
 POPPED_EMPTY = "pop of an empty list"
 NO_SUCH_KEY = "this map has no such key"
+NO_MAP_TYPE = "this is no map type"
 LIST_ITEM = "list_item"
 LIST_SET = "list_set"
 LIST_ADD = "list_add"
@@ -118,7 +119,7 @@ map_removing_function(p: Program, map: Node) as int := {
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
 key_searched(count: int, found: list<int>, map: Node, p: Program) as list<int> := {
 	keys = map_part(MAP_KEYS, map, p)
-	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + type_equality(key_type(map), p)
+	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + type_equality(map_key(map), p)
 	counted(count, keys + count_in(keys_of(map), ø, p), equal + IF + VOID_BLOCK + found + END)
 }
 # a new map of these keys' and values' code
@@ -143,6 +144,9 @@ counted_by(type: Node, step: int, p: Program) as list<int> := local_get(0) + cou
 # a map's struct, a reference to it, the types of its lists of keys and of values, and one of them in the map in local 0
 map_struct(map: Node, p: Program) as int := map_index(map, p.m, p.records) ?? refused(map, "this is no map")
 map_layout(map: Node, p: Program) as list<int> := nullable(map_struct(map, p))
-keys_of(map: Node) as Node := list_type(key_type(map))
-values_of(map: Node) as Node := list_type(held_type(map))
+# a map type's key type and value type, and the lists of them its parts are
+map_key(map: Node) as Node := key_type(map) ?? refused(map, NO_MAP_TYPE)
+map_value(map: Node) as Node := held_type(map) ?? refused(map, NO_MAP_TYPE)
+keys_of(map: Node) as Node := list_type(map_key(map))
+values_of(map: Node) as Node := list_type(map_value(map))
 map_part(at: int, map: Node, p: Program) as list<int> := local_get(0) + instruction(STRUCT_GET, [map_struct(map, p), at])
