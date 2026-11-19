@@ -267,7 +267,7 @@ record_declared(record: Record) as Node := match record { Record(name, fields, v
 record_type(record: Record) as Node := with_fact(symbol(record_name(record)), DECLARED_BY, record_declared(record))
 fields_of(record: Record) as list := match record { Record(name, fields, variants) => match fields { List(items, bracket, separator) => items } }
 # An enum's cases, as its Record's variants hold them: a bare name, `Dot`, or a name with its fields, `Circle(r: float)`
-cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
+cases_of(record: Record) as list<Node> := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 # the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
 case_fields(case: Node) as list<Node> := match case { Call(called, fields) => fields; _ => [] }
