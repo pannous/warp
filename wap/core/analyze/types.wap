@@ -175,7 +175,9 @@ gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valu
 value_of(n: Node, wanted: text) as Node := value_type(n) ?? refused(n, text_of(fact_of(n, RESULT_UNKNOWN)) ?? "this gives no value ${wanted}")
 # a fact's text, ø for none
 text_of(fact: Node?) as text? := match fact { Text(value) => value; _ => ø }
-valued_type(type: Node?) as bool := type != ø and type != symbol(EMPTY_TYPE)
+valued_type(type: Node?) as bool := value_bearing(type) != ø
+# a type that holds a value, ø for none or ø's own
+value_bearing(type: Node?) as Node? := if type == symbol(EMPTY_TYPE) then ø else type
 jumps(n: Node) as bool := has_fact(n, JUMPS)
 jumping(n: Node) as Node := with_fact(n, JUMPS, True)
 # n typed as the code it gives the value of: of its type, or jumping with it, `{ x = 1; return x }`
@@ -295,7 +297,7 @@ set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as No
 }
 # a receiver's field named bare in a method, `c`, as the Get `self.c` (core/analyze/scope.wap receiver_fields)
 receiver_field(name: Node) as Node := {
-	receiver = with_fact(with_binding(symbol(SELF_WORD), DefinitionKind.Parameter), DEFINED_AT, fact_of(name, DEFINED_AT))
+	receiver = with_fact(with_binding(symbol(SELF_WORD), DefinitionKind.Parameter), DEFINED_AT, fact_of(name, DEFINED_AT) ?? refused(name, "a receiver's field is bound"))
 	placed_like(Get(receiver, Text(text(name))), name)
 }
 name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {

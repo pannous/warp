@@ -111,9 +111,10 @@ takes_count(definition: Function, count: int) as bool := {
 	count <= #parameters and parameters.drop(count).all(defaulted)
 }
 defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
-# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
+# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants; a
+# default written ø is the fact Empty, which reads back as none
 defaults_given(definition: Function, count: int, s: TypingState, f: TypeFrame) as list := {
-	parameters_in(definition.definer).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
+	parameters_in(definition.definer).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT) ?? Empty, s, f, type_given(parameter)))
 }
 # a map's own word, `m.keys`, beside its entries, `m.name`: a function of that name taking a map alone (wiki/map.md)
 map_word(key: Node, s: TypingState) as bool := definitions_named(text(key), s).any(definition => takes_count(definition, 1) and takes_map(parameters_in(definition.definer)#1))
