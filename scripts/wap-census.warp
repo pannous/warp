@@ -1,6 +1,6 @@
 # The road to self-build, measured (notes/wap.md "Road to self-build"): the compiler's own stages (wap/core/pipeline.wap)
 # run on wap source files, statement by statement where a stage allows, every refusal printed as: stage <tab> message;
-# a total line at the end (test/wap/test_census.sh). The counts come from two paths: "functions typed" from one
+# a total line at the end (test/wap/ratchet_census.sh). The counts come from two paths: "functions typed" from one
 # typing state shared by the whole run, each module's forms typed once, a refusal rolled back; "typed whole" from the
 # compiler's own typed_file path, once for each closure; a closure holding a smaller one that refuses is refused with it.
 #   warp --no-window scripts/wap-census.warp $(git ls-files "wap/*.wap")
