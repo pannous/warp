@@ -17,8 +17,8 @@ use "function_values.wap"
 
 # the layout of a typed form's value
 # the layout of a node's type, ø for a node the typing stage left untyped
-typed_layout(n: Node, p: Program) as list? := if fact_of(n, TYPE) == ø then ø else layout_of(fact_of(n, TYPE), p.m, p.records)
-layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for the type ${fact_of(n, TYPE)} yet")
+typed_layout(n: Node, p: Program) as list<int>? := if fact_of(n, TYPE) == ø then ø else layout_of(fact_of(n, TYPE), p.m, p.records)
+layout(n: Node, p: Program) as list<int> := layout_of(fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped"), p.m, p.records) ?? refused(n, "the emitter has no value layout for the type ${fact_of(n, TYPE)} yet")
 # The way to a part of a value, a record's field or a list's item: the instructions that reach it, then the one that
 # reads it and the one that writes it
 class Place { reached: list; read: list; written: list }
@@ -47,13 +47,13 @@ instance_code(form: Node, record: Node, items: list, p: Program, f: Frame) as Co
 	Code(layout(form, p), (1 to #values).flat_map(at => field_filled(fields_of(record)#at, given_value(values#at), p, f)) + instruction(STRUCT_NEW, [struct_of(record, p.m, p.records)]))
 }
 # the instructions of a value given to a field, made to fit the field's type
-field_filled(field: Node, value: Node, p: Program, f: Frame) as list := {
+field_filled(field: Node, value: Node, p: Program, f: Frame) as list<int> := {
 	given = code(value, p, f)
 	fitted(given, layout_of(declared_type(field), p.m, p.records) ?? given.type, value, p).instructions
 }
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value; _ => refused(field, NOT_A_FIELD) }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
-item_reached(subject: Node, key: Node, p: Program, f: Frame) as list := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
+item_reached(subject: Node, key: Node, p: Program, f: Frame) as list<int> := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
 
 # A value given to a place: a name, which then has that value, or a list's item, which leaves none
 assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
@@ -97,9 +97,9 @@ added_variable(name: Node, type: list, p: Program, f: Frame) as Placed := {
 	f.slots += [Placed(defining_key(name), #f.slots, type, [], yes)]
 	f.slots.last
 }
-fetched(held: Placed) as list := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
+fetched(held: Placed) as list<int> := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
 # a value stored, and left on the stack
-kept(held: Placed) as list := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
+kept(held: Placed) as list<int> := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
 # what a bound name refers to: local, parameter, capture, global, function or library
 binding_of(name: Node) as text := text(fact_of(name, BINDING) ?? refused(name, "this name reached the emitter unbound"))
 # the definition a bound name refers to, among those placed so far

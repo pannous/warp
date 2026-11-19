@@ -15,19 +15,19 @@ use "../../kernel/forms.wap"
 # whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
 # Round brackets around one key or call only group it: `($f: $t)` in a pattern is the key, and code in such brackets is
 # matched as its key; a hole or a sequence still takes the group as written. Brackets around a phrase or a list keep their meaning.
-matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
+matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match m.test {
 	Test.Hole => hole_matches(m, n, bindings)
 	Test.Sequence => sequence_matches(m, n, bindings)
 	_ => item_matches(m, grouped_item(n) ?? n, bindings)
 }
-item_matches(m: Matcher, n: Node, bindings: map) as bool := match m.test {
+item_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match m.test {
 	Test.Literal => same_atom(m.literal, n)
 	Test.Repeat => repeat_matches(m.parts#1, [n], bindings)
 	Test.Pair => match n { Key(left, op, right) => op == m.op and matches(m.parts#1, left, bindings) and matches(m.parts#2, right, bindings); _ => no }
 	_ => refused(n, "this matcher tests no single item")
 }
 
-hole_matches(m: Matcher, n: Node, bindings: map) as bool := {
+hole_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := {
 	if not of_shape(m, n) { return no }
 	if bindings.has(m.name) { return "${bindings[m.name]}" == "${n}" }
 	bindings[m.name] = n
@@ -40,7 +40,7 @@ same_atom(literal: Node, n: Node) as bool := match literal {
 }
 canonical_word(spelling: text) as text := aliased(spelling, Fixity.Anywhere)
 
-sequence_matches(m: Matcher, n: Node, bindings: map) as bool := match n {
+sequence_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match n {
 	List(items, bracket, separator) => bracket == m.bracket and (#m.parts < 2 or #items < 2 or separators_fit(m.separator, separator)) and parts_match(m.parts, braced_items(items, bracket), bindings)
 	Empty => EMPTY_GROUPS.contains(m.bracket) and parts_match(m.parts, [], bindings)
 	# empty braces, which the reader writes as the word {} (core/parse/cascade.wap)
@@ -56,7 +56,7 @@ separators_fit(wanted: Separator, given: Separator) as bool := wanted == given o
 
 # Parts matched against items in order. A rest hole takes as few items as let the parts after it match, all that
 # remain when it is last: `if $c... then $a...` stops the condition at the first then. A failed try leaves no binding.
-parts_match(parts: list, items: list, bindings: map) as bool := {
+parts_match(parts: list, items: list, bindings: map<text, Node>) as bool := {
 	if parts is empty { return items is empty }
 	part = parts#1
 	if not part.rest { return items is not empty and matches(part, items#1, bindings) and parts_match(parts[1 ..], items[1 ..], bindings) }
@@ -68,10 +68,10 @@ parts_match(parts: list, items: list, bindings: map) as bool := {
 	no
 }
 
-taken_by(m: Matcher, items: list, bindings: map) as bool := if m.test == Test.Repeat then repeat_matches(m.parts#1, items, bindings) else rest_matches(m, items, bindings)
+taken_by(m: Matcher, items: list, bindings: map<text, Node>) as bool := if m.test == Test.Repeat then repeat_matches(m.parts#1, items, bindings) else rest_matches(m, items, bindings)
 
 # each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
-repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
+repeat_matches(part: Matcher, items: list, bindings: map<text, Node>) as bool := {
 	met = {}
 	# none taken binds each name to the empty sequence, so a template writes the part no times
 	for name in names_bound(part) { met[name] = [] }
@@ -85,13 +85,13 @@ repeat_matches(part: Matcher, items: list, bindings: map) as bool := {
 }
 
 # the names a matcher binds when it fits: its holes, a repetition's under `$p...`
-names_bound(m: Matcher) as list := match m.test {
+names_bound(m: Matcher) as list<text> := match m.test {
 	Test.Hole => [m.name]
 	Test.Repeat => names_bound(m.parts#1).map(name => name + REST_MARK)
 	_ => m.parts.flat_map(names_bound)
 }
 
-rest_matches(m: Matcher, items: list, bindings: map) as bool := {
+rest_matches(m: Matcher, items: list, bindings: map<text, Node>) as bool := {
 	for item in items { if not of_shape(m, item) { return no } }
 	bindings[m.name] = List(items, Bracket.None, Separator.Space)
 	yes

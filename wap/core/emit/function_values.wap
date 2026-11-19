@@ -17,7 +17,7 @@ use "../../kernel/forms.wap"
 
 # A function value's function starts by taking its captures out of its first parameter, the value, into variables of
 # its own, which its body reads as any local; a function that captures nothing takes none
-captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list := {
+captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list<int> := {
 	captures = captures_of(form)
 	value = if parameters is empty then ø else declared_name(parameters#1)
 	parts = if value == ø then ø else function_value_parts(fact_of(value, TYPE))
@@ -74,7 +74,7 @@ value_call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [value_struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(type, p.m, p.records)])))
 }
 # the values a function value captures, read from the variables they are where it is made
-captures_code(form: Node, f: Frame) as list := {
+captures_code(form: Node, f: Frame) as list<int> := {
 	captures_of(form).flat_map(definer => fetched(captured_variable(definer, f)))
 }
 captured_variable(definer: Node, f: Frame) as Placed := {

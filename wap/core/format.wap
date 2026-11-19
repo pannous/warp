@@ -56,7 +56,8 @@ tight_key_text(language: Language, key: Node, value: Node) as text :=
 
 # an operator call in its notation; a call of anything else as `f(a, b)`
 call_text(language: Language, call: Node, called: Node, arguments: list) as text := {
-	if fact_of(call, COMPOUND) != ø { return compound_text(language, call, arguments) }
+	compound = fact_of(call, COMPOUND)
+	if compound != ø { return compound_text(language, compound, arguments) }
 	if #arguments == 3 and formatted(language, called) == CHOICE { return operand_text(language, arguments#1, call, Side.Left) + " ? " + operand_text(language, arguments#2, call, Side.Left) + " : " + operand_text(language, arguments#3, call, Side.Right) }
 	spelling = formatted(language, called)
 	if #arguments == 2 and group_of(language, spelling, Fixity.Infix) != "" {
@@ -74,9 +75,10 @@ call_text(language: Language, call: Node, called: Node, arguments: list) as text
 open_text(language: Language, arguments: list, call: Node, spelling: text) as text :=
 	if arguments#1 == symbol(OPEN_SIDE) then spelling + " " + operand_text(language, arguments#2, call, Side.Right) else operand_text(language, arguments#1, call, Side.Left) + " " + spelling
 
-# `x += 1` as written: the assignment x = x + 1 the operator stage read it as, its right side's right operand
-compound_text(language: Language, call: Node, arguments: list) as text := match arguments#2 {
-	Call(operator, operands) => formatted(language, arguments#1) + " " + formatted(language, fact_of(call, COMPOUND)) + " " + formatted(language, operands#2)
+# `x += 1` as written: the assignment x = x + 1 the operator stage read it as, the operator it was written with, its
+# right side's right operand
+compound_text(language: Language, written: Node, arguments: list) as text := match arguments#2 {
+	Call(operator, operands) => formatted(language, arguments#1) + " " + formatted(language, written) + " " + formatted(language, operands#2)
 	_ => refused(arguments#2, "a compound assignment gives the call of its operator")
 }
 

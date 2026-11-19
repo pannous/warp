@@ -29,8 +29,7 @@ bo"
 check "a compound assignment to a list position" "$(ran compound_item 'xs = [1, 2, 3]
 xs#2 *= 5
 xs#2')" "10"
-check "two lists joined" "$(ran joined '+(a: list<int>, b: list<int>): list<int> := prim array_joined(a, b)
-xs = [1, 2] + [3]
+check "two lists joined" "$(ran joined 'xs = [1, 2] + [3]
 print text(#xs)
 xs#3')" "3
 3"
@@ -57,12 +56,11 @@ print text(#xs)')" "8
 1"
 check "a slice of a list, a new list of its items" "$(ran list_slice 'part(xs: list<int>, from: int, count: int): list<int> := prim array_slice(xs, from, count)
 print show(part([1, 2, 3, 4], 1, 2))')" "[2, 3]"
-check "a map's keys, a new list that leaves the map as it was" "$(ran map_keys 'keys(m: map<text, int>): list<text> := prim map_keys(m)
-m = {a: 1, b: 2}
-ks = keys(m)
+check "a map's keys, a new list that leaves the map as it was" "$(ran map_keys 'm = {a: 1, b: 2}
+ks = m.keys()
 ks.add("zz")
 print show(ks)
-print text(#keys(m))')" "[\"a\", \"b\", \"zz\"]
+print text(#m.keys())')" "[\"a\", \"b\", \"zz\"]
 2"
 check "a map's keys in the order set, and whether it has a key" "$(ran map_has 'm = {ab: 1, b: 2}
 m.cd = 3
@@ -71,8 +69,7 @@ print text(m.has("zz"))
 print text(#m.keys())')" "yes
 no
 3"
-check "a map's entry removed, the others kept in their order" "$(ran map_remove 'remove(m: map<text, int>, key: text) := prim map_remove(m, key)
-m = {aa: 1, bb: 2, cc: 3}
+check "a map's entry removed, the others kept in their order" "$(ran map_remove 'm = {aa: 1, bb: 2, cc: 3}
 m.remove("bb")
 m.remove("zz")
 m.dd = 4

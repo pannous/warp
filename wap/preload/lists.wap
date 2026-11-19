@@ -42,6 +42,12 @@ remove_at(xs: list<T>, at: int): T := {
 	removed
 }
 
+# the items without their repeats, each where it first appears: `[1, 2, 1].unique` is [1, 2]
+unique(xs: list<T>): list<T> := {
+	out: list<T> = []
+	for x in xs { if not out.contains(x) { out.add(x) } }
+	out
+}
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := (0 upto #xs).map(at => f(xs[at]))
 # each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
