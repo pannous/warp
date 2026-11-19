@@ -20,13 +20,6 @@ use "../type_notation.wap"
 use "places.wap"
 use "host.wap"
 
-# a character's UTF-8 bytes: the code point below which it takes 1, 2 or 3 bytes, the lead byte's mark for each count,
-# a following byte's mark, and the bits each following byte holds
-UTF8_LIMITS = [0x80, 0x800, 0x10000]
-UTF8_LEADS = [0, 0xC0, 0xE0, 0xF0]
-UTF8_FOLLOWER = 0x80
-UTF8_BITS = 6
-
 # The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
 # its built-in's definition writes (wap/preload/prelude.wap).
 INSTRUCTIONS: map<text, list<int>> = {
@@ -43,7 +36,7 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function, "char_text": char_text_function}
+HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
@@ -69,6 +62,7 @@ wasm_called(form: Node, arguments: list<Code>, signature: list, code: list<int>,
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
+BYTE_TEXT = "byte_text"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) as Code := {
@@ -84,6 +78,7 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
 	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
 	if name == LIST_COUNT { return ending(counted_items(p)) }
+	if name == BYTE_TEXT { return ending(I32_WRAP_I64 + instruction(ARRAY_NEW_FIXED, [text_type(p.m), 1])) }
 	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
 	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
@@ -156,13 +151,3 @@ slicing_function(p: Program, type: int) as int := {
 	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
 }
 
-# The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
-char_text_function(p: Program) as int := {
-	type = text_type(p.m)
-	c = local_get(0)
-	shifted = bits => c + i32_const(bits) + I32_SHR_U
-	follower = bits => shifted(bits) + i32_const(63) + I32_AND + i32_const(UTF8_FOLLOWER) + I32_OR
-	bytes = count => shifted(UTF8_BITS * (count - 1)) + i32_const(UTF8_LEADS#count) + I32_OR + (1 to count - 1).flat_map(i => follower(UTF8_BITS * (count - 1 - i))) + instruction(ARRAY_NEW_FIXED, [type, count])
-	shorter = (1 to UTF8_LIMITS.length).flat_map(count => c + i32_const(UTF8_LIMITS#count) + I32_LT_U + IF + VOID_BLOCK + bytes(count) + RETURN + END)
-	added_function(p.m, [I32], [nullable(type)], [], shorter + bytes(UTF8_LEADS.length))
-}
