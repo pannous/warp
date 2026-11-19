@@ -31,8 +31,9 @@ declared_program(program: Node) as Node := {
 	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
 	with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma))
 }
-# the files a program's `use` lines name, resolved against its own folder: plain notation, readable before any stage
-used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => beside(file_of(program) ?? ".", used_path(statement)))
+# the files a program's `use` lines name, each once however often named, resolved against its own folder: plain
+# notation, readable before any stage
+used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => beside(file_of(program) ?? ".", used_path(statement))).unique
 
 # `use "path"`: a statement that brings in a module, no code
 is_use(statement: Node) as bool := match statement {
