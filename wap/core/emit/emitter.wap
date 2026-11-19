@@ -85,7 +85,7 @@ class Program {
 	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
 	pending: list<Node> = []
-	# the functions whose calls compile to their primitive in place: key → the definition
+	# the functions whose calls compile to their primitive in place: key → that primitive
 	in_place: map<text, Node> = {}
 	# the helper functions primitives call: operation → index
 	helpers: map<text, int> = {}
