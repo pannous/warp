@@ -82,8 +82,6 @@ is_reference(type: list<int>) as bool := type == ANYREF or #type > 1 and type#1 
 heap_of(reference: list<int>) as list<int> := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 # a nullable reference to the declared type of that index
 nullable(type_index: int) as list<int> := [NULLABLE_REFERENCE] + signed(type_index)
-# whether a declared array type holds packed bytes, which only array.get_u and array.get_s read
-packed_array(m: Module, type_index: int) as bool := m.types#(type_index + 1) == array_type(field_type(I8, MUTABLE)) or m.types#(type_index + 1) == array_type(field_type(I8, IMMUTABLE))
 # the type index a nullable reference to a declared type holds, nullable(3) → 3; ø for an abstract one, as arrayref.
 # Every reference wap makes is nullable, so a non-null one (0x64) is not read yet.
 referenced(reference: list<int>) as int? := if #reference < 2 or reference#1 != NULLABLE_REFERENCE then ø else (2 to #reference).map(at => reference#at % 0x80 * 0x80 ^ (at - 2)).sum()
