@@ -1,6 +1,6 @@
 # Patterns: code with holes, matched against code (notes/first_principles.md "Holes", wiki/pattern.md). Reads a
 # pattern as the operator stage wrote it, in the very language it matches, and compiles it once to a Matcher, which
-# rules/matching.wap matches Nodes with, binding each hole.
+# rules/matcher.wap matches Nodes with, binding each hole.
 #
 #   unless $c $body                 a phrase: the word unless, then two holes
 #   $a ÷ $b                         (Call ÷ $a $b), as the operator stage reads it
@@ -25,7 +25,7 @@ use "lowering.wap"
 use "../analyze/declarations.wap"
 use "../analyze/fits.wap"
 use "stages.wap"
-use "matching.wap"
+use "matcher.wap"
 use "../language.wap"
 
 TYPE_FACT = "type"
@@ -185,7 +185,7 @@ shape_text(shape: Node, hole_written: (text) -> text) as text := match shape {
 	_ => refused(shape, "a pattern's builder writes names, holes and groups, not this part yet")
 }
 
-# a group of one item, `($f: $t)`, is that item: matched and compiled as it (rules/matching.wap)
+# a group of one item, `($f: $t)`, is that item: matched and compiled as it (rules/matcher.wap)
 is_list(n: Node) as bool := match n { List(items, bracket, separator) => yes; _ => no }
 grouped_item(n: Node) as Node? := match n {
 	List(items, Bracket.Round, separator) => if #items == 1 and not is_list(items#1) and repeated_part(items#1) == ø then items#1 else ø

@@ -79,7 +79,7 @@ wap/
 
     rules/                    the rule engine
       patterns.wap            a rule's pattern declared and compiled to a Matcher: holes, typed holes, rests, guards
-      matching.wap            code matched against a Matcher, its holes bound; how specific a matcher is
+      matcher.wap             running a compiled Matcher against code, its holes bound; and specificity
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
       lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the rule files

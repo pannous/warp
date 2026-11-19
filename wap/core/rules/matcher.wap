@@ -1,6 +1,6 @@
-# Matching: whether code fits a compiled pattern, a Matcher (rules/patterns.wap), each hole bound to the code it takes;
-# and how specific a matcher is, so the most specific rule of a head wins. Input: a Matcher and Nodes; output: yes or
-# no and the bindings.
+# The matcher: running a compiled Matcher (rules/patterns.wap) against code, each hole bound to the code it takes, and
+# how specific a matcher is, so the most specific rule of a head wins. Input: a Matcher and Nodes; output: yes or no
+# and the bindings.
 use "patterns.wap"
 use "../analyze/fits.wap"
 use "../parse/operators.wap"
