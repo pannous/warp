@@ -55,7 +55,7 @@ emitted(program: Block) as WasmModule := {
 	m = WasmModule()
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
-	added_tag(m, [nullable(text_type(m))])
+	added_tag(m, [text_layout(m)])
 	p.records = added_records(Records(), match program { Block(statements) => statements })
 	f = Frame()
 	body = code(program, p, f)
@@ -164,13 +164,13 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
 		type = typed_layout(form, p)
-		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
+		caught = BLOCK + text_layout(p.m) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
 		Code(type, BLOCK + block_type(type) + caught + instruction(CALL, [helper(p, "error_node", error_node_function)]) + local_set(error.index) + kept(instead, type) + END)
 	}
 	_ => refused(handler, "a Try's handler is a function written in place, `error => …`")
 }
 # the program's code, a raise no Try caught written and the program ended
-uncaught_ended(body: list<int>, p: Program) as list<int> := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + uncaught(p)
+uncaught_ended(body: list<int>, p: Program) as list<int> := BLOCK + text_layout(p.m) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + uncaught(p)
 # a structured instruction's type: the value it leaves, or none
 block_type(type: list<int>) as list<int> := if valued(type) then type else VOID_BLOCK
 # a part's code where its choice has the type: its value kept, or dropped when the choice has none
@@ -232,7 +232,7 @@ checked_cast(p: Program, wanted: list<int>, name: text, form: Node) as int := {
 	test = if plain then heap_instruction(REF_TEST, box) else REF_TEST_NULL + heap_of(wanted)
 	taken = if plain then heap_instruction(REF_CAST, box) + instruction(STRUCT_GET, [box, 0]) else REF_CAST_NULL + heap_of(wanted)
 	fits = local_get(0) + test + IF + VOID_BLOCK + local_get(0) + taken + RETURN + END
-	added_function(p.m, [ANYREF, nullable(text_type(p.m))], [wanted], [], fits + raised_with("${ANY_OF_ANOTHER_TYPE} ${name} wanted at ", local_get(1), p))
+	added_function(p.m, [ANYREF, text_layout(p.m)], [wanted], [], fits + raised_with("${ANY_OF_ANOTHER_TYPE} ${name} wanted at ", local_get(1), p))
 }
 # a casting helper's call given the place, one helper for each type, the type's name for the raise
 cast_called(wanted: list<int>, name: text, form: Node, p: Program) as list<int> := text_literal(place_of_code(form), p.m).instructions + instruction(CALL, [helper(p, "cast to ${wanted} ${name}", q => checked_cast(q, wanted, name, form))])

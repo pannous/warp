@@ -117,7 +117,7 @@ error_node_function(p: Program) as int := {
 	node = record_named(p.records, symbol(NODE_TYPE)) ?? refused(Text(NODE_TYPE), "a Try's handler takes the raise as a Node, and the program declares no Node")
 	tag = word => i32_const(declared_tag(node_case(node, word), p))
 	made = word => instruction(STRUCT_NEW, [case_struct_of(node, node_case(node, word), p.m, p.records)])
-	added_function(p.m, [nullable(text_type(p.m))], [known_layout(symbol(NODE_TYPE), p.m, p.records)], [], tag(ERROR_CASE) + tag(TEXT_CASE) + local_get(0) + made(TEXT_CASE) + made(ERROR_CASE))
+	added_function(p.m, [text_layout(p.m)], [known_layout(symbol(NODE_TYPE), p.m, p.records)], [], tag(ERROR_CASE) + tag(TEXT_CASE) + local_get(0) + made(TEXT_CASE) + made(ERROR_CASE))
 }
 node_case(node: Record, word: text) as Node := {
 	named = cases_of(node).filter(case => text(case_name(case)) == word)

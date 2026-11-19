@@ -28,7 +28,7 @@ equality(type: list<int>, p: Program) as list<int> := {
 	if type == I64 { return I64_EQ }
 	if type == F64 { return F64_EQ }
 	if type == I32 { return I32_EQ }
-	if type == nullable(text_type(p.m)) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
+	if type == text_layout(p.m) { return instruction(CALL, [helper(p, "text_equal", text_equality_function)]) }
 	if type == ANYREF { return instruction(CALL, [helper(p, "any_equal", any_equality_function)]) }
 	refused(Text("${type}"), "wap compares ints, floats, yes/no, characters and texts so far")
 }
@@ -92,7 +92,7 @@ text_equality_function(p: Program) as int := {
 # the values.
 any_equality_function(p: Program) as int := {
 	boxed = BOXED_WORDS.flat_map(word => compared_as(box_index(p.m, word), instruction(STRUCT_GET, [box_index(p.m, word), 0]), equality(WORD_LAYOUTS[word], p)))
-	texts = compared_as(text_type(p.m), [], equality(nullable(text_type(p.m)), p))
+	texts = compared_as(text_type(p.m), [], equality(text_layout(p.m), p))
 	same = local_get(0) + REF_CAST + EQ_HEAP + local_get(1) + REF_CAST + EQ_HEAP + REF_EQ
 	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing_compared() + boxed + texts + same)
 }
