@@ -18,6 +18,7 @@ use "../type_notation.wap"
 GROWTH = 4
 NO_SUCH_ITEM = "this list has no item at this place"
 POPPED_EMPTY = "pop of an empty list"
+NO_MAP_TYPE = "this is no map type"
 LIST_ITEM = "list_item"
 LIST_SET = "list_set"
 LIST_COUNT = "list_count"
@@ -33,7 +34,7 @@ typed_helper_called(operation: text, type: Node, p: Program) as list<int> := ins
 counted_items(p: Program) as list<int> := instruction(STRUCT_GET, [list_base(p.m), LIST_COUNT_AT]) + I64_EXTEND_I32_U
 
 # a new list of these items' code, of a list type
-list_made(type: Node, items: list, p: Program) as list<int> := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
+list_made(type: Node, items: list<Code>, p: Program) as list<int> := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
 
 # The helpers of list_item and list_set, an item at a place counted from 0: locals 0 the list, 1 the place, for
 # list_set 2 the value. A place at or past the count raises.
@@ -76,7 +77,7 @@ lists_joining_function(p: Program, type: Node) as int := {
 }
 
 # a new map of these keys' and values' code
-map_made(map: Node, keys: list, values: list, p: Program) as list<int> := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
+map_made(map: Node, keys: list<Code>, values: list<Code>, p: Program) as list<int> := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
 
 # the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
 list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
@@ -96,5 +97,8 @@ list_field(type: Node, local: int?, at: int, p: Program) as list<int> := (if loc
 counted_by(type: Node, step: int, p: Program) as list<int> := local_get(0) + count_in(type, 0, p) + i32_const(step) + I32_ADD + instruction(STRUCT_SET, [list_struct(type, p), LIST_COUNT_AT])
 # a map's struct, the types of its lists of keys and of values
 map_struct(map: Node, p: Program) as int := map_index(map, p.m, p.records) ?? refused(map, "this is no map")
-keys_of(map: Node) as Node := list_type(key_type(map))
-values_of(map: Node) as Node := list_type(held_type(map))
+# a map type's key type and value type, and the lists of them its parts are
+map_key(map: Node) as Node := key_type(map) ?? refused(map, NO_MAP_TYPE)
+map_value(map: Node) as Node := held_type(map) ?? refused(map, NO_MAP_TYPE)
+keys_of(map: Node) as Node := list_type(map_key(map))
+values_of(map: Node) as Node := list_type(map_value(map))

@@ -64,10 +64,10 @@ raise_called(p: Program) as list<int> := instruction(CALL, [helper(p, "raise_tex
 # a raise of a message from inside a helper
 raised(message: text, p: Program) as list<int> := text_literal(message, p.m).instructions + raise_called(p)
 # a raise of a message and the text the code `ending` gives, joined
-raised_with(message: text, ending: list, p: Program) as list<int> := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + raise_called(p)
+raised_with(message: text, ending: list<int>, p: Program) as list<int> := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + raise_called(p)
 # The helper of print_text, error_text and an uncaught raise: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
-writing_function(p: Program, file: int, after: list) as int := {
+writing_function(p: Program, file: int, after: list<int>) as int := {
 	text_type_index = text_type(p.m)
 	the_text = local_get(0)
 	length = local_get(1)
@@ -84,7 +84,7 @@ writing_function(p: Program, file: int, after: list) as int := {
 
 # the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
 # short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
-memory_grown(length: list, scratch: int) as list<int> := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + local_get(scratch) + instruction(MEMORY_GROW, [0]) + DROP + END
+memory_grown(length: list<int>, scratch: int) as list<int> := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + local_get(scratch) + instruction(MEMORY_GROW, [0]) + DROP + END
 
 # The helper of read_text: the file at a path, its bytes as a text; a path it cannot open raises "cannot read …".
 # Its locals: 0 the path, 1 to 4 the opening's (path_opened), 5 the file's size, 6 the text made, 7 the bytes read so
@@ -152,7 +152,7 @@ bytes_writing_function(p: Program) as int := {
 # The code that reads or writes (fd_read or fd_write) a file's bytes from BYTES_ADDRESS until the total is moved or
 # the file moves none, the count moved so far in the local `done`: iovec [bytes + done, total - done], then done +=
 # the count the call moved
-transferred(call: text, file: list, total: list, done: int, p: Program) as list<int> := {
+transferred(call: text, file: list<int>, total: list<int>, done: int, p: Program) as list<int> := {
 	moved = i32_const(WRITTEN_ADDRESS) + instruction(I32_LOAD, [2, 0])
 	so_far = local_get(done)
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + so_far + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + total + so_far + I32_SUB + instruction(I32_STORE, [2, 0])

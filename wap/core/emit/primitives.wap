@@ -29,7 +29,7 @@ UTF8_BITS = 6
 
 # The wasm instructions a Prim names: operation → opcode. The types of its operands and of its value are the ones
 # its built-in's definition writes (wap/preload/prelude.wap).
-INSTRUCTIONS = {
+INSTRUCTIONS: map<text, list<int>> = {
 	"ref_is_null": REF_IS_NULL, "i64_add": I64_ADD, "i64_sub": I64_SUB, "i64_mul": I64_MUL, "i64_eq": I64_EQ, "i64_ne": I64_NE,
 	"i64_lt_s": I64_LT_S, "i64_gt_s": I64_GT_S, "i64_le_s": I64_LE_S, "i64_ge_s": I64_GE_S,
 	"f64_add": F64_ADD, "f64_sub": F64_SUB, "f64_mul": F64_MUL, "f64_div": F64_DIV, "f64_eq": F64_EQ, "f64_ne": F64_NE,
@@ -55,7 +55,7 @@ MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 TAG_EQUAL = "tag_equal"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
-primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
+primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) as Code := {
 	name = operation_of(form)
 	operands = arguments.flat_map(argument => argument.instructions)
 	# the value the operands and these instructions after them give
@@ -64,7 +64,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == BOXED_TEST { return ending(heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p).type_index)) }
 	if name == BOXED_VALUE { return ending(instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
-	if name == CHECKED_CAST { return finished(ending(cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
+	if name == CHECKED_CAST { return finished(ending(cast_called(given_layout(form, p), text(type_of(form)), form, p))) }
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
 	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
 	if name == LIST_COUNT { return ending(counted_items(p)) }
@@ -83,21 +83,21 @@ ON_LISTS: map<text, text> = {"array_len": LIST_COUNT, "array_joined": "list_join
 operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
 # the plain value a box holds
 boxed_operand(form: Prim) as Node := match form { Prim(operation, given) => given#1 }
-first_operand_type(form: Prim) as Node? := match form { Prim(operation, given) => if given is empty then ø else fact_of(given#1, TYPE) }
+first_operand_type(form: Prim) as Node := match form { Prim(operation, given) => if given is empty then refused(form, "this primitive takes an operand") else type_of(given#1) }
 is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIST_TYPE)
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
 # missing one traps. A value any or a number holds, known of its type, is cast to it first.
 # an any's value as an any, `x!` of an any (an any? is an any), is the any itself, missing raising
-optional_value(form: Node, p: Program) as list<int> := if layout_of(first_operand_type(form), p.m, p.records) == ANYREF then (if given_layout(form, p) == ANYREF then REF_AS_NON_NULL else held_value(fact_of(form, TYPE), form, p)) else if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
+optional_value(form: Node, p: Program) as list<int> := if layout_of(first_operand_type(form), p.m, p.records) == ANYREF then (if given_layout(form, p) == ANYREF then REF_AS_NON_NULL else held_value(type_of(form), form, p)) else if given_layout(form, p) in PLAIN_VALUES then instruction(STRUCT_GET, [box_index(p.m, plain_word(form)), 0]) else REF_AS_NON_NULL
 # the array type of a primitive's first operand
-array_operand(form: Node, arguments: list) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
+array_operand(form: Node, arguments: list<Code>) as int := (if arguments is empty then ø else referenced(arguments#1.type)) ?? refused(form, "this primitive's first operand is an array of a known type: a text or a list<T>")
 # a packed array's item at a place counted from 0, an unsigned byte as an int
 unsigned_item(form: Node, array: int, p: Program) as list<int> := {
 	if not packed_array(p.m, array) { refused(form, "array_get_u reads a text's bytes; a list's item is xs#i") }
 	I32_WRAP_I64 + instruction(ARRAY_GET_U, [array]) + I64_EXTEND_I32_U
 }
 # the code of a primitive its helper function performs
-helper_called(form: Node, operands: list, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
+helper_called(form: Node, operands: list<int>, key: text, build: function, p: Program) as Code := finished(Code(given_layout(form, p), operands + instruction(CALL, [helper(p, key, build)])))
 # the wasm type of the value a primitive gives, [] when its definition writes none, NEVER when it never finishes
 given_layout(form: Node, p: Program) as list<int> := if fact_of(form, TYPE) == ø then [] else if text(fact_of(form, TYPE)) == NEVER_WORD then NEVER else layout(form, p)
 # the helper function of an operation, added by `build` the first time
@@ -109,7 +109,7 @@ helper(p: Program, operation: text, build: function) as int := {
 }
 
 # the body run for each count from 0 while it stays below the limit, the count in that local
-counted(local: int, limit: list, body: list) as list<int> := {
+counted(local: int, limit: list<int>, body: list<int>) as list<int> := {
 	count = local_get(local)
 	i32_const(0) + local_set(local) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + local_set(local) + instruction(BRANCH, [0]) + END + END
 }
