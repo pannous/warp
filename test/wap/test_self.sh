@@ -12,7 +12,7 @@ loaded() {
 	$warp "$compiler" "$root/$1" "$module" 2>&1 && $warp "$module" >/dev/null 2>&1 && echo loads
 }
 
-# the files wap compiles alone and loads, leaves of the use graph first
+# the files wap compiles alone and loads, in the order each became loadable
 files=(
 	wap/core/emit/opcodes.wap
 	wap/kernel/forms.wap
