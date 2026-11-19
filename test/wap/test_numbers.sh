@@ -45,5 +45,7 @@ check "a character's code, and a float's 64 bits as an int" "$(ran codes "print 
 print text(float_bits(1.0))")" "97
 4607182418800017408"
 check "a value made into its own type is itself" "$(ran identity 'print text(int(3)) + " " + text(float(2.5)) + " " + text(bool(no)) + " " + text(4 as int) + " " + text("a b" as text)')" "3 2.5 no 4 a b"
+check "a value as a bool: no and 0 written as text are no, any other value its truth" "$(ran bool_of 'print text(bool("no")) + " " + text(bool("0")) + " " + text(bool("yes")) + " " + text(bool("")) + " " + text(bool([])) + " " + text(bool(3)) + " " + text("no" as bool)')" "no no yes no no yes no"
+check "a float's whole part, toward zero" "$(ran int_of_float 'print text(int(2.7)) + " " + text(2.7 as int) + " " + text(int(-2.7))')" "2 2 -2"
 check "rem and ⦼ give the truncated remainder, of the dividend's sign (wiki/Footguns.md)" "$(ran truncated 'print text(-7 rem 3) + " " + text(-7 ⦼ 3) + " " + text(7 rem -3)')" "-1 -1 1"
 exit $((failures > 0))

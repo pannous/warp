@@ -17,4 +17,8 @@ print text(List([Text("x"), Number(2.5)], Bracket.Square, Separator.Comma)) + " 
 [\"x\", 2.5] {a; a}"
 check "two nodes are equal wherever they were written" "$(ran node_equal 'x = symbol("x")
 print text(positioned(x, 4, 2) == x) + " " + text([positioned(x, 1, 1)] == [x]) + " " + text(Key(positioned(x, 2, 2), Op.Add, x) == Key(x, Op.Add, x)) + " " + text(x == Text("x")) + " " + text(positioned(x, 1, 1) != symbol("y"))')" "yes yes yes no yes"
+check "a node is empty as warp reads it in a condition" "$(ran node_empty 'a = symbol("a")
+print [Empty, False, Number(0), Text(""), List([], Bracket.Square, Separator.Comma), Key(Text(""), Op.Colon, Number(0)), positioned(Number(0), 1, 1)].map(n => if n then "t" else "f").join("")
+print [True, a, Number(2), Text("x"), List([a], Bracket.Round, Separator.Space), Key(a, Op.Colon, Number(0))].map(n => if n then "t" else "f").join("")')" "fffffff
+tttttt"
 exit $((failures > 0))

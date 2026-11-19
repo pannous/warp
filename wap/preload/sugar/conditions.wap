@@ -13,8 +13,11 @@ rule if $condition... then if $inner... else $else... => refuse "this else may b
 
 rule unless $c $body => If($c, ø, $body)
 
-# a value with its fallback for when it raises: `try parse(s) else 0`
-rule try $body... else $otherwise... => Try($body, $otherwise)
+# a body and its handler for when it raises, a function of the caught Error (wiki/Error.md): `try parse(s) else 0`,
+# `try { raise "boom" } catch e { e.message }`; a handler that does not name the error ignores it
+rule try $body... catch $error $handler: Braces => Try($body, $error => $handler)
+rule try $body... catch $handler: Braces => Try($body, _ => $handler)
+rule try $body... else $otherwise... => Try($body, _ => $otherwise)
 
 # a choice written after its condition, `c ? a : b` (the operator table's choice, below every operator), and a
 # statement guarded after it, `print "a" if c`

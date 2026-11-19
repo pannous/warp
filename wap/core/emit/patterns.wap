@@ -12,6 +12,11 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "places.wap"
+use "../type_notation.wap"
+
+# the Node cases a raise becomes for a Try's handler, Error(Text(message)) (kernel-try)
+ERROR_CASE = "Error"
+TEXT_CASE = "Text"
 
 # A choice by patterns: the subject kept in a slot of its own, then each arm tested in order, an If each, until one
 # fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.
@@ -102,8 +107,20 @@ case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame)
 	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)
 	Code(layout(form, p), i32_const(tag_of(called, p)) + (1 to #arguments).flat_map(at => field_filled(case_fields(named)#at, arguments#at, p, f)) + instruction(STRUCT_NEW, [made]))
 }
+# The helper turning a raise's text into the Node a Try's handler takes, Error(Text(text)), as case_value_code builds
+# a case. Its local: 0 the text.
+error_node_function(p: Program) as int := {
+	node = record_named(p.records, symbol(NODE_TYPE)) ?? refused(Text(NODE_TYPE), "a Try's handler takes the raise as a Node, and the program declares no Node")
+	tag = word => i32_const(declared_tag(node_case(node, word), p))
+	made = word => instruction(STRUCT_NEW, [case_struct_of(node, node_case(node, word), p.m, p.records)])
+	added_function(p.m, [nullable(text_type(p.m))], [layout_of(symbol(NODE_TYPE), p.m, p.records)], [], tag(ERROR_CASE) + tag(TEXT_CASE) + local_get(0) + made(TEXT_CASE) + made(ERROR_CASE))
+}
+node_case(node: Record, word: text) as Node := {
+	named = cases_of(node).filter(case => text(case_name(case)) == word)
+	if named is empty then refused(Text(word), "the Node enum has no case of this name") else named#1
+}
 # A bound case's tag: its place among the cases of every enum the program declares, found by the case that defined
 # it, so cases of two enums never share a tag, not even two of one name
 tag_of(case: Node, p: Program) as int := declared_tag(case_declaring(p.records, case), p)
-declared_tag(declared: Node, p: Program) as int := index_where(p.records.flat_map(cases_of), each => each === declared) - 1
+declared_tag(declared: Node, p: Program) as int := index_where(p.records.items.flat_map(cases_of), each => each === declared) - 1
 is_case(name: Node) as bool := fact_of(name, BINDING) == symbol(BOUND_CASE)

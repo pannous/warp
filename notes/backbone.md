@@ -377,3 +377,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   definition's name reads it (core/analyze/calls.wap ranked). Reason: a template does not know which of its words
   will stand in a definition's name place. Paid off when templates are built from their forms, so the Define's name
   hole is known.
+- **Try's handler hole is read as Node** (wap/kernel/forms.wap `pattern Try`), though the handler is always a Fn.
+  Reason: old warp, which runs the compiler, never matches a single hole typed by a declared pattern, so `$handler: Fn`
+  stopped every Try. Paid off when card pattern-hole-typing lands: `Fn` goes back and this line goes.
