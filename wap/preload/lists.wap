@@ -14,6 +14,9 @@ any(xs: list<T>, fits: (T) -> bool): bool := {
 contains(xs: list<T>, item: T): bool := xs.any(x => x == item)
 # whether a list holds an item, the operator's reading: `x in xs` is xs.contains(x)
 in(x: T, xs: list<T>): bool := xs.contains(x)
+# a missing value is in no list: `ø in [1, 2]` is no, and an optional's value is looked for as itself
+in(x: T?, xs: list<T>): bool := not missing(x) and xs.contains(x!)
+contains(xs: list<T>, item: T?): bool := item in xs
 
 # how many a list, a text or a range holds, what # counts: `xs.count`, also written `xs.length` or `xs.size`
 count(x: T): int := #x

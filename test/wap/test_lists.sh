@@ -87,4 +87,6 @@ c = a
 c.add(3)
 print text(#a) + " " + text(#b)')" "2 2"
 check "a list's items without their repeats, each where it first appears" "$(ran unique_items 'print(text([3, 1, 3, 2, 1].unique))')" "[3, 1, 2]"
+check "an optional value is in a list when it is there, a missing one in none" "$(ran optional_in 'found(n: int) as int? := if n > 0 then n else ø
+print(text(found(2) in [1, 2]) + " " + text(found(3) in [1, 2]) + " " + text(found(0) in [1, 2]) + " " + text([1, 2].contains(found(1))))')" "yes no no yes"
 exit $((failures > 0))
