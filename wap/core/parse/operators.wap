@@ -131,9 +131,10 @@ tokens_read(language: Language, tokens: list) as Node := {
 	while i <= #tokens {
 		token = tokens#i
 		next = if i < #tokens then tokens#(i + 1) else ø
+		after = if i + 1 < #tokens then tokens#(i + 2) else ø
 		if expecting_operand {
 			prefix = if operand_after(language, next) != ø then reading_as(language, token.item, Fixity.Prefix) else ø
-			if prefix == ø and called_after_infix(language, token, next, pending) {
+			if prefix == ø and called_after_infix(language, token, next, after, pending) {
 				last = i + 1
 				takes_block = language.phrase_words.leading[spelling_written(token.item)] == yes
 				while last < #tokens and (takes_block or not is_block(tokens#(last + 1).item)) { last = last + 1 }
@@ -170,10 +171,10 @@ tokens_read(language: Language, tokens: list) as Node := {
 # A word that leads a rule's phrase after an infix operator, with more operands after it, takes the rest of the phrase
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
-# (`0 - step else step`).
-called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list<Use>) as bool := {
+# (`0 - step else step`), and so does one an operator follows, as any operand: `2 * no + 1` is `(2 * no) + 1`.
+called_after_infix(language: Language, token: Spaced, next: Spaced?, after: Spaced?, pending: list<Use>) as bool := {
 	operand = operand_after(language, next)
-	pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand != ø and not is_block(operand.item)
+	pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand != ø and not is_block(operand.item) and operator_after_operand(language, operand, after) == ø
 }
 # a word rules use only inside their phrases, which continues the code before it: `else`
 continuation_word(language: Language, word: text) as bool := language.phrase_words.inner.has(word) and not language.phrase_words.leading.has(word)
