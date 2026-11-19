@@ -42,9 +42,7 @@ operators_declared(language: Language, n: Node, placements: list) := match n {
 		declaration_read(language, n, tokens_of(language, items).map(token => declared_word(token.item)), placements)
 		for item in items { operators_declared(language, item, placements) }
 	}
-	List(items, bracket, separator) => for item in items { operators_declared(language, item, placements) }
-	Key(left, op, right) => { operators_declared(language, left, placements); operators_declared(language, right, placements) }
-	_ => ø
+	_ => for part in direct_parts(n) { operators_declared(language, part, placements) }
 }
 
 # the word an item spells, a call's head for `⊕(a, b)`, "" for anything else

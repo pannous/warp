@@ -65,6 +65,12 @@ with_parts(n: Node, f: (Node) -> Node) as Node := match n {
 	List(items, bracket, separator) => List(items.map(f), bracket, separator)
 	_ => n
 }
+# a node's direct parts: a key's two sides, a list's items; none of an atom
+direct_parts(n: Node) as list<Node> := match n {
+	Key(left, op, right) => [left, right]
+	List(items, bracket, separator) => items
+	_ => []
+}
 
 # the fact naming the rule that built a node: the rule's head, where it was written
 RULE = "rule"
@@ -82,6 +88,15 @@ fact_of(n: Node, name: text) as Node? := {
 		match fact { Key(Symbol(fact_name), Op.Colon, value) => if fact_name == name { found = value }; _ => ø }
 	}
 	found
+}
+# the items of a fact that holds a list, none when no stage has learned it; a fact set to anything else is a stage's bug
+fact_items(n: Node, name: text) as list<Node> := {
+	found = fact_of(n, name)
+	if found == ø { return [] }
+	match found {
+		List(items, bracket, separator) => items
+		_ => refused(found, "the fact ${name} holds a list")
+	}
 }
 
 # Where a node was written: line_of and column_of its position, file_of the file the reader read it from (ø for a
@@ -209,10 +224,7 @@ CAPTURES = "captures"
 # a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
 # as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
 FUNCTION_VALUE = "function_value"
-captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
-	List(items, bracket, separator) => items
-	_ => []
-}
+captures_of(function: Node) as list<Node> := fact_items(function, CAPTURES)
 
 # The facts of the typing stage, core/analyze/types.wap: a value's TYPE, `int`, as a program writes types; a function's
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means

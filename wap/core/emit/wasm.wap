@@ -64,6 +64,7 @@ i32_const(n: int) as list<int> := I32_CONST + signed(n)
 i64_const(n: int) as list<int> := I64_CONST + signed(n)
 f64_const(x: float) as list<int> := F64_CONST + little_endian(float_bits(x), 8)
 local_get(local: int) as list<int> := instruction(LOCAL_GET, [local])
+local_set(local: int) as list<int> := instruction(LOCAL_SET, [local])
 # the null reference of a heap type, `ref.null any`
 null_of(heap_type: list<int>) as list<int> := REF_NULL + heap_type
 
