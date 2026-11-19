@@ -428,4 +428,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   refused. Paid off when old warp retires: one overloaded `staged`.
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
-  defaults_given passes the ø on unchecked. Paid off when old warp retires: a missing default is refused there.
+  defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
+- **Helpers named apart from same-named ones** (wap/core/analyze: `within` became part_of beside names.wap's scope
+  `within`, `valued` value_bearing beside the emitter's): a
+  program's definitions dispatch across all its modules, and a Node parameter dispatches as any, so analyze's
+  `valued(type: Node?)` beside emit's `valued(type: list<int>)` is refused though each call site's types tell them
+  apart. Paid off when a call is resolved statically wherever its argument types decide it.
