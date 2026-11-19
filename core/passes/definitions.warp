@@ -128,8 +128,10 @@ result_held(annotated: Node, body: Node, n: Node) as Node := match annotated {
 		if name_of(head#1).ends_with("!") { diagnose(call_of("bang_result", [name_of(head#1)]), result_type) }
 		result = symbol(result_word)
 		held = optional_when_answering_empty(head, body, result_type)
-		if name_of(held).ends_with("?") { body = with_empty_otherwise(body) }
-		if is_list_type(name_of(held)) and can_answer_empty(body, optional_functions) { body = Key(with_empty_otherwise(body), Op.Coalesce, List([], Bracket.Square, Separator.Comma)) }
+		optional = name_of(held).ends_with("?")
+		if optional { body = with_empty_otherwise(body) }
+		# `list<int>?` reads `list of int?`: optional, so its ø stays, no empty list stands in
+		if not optional and is_list_type(name_of(held)) and can_answer_empty(body, optional_functions) { body = Key(with_empty_otherwise(body), Op.Coalesce, List([], Bracket.Square, Separator.Comma)) }
 		Key(head, Op.Define, List([Key(Key(result, Op.Colon, held), Op.Assign, body), result], Bracket.Curly, Separator.Semicolon))
 	}
 	_: n
