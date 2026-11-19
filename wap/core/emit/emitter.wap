@@ -50,7 +50,7 @@ emitted(program: Block) as Module := {
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
 	added_tag(m, [nullable(text_type(m))])
-	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
+	p.records = added_records(Records(), match program { Block(statements) => statements })
 	f = Frame()
 	body = code(program, p, f)
 	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], uncaught_ended(dropped(body), p)), f))
@@ -85,7 +85,7 @@ class Program {
 	# the helper functions primitives call, each [operation, index]
 	helpers: list = []
 	# the Records the program declares, which lay out their instances
-	records: list = []
+	records: Records = Records()
 }
 # The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
 class Frame {
@@ -162,7 +162,7 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code := match handler {
 	Fn(parameters, handling) => {
 		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
-		error = slotted(f, listed(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
+		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
 		type = joined(tried.type, instead.type)
 		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END

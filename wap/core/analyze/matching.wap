@@ -122,7 +122,7 @@ shape_missing(rows: list, types: list, s: TypingState) as list? := {
 	if inner == ø then ø else [Call(symbol(text(types#1)), inner[.. #holes])] + inner[#holes ..]
 }
 # a row with its first pattern opened into patterns of the case's fields: a name, `_` or a bare case fits each
-opened(row: list, count: int) as list := (if row#1 is symbol then wildcards(count) else pattern_parts(row#1)) + row[1 ..]
+opened(row: list, count: int) as list := (if row#1 is symbol then wildcards(count) else case_fields(row#1)) + row[1 ..]
 wildcards(count: int) as list := copies(symbol(WILDCARD), count)
 copies(x: Node, count: int) as list := if count == 0 then [] else (1 to count).map(at => x)
 # Where a column holds list patterns, its lists are split by count, each count up to the longest pattern's and then the
@@ -147,8 +147,6 @@ fits_count(pattern: Node, count: int, longer: bool) as bool := {
 }
 # a row with its first pattern opened into the patterns of a count of items: a list pattern's own, `_` for the others
 items_opened(row: list, count: int) as list := (if fits_any(row#1) then wildcards(count) else (list_pattern_items(row#1) ?? []).filter(item => rest_named(item) == ø) + wildcards(count - fixed_count(row#1))) + row[1 ..]
-# the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
-pattern_parts(pattern: Node) as list := match pattern { Call(called, parts) => parts; _ => [] }
 # a pattern as the program writes it: `Two(Circle(_), _)`, `[_, ..._]`
 pattern_text(pattern: Node) as text := match pattern {
 	List(items, Bracket.Square, separator) => "[${items.map(pattern_text).join(", ")}]"

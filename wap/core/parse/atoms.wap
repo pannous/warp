@@ -44,8 +44,11 @@ name_read(r: Reader) := {
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
 	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
 	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
-	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+	symbol_token(r, end)
 }
+
+# the symbol from the reader's place up to `end`, as one token
+symbol_token(r: Reader, end: int) := token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 
 # A word glued to `://` begins a URL, `http://x.com/a?b=1`, any scheme alike: one Text up to the next blank,
 # bracket or separator, as today's warp reads it (reader.md §6, URLs)
@@ -60,7 +63,7 @@ glyphs_read(r: Reader, c: text) := {
 	end = r.at + 1
 	while end < r.n and r.code[end] == c { end += 1 }
 	while end < r.n and r.code[end] == '=' { end += 1 }
-	token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+	symbol_token(r, end)
 }
 
 # `12`, `-3`, `1_000`, `3.5`, `3.`, `1e-3`, `0xFF`: an int, or a float when it has a point or a negative exponent
@@ -167,19 +170,22 @@ hole_closer_at(r: Reader, at: int) as text? := {
 	for i in 1 to HOLE_OPENERS.length { if slice_of(r, at, min(at + 2, r.n)) == HOLE_OPENERS#i { return HOLE_CLOSERS#i } }
 	ø
 }
+# a piece of a text with holes begun: joined by `+` to the pieces before it, if any
+piece_begun(r: Reader, pieces: int) := {
+	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	r.blank = yes
+}
 # a piece of a text with holes, joined by `+` to those before it; an empty text is no piece. The pieces so far after it
 piece_added(r: Reader, piece: Node, pieces: int) as int := {
 	if piece == Text("") { return pieces }
-	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
-	r.blank = yes
+	piece_begun(r, pieces)
 	token(r, LexemeKind.Atom, piece, 0)
 	pieces + 1
 }
 # the hole at the reader's place read as `text(…)`, its code as any code is read, up to its closer; where the text
 # goes on after it
 hole_read(r: Reader, hole_closer: text, pieces: int) as int := {
-	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
-	r.blank = yes
+	piece_begun(r, pieces)
 	token(r, LexemeKind.Atom, Symbol(TEXT_WORD), 0)
 	bracket_opened(r, "(", 2)
 	depth = r.opened.length
