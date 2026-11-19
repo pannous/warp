@@ -54,7 +54,7 @@ check "the last item taken off a list" "$(ran popped 'xs = [7, 8]
 print text(xs.pop())
 print text(#xs)')" "8
 1"
-check "a slice of a list, a new list of its items" "$(ran list_slice 'part(xs: list<int>, from: int, count: int): list<int> := prim array_slice(xs, from, count)
+check "a slice of a list, a new list of its items" "$(ran list_slice 'part(xs: list<int>, from: int, count: int): list<int> := xs.slice(from to from + count - 1)
 print show(part([1, 2, 3, 4], 1, 2))')" "[2, 3]"
 check "a map's keys, a new list that leaves the map as it was" "$(ran map_keys 'm = {a: 1, b: 2}
 ks = m.keys()

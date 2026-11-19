@@ -1,5 +1,9 @@
 # Kernel forms to a wasm module (notes/kernel.md): one case per form, any other node refused.
 #
+# read wasm-representation.md (todo: even copy it here?) :
+# names, exports, imports, class shapes and source positions come by convention from wasm’s standard sections. 
+# Everything wasm erases (real types, defaults, overloads, enums, rules, generic bodies, version stamp) goes into the wap section as warp declaration data
+
 # Input: the kernel (wap/kernel/forms.wap and the literals); output: a Module (core/emit/wasm.wap). The emitter
 # never sees a surface spelling, and it decides nothing a rule could decide: it translates. Which wasm type holds a
 # value is core/emit/values.wap's; the bytes are wasm.wap's.
@@ -67,7 +71,7 @@ host_calls(program: Node) as list<text> := {
 	names
 }
 primitives_in(n: Node) as list<text> := match n {
-	Prim(operation, arguments) => [operation_of(n)] + arguments.flat_map(primitives_in)
+	Prim(operation, arguments) => [text(operation)] + arguments.flat_map(primitives_in)
 	_ => direct_parts(n).flat_map(primitives_in)
 }
 

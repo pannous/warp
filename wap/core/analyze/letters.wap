@@ -81,10 +81,10 @@ facts_settled(n: Node, s: TypingState) as Node := {
 letters_bound(definition: Node, types: list, s: TypingState) as list? := {
 	bound = []
 	parameters = parameters_in(definition)
-	in_order = (1 to #types).filter(at => function_type_parts(type_given(parameters#at)) == ø) + (1 to #types).filter(at => function_type_parts(type_given(parameters#at)) != ø)
+	in_order = (1 to #types).filter(at => signature(type_given(parameters#at)) == ø) + (1 to #types).filter(at => signature(type_given(parameters#at)) != ø)
 	for at in in_order {
 		wanted = type_given(parameters#at)
-		if wanted != ø and (has_letters(wanted, s.records) or function_type_parts(wanted) != ø or has_unknowns(types#at) and not takes_own_type(wanted, s.records)) { bound = unified(wanted, types#at, bound, s) ?? return ø }
+		if wanted != ø and (has_letters(wanted, s.records) or signature(wanted) != ø or has_unknowns(types#at) and not takes_own_type(wanted, s.records)) { bound = unified(wanted, types#at, bound, s) ?? return ø }
 	}
 	bound
 }
@@ -96,7 +96,7 @@ unified(wanted: Node, given: Node?, bound: list, s: TypingState) as list? := {
 	if is_letter(wanted, records) or is_unknown(wanted) { return bound_as(wanted, given, bound, s) }
 	if is_unknown(given) { return bound_as(given, wanted, bound, s) }
 	if base_of_optional(wanted) != ø and base_of_optional(given) == ø { return if given == symbol(EMPTY_TYPE) then bound else unified(base_of_optional(wanted), given, bound, s) }
-	wanted_function = function_type_parts(wanted)
+	wanted_function = signature(wanted)
 	if wanted_function != ø and function_value_parts(given) != ø { return function_value_bound(wanted_function, given, bound, s) }
 	# a value binds as the type it reads as, a range's `T` of a list<T> an int
 	read = read_type(given, wanted)
@@ -130,7 +130,7 @@ reads_as(held: Node, given: Node) as bool := {
 }
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
-function_value_bound(wanted: FunctionParts, value: Node, bound: list, s: TypingState) as list? := {
+function_value_bound(wanted: Signature, value: Node, bound: list, s: TypingState) as list? := {
 	parameters = wanted.parameters.map(type => substituted(type, bound))
 	if parameters.any(type => has_letters(type, s.records)) { return ø }
 	result = (value_function_typed(parameters, value, s) ?? return ø).result ?? return ø
@@ -144,9 +144,10 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	closure = if is_lambda_key(key, s) then [type] else []
 	if #parameters_in(definition) != #closure + #parameters { return ø }
 	typed = function_typed(definition, closure + parameters, s, definition)
-	# its parameters those wanted or shapes of them, `(pair: Pair)` where `(Node)` is
+	# its parameters take the wanted ones as they are: that type or a shape of it, `(pair: Pair)` where `(Node)` is, or
+	# a reference's optional, `(type: Node?)` where `(Node)` is; a plain value's optional would hold it boxed
 	taken = typed.arguments[#closure ..]
-	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed]) then typed else ø
+	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed] + (if is_plain(parameters#at) then [] else [Conversion.Wrapped])) then typed else ø
 }
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to
