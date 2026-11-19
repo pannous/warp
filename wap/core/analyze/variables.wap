@@ -33,7 +33,7 @@ defined_in(statements: list, scope: Scope, depth: int) as list<Definition> := {
 }
 definitions_made_by(n: Node, scope: Scope, depth: int) as list<Definition> := match n {
 	Define(name, parameters, body) => [Definition(text(declared_name(name)), DefinitionKind.ProgramFunction, declared_name(name), depth)]
-	Record(name, fields, variants) => [Definition(text(name), DefinitionKind.Declaration, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), DefinitionKind.EnumCase, case_name(case), depth, text(name), #case_fields(case)))
+	Record(name, fields, variants) => [Definition(text(name), DefinitionKind.TypeRecord, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), DefinitionKind.EnumCase, case_name(case), depth, text(name), #case_fields(case)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
 	Block(statements) => []
 	Fn(parameters, body) => []

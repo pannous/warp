@@ -158,9 +158,9 @@ DEFINED_AT = "defined_at"
 # What a definition is, and so what a name bound to it refers to: a block's or the program's variable, a parameter, a
 # variable of the function around (captured), a function of the program or of the library (the preload's or a used
 # module's), a case of an enum (`Dime`, its Record defines it), a field of a method's receiver named bare (`c` for
-# `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a class's or an enum's declaration, a used module.
+# `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a type's record, a class or an enum, a used module.
 # On a name its BINDING fact is the kind's word, `local`, `global` …
-enum DefinitionKind { Local, Parameter, Capture, Global, ProgramFunction, LibraryFunction, EnumCase, Field, Declaration, UsedModule }
+enum DefinitionKind { Local, Parameter, Capture, Global, ProgramFunction, LibraryFunction, EnumCase, Field, TypeRecord, UsedModule }
 kind_word(kind: DefinitionKind) as text := lower(text(kind))
 is_kind_word(word: Node?, kind: DefinitionKind) as bool := word == symbol(kind_word(kind))
 with_binding(n: Node, kind: DefinitionKind) as Node := with_fact(n, BINDING, symbol(kind_word(kind)))

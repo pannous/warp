@@ -85,7 +85,7 @@ bound(n: Node, scope: Scope, depth: int) as Node := match n {
 # A written type with each record name in it bound to the Record its scope sees, `Box` of `b: Box` or `list<Box>?`
 type_bound(type: Node, scope: Scope) as Node := match type {
 	Symbol(name) => {
-		for definition in named_in(scope, name) { if definition.kind == DefinitionKind.Declaration { return with_fact(type, DECLARED_BY, record_declared(definition.definer)) } }
+		for definition in named_in(scope, name) { if definition.kind == DefinitionKind.TypeRecord { return with_fact(type, DECLARED_BY, record_declared(definition.definer)) } }
 		type
 	}
 	List(items, bracket, separator) => refitted(List(items.map(item => type_bound(item, scope)), bracket, separator), type)
@@ -196,7 +196,7 @@ receiver_fields(parameters: List, scope: Scope, depth: int) as list<Definition> 
 	type = declared_type(receiver) ?? return []
 	if text(parameter_name(receiver)) != SELF_WORD { return [] }
 	for definition in named_in(scope, text(type)) {
-		if definition.kind == DefinitionKind.Declaration {
+		if definition.kind == DefinitionKind.TypeRecord {
 			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), DefinitionKind.Field, parameter_name(receiver), depth))
 		}
 	}
