@@ -42,7 +42,7 @@ literal(n: Node, m: Module) as Code? := match n {
 # the wasm type of a declared type, `int` in `x: int`, or ø for one without a layout yet; a record's among these
 # records (core/stage.wap record_named)
 # a shape, `Record`, laid out as the type it narrows (core/analyze/shapes.wap)
-layout_of(type_name: Node, m: Module, records: list) as list? := match type_name {
+layout_of(type_name: Node, m: Module, records: list) as list<int>? := match type_name {
 	Symbol(name) => {
 		narrowed = fact_of(type_name, NARROWS)
 		record = record_named(records, type_name)
