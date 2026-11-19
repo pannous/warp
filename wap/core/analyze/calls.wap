@@ -23,6 +23,8 @@ SHOW_WORD = "show"
 PRINT_WORD = "print"
 # the word of an optional value known present, `x!` (named required): its value, raising when it is missing
 REQUIRED_WORD = "!"
+# the fact of a call of a function whose result is not known yet, its body calling itself: what to write instead
+RESULT_UNKNOWN = "result_unknown"
 
 # A call: its arguments typed, each expecting its parameter's written type when only one definition takes that many
 # arguments; then the function it means, typed for these argument types
@@ -188,7 +190,7 @@ definition_keyed(key: text, s: TypingState) as Node? := {
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
 chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: Node?, s: TypingState) as Node := {
 	candidates = scopes.flat_map(scope => scope)
-	types = given.map(argument => value_type(argument) ?? refused(argument, "this gives no value to pass"))
+	types = given.map(argument => value_of(argument, "to pass"))
 	dispatcher = dispatching(called, candidates, types, s)
 	if dispatcher != ø { return dispatcher }
 	fitting = candidates.filter(definition => takes(definition, given, s, (argument, wanted) -> fits(argument, wanted, s)))
@@ -339,7 +341,8 @@ shaped_typed(definition: Define, argument_types: list, s: TypingState, at: Node)
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(type_given(parameters_in(definition)#place))) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
 		if typed.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
-			if not typed.done and typed.result == ø { refused(at, "a function that calls itself needs its full result type: write `${declared_name(name)}(…): ${full_type_hint(declared_type(name))} := …`") }
+			# a call of itself before its result is known gives no value; a function giving one refuses below
+			typed.called_unknown = typed.called_unknown or not typed.done and typed.result == ø
 			return typed
 		}
 	}
@@ -350,6 +353,7 @@ shaped_typed(definition: Define, argument_types: list, s: TypingState, at: Node)
 	typed.result = if names_bare_kind(written) or typed.jumps then ø else written
 	# a function that never returns says so in its signature, as a built-in writes it, `never`, which the emitter lays out
 	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
+	typed.unknown_result = "a function that calls itself and gives a value needs its full result type: write `${declared_name(name)}(…): ${full_type_hint(declared_type(name))} := …`"
 	s.functions += [typed]
 	frame = TypeFrame()
 	frame.result = typed.result
@@ -366,11 +370,12 @@ shaped_typed(definition: Define, argument_types: list, s: TypingState, at: Node)
 	typed.signed = with_signature(name, types, if typed.jumps then symbol(NEVER_RESULT) else typed.result)
 	typed.define = refitted(Define(typed.signed, with_items(parameters, typed_parameters), typed_body), definition)
 	typed.late = frame.late
+	if typed.called_unknown and valued_type(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
 	typed.done = yes
 	typed
 } }
 # a call typed by the function it calls: of its result, or jumping when that never returns
-result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else with_type_of(n, chosen.result)
+result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else if chosen.result == ø and not chosen.done then with_fact(n, RESULT_UNKNOWN, Text(chosen.unknown_result)) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
 parameter_type(written: Node?, given: Node, letters: list, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)

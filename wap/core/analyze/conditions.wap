@@ -96,7 +96,7 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 	if fact_of(tested, BINDING) == symbol(BOUND_CASE) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
 	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	typed = typed_form(subject, s, f, ø)
-	type = value_type(typed) ?? refused(subject, "this gives no value to test")
+	type = value_of(typed, "to test")
 	kind = kind_named(tested, type, s)
 	if kind != ø { return typed_form(shape_test(subject, kind, n, s), s, f, ø) }
 	if boxed_fit(tested, type) and not same_type(type, tested) { return with_fact(with_type(placed_like(Prim(symbol(BOXED_TEST), [typed]), n), BOOL_TYPE), TESTED, tested) }
