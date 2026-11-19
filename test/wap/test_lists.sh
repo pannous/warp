@@ -86,4 +86,5 @@ b.add(2)
 c = a
 c.add(3)
 print text(#a) + " " + text(#b)')" "2 2"
+check "a list's items without their repeats, each where it first appears" "$(ran unique_items 'print(text([3, 1, 3, 2, 1].unique))')" "[3, 1, 2]"
 exit $((failures > 0))

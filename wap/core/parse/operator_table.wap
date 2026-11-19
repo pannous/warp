@@ -73,8 +73,10 @@ declaration_read(language: Language, n: Node, words: list, placements: list) := 
 # the operator joins the table in the declaring word's fixity and group; one the table has there is an overload
 declared(language: Language, spelling: text, declaring: Declaring) := {
 	if group_of(language, spelling, declaring.fixity) != "" { return }
-	if operator_spelled(language, spelling) == ø { language.operators.add(Operator(spelling, spelling)) }
-	grouped(operator_spelled(language, spelling), declaring.fixity, declaring.group)
+	found = operator_spelled(language, spelling)
+	operator = found ?? Operator(spelling, spelling)
+	if found == ø { language.operators.add(operator) }
+	grouped(operator, declaring.fixity, declaring.group)
 }
 
 grouped(operator: Operator, fixity: Fixity, group: text) := match fixity {

@@ -77,6 +77,12 @@ empty(t: text): bool := t == ""
 text(n: int): text := if n < 0 then "-" + negated_digits(n) else negated_digits(0 - n)
 # the digits of a negative int's size, or of 0
 negated_digits(n: int): text := if n > -10 then bytes_between(DIGITS, 0 - n, 1 - n) else negated_digits((n - n rem 10) ÷ 10) + negated_digits(n rem 10)
+# a text and an int's digits joined: `"a" + 3` is "a3". A text ending in a digit takes no number, since `"5" + 3` could
+# mean 8 (wiki/Footguns.md "String + number")
++(t: text, n: int): text := {
+	if t != "" and is_digit(t#(#t)) { raise "no implicit conversion of a text ending in a digit: convert explicitly, e.g. int(\"5\") + 3" }
+	t + text(n)
+}
 # how many characters t holds: `#"héllo"` is 5
 #(t: text): int := {
 	count = 0

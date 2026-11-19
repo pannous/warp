@@ -9,16 +9,16 @@ use "parse/operator_table.wap"
 # The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
 # its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules, the operator
 # stage reads them.
-class PhraseWords { leading: map, inner: map }
+class PhraseWords { leading: map<text, bool>, inner: map<text, bool> }
 
-class Rule { head: text, matcher: Matcher, template: Node, fresh: list, written: Node, specificity: int }
+class Rule { head: text, matcher: Matcher, template: Node, fresh: list<text>, written: Node, specificity: int }
 # the rules of one stage, by head: stage 1 asks only shapes, stage 3 the types of typed code (a hole of a value type)
-class Rules { by_head: map }
+class Rules { by_head: map<text, list<Rule>> }
 
 # group_names and operator_names index groups and operators by name, so a spelling is looked up, not searched for;
 # looser_than: group name → every group it binds tighter than, the order of the groups' relations, derived from
 # `groups` whenever they change (core/parse/operator_table.wap related_groups)
-class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map, looser_than: map = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex() }
+class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex() }
 
 # the language every program starts from: the preload's operator table, copied row by row so that what a program
 # declares joins its own copy, no rules or patterns yet
