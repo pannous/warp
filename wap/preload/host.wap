@@ -1,12 +1,12 @@
 # The host's machinery the preload's file and command-line words use (prelude.wap, which `use`s it, so programs do not
-# see it): plain warp over the module's memory and WASI's calls. Its primitives are the memory's bytes and words, its
-# size and growth, a text made and its bytes set, and each WASI call by its own name (core/emit/primitives.wap).
+# see it): plain warp over the module's memory and WASI's calls. Its primitives are the memory's bytes and words, the
+# emitter's helpers that grow it, place a text in it and write a text from it (core/emit/host.wap), and each WASI call
+# by its own name (core/emit/primitives.wap).
 
 # the memory: an iovec [address, length] at 0, the count a call moved or the file it opened at 8, bytes from 16
 IOVEC_AT := 0
 MOVED_AT := 8
 BYTES_AT := 16
-PAGE_BYTES := 65536
 # WASI: the folders the host opens for a program, the current one and the root (core/native/driver.warp), so a path
 # starting with / opens in the second; links followed; the rights to read and seek; seek from the start or the end
 CURRENT_FOLDER := 3
@@ -18,27 +18,26 @@ WRITE_RIGHT := 64
 FROM_START := 0
 FROM_END := 2
 SLASH := 47
+# WASI: the files a program starts with open, its standard output and error
+STANDARD_OUTPUT := 1
+STANDARD_ERROR := 2
 
 memory_byte(at: int): int := prim memory_byte(at)
-set_memory_byte(at: int, b: int) := prim memory_set_byte(at, b)
 memory_word(at: int): int := prim memory_word(at)
 set_memory_word(at: int, word: int) := prim memory_set_word(at, word)
-memory_pages(): int := prim memory_size()
-memory_grown_by(pages: int): int := prim memory_grow(pages)
+# the memory grown to hold `count` bytes from BYTES_AT; a text's bytes placed there; a text written to a file, a line
+# end after it when `line` says so
+memory_holding(count: int) := prim memory_held(count)
+place(t: text) := prim text_placed(t)
+write_text(file: int, t: text, line: bool) := prim text_written(t, file, line)
 
 args_sizes_get(count_at: int, size_at: int): int := prim args_sizes_get(count_at, size_at)
 args_get(addresses_at: int, bytes_at: int): int := prim args_get(addresses_at, bytes_at)
 path_open(folder: int, lookup: int, path_at: int, length: int, flags: int, rights: int, inherited: int, file_flags: int, opened_at: int): int := prim path_open(folder, lookup, path_at, length, flags, rights, inherited, file_flags, opened_at)
 fd_seek(file: int, offset: int, whence: int, position_at: int): int := prim fd_seek(file, offset, whence, position_at)
 fd_read(file: int, iovecs_at: int, count: int, moved_at: int): int := prim fd_read(file, iovecs_at, count, moved_at)
-fd_write(file: int, iovecs_at: int, count: int, moved_at: int): int := prim fd_write(file, iovecs_at, count, moved_at)
 fd_close(file: int): int := prim fd_close(file)
 
-# the memory grown to hold `count` bytes from BYTES_AT
-memory_holding(count: int) := {
-	short = (BYTES_AT + count + PAGE_BYTES - 1) ÷ PAGE_BYTES - memory_pages()
-	if short > 0 and memory_grown_by(short) < 0 { raise "the memory cannot grow to hold ${count} bytes" }
-}
 # the memory's bytes from an address, as a text
 memory_text(at: int, count: int): text := {
 	t = text_made(count)
@@ -55,20 +54,17 @@ zero_ended(at: int): text := {
 # it cannot open raises the refusal and the path
 opened(path: text, flags: int, rights: int, refusal: text): int := {
 	rooted = if byte_count(path) > 0 and byte_at(path, 0) == SLASH then 1 else 0
-	length = byte_count(path) - rooted
-	memory_holding(length)
-	for at in 0 upto length { set_memory_byte(BYTES_AT + at, byte_at(path, at + rooted)) }
-	if path_open(CURRENT_FOLDER + rooted, FOLLOW_LINKS, BYTES_AT, length, flags, rights, 0, 0, MOVED_AT) != 0 { raise refusal + path }
+	place(bytes_between(path, rooted, byte_count(path)))
+	if path_open(CURRENT_FOLDER + rooted, FOLLOW_LINKS, BYTES_AT, byte_count(path) - rooted, flags, rights, 0, 0, MOVED_AT) != 0 { raise refusal + path }
 	memory_word(MOVED_AT)
 }
-# the bytes from BYTES_AT moved to or from a file, by fd_read or fd_write, until `total` are or a call moves none; the
-# count moved
-moved(file: int, total: int, move: (int, int, int, int) -> int): int := {
+# a file's bytes read into the memory from BYTES_AT until `total` are or a read gives none; the count read
+bytes_read(file: int, total: int): int := {
 	done = 0
 	while done < total {
 		set_memory_word(IOVEC_AT, BYTES_AT + done)
 		set_memory_word(IOVEC_AT + 4, total - done)
-		move(file, IOVEC_AT, 1, MOVED_AT)
+		fd_read(file, IOVEC_AT, 1, MOVED_AT)
 		if memory_word(MOVED_AT) == 0 { return done }
 		done += memory_word(MOVED_AT)
 	}

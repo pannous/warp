@@ -7,9 +7,9 @@ use "floats.wap"
 use "host.wap"
 
 # a text written to the standard output, then a line end
-print(t: text) := prim print_text(t)
+print(t: text) := write_text(STANDARD_OUTPUT, t, yes)
 # a text written to the standard error, then a line end; the program goes on
-eprint(t: text) := prim error_text(t)
+eprint(t: text) := write_text(STANDARD_ERROR, t, yes)
 # a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
 hint(message: text) := eprint("hint: " + message)
 # the text of the file at a path, relative to the current folder or from the root (/…)
@@ -19,7 +19,7 @@ read(path: text): text := {
 	size = memory_word(MOVED_AT)
 	fd_seek(file, 0, FROM_START, MOVED_AT)
 	memory_holding(size)
-	got = moved(file, size, fd_read)
+	got = bytes_read(file, size)
 	fd_close(file)
 	memory_text(BYTES_AT, got)
 }
@@ -45,10 +45,11 @@ folder_of(file: text): text := {
 # bytes written to the file at a path, made anew or emptied first: what a compiler writes its module with
 write_bytes(path: text, bytes: list<int>) := {
 	file = opened(path, CREATED_OR_EMPTIED, WRITE_RIGHT, "write: cannot open ")
-	memory_holding(#bytes)
-	for at in 0 upto #bytes { set_memory_byte(BYTES_AT + at, bytes[at]) }
-	moved(file, #bytes, fd_write)
+	t = text_made(#bytes)
+	for at in 0 upto #bytes { set_text_byte(t, at, bytes[at]) }
+	write_text(file, t, no)
 	fd_close(file)
+	return
 }
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)

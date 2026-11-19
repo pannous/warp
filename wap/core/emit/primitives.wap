@@ -36,7 +36,7 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
+HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
@@ -46,19 +46,18 @@ MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
 # The operations on the module's memory and on a text being made, each by the wasm types it takes and gives and its
 # instructions, as a host function's call by HOST_FUNCTIONS: an int given where it takes an i32 is wrapped to one, an
-# i32 it gives extended to an int by its sign, so memory.grow's failure is -1
+# i32 it gives extended to an int
 class WasmOperation { takes: list<list<int>>; gives: list<list<int>>; code: list<int> }
 memory_operations(p: Program) as map<text, WasmOperation> := {
-	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])), "memory_set_byte": WasmOperation([I32, I32], [], instruction(I32_STORE8, [0, 0])),
+	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
 	"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
-	"memory_size": WasmOperation([], [I32], instruction(MEMORY_SIZE, [0])), "memory_grow": WasmOperation([I32], [I32], instruction(MEMORY_GROW, [0])),
 	"text_made": WasmOperation([I32], [nullable(text_type(p.m))], instruction(ARRAY_NEW_DEFAULT, [text_type(p.m)])), "text_byte_set": WasmOperation([nullable(text_type(p.m)), I32, I32], [], instruction(ARRAY_SET, [text_type(p.m)]))
 }
 # the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
 # i32 it gives extended to the int its definition writes
 wasm_called(form: Node, arguments: list<Code>, operation: WasmOperation, p: Program) as Code := {
 	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else []))
-	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_S else []))
+	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_U else []))
 }
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
