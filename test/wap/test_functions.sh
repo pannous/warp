@@ -263,4 +263,8 @@ print text(doubled(8))')" "16"
 check "a function value giving a shape fits where one giving its type is wanted" "$(ran shape_result 'pattern Pair = (Pair $left: Node $right: Node)
 applied(n: Node, rewrite: (Node) -> Node) as Node := rewrite(n)
 print text(applied(Text("a"), whole => Pair(whole, Number(1))))')" "(Pair \"a\" 1)"
+check "a bare function parameter takes a function of a written type" "$(ran bare_function_written 'once(f: function, x: int) := f(x)
+inc(x: int): int := x + 1
+steps: map<text, (int) -> int> = {"inc": inc}
+print text(once(steps["inc"], 3))')" "4"
 exit $((failures > 0))

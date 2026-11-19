@@ -41,21 +41,22 @@ dispatching(called: Node, candidates: list<Function>, types: list, s: TypingStat
 	taking = order.filter(definition => takes(definition, tested_reads(definition, reads, types, s), s, (argument, wanted) -> fits(argument, wanted, s)))
 	untested = taking.filter(definition => tested_places(definition, types, s) == [])
 	last = if untested is empty then raised("${called}: no definition takes these values' types", name, s) else named_call(text(called), untested, reads, name)
-	tried = taking.filter(definition => tested_places(definition, types, s) != []).map(definition => [tests_of(definition, reads, types, s, name), named_call(definition.name, [definition], reads, name)])
+	tried = taking.filter(definition => tested_places(definition, types, s) != []).map(definition => Choice(tests_of(definition, reads, types, s, name), named_call(definition.name, [definition], reads, name)))
 	dispatcher_made(name, reads, chained(tried, last, name), order.map(definition => definition.result), s)
 }
 # The dispatching function a read of this field on an any means, `.name(any)`; ø when no record has the field
 field_dispatching(key: Node, s: TypingState) as Function? := {
 	holders = s.records.items.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
 	if holders is empty { return ø }
-	held = field_named(holders#1, key) ?? refused(key, "the record holding this field has none")
+	held = held_field(holders#1, key)
 	name = name_for("${FIELD_MARK}${key}(${ANY_TYPE})", declared_name(held))
 	known = definition_keyed(place_key(name), s)
 	if known != ø { return known }
 	read = parameters_of(name, [symbol(ANY_TYPE)])#1
-	tried = holders.map(record => [[test_of(read, record_type(record), name, s)], placed_like(Get(read, key), name)])
-	dispatcher_made(name, [read], chained(tried, raised("${key}: no record of this value's type has this field", name, s), name), holders.map(record => declared_type(field_named(record, key))), s)
+	tried = holders.map(record => Choice([test_of(read, record_type(record), name, s)], placed_like(Get(read, key), name)))
+	dispatcher_made(name, [read], chained(tried, raised("${key}: no record of this value's type has this field", name, s), name), holders.map(record => declared_type(held_field(record, key))), s)
 }
+held_field(record: Node, key: Node) as Node := field_named(record, key) ?? refused(key, "the record holding this field has none")
 
 # a dispatching function's parameters, x1 …, one of each type, as its body reads them
 parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
@@ -64,19 +65,23 @@ parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
 })
 # The dispatching function, kept with the typing stage's definitions and placed with the program's functions; its
 # result written when every choice writes its own, so a choice calling back through the dispatch finds it
-dispatcher_made(name: Node, reads: list, body: Node, results: list, s: TypingState) as Function := {
-	written = if results.all(result => result != ø) then Key(name, Op.Colon, results.drop(1).fold(results#1, (a, b) -> joined_type(a, b, s))) else name
-	dispatcher = placed_like(Define(written, List(reads.map(read => Key(read, Op.Colon, value_type(read))), Bracket.Round, Separator.Comma), body), name)
+dispatcher_made(name: Node, reads: list, body: Node, results: list<Node?>, s: TypingState) as Function := {
+	# joined_type is ø where either is: a choice without a written result writes none
+	result = results.drop(1).fold(results#1, (a, b) -> joined_type(a, b, s))
+	written = if result == ø then name else Key(name, Op.Colon, result)
+	dispatcher = placed_like(Define(written, List(reads.map(read => Key(read, Op.Colon, value_of(read, "for a dispatcher's parameter"))), Bracket.Round, Separator.Comma), body), name)
 	s.dispatchers += [dispatcher]
 	function_added(dispatcher, s)
 }
-# the choices, each [its tests, its code], tried in order: the first whose tests all pass runs, else the last
-chained(choices: list, last: Node, at: Node) as Node := {
+# a dispatch's choice: its tests, and the code that runs once they all pass
+class Choice { tests: list<Node>; code: Node }
+# the choices tried in order: the first whose tests all pass runs, else the last
+chained(choices: list<Choice>, last: Node, at: Node) as Node := {
 	chain = last
 	for place in 0 upto #choices {
 		choice = choices#(#choices - place)
-		condition = choice#1[1 ..].fold(choice#1#1, (both, test) -> placed_like(If(both, test, False), at))
-		chain = placed_like(If(condition, choice#2, chain), at)
+		condition = choice.tests.drop(1).fold(choice.tests#1, (both, test) -> placed_like(If(both, test, False), at))
+		chain = placed_like(If(condition, choice.code, chain), at)
 	}
 	chain
 }
@@ -94,7 +99,7 @@ tested_reads(definition: Function, reads: list, types: list, s: TypingState) as 
 	places = tested_places(definition, types, s)
 	(1 to #reads).map(at => if at in places then with_type_of(reads#at, definition.parameters#at) else reads#at)
 }
-tests_of(definition: Function, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, definition.parameters#place, at, s))
+tests_of(definition: Function, reads: list, types: list, s: TypingState, at: Node) as list<Node> := tested_places(definition, types, s).map(place => test_of(reads#place, definition.parameters#place ?? refused(at, "a tested parameter has its type"), at, s))
 # whether an any's value is of the type, `x is int`, or a value of a shape (core/analyze/shapes.wap)
 test_of(read: Node, type: Node, at: Node, s: TypingState) as Node := if narrowed_type(type) != ø then shape_test(read, type, at, s) else with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
 # a call of one of these definitions, chosen among them as any call is

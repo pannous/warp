@@ -16,9 +16,11 @@
 use "errors.wap"
 use "../kernel/forms.wap"
 
-# n rewritten by the stage's rewrite, every node it built placed where n was written; the result stands for n, so it
-# also takes the facts earlier stages learned about n (a definition's declaration survives its lowering)
-staged(n: Node, rewrite: (Node) -> Node) as Node := with_facts_of(placed_like(rewrite(n), n), n)
+# n replaced by what a stage built from it (or by its rewrite of n), every node built placed where n was written; the
+# result stands for n, so it also takes the facts earlier stages learned about n (a definition's declaration survives
+# its lowering)
+replaced(n: Node, built: Node) as Node := with_facts_of(placed_like(built, n), n)
+staged(n: Node, rewrite: (Node) -> Node) as Node := replaced(n, rewrite(n))
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }
@@ -261,7 +263,7 @@ fields_of(record: Record) as list := match record { Record(name, fields, variant
 cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 # the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
-case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
+case_fields(case: Node) as list<Node> := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling
 case_declaring(records: Records, name: Node) as Node := declaring(records, name)#2

@@ -47,8 +47,9 @@ NODE_TYPE = "Node"
 # the fact of a shape's type, `Record`, naming the type it narrows (core/analyze/shapes.wap): its values are of that
 # type, laid out as it is
 NARROWS = "narrows"
-# an optional's value type, any other type itself: int of int? and of int
-base_or_self(type: Node?) as Node? := base_of_optional(type) ?? type
+# an optional's value type, any other type itself: int of int? and of int; ø of none
+base_of(type: Node) as Node := base_of_optional(type) ?? type
+base_or_self(type: Node?) as Node? := if type == ø then ø else base_of(type)
 optional_type(base: Node) as Node := if base_of_optional(base) != ø or base == symbol(ANY_TYPE) then base else List([base, symbol(OPTIONAL_MARK)], Bracket.None, Separator.None)
 base_of_optional(type: Node?) as Node? := match type {
 	List(items, Bracket.None, separator) => if #items == 2 and text(items#2) == OPTIONAL_MARK then items#1 else ø

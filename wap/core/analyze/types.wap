@@ -158,10 +158,12 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	}
 	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
+	settled_late = s.functions.drop(typed_before)
+	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
 	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
-	late = s.functions.drop(typed_before).filter(each => not (each.function.key in library_keys)).map(each => each.define)
+	late = settled_late.filter(each => not (each.function.key in library_keys) and s.functions.any(kept => kept === each)).map(each => each.define)
 	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
@@ -369,7 +371,7 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 # the type it is known to hold; as it is where nothing finds it
 as_found(n: Node, read: Node, s: TypingState, f: TypeFrame) as Node := {
 	known = found_type(path_key(n) ?? return read, f.present) ?? return read
-	if base_of_optional(value_type(read)) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
+	if base_of_optional(value_type(read)) != ø then with_type_of(word_called(n, REQUIRED_WORD, [read], ø, s), known) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
 # A path a condition may find, its key: a variable's own, `x`, a field of a path, `m.pattern`, and an item of a path at
 # a written place, `types#1`; ø for any other form. A path is found until something gives it, or a path it is part
@@ -412,7 +414,7 @@ defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "th
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 
 # A case of an enum, `Dime`, or a case given its fields' values, `Circle(3)`: a value of the enum's type
-case_call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame) as Node := {
+case_call_typed(n: Node, called: Node, arguments: list<Node>, s: TypingState, f: TypeFrame) as Node := {
 	fields = case_fields(case_declaring(s.records, called))
 	if #arguments != #fields { refused(n, "${called} takes a value for each of its fields: ${field_names(fields)}") }
 	given = (1 to #arguments).map(at => field_checked(typed_form(arguments#at, s, f, declared_type(fields#at)), fields#at, arguments#at, s))

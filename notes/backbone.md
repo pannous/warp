@@ -423,3 +423,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A local named like a method shadows it**: a parameter `map` made `fields_of(record).map(…)` call the Node, so
   instance_from_map (analyze/data.wap) names its map `source`. Reason: the self-build census needs the function typed
   now. Paid off when `xs.map(…)` finds the list's method past a local of that name: the parameter is `map` again.
+- **A function read from a map traps when its parameter calls it twice** (found 2026-11-19, off-census):
+  `steps: map<text, (int) -> int> = {"inc": inc}`, then `twice(f: (int) -> int, x: int) := f(f(x))` with
+  `twice(steps["inc"], 3)` traps with a null reference; `f(x)` once works, and `twice(inc, 3)` does too. Paid off
+  when the nested call of such a parameter runs.
+- **A named function is refused where a function type is written for a variable** (found 2026-11-19, off-census):
+  `g: (int) -> int = inc` says it gives fn<"… inc">, while the same `inc` in a `map<text, (int) -> int>` literal is
+  taken. Paid off when a function's value fits a written function type wherever it is given.
+- **stage.wap's `replaced` is `staged`'s Node form, named apart** (wap/core/stage.wap): old warp cannot tell a Node
+  parameter from a function-typed one, so `staged(n, built: Node)` beside `staged(n, rewrite: (Node) -> Node)` is
+  refused. Paid off when old warp retires: one overloaded `staged`.
+- **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
+  `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
+  defaults_given passes the ø on unchecked. Paid off when old warp retires: a missing default is refused there.

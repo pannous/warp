@@ -58,6 +58,16 @@ all_settled(s: TypingState) := {
 		for call in waiting { function_typed(call.definition, call.types.map(type => type_substituted(type, s.settled)), s, call.at) }
 	}
 }
+# instances of a function its unknowns settled alike are one, the first kept: `empty` typed for a list<α7> and then
+# for the list<Definition> α7 settles to
+distinct_instances(functions: list<TypedFunction>, s: TypingState) as list<TypedFunction> := {
+	kept: list<TypedFunction> = []
+	for typed in functions { if not kept.any(other => same_instance(other, typed.function.key, settled_arguments(typed, s), s)) { kept += [typed] } }
+	kept
+}
+# whether a typed function is the instance of this key for these settled argument types
+same_instance(typed: TypedFunction, key: text, types: list<Node>, s: TypingState) as bool := typed.function.key == key and same_types(settled_arguments(typed, s), types)
+settled_arguments(typed: TypedFunction, s: TypingState) as list<Node> := typed.arguments.map(type => type_substituted(type, s.settled))
 # typed code with every unknown settled, the names its calls name too
 settled_everywhere(n: Node, s: TypingState) as Node := {
 	whole = facts_settled(refitted(with_parts(n, part => settled_everywhere(part, s)), n), s)
