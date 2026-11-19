@@ -144,7 +144,8 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 	result_of(refitted(Call(calling(symbol(word), chosen), taken), n), chosen)
 }
 # the definitions of functions of this name the typing stage holds
-definitions_named(name: text, s: TypingState) as list := s.definitions.filter(definition => text(declared_name(written_name(definition))) == name)
+definitions_named(name: text, s: TypingState) as list := named(s.definition_names, s.definitions, name, definition_name)
+definition_name(definition: Define) as text := text(declared_name(written_name(definition)))
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_fact(called, BINDING, symbol(BOUND_FUNCTION)), DEFINED_AT, declared_name(chosen.signed))
 # a class's maker given one map that none of its definitions takes, `person({name: "Ann"})`: the instance made from it
