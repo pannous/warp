@@ -76,7 +76,7 @@ Three details:
 | Break, Continue, Return | none, none, `value` | the same words |
 | Record | `name fields variants`, the one form that declares a type (user-approved 2026-11-17) | `class`, `enum`, `type X = A \| B` |
 | Case | `subject arms` | `match`, `x is T` |
-| Try | `body otherwise` | `try … catch`, `try x else y`, `except` |
+| Try | `body handler` | `try … catch`, `try x else y`, `except` |
 
 How a few spellings reach the kernel:
 - `for x in xs { b }` is `Block([i = iterator(xs), While(has_next(i), Block([x = next(i), b]))])`.
