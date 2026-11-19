@@ -77,13 +77,13 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 	typed = value_function_typed(parts.parameters, own, s) ?? return ø
 	if not same_types(typed.arguments[#typed.arguments - #parts.parameters ..], parts.parameters) { return shape_taking(value, typed, parts, s, wanted) }
 	if typed.result == ø or not conversion(typed.result, parts.result, s) in STATIC_CONVERSIONS { return ø }
-	with_fact(with_fact(with_type_of(value, wanted), FUNCTION_VALUE, own), DEFINED_AT, declared_name(typed.signed))
+	with_fact(with_fact(with_type_of(value, wanted), FUNCTION_VALUE, own), DEFINED_AT, declared_name(signed_name(typed)))
 }
 # A function taking shapes where one taking their types is wanted, `pair_name(pair: Pair)` where `(Node) -> text` is:
 # a function the typing stage writes once, taking those types and calling it, so each shape is checked where the value
 # is called, as a direct call checks it
 shape_taking(value: Node, typed: TypedFunction, parts: Signature, s: TypingState, wanted: Node) as Node := {
-	definition = definition_keyed(typed.key, s) ?? refused(value, "the typing stage found no definition of this function")
+	definition = typed.function
 	word = definition.name
 	name = placed_like(symbol("${word}(${parts.parameters.map(text).join(", ")})"), value)
 	made = definitions_named(text(name), s)
