@@ -13,6 +13,7 @@ use "../analysis/words.warp"
 use "classes.warp"
 use "definitions.warp"
 use "prefix_calls.warp"
+use "node_cases.warp"
 
 # the call `f(a, b)` a definition's target names: `f(a, b)`, `f(a, b): T`, `f(a, b) as T`; ø for another target
 target_call(target: Node) as Node := match target {
@@ -361,11 +362,14 @@ class_distance(kind: text, type: text) as int? := {
 	if above == ø then ø else above + 1
 }
 
-# `x: int` → "int", an untyped parameter "any"; a definition taking a pattern apart, `len([h, t...])`, is a clause of
-# extensions/function_clauses.warp, no overload (card pattern-clause-refusal)
+# `x: int` → "int", an untyped parameter "any", as a Node one of a word no library line names: a Node holds any value
+# (beside a line, the runtime's field_with(m: Node, …) implementing its own, the Node stays a type no variant is told
+# by); a definition taking a pattern apart, `len([h, t...])`, is a clause of extensions/function_clauses.warp, no
+# overload (card pattern-clause-refusal)
 parameter_types(call: Node) as list := {
 	if items_of(call)[1..].any(is_list_pattern) { return [pattern_type] }
-	signature_of(items_of(call)).parameters.map(p => if p.type_name == "" then any_word else p.type_name)
+	lined = word_lines().has(library_word_named(name_of(call#1)))
+	signature_of(items_of(call)).parameters.map(p => if p.type_name == "" or (holds_node(p.type_name) and not lined) then any_word else p.type_name)
 }
 pattern_type = "pattern"
 is_list_pattern(written: Node) as bool := is_empty_list(written) or (is_group(written) and bracket_of(written) == "[")
