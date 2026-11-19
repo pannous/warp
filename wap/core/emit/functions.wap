@@ -90,12 +90,9 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not names_function(called)) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	kept = if names_function(called) and p.in_place.has(defining_key(called)) then p.in_place[defining_key(called)] else ø
-	if kept is Prim { return match kept { Prim(operation, given) => {
-		arity_checked(form, arguments, #given)
-		primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p)
-	} } }
+	if kept is Prim { return match kept { Prim(operation, given) => primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p) } }
 	function = called_function(form, called, p, f)
-	arity_checked(form, arguments, #function.parameters)
+	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
 	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at, p.m)) { refused(form, "the arguments are not of the parameters' types") }
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
@@ -112,7 +109,6 @@ kept_in_place(definition: Define, key: text, p: Program) := match definition { D
 	}
 	_ => ø
 } }
-arity_checked(form: Node, arguments: list<Node>, taken: int) := if #arguments != taken { refused(form, "the call gives ${#arguments} arguments, the function takes ${taken}") }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
 passes(given: list<int>, taken: list<int>, m: WasmModule) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
