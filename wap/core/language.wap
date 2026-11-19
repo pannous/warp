@@ -5,6 +5,7 @@
 use "../preload/operators.wap"
 use "rules/patterns.wap"
 use "parse/operator_table.wap"
+use "stage.wap"
 
 # The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
 # its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules, the operator
