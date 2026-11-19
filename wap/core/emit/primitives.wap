@@ -59,6 +59,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
 	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p)#1)) }
+	if name == BOXED_VALUE { return Code(given_layout(form, p), operands + instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
 	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
 	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
 	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
@@ -75,6 +76,8 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 ON_LISTS = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
 # the operation a primitive performs: the one it names, or the list's for an array's operation given a list
 operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
+# the plain value a box holds
+boxed_operand(form: Prim) as Node := match form { Prim(operation, given) => given#1 }
 first_operand_type(form: Prim) as Node? := match form { Prim(operation, given) => if given is empty then ø else fact_of(given#1, TYPE) }
 is_list_type(type: Node?) as bool := item_type(type) != ø or type == symbol(LIST_TYPE)
 # an optional's value, x known to be there: a plain value taken out of its box, a reference made non-null; a
