@@ -90,6 +90,7 @@ wap/
 
     analyze/                  facts about the program, no rewriting
       declarations.wap        the prescan: the names, signatures and types a program declares
+      definers.wap            the ids of the names that define something, given by the prescan and binding
       modules.wap             the modules a program uses, by file name, as binding sees them
       scope.wap               the one binding analysis: what each name refers to
       names.wap               what a name may mean: the scope's layers, each finding its definitions by name

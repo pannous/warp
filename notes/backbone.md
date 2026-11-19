@@ -264,6 +264,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **`use "m.wasm"` is not read yet** (card wasm-module-import, wiki/wasm-representation.md): a compiled module can't
+  be used as its source is. Reason: paused for the self-build census (user 2026-11-19). Branch wasm-module-import has
+  the exports and the `wap` section of header lines; the reader, the body-less `export` declaration and the import
+  are left (card note). Paid off once wap compiles itself.
+
 - **A failed write traps without naming itself** (wap/core/emit/host.wap writing_function): a write that fails or
   takes none (a closed stdout, `| head`) stops the program with wasm's bare "unreachable", not a raise naming it.
   Reason: a raise there pulls its text and the raise helper into every program, hello 432 → 476 B. Paid off when a
@@ -398,3 +403,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
   List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
   mark becomes the empty sequence.
+- **Overloads rank by weights, not by subsumption** (wap/core/analyze/calls.wap most_specific, ranked: typing weight,
+  written structure, derived), and `text(1 to 3)` is refused as reading two ways. Reason: paused for the self-build
+  census (user 2026-11-19). The subsumption ranking under the one conversion is built and parked on branch
+  subsumption-ranking: one order for the static and the dynamic choice, an unconverted fit and then the instance of
+  the other's parameters breaking ties; it still leaves 4 more functions untyped than main. Paid off when wap compiles
+  itself: that branch lands.
+- **`{}` is its own kernel form, EmptyMap** (wap/kernel/forms.wap), not Empty typed as the map wanted, as `[]` is an
+  empty list (decided 2026-11-19). Reason: Empty carries no facts in warp's Node, so no TYPE can sit on it while old
+  warp reads wap's source. Paid off when old warp no longer reads wap's source: `{}` reads as Empty, the form goes.
+- **A bool does not read as its number where an int is wanted** (wiki/bool.md "acts like the numbers 1 and 0"):
+  `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
+  and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
+  off when wap compiles itself: that branch lands.

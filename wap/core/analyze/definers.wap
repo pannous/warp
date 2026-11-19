@@ -1,0 +1,59 @@
+# The ids of the names that define something (core/stage.wap DEFINER), given before any stage makes a definition of
+# them: the declaration prescan gives the top level's (core/analyze/declarations.wap), the binding analysis a
+# function's (core/analyze/scope.wap), each going on with its module's count.
+
+use "../stage.wap"
+use "../bindings.wap"
+use "../../kernel/forms.wap"
+
+# a statement with an id on each name it defines (core/stage.wap DEFINER), where declaration_of finds them: a class's
+# or an enum's name, its fields and its cases, the name before := or =
+names_identified(statement: Node, ids: Definers) as Node := match statement {
+	Record(name, fields, variants) => refitted(Record(identified(name, ids), heads_identified(fields, ids), heads_identified(variants, ids)), statement)
+	Call(called, arguments) => if text(called) == ":=" or text(called) == "=" then refitted(Call(called, [head_identified(arguments#1, ids)] + arguments.drop(1)), statement) else statement
+	_ => statement
+}
+# a list of heads, a class's fields or an enum's cases, each with its id
+heads_identified(heads: Node, ids: Definers) as Node := match heads { List(items, bracket, separator) => refitted(List(items.map(head => head_identified(head, ids)), bracket, separator), heads); _ => heads }
+# the head of a definition with an id on its name: `f(a)`, `f(a): int`, `x`, `let x`, a case `Leaf(value: int)`
+head_identified(head: Node, ids: Definers) as Node := match head {
+	Key(name, Op.Colon, type) => refitted(Key(head_identified(name, ids), Op.Colon, type), head)
+	Key(name, Op.None, group) => refitted(Key(head_identified(name, ids), Op.None, group), head)
+	Symbol(word) => identified(head, ids)
+	List(items, Bracket.None, Separator.Space) => if #items == 2 then refitted(List([items#1, head_identified(items#2, ids)], Bracket.None, Separator.Space), head) else head
+	_ => head
+}
+# Code with an id on each name that defines something, before any definition is made of it (core/stage.wap DEFINER):
+# a function's name and parameters, a function value, which defines its λ, an assignment's name, a pattern's names, a block's variables named without a
+# value. A name that turns out to define nothing, a case in a pattern or a variable assigned again, carries one unused.
+definers_identified(n: Node, ids: Definers) as Node := match n {
+	Define(name, parameters, body) => refitted(Define(written_identified(name, ids), parameters_identified(parameters, ids), definers_identified(body, ids)), n)
+	Fn(parameters, body) => identified(refitted(Fn(parameters_identified(parameters, ids), definers_identified(body, ids)), n), ids)
+	Set(place, value) => refitted(Set(written_identified(place, ids), definers_identified(value, ids)), n)
+	Arm(pattern, result) => refitted(Arm(pattern_identified(pattern, ids), definers_identified(result, ids)), n)
+	Block(statements) => variables_identified(refitted(Block(statements.map(statement => definers_identified(statement, ids))), n), ids)
+	_ => if direct_parts(n) is empty then n else refitted(with_parts(n, part => definers_identified(part, ids)), n)
+}
+# a block whose variables named without a value, `let x`, have their ids
+variables_identified(block: Node, ids: Definers) as Node := if fact_of(block, VARIABLES) == ø then block else with_fact(block, VARIABLES, List(fact_items(block, VARIABLES).map(naming => written_identified(naming, ids)), Bracket.Square, Separator.Comma))
+# a written name, `x` or `x: int`, with its id; any other place, `xs#i`, with the ids of what it holds
+written_identified(written: Node, ids: Definers) as Node := match written {
+	Key(name, Op.Colon, type) => refitted(Key(written_identified(name, ids), Op.Colon, type), written)
+	Symbol(word) => identified(written, ids)
+	_ => definers_identified(written, ids)
+}
+# each parameter's name with its id, and the ids in the value a default gives
+parameters_identified(parameters: List, ids: Definers) as Node := match parameters {
+	List(items, bracket, separator) => refitted(List(items.map(parameter => defaults_identified(written_identified(parameter, ids), ids)), bracket, separator), parameters)
+}
+defaults_identified(parameter: Node, ids: Definers) as Node := {
+	given = fact_of(parameter, DEFAULT) ?? return parameter
+	with_fact(parameter, DEFAULT, definers_identified(given, ids))
+}
+# a pattern's names with their ids: the variables it fills, `Circle(r)`, `[first, ...rest]`; `_` names none
+pattern_identified(pattern: Node, ids: Definers) as Node := match pattern {
+	Symbol(name) => if name == WILDCARD then pattern else identified(pattern, ids)
+	Call(called, fields) => refitted(Call(called, fields.map(field => pattern_identified(field, ids))), pattern)
+	List(items, Bracket.Square, separator) => refitted(List(items.map(item => pattern_identified(item, ids)), Bracket.Square, separator), pattern)
+	_ => pattern
+}

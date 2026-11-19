@@ -18,6 +18,7 @@
 use "../errors.wap"
 use "../rules/lowering.wap"
 use "../stage.wap"
+use "definers.wap"
 use "../../kernel/forms.wap"
 
 use "../paths.wap"
@@ -25,11 +26,12 @@ use "../paths.wap"
 USE_WORD = "use"
 
 declared_program(program: Node) as Node := {
-	statements = top_level_statements(program).map(declared_statement)
+	ids = definers_of(program)
+	statements = top_level_statements(program).map(statement => declared_statement(names_identified(statement, ids)))
 	declarations = []
 	for statement in statements { if fact_of(statement, DECLARES) != ø { declarations = declarations + [fact_of(statement, DECLARES)] } }
 	declared = with_fact(refitted(rebuilt_statements(program, statements), program), DECLARATIONS, List(declarations, Bracket.Square, Separator.Comma))
-	with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma))
+	with_definers(with_fact(declared, USES, List(used_files(program).map(file => Text(file)), Bracket.Square, Separator.Comma)), ids)
 }
 # the files a program's `use` lines name, each once however often named, resolved against its own folder: plain
 # notation, readable before any stage
