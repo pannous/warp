@@ -86,8 +86,7 @@ lowered_form(language: Language, n: Node) as Node := match n {
 	List(items, Bracket.Square, separator) => List(items.map(item => lowered(language, item)), Bracket.Square, separator)
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(language, items, separator, n) else lowered_block(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Comma) => List(items.map(item => lowered(language, item)), Bracket.Square, Separator.Comma)
-	List(items, Bracket.Round, Separator.Space) => if pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, Separator.Space) else group_lowered(language, statements_of(List(items, Bracket.None, Separator.Space)))
-	List(items, Bracket.Round, separator) => group_lowered(language, statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Round, separator) => if separator == Separator.Space and pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, Separator.Space) else group_lowered(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(language, items, n)
 	# a word written against what follows it, `...rest`, as a phrase
 	List(items, Bracket.None, Separator.None) => phrase_lowered(language, items, n)
