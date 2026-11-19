@@ -214,4 +214,15 @@ print text(try f(-1) else 0)
 print text(try f(5) else 0)')" "7
 0
 5"
+check "try's handler takes the caught Error, its message the raised text, and runs in the function around it: its return returns from that function" "$(ran try_catch 'print(try { raise "boom" } catch e { e.message })
+print(text(try { raise "y" } catch { 3 }))
+safe(t: text) as int := {
+	n = try { if t == "bad" { raise "no" }; 5 } catch e { return 0 }
+	n + 1
+}
+print(text(safe("ok")))
+print(text(safe("bad")))')" "boom
+3
+6
+0"
 exit $((failures > 0))

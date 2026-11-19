@@ -151,7 +151,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	If(condition, then_part, else_part) => if_typed(n, condition, then_part, else_part, s, f, expected)
 	While(condition, body) => refitted(While(condition_typed(condition, s, f), typed_form(body, s, f, ø)), n)
 	# the body's value, or the otherwise part's where the body raises (wiki/Error.md "try"): joined as an if's arms
-	Try(body, otherwise) => try_typed(n, typed_form(body, s, f, expected), typed_form(otherwise, s, f, expected), s)
+	Try(body, handler) => try_typed(n, typed_form(body, s, f, expected), handler, s, f, expected)
 	Case(subject, arms) => case_typed(n, typed_form(subject, s, f, ø), arms, s, f, expected)
 	Return(value) => return_typed(n, value, s, f)
 	Break() => jumping(n)
@@ -201,7 +201,13 @@ functions_typed_from(definitions: list, s: TypingState) as list := {
 }
 function_key_of(definition: Node) as text := place_key(declared_name(written_name(definition)))
 
-try_typed(n: Node, body: Node, otherwise: Node, s: TypingState) as Node := joined_of(refitted(Try(body, otherwise), n), [body, otherwise], s)
+# a Try typed: its body, and its handler in place, in the function around it, its parameter the caught Error, a Node;
+# its value the two joined
+try_typed(n: Node, body: Node, handler: Fn, s: TypingState, f: TypeFrame, expected: Node?) as Node := match handler { Fn(parameters, handling) => {
+	caught = items_of(parameters).map(parameter => parameter_typed(parameter, symbol(NODE_TYPE), f))
+	handled = typed_form(handling, s, f, expected)
+	joined_of(refitted(Try(body, refitted(Fn(with_items(parameters, caught), handled), handler)), n), [body, handled], s)
+} }
 # The function left with a value, expected the function's written result type; the code after it never runs
 return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	typed = typed_form(value, s, f, f.result)
