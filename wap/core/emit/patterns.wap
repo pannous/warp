@@ -123,4 +123,4 @@ node_case(node: Record, word: text) as Node := {
 # it, so cases of two enums never share a tag, not even two of one name
 tag_of(case: Node, p: Program) as int := declared_tag(case_declaring(p.records, case), p)
 declared_tag(declared: Node, p: Program) as int := index_where(p.records.items.flat_map(cases_of), each => each === declared) - 1
-is_case(name: Node) as bool := is_bound(name, DefinitionKind.EnumCase)
+is_case(name: Node) as bool := is_bound(name, DefinitionKind.Case)

@@ -76,4 +76,11 @@ check "a call picks the case of its name that takes as many values" "$(ran case_
 enum Shape { Key(a: int, b: int), Dot }
 s = Key(1, 2)
 print text(match s { Key(a, b) => a + b; Dot => 0 })')" "3"
+# decision enum-case-shadowing (user, 2026-11-19): a bare case is meant only where nothing else of its name is, or
+# where its enum is expected; elsewhere it is written with the enum's name
+check "a case named like a class is the case where its enum is expected or named, the class elsewhere" "$(ran case_beside_class 'class Box { n: int }
+enum Kind { Box, Other }
+b = Box(3)
+k: Kind = Box
+print text(b.n) + " " + text(k == Kind.Box) + " " + text(Other == Kind.Other)')" "3 yes yes"
 exit $((failures > 0))

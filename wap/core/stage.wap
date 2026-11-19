@@ -160,13 +160,13 @@ DEFINED_AT = "defined_at"
 # module's), a case of an enum (`Dime`, its Record defines it), a field of a method's receiver named bare (`c` for
 # `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a type's record (a class or an enum), a used
 # module. On a name its BINDING fact is the kind's word, `local`, `global` …
-enum DefinitionKind { Local, Parameter, Capture, Global, ProgramFunction, LibraryFunction, EnumCase, Field, TypeRecord, UsedModule }
+enum DefinitionKind { Local, Parameter, Capture, Global, Function, Library, Case, Field, Record, Module }
 kind_word(kind: DefinitionKind) as text := lower(text(kind))
 is_kind_word(word: Node?, kind: DefinitionKind) as bool := word == symbol(kind_word(kind))
 with_binding(n: Node, kind: DefinitionKind) as Node := with_fact(n, BINDING, symbol(kind_word(kind)))
 is_bound(n: Node, kind: DefinitionKind) as bool := is_kind_word(fact_of(n, BINDING), kind)
 # whether a name names a function, the program's or the library's
-names_function(n: Node) as bool := is_bound(n, DefinitionKind.ProgramFunction) or is_bound(n, DefinitionKind.LibraryFunction)
+names_function(n: Node) as bool := is_bound(n, DefinitionKind.Function) or is_bound(n, DefinitionKind.Library)
 SELF_WORD = "self"
 # on a Define a rule wrote for every class, as its show: typed only when something calls it, so a class whose field
 # has no show of its own is not refused for a show nothing uses
