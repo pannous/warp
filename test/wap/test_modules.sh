@@ -102,4 +102,11 @@ check "a module is one module however often a program names it" "$(ran use_named
 use "speak.wap"
 say("once")')" "loaded
 once"
+# include (wiki/use.md): a file's text in place, as it is, so its words are the program's own, and a use inside it
+# is read beside the included file
+mkdir -p "$stage/parts"
+printf '%s\n' 'use "../speak.wap"' 'twice(x: int) as int := x * 2' >"$stage/parts/twice.wap"
+check "an included file's definitions are the program's own; its use is found beside it" "$(ran included 'include "parts/twice.wap"
+say(text(twice(21)))')" "loaded
+42"
 exit $((failures > 0))

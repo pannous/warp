@@ -1,0 +1,12 @@
+# The rules every program gets (notes/wap.md "Layers"): the kernel forms' patterns, then the surface spellings by topic,
+# included in place
+include "../kernel/forms.wap"
+include "sugar/conditions.wap"
+include "sugar/loops.wap"
+include "sugar/matching.wap"
+include "sugar/data.wap"
+include "sugar/records.wap"
+include "sugar/definitions.wap"
+include "sugar/types.wap"
+include "sugar/ranges.wap"
+include "sugar/calls.wap"
