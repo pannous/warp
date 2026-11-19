@@ -308,7 +308,16 @@ candidates_text(definitions: list) as text := definitions.map(definition => "${w
 
 # A function typed for these argument types, its written types' shapes known first, so it types alike however it is
 # reached: from a block, a call, or alone
-function_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := shaped_typed(shaped_once(definition, s), argument_types, s, at)
+# It ends alone when wap refuses it: refused once, and each caller is refused naming it
+function_typed(definition: Define, argument_types: list, s: TypingState, at: Node) as TypedFunction := {
+	key = function_key_of(definition)
+	name = text(declared_name(written_name(definition)))
+	if s.refusals.any(each => each.key == key) { refused(at, "this calls ${name}, which wap refuses") }
+	try shaped_typed(shaped_once(definition, s), argument_types, s, at) catch e {
+		s.refusals += [Refusal(key, e.message)]
+		refused(at, "this calls ${name}, which wap refuses")
+	}
+}
 # A function typed for these argument types, once per tuple: its parameters, then its body, its result the written
 # one, which the body's type fits, or else the body's type. A call inside its own body finds it typed but without a result unless one is written.
 # what a function's body and returns give back, all of one type

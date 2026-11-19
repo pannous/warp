@@ -24,6 +24,9 @@ count(x: T): int := #x
 	yes
 }
 !=(xs: list<T>, ys: list<T>): bool := not(xs == ys)
+# a new list of the same items, which grows apart from the first: `b = a` shares a list, `b = copy(a)` does not
+# (wiki/reference.md)
+copy(xs: list<T>): list<T> := xs[0 ..]
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
 +(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
 # an item put at the end of a list, which grows in place: every name holding it sees the item

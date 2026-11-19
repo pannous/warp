@@ -74,6 +74,13 @@ class TypingState {
 	settled: list = []
 	# the calls of functions typed only once their unknowns settle, each [definition, argument types, call]
 	deferred: list = []
+	# the functions wap refuses, each ended alone: its siblings are typed anyway, and its callers refused naming it
+	refusals: list<Refusal> = []
+}
+# a function wap refuses: its key and why
+class Refusal {
+	key: text
+	message: text
 }
 # A function typed for one tuple of argument types: the definition's key, its argument types, its result's type,
 # its name with its signature and the Define it became
@@ -120,7 +127,8 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	s.definitions = defines
 	s.records = added_records(Records(), library)
 	s.definitions = shaped_definitions(s.definitions, s)
-	typed = typed_form(program, s, TypeFrame(), ø)
+	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
+	if s.refusals { refused_all(s, []) }
 	statements = statements_in(typed)
 	if shown and statements and gives_value(statements.last) {
 		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
@@ -135,6 +143,8 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
+# every function wap refuses, then what else stopped the program, said together
+refused_all(s: TypingState, more: list) := raise (s.refusals.map(each => each.message) + more).join("\n")
 # whether a typed form gives a value: not none, not a jump that never comes back
 gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valued_type(value_type(n))
 # whether a type is one of a value: not none, not ø alone
@@ -193,11 +203,19 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 	s.definitions = shaped_definitions(s.definitions, s)
 	# each definition as the typing stage keeps it, its written types' shapes known
 	statements = written.map(statement => if statement is Define then definition_keyed(function_key_of(statement), s) ?? statement else statement)
-	typed = statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø))
-	for statement in statements { if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø and all_typed(statement, s.records) { function_typed(statement, written_types(statement), s, statement) } }
+	# a statement wap refuses still lets the definitions beside it be typed, so their refusals are said with its own
+	typed = try statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø)) catch e {
+		typed_alone(statements, s)
+		raise e.message
+	}
+	typed_alone(statements, s)
 	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
 	if typed is empty then block else typed_like(block, typed.last)
 }
+# each definition whose parameters all have their types typed, even when nothing calls it, unless TYPED_WHEN_CALLED;
+# one wap refuses ends alone. The catch is empty because function_typed has already kept its refusal for the end:
+# only what function_typed raises may reach it, never a raise that skips that record
+typed_alone(statements: list, s: TypingState) := for statement in statements { if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø and all_typed(statement, s.records) { try function_typed(statement, written_types(statement), s, statement) catch e { } } }
 # the Defines each of these definitions became, in the order typed
 functions_typed_from(definitions: list, s: TypingState) as list := {
 	keys = definitions.map(function_key_of)

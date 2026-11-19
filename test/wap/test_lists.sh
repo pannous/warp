@@ -80,4 +80,10 @@ check "a list's count, also written length or size" "$(ran count 'xs = [4, 5, 6]
 print text(xs.count) + " " + text(xs.length) + " " + text([1].size)')" "3 3 1"
 check "two lists are equal when their items are, in order" "$(ran list_equal 'print text([1, 2] == [1, 2]) + " " + text([1, 2] == [2, 1]) + " " + text(["a"] != ["a", "b"])')" "yes no yes"
 check "a list's items joined by their texts" "$(ran join_any 'print [1, 2].join(" ") + "|" + "ab".codepoints.join("-") + "|" + ["x", "y"].join(", ")')" "1 2|a-b|x, y"
+check "a copied list grows apart from the first" "$(ran list_copy 'a = [1]
+b = copy(a)
+b.add(2)
+c = a
+c.add(3)
+print text(#a) + " " + text(#b)')" "2 2"
 exit $((failures > 0))
