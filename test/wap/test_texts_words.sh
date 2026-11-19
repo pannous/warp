@@ -22,4 +22,5 @@ print text(#s.codepoints) + " " + text(ord(s.codepoints#3)) + " " + text(s.codep
 check "a text's UTF-8 bytes" "$(ran text_bytes 'print text("aé".bytes) + " " + text(#"".bytes)')" "[97, 195, 169] 0"
 check "a text repeated" "$(ran text_times 'print "[" + "ab" * 3 + "][" + "xy" * 0 + "]"')" "[ababab][]"
 check "a text's count, also written length or size, counts its characters" "$(ran text_count 'print text("abé".length) + " " + text("".count) + " " + text((1 to 4).size)')" "3 0 4"
+check "a character's text, its 2, 3 or 4 UTF-8 bytes" "$(ran char_bytes "print text('ü') + text('€') + text('😀') + ' ' + text(text('😀').bytes)")" "ü€😀 [240, 159, 152, 128]"
 exit $((failures > 0))

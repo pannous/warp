@@ -2,6 +2,8 @@
 # (core/runtime/text_words.warp, characters.warp). Positions count characters from 1; byte offsets count from 0.
 # Its primitives are the array operations on a text's bytes: its length, a byte, a new text of some of them.
 
+use "host.wap"
+
 # a byte that continues a character: 10xxxxxx
 CONTINUATION_FROM := 128
 CONTINUATION_UNTIL := 192
@@ -24,7 +26,11 @@ byte_count(t: text): int := prim array_len(t)
 byte_at(t: text, at: int): int := prim array_get_u(t, at)
 bytes_between(t: text, start: int, stop: int): text := prim array_slice(t, start, stop - start)
 # a text of one byte
-byte_text(b: int): text := prim byte_text(b)
+byte_text(b: int): text := {
+	t = text_made(1)
+	set_text_byte(t, 0, b)
+	t
+}
 # a code's UTF-8 bytes: the fewest that hold it, from `count` bytes up, scale the part of the code below the lead byte's
 # bits; the lead byte marked by its count, then the continuation bytes
 encoded(code: int, count: int, scale: int): text := if code < LEAD_BITS#count * scale or count == #LEAD_BITS then byte_text(256 - 2 * LEAD_BITS#count + code ÷ scale) + continuation_bytes(code, scale ÷ CONTINUATION_BITS) else encoded(code, count + 1, scale * CONTINUATION_BITS)

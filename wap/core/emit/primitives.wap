@@ -36,7 +36,7 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"print_text": printing_function, "error_text": error_writing_function, "arguments": arguments_function, "bytes_written": bytes_writing_function, "raise_text": raising_function, "read_text": reading_function, "text_equal": text_equality_function, "text_joined": joining_function}
+HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
@@ -44,9 +44,24 @@ ARRAY_HELPERS = {"array_slice": slicing_function}
 # the lists a map holds, not copied: its keys and its values, an entry the same place in both
 MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
+# The operations on the module's memory and on a text being made, each by the wasm types it takes and gives and its
+# instructions, as a host function's call by HOST_FUNCTIONS: an int given where it takes an i32 is wrapped to one, an
+# i32 it gives extended to an int
+class WasmOperation { takes: list<list<int>>; gives: list<list<int>>; code: list<int> }
+memory_operations(p: Program) as map<text, WasmOperation> := {
+	"memory_byte": WasmOperation([I32], [I32], instruction(I32_LOAD8_U, [0, 0])),
+	"memory_word": WasmOperation([I32], [I32], instruction(I32_LOAD, [2, 0])), "memory_set_word": WasmOperation([I32, I32], [], instruction(I32_STORE, [2, 0])),
+	"text_made": WasmOperation([I32], [nullable(text_type(p.m))], instruction(ARRAY_NEW_DEFAULT, [text_type(p.m)])), "text_byte_set": WasmOperation([nullable(text_type(p.m)), I32, I32], [], instruction(ARRAY_SET, [text_type(p.m)]))
+}
+# the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
+# i32 it gives extended to the int its definition writes
+wasm_called(form: Node, arguments: list<Code>, operation: WasmOperation, p: Program) as Code := {
+	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else []))
+	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_U else []))
+}
+
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
-BYTE_TEXT = "byte_text"
 # the code of a primitive: its arguments, then its instruction or a call of its helper, giving the value its
 # built-in's definition writes
 primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) as Code := {
@@ -62,7 +77,6 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
 	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
 	if name == LIST_COUNT { return ending(counted_items(p)) }
-	if name == BYTE_TEXT { return ending(I32_WRAP_I64 + instruction(ARRAY_NEW_FIXED, [text_type(p.m), 1])) }
 	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
 	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
@@ -70,6 +84,9 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
 	}
+	if HOST_FUNCTIONS.has(name) { return wasm_called(form, arguments, WasmOperation(HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2, instruction(CALL, [host(p, name)])), p) }
+	operations = memory_operations(p)
+	if operations.has(name) { return wasm_called(form, arguments, operations[name], p) }
 	refused(form, "no primitive of this name")
 }
 # an array's operations given a list work on its items: operation → the list's
