@@ -149,4 +149,8 @@ print(f(Text("b")) + f(symbol("a")) + f(Empty))
 g(x: text) as bool := x is text
 print(text(g("a")))')" "textaother
 yes"
+check "a list of optionals is the type of a result, a field or a variable" "$(ran optional_items 'f(x: int) as list<int?> := [x]
+class C { ps: list<int?> = [] }
+d: list<int?> = [1, 2]
+print(text(#f(1)) + " " + text(#C().ps) + " " + text(#d))')" "1 0 2"
 exit $((failures > 0))
