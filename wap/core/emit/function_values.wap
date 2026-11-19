@@ -27,7 +27,7 @@ captures_loaded(form: Define, parameters: list<Node>, p: Program, f: Frame) as l
 	closure = closure_of(value, p)
 	loads = []
 	for at in 1 to #captures {
-		f.slots += [Placed(place_key(captures#at), #f.slots, layout_of(parts#(at + 1), p.m, p.records), [], yes)]
+		f.slots += [Placed(place_key(captures#at), #f.slots, known_layout(parts#(at + 1), p.m, p.records), [], yes)]
 		loads += instruction(LOCAL_GET, [0]) + instruction(STRUCT_GET, [closure, at - 1]) + instruction(LOCAL_SET, [f.slots.last.index])
 	}
 	loads
@@ -46,15 +46,17 @@ signature_value_code(form: Node, p: Program, f: Frame) as Code := {
 	own = fact_of(form, FUNCTION_VALUE) ?? refused(form, "this function value reached the emitter without the function it is")
 	captures = if is_lambda(form) then captures_code(form, f) + instruction(STRUCT_NEW, [closure_of_type(own, form, p)]) else null_of(ANY_HEAP)
 	adapter = helper(p, "adapter ${defining_key(form)} ${type_of(form)}", q => adapting_function(form, own, q))
-	Code(layout(form, p), function_reference(p.m, adapter) + captures + instruction(STRUCT_NEW, [signature_value_index(type_of(form), p.m, p.records)]))
+	Code(layout(form, p), function_reference(p.m, adapter) + captures + instruction(STRUCT_NEW, [signature_struct(value_signature(form), p.m, p.records)]))
 }
+# a function value's signature, which its type is
+value_signature(value: Node) as Signature := signature(type_of(value)) ?? refused(value, "this function value's type is no function type")
 is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => no }
 # The function every value of a signature calls: its captures, then its parameters, given to the value's own function,
 # the one its DEFINED_AT names, typed for the signature; a λ takes the captures cast to their struct, a function's name
 # none
 adapting_function(form: Node, own: Node, p: Program) as int := {
 	function = placed_for(p.functions, form) ?? pending_function(p, form) ?? refused(form, "the typing stage typed no function for this value")
-	parts = signature(type_of(form)) ?? refused(form, "this function value's type is no function type")
+	parts = value_signature(form)
 	parameters = signature_parameters(parts, p.m, p.records)
 	captures = if is_lambda(form) then local_get(0) + heap_instruction(REF_CAST_NULL, closure_of_type(own, form, p)) else []
 	added_function(p.m, [ANYREF] + parameters, signature_results(parts, p.m, p.records), [], captures + (1 to #parameters).flat_map(local_get) + instruction(CALL, [function.index]))
@@ -62,18 +64,17 @@ adapting_function(form: Node, own: Node, p: Program) as int := {
 # A call of a function value of a signature: the value kept in a slot of its own, then its captures, the arguments and
 # its function's reference, called by call_ref
 value_call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
-	type = type_of(called)
-	parts = signature(type) ?? refused(called, "this value's type is no function type")
+	parts = value_signature(called)
 	value = code(called, p, f)
 	f.slots += [Placed("value called by ${place_key(form)}", #f.slots, value.type, [], yes)]
 	held = local_get(f.slots.last.index)
-	value_struct = signature_value_index(type, p.m, p.records)
+	value_struct = signature_struct(parts, p.m, p.records)
 	taken = signature_parameters(parts, p.m, p.records)
 	if #arguments != #taken { refused(form, "the call gives ${#arguments} arguments, the function value takes ${#taken}") }
 	given = (1 to #arguments).flat_map(at => fitted(code(arguments#at, p, f), taken#at, arguments#at, p).instructions)
 	results = signature_results(parts, p.m, p.records)
 	reference = held + instruction(STRUCT_GET, [value_struct, VALUE_FUNCTION_AT])
-	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [value_struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(type, p.m, p.records)])))
+	finished(Code(if results is empty then [] else results#1, value.instructions + instruction(LOCAL_SET, [f.slots.last.index]) + held + instruction(STRUCT_GET, [value_struct, VALUE_CAPTURES_AT]) + given + reference + instruction(CALL_REF, [signature_function_index(parts, p.m, p.records)])))
 }
 # the values a function value captures, read from the variables they are where it is made
 captures_code(form: Node, f: Frame) as list<int> := {
