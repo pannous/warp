@@ -111,9 +111,10 @@ takes_count(definition: Function, count: int) as bool := {
 	count <= #parameters and parameters.drop(count).all(defaulted)
 }
 defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
-# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
+# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants; a
+# default written ø is the fact Empty, which reads back as none
 defaults_given(definition: Function, count: int, s: TypingState, f: TypeFrame) as list := {
-	parameters_in(definition.definer).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT), s, f, type_given(parameter)))
+	parameters_in(definition.definer).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT) ?? Empty, s, f, type_given(parameter)))
 }
 # a map's own word, `m.keys`, beside its entries, `m.name`: a function of that name taking a map alone (wiki/map.md)
 map_word(key: Node, s: TypingState) as bool := definitions_named(text(key), s).any(definition => takes_count(definition, 1) and takes_map(parameters_in(definition.definer)#1))
@@ -365,7 +366,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place ?? refused(at, "an argument reached typing without its type"), letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
-		if typed.function.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
+		if same_instance(typed, key, types, s) {
 			# a call of itself before its result is known gives no value; a function giving one refuses below
 			typed.called_unknown = typed.called_unknown or not typed.done and typed.result == ø
 			return typed
@@ -390,7 +391,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	# a written result stays the result, `show(x: any): text := raise(…)`; one that writes none and never returns jumps
 	typed.jumps = typed.jumps or written == ø and jumps(typed_body) and frame.returns is empty
 	if written != ø and not typed.jumps { typed_body = converted(typed_body, written, s, body, "the function says it gives a") }
-	typed.result = typed.result ?? (if base_of_optional(written) != ø and given != symbol(EMPTY_TYPE) then optional_type(given) else given)
+	typed.result = typed.result ?? (if given != ø and given != symbol(EMPTY_TYPE) and base_of_optional(written) != ø then optional_type(given) else given)
 	typed.define = refitted(Define(signed_name(typed), with_items(parameters, typed_parameters), typed_body), definition.definer)
 	typed.late = frame.late
 	if typed.called_unknown and valued_type(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
@@ -401,7 +402,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else if chosen.result == ø and not chosen.done then with_fact(n, RESULT_UNKNOWN, Text(chosen.unknown_result)) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
 # int?; none written, or one that takes its argument's own type, it is of the argument's type
-parameter_type(written: Node?, given: Node, letters: list<Binding>, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
+parameter_type(written: Node?, given: Node, letters: list<Binding>, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else type_substituted(written, letters)
 # whether a parameter of this written type is typed anew for each type given: a bare `list`, `enum` or `function`,
 # which take any list, enum or function value, a function type, whose function values each type it, and a protocol
 takes_own_type(written: Node, records: Records) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or signature(written) != ø or protocol_named(records, written) != ø

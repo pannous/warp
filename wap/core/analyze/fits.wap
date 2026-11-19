@@ -16,7 +16,9 @@ use "../errors.wap"
 # DONE (bd6311b8df): link conversion(given, wanted) to explicit function convert(a,b) and cast(a,b)  ≈  a as b := {...} 
 # the type that holds both, an unknown in either settled by the other, `if missing(x) then 3 else x!` an int
 joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
-	if valued_type(a) and valued_type(b) { settles(a, b, s) }
+	given = value_bearing(a)
+	wanted = value_bearing(b)
+	if given != ø and wanted != ø { settles(given, wanted, s) }
 	joined_type(substituted(a, s.settled), substituted(b, s.settled), s)
 }
 # Code of which one part runs, an if's or a match's arms: of the type joining those that finish, jumping when all jump
@@ -44,7 +46,7 @@ joined_type(a: Node?, b: Node?, s: TypingState) as Node? := {
 	if a == symbol(EMPTY_TYPE) { return optional_type(b) }
 	if b == symbol(EMPTY_TYPE) { return optional_type(a) }
 	shared = shape_base(a) ?? return wider(a, b, s)
-	if shape_base(b) == ø or not same_type(shared, shape_base(b)) { return wider(a, b, s) }
+	if not same_type(shared, shape_base(b) ?? return wider(a, b, s)) { return wider(a, b, s) }
 	# two shapes of one type join as that type, `Define` and `Fn?` as a Node?
 	if base_of_optional(a) != ø or base_of_optional(b) != ø then optional_type(shared) else shared
 }
@@ -61,9 +63,9 @@ fits_type(n: Node, wanted: Node) as bool := {
 	held != ø and same_type(held, wanted)
 }
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? fact_of(fact_of(n, DEFINED_AT) ?? return ø, SIGNATURE)
-same_types(these: list, those: list) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
+same_types(these: list<Node>, those: list<Node>) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
 # a value given to a field as the field's type has it, refused when it cannot get there; value is the code that gave it
-field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, declared_type(field), s, value, "the field holds a")
+field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := converted(given, declared_type(field) ?? refused(field, "a field has a type"), s, value, "the field holds a")
 # What `x as T` does where nothing is written (wiki/conversion.md "Fitting" and "Repacking"): checked is the cast,
 # every other way repacks; written, `x as T` is the maker T(x) ("Making").
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
@@ -80,7 +82,8 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
 	if same_type(given, wanted) or bare_fit(given, wanted, s.records) { return Conversion.Same }
 	# a shape's value is a value of the type it narrows: a Record where a Node is
-	if narrowed_type(given) != ø and conversion(narrowed_type(given), wanted, s) == Conversion.Same { return Conversion.Same }
+	narrows = narrowed_type(given)
+	if narrows != ø and conversion(narrows, wanted, s) == Conversion.Same { return Conversion.Same }
 	narrowing = narrowed_type(wanted)
 	if narrowing != ø and same_type(given, narrowing) { return Conversion.Narrowed }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
@@ -98,9 +101,10 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node := {
 	# code that never finishes gives nothing to convert
 	if jumps(n) { return n }
-	way = conversion(value_type(n), wanted, s) ?? refused(at, "this gives ${value_type(n) ?? "no value"}, ${place} ${wanted}")
-	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
-	if way == Conversion.Read { return as_read(n, base_or_self(wanted), s) }
+	given = value_type(n) ?? refused(at, "this gives no value, ${place} ${wanted}")
+	way = conversion(given, wanted, s) ?? refused(at, "this gives ${given}, ${place} ${wanted}")
+	if way == Conversion.Settled { settles(given, wanted, s) }
+	if way == Conversion.Read { return as_read(n, base_of(wanted), s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
 	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
@@ -117,7 +121,7 @@ unboxed(n: Node) as Node := match n {
 as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 	if wanted == ø or jumps(n) { return n }
 	way = conversion(value_type(n), wanted, s)
-	if way == Conversion.Read then as_read(n, base_or_self(wanted), s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+	if way == Conversion.Read then as_read(n, base_of(wanted), s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
 # a value of a kind where its bare kind's word is wanted: `list`, `function` (a function value or a written function
 # type, `(int) -> int`), `enum`

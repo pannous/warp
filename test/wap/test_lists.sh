@@ -96,4 +96,16 @@ print(text(xs.find(x => x > 1) ?? 0) + " " + text(xs.find(x => x > 5) ?? 0) + " 
 check "a list of optional ints takes an int, which it holds as an int?" "$(ran add_optional 'ys = [ø, 2]
 ys.add(3)
 print(text(#ys) + " " + text(ys#3 ?? 0))')" "3 3"
+check "an empty list where an optional list is the result is a list of the item type it holds" "$(ran optional_empty 'picked(n: int) as list<int>? := {
+	if n < 0 { return ø }
+	if n == 0 { return [] }
+	[n]
+}
+print(text(picked(0)) + " " + text(picked(2)) + " " + text(picked(-1) == ø))')" "[] [2] yes"
+check "a function of any list called on a list before its item type settles and on one of that type is one function" "$(ran settled_alike 'a = []
+b = ["x"]
+print(text(empty(a)) + " " + text(empty(b)))
+a += ["y"]
+print(text(empty(a)))')" "yes no
+no"
 exit $((failures > 0))
