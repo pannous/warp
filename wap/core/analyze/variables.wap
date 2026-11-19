@@ -7,6 +7,7 @@ use "names.wap"
 use "types.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../bindings.wap"
 use "../../kernel/forms.wap"
 
 # The variables a Block names without a value (VARIABLES, core/rules/lowering.wap): `let x` a new one of the block,

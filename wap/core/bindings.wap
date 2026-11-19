@@ -1,0 +1,36 @@
+# The facts the binding analysis (core/analyze/scope.wap) learns of the names a program writes, read by every later
+# stage: what a name refers to, what an assignment assigns, the variables a block declares, a name's overloads, a
+# function's captures. Input and output: facts on Nodes.
+
+use "stage.wap"
+
+# BINDING on a bound name: what it refers to, the word of its DefinitionKind as a Symbol (DEFINED_AT, the name that
+# defined it, is in core/stage.wap, which records read too)
+BINDING = "binding"
+# What a definition is, and so what a name bound to it refers to: a block's or the program's variable, a parameter, a
+# variable of the function around (captured), a function of the program or of the library (the preload's or a used
+# module's), a case of an enum (`Dime`, its Record defines it), a field of a method's receiver named bare (`c` for
+# `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a type's record (a class or an enum), a used
+# module. On a name its BINDING fact is the kind's word, `local`, `global` …
+enum DefinitionKind { Local, Parameter, Capture, Global, Function, Library, Case, Field, Record, Module }
+kind_word(kind: DefinitionKind) as text := lower(text(kind))
+is_kind_word(word: Node?, kind: DefinitionKind) as bool := word == symbol(kind_word(kind))
+with_binding(n: Node, kind: DefinitionKind) as Node := with_fact(n, BINDING, symbol(kind_word(kind)))
+is_bound(n: Node, kind: DefinitionKind) as bool := is_kind_word(fact_of(n, BINDING), kind)
+# whether a name names a function, the program's or the library's
+names_function(n: Node) as bool := is_bound(n, DefinitionKind.Function) or is_bound(n, DefinitionKind.Library)
+# on an assignment, the variable it ASSIGNS when the program said so: a local, a new one in its block (`let x = 1`),
+# a global, the program's (`global x = 1`); without it, the variable the function sees, or a new one
+ASSIGNS = "assigns"
+# on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
+# program's in the whole block, `let x` a new one of the block's
+VARIABLES = "variables"
+# a name of several overloads gets CANDIDATES, their defining names in a list per scope, innermost first, instead of
+# DEFINED_AT; the typing stage picks one and sets DEFINED_AT
+CANDIDATES = "candidates"
+# a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
+CAPTURES = "captures"
+# a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
+# as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
+FUNCTION_VALUE = "function_value"
+captures_of(function: Node) as list<Node> := fact_items(function, CAPTURES)

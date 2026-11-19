@@ -151,22 +151,12 @@ with_name_fact(n: Node, name: text, value: Node) as Node := match n {
 place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file_of(definer)}:${line_of(definer)}:${column_of(definer)} ${text(definer)}${signature_key(definer)}"
 signature_key(definer: Node) as text := if fact_of(definer, SIGNATURE) == ø then "" else " ${fact_of(definer, SIGNATURE)}"
 
-# The facts of a bound name, learned by core/analyze/scope.wap and read by every later stage: BINDING is what the
-# name refers to, one of the binding words below as a Symbol; DEFINED_AT the name that defined it, positioned.
-BINDING = "binding"
+# DEFINED_AT on a bound name: the name that defined it, positioned (core/analyze/scope.wap learns it; its other
+# facts are in core/bindings.wap)
 DEFINED_AT = "defined_at"
-# What a definition is, and so what a name bound to it refers to: a block's or the program's variable, a parameter, a
-# variable of the function around (captured), a function of the program or of the library (the preload's or a used
-# module's), a case of an enum (`Dime`, its Record defines it), a field of a method's receiver named bare (`c` for
-# `self.c` inside `inc(self: Counter)`, DEFINED_AT the self parameter), a type's record (a class or an enum), a used
-# module. On a name its BINDING fact is the kind's word, `local`, `global` …
-enum DefinitionKind { Local, Parameter, Capture, Global, Function, Library, Case, Field, Record, Module }
-kind_word(kind: DefinitionKind) as text := lower(text(kind))
-is_kind_word(word: Node?, kind: DefinitionKind) as bool := word == symbol(kind_word(kind))
-with_binding(n: Node, kind: DefinitionKind) as Node := with_fact(n, BINDING, symbol(kind_word(kind)))
-is_bound(n: Node, kind: DefinitionKind) as bool := is_kind_word(fact_of(n, BINDING), kind)
-# whether a name names a function, the program's or the library's
-names_function(n: Node) as bool := is_bound(n, DefinitionKind.Function) or is_bound(n, DefinitionKind.Library)
+# a type's name bound to the name of the Record declaring it, as the code writing it sees it: a module's class hides
+# the preload's of one name only inside the module (core/analyze/scope.wap type_bound)
+DECLARED_BY = "declared_by"
 SELF_WORD = "self"
 # on a Define a rule wrote for every class, as its show: typed only when something calls it, so a class whose field
 # has no show of its own is not refused for a show nothing uses
@@ -208,24 +198,6 @@ rest_named(item: Node) as Node? := match item {
 	Call(called, names) => if text(called) == REST_WORD and #names == 1 then names#1 else ø
 	_ => ø
 }
-# on an assignment, the variable it ASSIGNS when the program said so: a local, a new one in its block (`let x = 1`),
-# a global, the program's (`global x = 1`); without it, the variable the function sees, or a new one
-ASSIGNS = "assigns"
-# on a Block, the VARIABLES its statements name without a value, each `name: binding word`: `global x` says x is the
-# program's in the whole block, `let x` a new one of the block's
-VARIABLES = "variables"
-# a name of several overloads gets CANDIDATES, their defining names in a list per scope, innermost first, instead of
-# DEFINED_AT; the typing stage picks one and sets DEFINED_AT
-CANDIDATES = "candidates"
-# a type's name bound to the name of the Record declaring it, as the code writing it sees it: a module's class hides
-# the preload's of one name only inside the module (core/analyze/scope.wap type_bound)
-DECLARED_BY = "declared_by"
-# a function's CAPTURES: the defining names of what it reads from the functions around it (a closure's fields)
-CAPTURES = "captures"
-# a function value read as a function type, `inc` in a list<(int) -> int>, keeps its own type, fn<key, capture types…>,
-# as its FUNCTION_VALUE, and names the function typed for that type with DEFINED_AT, as a call does
-FUNCTION_VALUE = "function_value"
-captures_of(function: Node) as list<Node> := fact_items(function, CAPTURES)
 
 # The facts of the typing stage, core/analyze/types.wap: a value's TYPE, `int`, as a program writes types; a function's
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
