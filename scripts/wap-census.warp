@@ -12,7 +12,7 @@ use "../wap/core/language.wap"
 PRELOAD_FOLDER = "wap/preload/"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = preload_scope(declarations_of(preload))
+library_scope = Scope(preload_scope(declarations_of(preload)))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 
@@ -80,10 +80,10 @@ typing_joined(modules: list) := {
 bound_alone(module: Node, modules: list) as list := {
 	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
 	statements = statements_in(lowered_program(language, module))
-	bound_each(statements, defined_in(statements, words, PROGRAM_DEPTH) + words, no)
+	bound_each(statements, within(words, defined_in(statements, words, PROGRAM_DEPTH)), no)
 }
 # statements bound one by one in a scope, those that bind kept; each refusal reported where it is `shown`
-bound_each(statements: list, scope: list, shown: bool) as list := {
+bound_each(statements: list, scope: Scope, shown: bool) as list := {
 	kept = []
 	for statement in statements {
 		try kept = kept + [bound(statement, scope, PROGRAM_DEPTH)] catch e { if shown { report("bind", e.message) } }
@@ -193,7 +193,7 @@ probe(file: text) as Tally := {
 	for statement in statements {
 		try { lowered_ok = lowered_ok + statements_in(lowered_program(language, declared_code(language, statement))) } catch e { report("lower", e.message) }
 	}
-	bound_ok = bound_each(lowered_ok, defined_in(lowered_ok, library_scope, PROGRAM_DEPTH) + used + library_scope, yes)
+	bound_ok = bound_each(lowered_ok, within(within(library_scope, used), defined_in(lowered_ok, library_scope, PROGRAM_DEPTH)), yes)
 	# typing: each function alone in the run's state (functions_probe), then the whole file as the compiler types it
 	# and emits it when no module of its closure refuses a form (whole_once); a preload file is no program of its own
 	# but every program's library, typed function by function

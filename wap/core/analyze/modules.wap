@@ -36,10 +36,10 @@ declared_alike(declaration: Node) as text := match declaration {
 # A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
 # that name the module declares, bound as the bare name would be were they the only ones; ø where the subject names no
 # module, or names something nearer, a variable `a`
-module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
+module_word(n: Node, subject: Node, key: text, scope: Scope) as Node? := {
 	if not subject is symbol or definitions_meant(text(subject), scope) { return ø }
-	for definition in scope {
-		if definition.kind == MODULE_KIND and definition.name == text(subject) {
+	for definition in named_in(scope, text(subject)) {
+		if definition.kind == MODULE_KIND {
 			named = module_names(definition.definer).filter(name => text(name) == key)
 			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
 			found = with_fact(placed_like(symbol(key), n), BINDING, symbol(BOUND_LIBRARY))
@@ -49,7 +49,7 @@ module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
 	ø
 }
 # a call of a used module's word, `a.twice(3)`, its other arguments bound; ø for any other call
-module_call(n: Node, called: Node, arguments: list, scope: list, depth: int) as Node? := {
+module_call(n: Node, called: Node, arguments: list, scope: Scope, depth: int) as Node? := {
 	if not called is symbol or arguments is empty { return ø }
 	word = module_word(called, arguments#1, text(called), scope) ?? return ø
 	refitted(Call(word, all_bound(arguments.drop(1), scope, depth)), n)
