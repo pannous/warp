@@ -43,28 +43,33 @@ prepared_once(module: Node, modules: list) as list := {
 }
 # One typing state for the run, as the compiler types a program: the library's definitions and records, then each
 # module's joined once, its top-level values typed, then its functions typed alone, so a form is typed once and its
-# callees' types are there for the next. A refusal leaves the state as it was before the form, so it changes how no
-# other form types; a top-level statement's refusal is kept with its module. A module that cannot be bound whole joins
-# with the statements that bind alone, so a refusal hides only its statement (probe reports it with the file).
+# callees' types are there for the next. The modules of a closure join before any of their statements is typed, as the
+# compiler knows every record and definition before it types: modules that use each other (emit/lists.wap and
+# emitter.wap) see each other's records whichever comes first. A refusal leaves the state as it was before the form,
+# so it changes how no other form types; a top-level statement's refusal is kept with its module. A module that cannot
+# be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
+# with the file).
 class Run { state: TypingState, frame: TypeFrame, joined: map = {}, refusals: map = {}, probed: map = {} }
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list) := {
 	global run
-	for module in modules {
+	keys = modules.map(module => file_of(module) ?? "")
+	joining = keys.filter(key => not run.joined.has(key))
+	for module in modules.filter(module => (file_of(module) ?? "") in joining) {
 		key = file_of(module) ?? ""
-		if not run.joined.has(key) {
-			run.refusals[key] = []
-			statements = []
-			try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
-			run.joined[key] = statements
-			run.state.definitions += statements.filter(statement => statement is Define)
-			run.state.records = added_records(run.state.records, statements)
-			for statement in statements.filter(statement => not (statement is Define) and not (statement is Record)) {
-				before = copied(run.state)
-				try typed_form(statement, run.state, run.frame, ø) catch e {
-					run.state = rolled_back(before)
-					run.refusals[key] += ["type\ta top-level statement: " + e.message]
-				}
+		run.refusals[key] = []
+		statements = []
+		try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
+		run.joined[key] = statements
+		run.state.definitions += statements.filter(statement => statement is Define)
+		run.state.records = added_records(run.state.records, statements)
+	}
+	for key in joining {
+		for statement in run.joined[key].filter(statement => not (statement is Define) and not (statement is Record)) {
+			before = copied(run.state)
+			try typed_form(statement, run.state, run.frame, ø) catch e {
+				run.state = rolled_back(before)
+				run.refusals[key] += ["type\ta top-level statement: " + e.message]
 			}
 		}
 	}
