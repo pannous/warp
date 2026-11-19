@@ -24,7 +24,6 @@ layout(n: Node, p: Program) as list := layout_of(fact_of(n, TYPE) ?? refused(n, 
 class Place { reached: list; read: list; written: list }
 place_of(subject: Node, key: Node, p: Program, f: Frame) as Place := {
 	map = fact_of(subject, TYPE)
-	if key_type(map) != ø { return Place(code(subject, p, f).instructions + code(key, p, f).instructions, typed_helper_called(MAP_GET, map, p), typed_helper_called(MAP_SET, map, p)) }
 	record = record_named(p.records, fact_of(subject, TYPE))
 	if record != ø {
 		at = [struct_of(record, p.m, p.records), index_where(fields_of(record), field => text(declared_name(field)) == text(key)) - 1]

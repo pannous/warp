@@ -48,6 +48,8 @@ HELPERS = {"print_text": printing_function, "error_text": error_writing_function
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
+# the lists a map holds, not copied: its keys and its values, an entry the same place in both
+MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
@@ -65,6 +67,7 @@ primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code
 	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
 	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
 	if name == LIST_COUNT { return ending(counted_items(p)) }
+	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
 	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
 	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
 	if ARRAY_HELPERS.has(name) {

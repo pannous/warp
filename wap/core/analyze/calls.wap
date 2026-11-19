@@ -18,6 +18,8 @@ use "shapes.wap"
 
 # the word an item taken by its place calls on a value that is no list, `r#2` is `#(r, 2)`
 PLACE_WORD = "#"
+# the word that gives such a place its value, `m["a"] = 1` is `set(m, "a", 1)`
+SET_WORD = "set"
 # the word that shows a value in warp notation, the program's last value by it (core/analyze/types.wap typed_shown)
 SHOW_WORD = "show"
 PRINT_WORD = "print"
@@ -116,7 +118,7 @@ takes_map(parameter: Node) as bool := {
 # (core/analyze/dispatch.wap)
 part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	typed = typed_form(subject, s, f, ø)
-	if key_type(value_type(typed)) != ø and not map_word(key, s) { return entry_read_typed(n, typed, key) }
+	if key_type(value_type(typed)) != ø and not map_word(key, s) { return entry_read_typed(n, typed, typed_form(key, s, f, symbol(TEXT_TYPE)), s) }
 	reader = if value_type(typed) == symbol(ANY_TYPE) then field_dispatching(key, s) else ø
 	if reader != ø { return typed_form(named_call(text(declared_name(written_name(reader))), [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
