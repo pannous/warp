@@ -24,7 +24,7 @@ type_equality(type: Node, p: Program) as list<int> := {
 	equality(layout_of(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this type yet"), p)
 }
 # the instructions that compare two values of a wasm type: an int, float, yes/no or character, a text, an `any`
-equality(type: list, p: Program) as list<int> := {
+equality(type: list<int>, p: Program) as list<int> := {
 	if type == I64 { return I64_EQ }
 	if type == F64 { return F64_EQ }
 	if type == I32 { return I32_EQ }
@@ -34,8 +34,8 @@ equality(type: list, p: Program) as list<int> := {
 }
 # A call of the helper comparing two values of one layout by their parts, its locals after the two values; the helper
 # takes its place before its code is written, so its code may call it again
-class Compared { locals: list; code: list }
-parts_compared(p: Program, key: text, layout: list, compared: function) as list<int> := {
+class Compared { locals: list<list<int>>; code: list<int> }
+parts_compared(p: Program, key: text, layout: list<int>, compared: function) as list<int> := {
 	if p.helpers.has(key) { return instruction(CALL, [p.helpers[key]]) }
 	index = reserved_function(p.m, [layout, layout], [I32])
 	p.helpers[key] = index
@@ -97,7 +97,7 @@ any_equality_function(p: Program) as int := {
 	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing_compared() + boxed + texts + same)
 }
 # when the value in local 0 is of a type: no unless local 1 is too, else both taken out and compared
-compared_as(type: int, taken: list, compare: list) as list<int> := {
+compared_as(type: int, taken: list<int>, compare: list<int>) as list<int> := {
 	both = local_get(0) + heap_instruction(REF_CAST, type) + taken + local_get(1) + heap_instruction(REF_CAST, type) + taken
 	local_get(0) + heap_instruction(REF_TEST, type) + IF + VOID_BLOCK + local_get(1) + heap_instruction(REF_TEST, type) + NO_UNLESS_YES + both + compare + RETURN + END
 }

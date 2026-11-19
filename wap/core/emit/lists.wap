@@ -38,7 +38,7 @@ typed_helper_called(operation: text, type: Node, p: Program) as list<int> := ins
 counted_items(p: Program) as list<int> := instruction(STRUCT_GET, [list_base(p.m), LIST_COUNT_AT]) + I64_EXTEND_I32_U
 
 # a new list of these items' code, of a list type
-list_made(type: Node, items: list, p: Program) as list<int> := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
+list_made(type: Node, items: list<Code>, p: Program) as list<int> := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
 
 # The helpers of list_item and list_set, an item at a place counted from 0: locals 0 the list, 1 the place, for
 # list_set 2 the value. A place at or past the count raises.
@@ -116,13 +116,13 @@ map_removing_function(p: Program, map: Node) as int := {
 	added_function(p.m, keyed_layouts(map, p), [], [I32], key_searched(2, found, map, p))
 }
 # the code that counts through a map's keys in the local `count`, running `found` at the first equal to the key
-key_searched(count: int, found: list, map: Node, p: Program) as list<int> := {
+key_searched(count: int, found: list<int>, map: Node, p: Program) as list<int> := {
 	keys = map_part(MAP_KEYS, map, p)
 	equal = keys + items_in(keys_of(map), ø, p) + local_get(count) + instruction(ARRAY_GET, [items_array(keys_of(map), p)]) + local_get(1) + type_equality(key_type(map), p)
 	counted(count, keys + count_in(keys_of(map), ø, p), equal + IF + VOID_BLOCK + found + END)
 }
 # a new map of these keys' and values' code
-map_made(map: Node, keys: list, values: list, p: Program) as list<int> := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
+map_made(map: Node, keys: list<Code>, values: list<Code>, p: Program) as list<int> := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
 
 # the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
 list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")

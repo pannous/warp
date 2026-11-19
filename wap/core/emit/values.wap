@@ -134,7 +134,7 @@ struct_of(record: Node, m: Module, records: Records) as int := {
 # the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
 enum_base(m: Module) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
 tagged(m: Module) as list<int> := instruction(STRUCT_GET, [enum_base(m), 0])
-field_layouts(fields: list, m: Module, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
+field_layouts(fields: list<Node>, m: Module, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
 case_struct_of(record: Node, case: Node, m: Module, records: Records) as int := {
 	base = struct_of(record, m, records)
 	fields = field_layouts(fields_of(record) + case_fields(case), m, records)

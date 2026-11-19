@@ -21,13 +21,13 @@ TEXT_CASE = "Text"
 # A choice by patterns: the subject kept in a slot of its own, then each arm tested in order, an If each, until one
 # fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.
 #   subject, local.set held;  held == p1, if  r1  else  held == p2, if  r2  else …  end  end
-case_code(form: Node, subject: Code, arms: list, p: Program, f: Frame) as Code := {
+case_code(form: Node, subject: Code, arms: list<Node>, p: Program, f: Frame) as Code := {
 	f.slots += [Placed("subject of ${place_key(form)}", #f.slots, subject.type, [], yes)]
 	held = f.slots.last
 	chosen = arms_code(form, arms, held, p, f)
 	Code(chosen.type, subject.instructions + instruction(LOCAL_SET, [held.index]) + chosen.instructions)
 }
-arms_code(form: Node, arms: list, held: Placed, p: Program, f: Frame) as Code := {
+arms_code(form: Node, arms: list<Node>, held: Placed, p: Program, f: Frame) as Code := {
 	if arms is empty { return if fact_of(form, TYPE) == ø then Code() else Code(NEVER, UNREACHABLE) }
 	match arms#1 {
 		Arm(pattern, result) => {
@@ -52,12 +52,12 @@ only_names(pattern: Node, p: Program) as bool := field_parts(pattern, [], p).all
 # A part of a value a pattern takes apart: the field's pattern, the code that gives the field's value, its layout
 class Part {
 	pattern: Node
-	value: list
-	type: list
+	value: list<int>
+	type: list<int>
 }
 # the parts of a case pattern, `Circle(r)`, each field of the value cast to the case, or of a list pattern, each item
 # and the rest; none for any other pattern
-field_parts(pattern: Node, value: list, p: Program) as list<Part> := match pattern {
+field_parts(pattern: Node, value: list<int>, p: Program) as list<Part> := match pattern {
 	List(items, Bracket.Square, separator) => item_parts(items, value, fact_of(pattern, TYPE), p)
 	Call(called, patterns) => {
 		record = enum_declaring(p.records, called)
@@ -68,7 +68,7 @@ field_parts(pattern: Node, value: list, p: Program) as list<Part> := match patte
 	_ => []
 }
 # A list pattern's parts: its items by their places, then the rest, the items after them as a new list
-item_parts(items: list, value: list, type: Node, p: Program) as list<Part> := {
+item_parts(items: list<Node>, value: list<int>, type: Node, p: Program) as list<Part> := {
 	fixed = items.filter(item => rest_named(item) == ø)
 	parts = (1 to #fixed).map(at => Part(fixed#at, value + items_in(type, ø, p) + i32_const(at - 1) + instruction(ARRAY_GET, [items_array(type, p)]), item_layout(type, p)))
 	rests = items.filter(item => rest_named(item) != ø).map(item => Part(rest_named(item), value + i64_const(#fixed) + value + count_in(type, ø, p) + i32_const(#fixed) + I32_SUB + I64_EXTEND_I32_U + typed_helper_called(LIST_SLICE, type, p), list_layout(type, p)))
@@ -77,7 +77,7 @@ item_parts(items: list, value: list, type: Node, p: Program) as list<Part> := {
 # Whether the value fits a pattern, yes or no: a case by its tag, a list by its count, then each part by its own
 # pattern, tested only once the shape fits; a literal by equality. `value` is the code that gives the value, of the
 # layout `type`.
-pattern_test(pattern: Node, value: list, type: list, p: Program) as list<int> := {
+pattern_test(pattern: Node, value: list<int>, type: list<int>, p: Program) as list<int> := {
 	shape = shape_test(pattern, value, p)
 	if shape != ø {
 		tested = field_parts(pattern, value, p).filter(part => not names_any(part.pattern))
@@ -87,7 +87,7 @@ pattern_test(pattern: Node, value: list, type: list, p: Program) as list<int> :=
 	value + given.instructions + equality(type, p)
 }
 # the test of a case pattern's tag or a list pattern's count, ø for any other pattern
-shape_test(pattern: Node, value: list, p: Program) as list<int>? := {
+shape_test(pattern: Node, value: list<int>, p: Program) as list<int>? := {
 	# a missing value, an optional's ø, is no case
 	if is_case(case_name(pattern)) { return value + REF_IS_NULL + IF + I32 + i32_const(0) + ELSE + value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ + END }
 	items = list_pattern_items(pattern) ?? return ø
@@ -95,13 +95,13 @@ shape_test(pattern: Node, value: list, p: Program) as list<int>? := {
 	value + count_in(fact_of(pattern, TYPE), ø, p) + i32_const(fixed) + (if fixed < #items then I32_GE_U else I32_EQ)
 }
 # the names of a pattern given their parts of the value, after every test fit; code that leaves nothing. _ gives none.
-names_held(pattern: Node, value: list, type: list, p: Program, f: Frame) as list<int> := {
+names_held(pattern: Node, value: list<int>, type: list<int>, p: Program, f: Frame) as list<int> := {
 	if text(pattern) == WILDCARD { return [] }
 	if names_any(pattern) { return value + kept(added_variable(pattern, type, p, f)) + DROP }
 	field_parts(pattern, value, p).flat_map(part => names_held(part.pattern, part.value, part.type, p, f))
 }
 # A case's value, `Dime` or `Circle(3)`: its tag and its fields' values in a new struct of its case, of its enum's type
-case_value_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+case_value_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	record = enum_declaring(p.records, called)
 	named = case_declaring(p.records, called)
 	made = if case_fields(named) is empty then struct_of(record, p.m, p.records) else case_struct_of(record, named, p.m, p.records)

@@ -17,7 +17,7 @@ use "../../kernel/forms.wap"
 
 # A function value's function starts by taking its captures out of its first parameter, the value, into variables of
 # its own, which its body reads as any local; a function that captures nothing takes none
-captures_loaded(form: Define, parameters: list, p: Program, f: Frame) as list<int> := {
+captures_loaded(form: Define, parameters: list<Node>, p: Program, f: Frame) as list<int> := {
 	captures = captures_of(form)
 	value = if parameters is empty then ø else declared_name(parameters#1)
 	parts = if value == ø then ø else function_value_parts(fact_of(value, TYPE))
@@ -59,7 +59,7 @@ adapting_function(form: Node, own: Node, p: Program) as int := {
 }
 # A call of a function value of a signature: the value kept in a slot of its own, then its captures, the arguments and
 # its function's reference, called by call_ref
-value_call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+value_call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	type = fact_of(called, TYPE)
 	parts = function_type_parts(type) ?? refused(called, "this value's type is no function type")
 	value = code(called, p, f)
