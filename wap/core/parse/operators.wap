@@ -132,7 +132,7 @@ tokens_read(language: Language, tokens: list) as Node := {
 		token = tokens#i
 		next = if i < #tokens then tokens#(i + 1) else ø
 		if expecting_operand {
-			prefix = if operand_follows(language, next) then reading_as(language, token.item, Fixity.Prefix) else ø
+			prefix = if operand_after(language, next) != ø then reading_as(language, token.item, Fixity.Prefix) else ø
 			if prefix == ø and called_after_infix(language, token, next, pending) {
 				last = i + 1
 				takes_block = language.phrase_words.leading[spelling_written(token.item)] == yes
@@ -171,23 +171,31 @@ tokens_read(language: Language, tokens: list) as Node := {
 # as its own, as at a phrase's start: `a ?? return ø` is `a ?? (return ø)`, `a ?? if c {1} else {2}` the whole if. A
 # block stays the statement's (`if a == f x { … }`) unless the word's rules take one. Other words stay operands
 # (`0 - step else step`).
-called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list<Use>) as bool := pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand_follows(language, next) and not is_block(next.item)
+called_after_infix(language: Language, token: Spaced, next: Spaced?, pending: list<Use>) as bool := {
+	operand = operand_after(language, next)
+	pending is not empty and pending.last.spelling != "" and pending.last.fixity == Fixity.Infix and token.item is symbol and language.phrase_words.leading.has(spelling_written(token.item)) and not token.glued_after and operand != ø and not is_block(operand.item)
+}
 # a word rules use only inside their phrases, which continues the code before it: `else`
 continuation_word(language: Language, word: text) as bool := language.phrase_words.inner.has(word) and not language.phrase_words.leading.has(word)
 is_block(n: Node) as bool := match n { List(items, Bracket.Curly, separator) => yes; _ => no }
 
-# whether the token can start an operand: a word, a literal, a group, or a prefix operator; ø ends the phrase
-operand_follows(language: Language, next: Spaced?) as bool := next != ø and (reading_as(language, next.item, Fixity.Prefix) != ø or reading_as(language, next.item, Fixity.Infix) == ø and reading_as(language, next.item, Fixity.Postfix) == ø)
+# the next token where it can start an operand: a word, a literal, a group, or a prefix operator; ø where it cannot,
+# and at the phrase's end
+operand_after(language: Language, next: Spaced?) as Spaced? := {
+	if next == ø { return ø }
+	item = next.item
+	if reading_as(language, item, Fixity.Prefix) != ø or reading_as(language, item, Fixity.Infix) == ø and reading_as(language, item, Fixity.Postfix) == ø then next else ø
+}
 
 # after an operand, the token as an infix or postfix operator, by the minus rule (notes/backbone.md "Minus"): spaced
 # on both sides or on neither it is infix; attached only to what follows it is prefix, so juxtaposition comes first
 # (ø here), and so is one glued to brackets, a call of it like any `f(x)` (`⊕(a, b)`); attached only to what
 # precedes it is postfix where it has a postfix, else infix. Infix and prefix need an operand after them.
 operator_after_operand(language: Language, token: Spaced, next: Spaced?) as Use? := {
-	followed = operand_follows(language, next)
-	infix = if followed then reading_as(language, token.item, Fixity.Infix) else ø
+	operand = operand_after(language, next)
+	infix = if operand != ø then reading_as(language, token.item, Fixity.Infix) else ø
 	postfix = reading_as(language, token.item, Fixity.Postfix)
-	if token.glued_after and not token.glued_before and followed and (reading_as(language, token.item, Fixity.Prefix) != ø or is_bracketed(next.item)) { return ø }
+	if token.glued_after and not token.glued_before and operand != ø and (reading_as(language, token.item, Fixity.Prefix) != ø or is_bracketed(operand.item)) { return ø }
 	if token.glued_before and not token.glued_after and postfix != ø { return postfix }
 	if infix != ø { return infix }
 	postfix
