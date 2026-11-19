@@ -26,7 +26,7 @@ LIST_SLICE = "list_slice"
 # The operations on a list or a map, one helper for each type of their first operand: operation → its builder
 TYPED_HELPERS = {
 	"list_item": item_reading_function, "list_set": item_setting_function, "list_add": adding_function,
-	"list_pop": popping_function, "list_joined": lists_joining_function, "list_slice": list_slicing_function
+	"list_pop": popping_function, "list_slice": list_slicing_function
 }
 # a call of the helper of an operation on a value of this type
 typed_helper_called(operation: text, type: Node, p: Program) as list<int> := instruction(CALL, [helper(p, "${operation} ${type}", q => TYPED_HELPERS[operation](q, type))])
@@ -65,15 +65,6 @@ list_slicing_function(p: Program, type: Node) as int := {
 	checked = count_in(type, 0, p) + place(1) + place(2) + I32_ADD + I32_LT_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
 	copied = place(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + items_in(type, 0, p) + place(1) + place(2) + instruction(ARRAY_COPY, [array, array])
 	added_function(p.m, [list_layout(type, p), I64, I64], [list_layout(type, p)], [nullable(array)], checked + copied + place(2) + local_get(3) + instruction(STRUCT_NEW, [list_struct(type, p)]))
-}
-# The helper of list_joined: a new list of the first's items, then the second's. Its locals: 0 and 1 the lists, 2 the
-# new array.
-lists_joining_function(p: Program, type: Node) as int := {
-	array = items_array(type, p)
-	total = count_in(type, 0, p) + count_in(type, 1, p) + I32_ADD
-	copied = (at, local) => local_get(2) + at + items_in(type, local, p) + i32_const(0) + count_in(type, local, p) + instruction(ARRAY_COPY, [array, array])
-	made = total + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(2) + copied(i32_const(0), 0) + copied(count_in(type, 0, p), 1)
-	added_function(p.m, [list_layout(type, p), list_layout(type, p)], [list_layout(type, p)], [nullable(array)], made + total + local_get(2) + instruction(STRUCT_NEW, [list_struct(type, p)]))
 }
 
 # a new map of these keys' and values' code

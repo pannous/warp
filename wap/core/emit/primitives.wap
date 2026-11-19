@@ -47,7 +47,7 @@ HELPERS = {"print_text": printing_function, "error_text": error_writing_function
 # The operations on an array, a text's bytes or a list's items, of the array type their first operand holds: their
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
-ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
+ARRAY_HELPERS = {"array_slice": slicing_function}
 # the lists a map holds, not copied: its keys and its values, an entry the same place in both
 MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
@@ -78,7 +78,7 @@ primitive_code(form: Node, operation: Node, arguments: list<Code>, p: Program) a
 	refused(form, "no primitive of this name")
 }
 # an array's operations given a list work on its items: operation → the list's
-ON_LISTS: map<text, text> = {"array_len": LIST_COUNT, "array_joined": "list_joined", "array_slice": "list_slice"}
+ON_LISTS: map<text, text> = {"array_len": LIST_COUNT, "array_slice": "list_slice"}
 # the operation a primitive performs: the one it names, or the list's for an array's operation given a list
 operation_of(form: Prim) as text := match form { Prim(operation, given) => if ON_LISTS.has(text(operation)) and is_list_type(first_operand_type(form)) then ON_LISTS[text(operation)] else text(operation) }
 # the plain value a box holds
@@ -116,7 +116,7 @@ counted(local: int, limit: list<int>, body: list<int>) as list<int> := {
 
 # The helper of text_joined: a new text of the first's bytes, then the second's
 joining_function(p: Program) as int := arrays_joining_function(p, text_type(p.m))
-# The helper of array_joined and text_joined: a new array of the first's items, then the second's. Its locals: 0 and
+# The helper of text_joined, for an array type: a new array of the first's items, then the second's. Its locals: 0 and
 # 1 the arrays, 2 the new one.
 arrays_joining_function(p: Program, type: int) as int := {
 	items_in = local => local_get(local) + ARRAY_LEN

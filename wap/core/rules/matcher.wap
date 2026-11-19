@@ -71,12 +71,12 @@ parts_match(parts: list, items: list, bindings: map<text, Node>) as bool := {
 taken_by(m: Matcher, items: list, bindings: map<text, Node>) as bool := if m.test == Test.Repeat then repeat_matches(m.parts#1, items, bindings) else rest_matches(m, items, bindings)
 
 # each item fits the repeated part on its own; each hole of it is bound to the sequence of what it met
-repeat_matches(part: Matcher, items: list, bindings: map<text, Node>) as bool := {
-	met = {}
+repeat_matches(part: Matcher, items: list<Node>, bindings: map<text, Node>) as bool := {
+	met: map<text, list<Node>> = {}
 	# none taken binds each name to the empty sequence, so a template writes the part no times
 	for name in names_bound(part) { met[name] = [] }
 	for item in items {
-		own = {}
+		own: map<text, Node> = {}
 		if not matches(part, item, own) { return no }
 		for name in own.keys { met[name] = (if met.has(name) then met[name] else []) + [own[name]] }
 	}
