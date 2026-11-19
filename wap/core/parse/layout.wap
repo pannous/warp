@@ -11,10 +11,11 @@ SEPARATOR_ORDER = [Separator.None, Separator.Space, Separator.Comma, Separator.S
 OPENERS = "([{"
 CLOSERS = ")]}"
 BRACKETS = [Bracket.Round, Bracket.Square, Bracket.Curly]
-# a type list glued to a word, `list<int>`, `map<text, (int) -> int>`, and its type arrow
+# a type list glued to a word, `list<int>`, `map<text, (int) -> int>`, `list<int?>`: its type arrow and its optional mark
 ANGLE_OPEN = '<'
 ANGLE_CLOSE = '>'
 TYPE_ARROW = "->"
+OPTIONAL_MARK = '?'
 
 # ── brackets, separators, indentation ──
 
@@ -54,8 +55,13 @@ type_list_end(r: Reader, at: int) as int := {
 	while at >= 0 and peek_at(r, at) == ',' { at = type_end(r, if peek_at(r, at + 1) == ' ' then at + 2 else at + 1) }
 	at
 }
-# where one type starting at `at` ends: a word with its glued type list, or `(types) -> type`; -1 for none
+# where one type starting at `at` ends: a word with its glued type list, or `(types) -> type`, either with an
+# optional mark; -1 for none
 type_end(r: Reader, at: int) as int := {
+	end = bare_type_end(r, at)
+	if end >= 0 and peek_at(r, end) == OPTIONAL_MARK then end + 1 else end
+}
+bare_type_end(r: Reader, at: int) as int := {
 	if peek_at(r, at) == '(' {
 		inside = if peek_at(r, at + 1) == ')' then at + 1 else type_list_end(r, at + 1)
 		if inside < 0 or peek_at(r, inside) != ')' { return -1 }
