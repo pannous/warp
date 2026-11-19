@@ -213,4 +213,8 @@ worse(x: int) as int := bad(x) + 1
 also(x: int) as text := 3
 good(x: int) as int := x * 2
 print(text(good(21)))' | grep -o 'line [0-9]*:\|calls bad' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: "
+check "a program statement wap refuses still lets the functions beside it be typed: all refusals said together" "$(ran refused_beside 'bad(x: int) as int := x + "a"
+worse(x: int) as int := bad(x) + 1
+also(x: int) as text := 3
+print(text(worse(21)))' | grep -o 'line [0-9]*:\|calls [a-z]*' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: line 4: calls worse "
 exit $((failures > 0))
