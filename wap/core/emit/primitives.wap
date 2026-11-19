@@ -48,6 +48,8 @@ HELPERS = {"print_text": printing_function, "error_text": error_writing_function
 # instructions after the operands, and the helpers they call, one for each array type
 ARRAY_INSTRUCTIONS = {"array_get_u": unsigned_item}
 ARRAY_HELPERS = {"array_slice": slicing_function, "array_joined": arrays_joining_function}
+# the lists a map holds, not copied: its keys and its values, an entry the same place in both
+MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
 # two cases compared, by the type of the first: its tag and its fields, each by its own type's equality
 TAG_EQUAL = "tag_equal"
@@ -56,16 +58,19 @@ TAG_EQUAL = "tag_equal"
 primitive_code(form: Node, operation: Node, arguments: list, p: Program) as Code := {
 	name = operation_of(form)
 	operands = arguments.flat_map(argument => argument.instructions)
-	if INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + INSTRUCTIONS[name]) }
+	# the value the operands and these instructions after them give
+	ending = instructions => Code(given_layout(form, p), operands + instructions)
+	if INSTRUCTIONS.has(name) { return ending(INSTRUCTIONS[name]) }
 	if HELPERS.has(name) { return helper_called(form, operands, name, HELPERS[name], p) }
-	if name == BOXED_TEST { return Code(given_layout(form, p), operands + heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p).type_index)) }
-	if name == BOXED_VALUE { return Code(given_layout(form, p), operands + instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
-	if name == CHECKED_CAST { return finished(Code(given_layout(form, p), operands + cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
-	if name == OPTIONAL_VALUE { return Code(given_layout(form, p), operands + optional_value(form, p)) }
-	if name == TAG_EQUAL { return Code(given_layout(form, p), operands + type_equality(first_operand_type(form), p)) }
-	if name == LIST_COUNT { return Code(given_layout(form, p), operands + counted_items(p)) }
-	if TYPED_HELPERS.has(name) { return finished(Code(given_layout(form, p), operands + typed_helper_called(name, first_operand_type(form), p))) }
-	if ARRAY_INSTRUCTIONS.has(name) { return Code(given_layout(form, p), operands + ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
+	if name == BOXED_TEST { return ending(heap_instruction(REF_TEST, held_in_any(fact_of(form, TESTED), form, p).type_index)) }
+	if name == BOXED_VALUE { return ending(instruction(STRUCT_NEW, [box_index(p.m, plain_word(boxed_operand(form)))])) }
+	if name == CHECKED_CAST { return finished(ending(cast_called(given_layout(form, p), text(fact_of(form, TYPE)), form, p))) }
+	if name == OPTIONAL_VALUE { return ending(optional_value(form, p)) }
+	if name == TAG_EQUAL { return ending(type_equality(first_operand_type(form), p)) }
+	if name == LIST_COUNT { return ending(counted_items(p)) }
+	if MAP_FIELDS.has(name) { return ending(instruction(STRUCT_GET, [map_struct(first_operand_type(form), p), MAP_FIELDS[name]])) }
+	if TYPED_HELPERS.has(name) { return finished(ending(typed_helper_called(name, first_operand_type(form), p))) }
+	if ARRAY_INSTRUCTIONS.has(name) { return ending(ARRAY_INSTRUCTIONS[name](form, array_operand(form, arguments), p)) }
 	if ARRAY_HELPERS.has(name) {
 		array = array_operand(form, arguments)
 		return helper_called(form, operands, "${name} ${array}", q => ARRAY_HELPERS[name](q, array), p)
@@ -105,8 +110,8 @@ helper(p: Program, operation: text, build: function) as int := {
 
 # the body run for each count from 0 while it stays below the limit, the count in that local
 counted(local: int, limit: list, body: list) as list<int> := {
-	count = instruction(LOCAL_GET, [local])
-	i32_const(0) + instruction(LOCAL_SET, [local]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + instruction(LOCAL_SET, [local]) + instruction(BRANCH, [0]) + END + END
+	count = local_get(local)
+	i32_const(0) + local_set(local) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + count + limit + I32_GE_U + instruction(BRANCH_IF, [1]) + body + count + i32_const(1) + I32_ADD + local_set(local) + instruction(BRANCH, [0]) + END + END
 }
 
 # The helper of text_joined: a new text of the first's bytes, then the second's
@@ -114,10 +119,10 @@ joining_function(p: Program) as int := arrays_joining_function(p, text_type(p.m)
 # The helper of array_joined and text_joined: a new array of the first's items, then the second's. Its locals: 0 and
 # 1 the arrays, 2 the new one.
 arrays_joining_function(p: Program, type: int) as int := {
-	items_in = local => instruction(LOCAL_GET, [local]) + ARRAY_LEN
-	joined = instruction(LOCAL_GET, [2])
-	copy = (at, local) => joined + at + instruction(LOCAL_GET, [local]) + i32_const(0) + items_in(local) + instruction(ARRAY_COPY, [type, type])
-	made = items_in(0) + items_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [2])
+	items_in = local => local_get(local) + ARRAY_LEN
+	joined = local_get(2)
+	copy = (at, local) => joined + at + local_get(local) + i32_const(0) + items_in(local) + instruction(ARRAY_COPY, [type, type])
+	made = items_in(0) + items_in(1) + I32_ADD + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(2)
 	added_function(p.m, [nullable(type), nullable(type)], [nullable(type)], [nullable(type)], made + copy(i32_const(0), 0) + copy(items_in(0), 1) + joined)
 }
 
@@ -125,17 +130,17 @@ arrays_joining_function(p: Program, type: int) as int := {
 # Its locals: 0 the list, 1 from, 2 count, 3 the new list. A slice past the end traps.
 slicing_function(p: Program, type: int) as int := {
 	given = nullable(type)
-	place = local => instruction(LOCAL_GET, [local]) + I32_WRAP_I64
-	sliced = instruction(LOCAL_GET, [3])
-	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + instruction(LOCAL_SET, [3])
-	copied = sliced + i32_const(0) + instruction(LOCAL_GET, [0]) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
+	place = local => local_get(local) + I32_WRAP_I64
+	sliced = local_get(3)
+	made = place(2) + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(3)
+	copied = sliced + i32_const(0) + local_get(0) + place(1) + place(2) + instruction(ARRAY_COPY, [type, type])
 	added_function(p.m, [given, I64, I64], [given], [given], made + copied + sliced)
 }
 
 # The helper of char_text: a character's text, its UTF-8 bytes, 1 to 4 by its code point. Its local: 0 the character.
 char_text_function(p: Program) as int := {
 	type = text_type(p.m)
-	c = instruction(LOCAL_GET, [0])
+	c = local_get(0)
 	shifted = bits => c + i32_const(bits) + I32_SHR_U
 	follower = bits => shifted(bits) + i32_const(63) + I32_AND + i32_const(UTF8_FOLLOWER) + I32_OR
 	bytes = count => shifted(UTF8_BITS * (count - 1)) + i32_const(UTF8_LEADS#count) + I32_OR + (1 to count - 1).flat_map(i => follower(UTF8_BITS * (count - 1 - i))) + instruction(ARRAY_NEW_FIXED, [type, count])
