@@ -43,11 +43,11 @@ bound_program(program: Block, preload: list, modules: list<Module>) as Block := 
 	with_definers(late_reads_checked(bound(definers_identified(program, ids), scope_around(preload, codes), PROGRAM_DEPTH)), ids)
 }
 # Code with an id on each name that defines something, before any definition is made of it (core/stage.wap DEFINER):
-# a function's name and parameters, an assignment's name, a pattern's names, a block's variables named without a
+# a function's name and parameters, a function value, which defines its λ, an assignment's name, a pattern's names, a block's variables named without a
 # value. A name that turns out to define nothing, a case in a pattern or a variable assigned again, carries one unused.
 definers_identified(n: Node, ids: Definers) as Node := match n {
 	Define(name, parameters, body) => refitted(Define(written_identified(name, ids), parameters_identified(parameters, ids), definers_identified(body, ids)), n)
-	Fn(parameters, body) => refitted(Fn(parameters_identified(parameters, ids), definers_identified(body, ids)), n)
+	Fn(parameters, body) => identified(refitted(Fn(parameters_identified(parameters, ids), definers_identified(body, ids)), n), ids)
 	Set(place, value) => refitted(Set(written_identified(place, ids), definers_identified(value, ids)), n)
 	Arm(pattern, result) => refitted(Arm(pattern_identified(pattern, ids), definers_identified(result, ids)), n)
 	Block(statements) => variables_identified(refitted(Block(statements.map(statement => definers_identified(statement, ids))), n), ids)

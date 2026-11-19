@@ -23,7 +23,7 @@ TEXT_CASE = "Text"
 # fits; a name binds the subject. Typing gave the Case a value only when its last arm fits any.
 #   subject, local.set held;  held == p1, if  r1  else  held == p2, if  r2  else …  end  end
 case_code(form: Node, subject: Code, arms: list<Node>, p: Program, f: Frame) as Code := {
-	f.slots += [Placed("subject of ${place_key(form)}", #f.slots, subject.type, [], yes)]
+	f.slots += [Placed("subject held in slot ${#f.slots}", #f.slots, subject.type, [], yes)]
 	held = f.slots.last
 	chosen = arms_code(form, arms, held, p, f)
 	Code(chosen.type, subject.instructions + local_set(held.index) + chosen.instructions)
