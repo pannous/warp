@@ -40,9 +40,15 @@ raise(message: text): never := prim raise_text(message)
 *(a: int, b: int): int := prim i64_mul(a, b)
 # an int's sign turned: `-x`
 -(x: int): int := 0 - x
-# the floored quotient and remainder of ints, warp's: `-7 ÷ 2` is -4, `-7 % 3` is 2, the remainder of the divisor's sign
-÷(a: int, b: int): int := if truncated_above_floor(a, b) then quotient(a, b) - 1 else quotient(a, b)
-%(a: int, b: int): int := if truncated_above_floor(a, b) then rem(a, b) + b else rem(a, b)
+# the Euclidean quotient and remainder of ints, warp's (wiki/Footguns.md "Negative modulo"): the remainder is never
+# negative, 0 ≤ r < |b|, and a == b * (a ÷ b) + a % b: `-7 % 3` is 2, `7 % -3` is 1, `-7 ÷ 2` is -4, `7 ÷ -3` is -2
+÷(a: int, b: int): int := quotient(a - a % b, b)
+%(a: int, b: int): int := {
+	r = truncated_remainder(a, b)
+	if r >= 0 then r else if b > 0 then r + b else r - b
+}
+# the remainder of the truncated quotient, of the dividend's sign: `-7 rem 3` and `-7 ⦼ 3` are -1
+rem(a: int, b: int): int := truncated_remainder(a, b)
 ==(a: int, b: int): bool := prim i64_eq(a, b)
 !=(a: int, b: int): bool := prim i64_ne(a, b)
 <(a: int, b: int): bool := prim i64_lt_s(a, b)

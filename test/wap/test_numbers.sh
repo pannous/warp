@@ -23,10 +23,12 @@ check "the texts of floats" "$(ran float_texts 'print "${0.1} ${1.5} ${1.0e21} $
 print "${5e-324} ${1.0 / 0.0} ${-1.0 / 0.0} ${0.0 / 0.0} ${trunc(2.7)} ${floor(-2.5)} ${ceil(2.1)}"')" "0.1 1.5 1e21 0 0.3333333333333333 0.30000000000000004 0.000025 1e-6 -2.5
 5e-324 ∞ -∞ NaN 2 -3 3"
 check "the smaller and the larger of two ints" "$(ran min_max 'print text(min(3, 2)) + " " + text(max(3, 2))')" "2 3"
-check "÷ and % of ints floor, the remainder taking the divisor's sign (wiki/Footguns.md)" "$(ran floored 'print text(-7 ÷ 2)
+check "% of ints is Euclidean, the remainder never negative, and ÷ its quotient (wiki/Footguns.md)" "$(ran euclidean 'print text(-7 ÷ 2)
 print text(-7 % 3)
-print text(7 % -3)')" "-4
+print text(7 % -3)
+print text(7 ÷ -3)')" "-4
 2
+1
 -2"
 check "a power of an int and of a float" "$(ran power 'print text(2 ^ 10)
 print text(1.5 ^ 2)
@@ -43,4 +45,5 @@ check "a character's code, and a float's 64 bits as an int" "$(ran codes "print 
 print text(float_bits(1.0))")" "97
 4607182418800017408"
 check "a value made into its own type is itself" "$(ran identity 'print text(int(3)) + " " + text(float(2.5)) + " " + text(bool(no)) + " " + text(4 as int) + " " + text("a b" as text)')" "3 2.5 no 4 a b"
+check "rem and ⦼ give the truncated remainder, of the dividend's sign (wiki/Footguns.md)" "$(ran truncated 'print text(-7 rem 3) + " " + text(-7 ⦼ 3) + " " + text(7 rem -3)')" "-1 -1 1"
 exit $((failures > 0))

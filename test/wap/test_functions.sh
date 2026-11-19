@@ -208,6 +208,12 @@ fail(r, "two")
 print(r.error)')" "some
 none
 one"
+check "try gives its body's value, or its else part's where the body raises" "$(ran try_else 'print text(try raise("x") else 7)
+f(x: int) as int := if x < 0 then raise("neg") else x
+print text(try f(-1) else 0)
+print text(try f(5) else 0)')" "7
+0
+5"
 check "a refused function ends only itself: its siblings are typed anyway, each caller is refused naming it, all said together" "$(ran refused_alone 'bad(x: int) as int := x + "a"
 worse(x: int) as int := bad(x) + 1
 also(x: int) as text := 3
