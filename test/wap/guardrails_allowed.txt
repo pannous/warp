@@ -20,7 +20,6 @@ emit-reads-type wap/core/emit/primitives.wap 4
 emit-reads-type wap/core/emit/values.wap 1
 long-file wap/core/analyze/calls.wap 1
 long-file wap/core/analyze/types.wap 1
-repeated-code wap/core/analyze/calls.wap 1
 repeated-code wap/core/analyze/data.wap 1
 same-shape wap/core/analyze/scope.wap 1
 same-shape wap/core/emit/equality.wap 1
