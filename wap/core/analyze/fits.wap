@@ -91,8 +91,11 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	if way == Conversion.Settled { settles(value_type(n), wanted, s) }
 	if way == Conversion.Read { return as_text(n, s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
-	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else n
+	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
+# a plain value put where a reference is wanted, an any, a number or an optional, in its box: `prim box(3)`; any
+# other value as it is, a reference already
+boxed(n: Node, wanted: Node) as Node := if is_plain(value_type(n)) then with_type_of(placed_like(Prim(symbol(BOXED_VALUE), [n]), n), wanted) else n
 # a character where a text is wanted read as its text, any other value as it is: `if c then 'a' else ""`, a char
 # argument of a text parameter
 text_read(n: Node, wanted: Node?, s: TypingState) as Node := if wanted != ø and conversion(value_type(n), wanted, s) == Conversion.Read then as_text(n, s) else n
@@ -104,6 +107,8 @@ bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 }
 # any value where any is wanted, an int or a float where a number is
 boxed_fit(given: Node, wanted: Node) as bool := wanted == symbol(ANY_TYPE) or wanted == symbol(NUMBER_TYPE) and given in [symbol(INT_TYPE), symbol(FLOAT_TYPE)]
+# whether a type's values are held as they are, not by reference: put where a reference is wanted, each goes in its box
+is_plain(type: Node?) as bool := type is symbol and text(type) in [INT_TYPE, FLOAT_TYPE, BOOL_TYPE, CHAR_TYPE]
 # two types written alike, whatever their positions: `int`, `list<int>`, `(float) -> float`
 same_type(a: Node, b: Node) as bool := match b {
 	Symbol(name) => a is symbol and text(a) == name
