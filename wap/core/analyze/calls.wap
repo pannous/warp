@@ -100,7 +100,7 @@ arranged(definition: Function, arguments: list) as list? := {
 	placed = positional
 	for parameter in parameters.drop(#positional) {
 		given = named.filter(argument => text(declared_name(argument)) == text(declared_name(parameter)))
-		placed = placed + [if given then named_value(given#1) else if defaulted(parameter) then fact_of(parameter, DEFAULT) else return ø]
+		placed = placed + [if given then named_value(given#1) else if defaulted(parameter) then parameter_default(parameter) else return ø]
 	}
 	placed
 }
@@ -111,10 +111,11 @@ takes_count(definition: Function, count: int) as bool := {
 	count <= #parameters and parameters.drop(count).all(defaulted)
 }
 defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
-# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants; a
-# default written ø is the fact Empty, which reads back as none
+# a parameter's default value; a default written ø is the fact Empty, which reads back as none
+parameter_default(parameter: Node) as Node := fact_of(parameter, DEFAULT) ?? Empty
+# the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
 defaults_given(definition: Function, count: int, s: TypingState, f: TypeFrame) as list := {
-	parameters_in(definition.definer).drop(count).map(parameter => typed_form(fact_of(parameter, DEFAULT) ?? Empty, s, f, type_given(parameter)))
+	parameters_in(definition.definer).drop(count).map(parameter => typed_form(parameter_default(parameter), s, f, type_given(parameter)))
 }
 # a map's own word, `m.keys`, beside its entries, `m.name`: a function of that name taking a map alone (wiki/map.md)
 map_word(key: Node, s: TypingState) as bool := definitions_named(text(key), s).any(definition => takes_count(definition, 1) and takes_map(parameters_in(definition.definer)#1))
@@ -359,6 +360,7 @@ result_given(body: Node, frame: TypeFrame, name: Node, s: TypingState) as Node? 
 	for returned in frame.returns { if not (returned == result or result == ø and returned == symbol(EMPTY_TYPE) or conversion(returned, result, s) in STATIC_CONVERSIONS) { refused(name, "this function gives back values of different types") } }
 	result
 }
+A_DEFINE = "a function's definition is a Define"
 shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition.definer { Define(name, parameters, body) => {
 	key = definition.key
 	letters = letters_bound(definition, argument_types, s) ?? []
@@ -397,7 +399,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	if typed.called_unknown and valued_type(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
 	typed.done = yes
 	typed
-} }
+}; _ => refused(definition.definer, A_DEFINE) }
 # a call typed by the function it calls: of its result, or jumping when that never returns
 result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumping(n) else if chosen.result == ø and not chosen.done then with_fact(n, RESULT_UNKNOWN, Text(chosen.unknown_result)) else with_type_of(n, chosen.result)
 # A parameter is of its written type, its letters bound, whatever an argument gives: `f(x: int?)` takes 3 and ø as an
