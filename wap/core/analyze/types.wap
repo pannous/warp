@@ -54,11 +54,14 @@ ARROW = "->"
 
 # The type a key has: a variable's by its place's key, a generic letter's, an unknown's (α1) once settled
 class Binding { key: text; type: Node }
+# A function as its definition writes it: its name, its parameters' written types (ø where none is written), its
+# written result, its Define and the file of the module it is written in
+class Function { name: text; parameters: list<Node?>; result: Node?; definer: Node; module: text }
 # A call of a function typed only once its unknowns settle: the definition, the argument types, the call
-class Deferred { definition: Node; types: list<Node>; at: Node }
+class Deferred { definition: Function; types: list<Node>; at: Node }
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
 class TypingState {
-	definitions: list<Node> = []
+	definitions: list<Function> = []
 	# the definitions' places by name, for definitions_named, and by the key of the place each is written at, for
 	# definition_keyed (core/analyze/calls.wap)
 	definition_names: NameIndex = NameIndex()
@@ -132,7 +135,7 @@ typed_shown(program: Block, preload: Block) as Block := typed_among(program, sta
 typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()
 	defines = library.filter(statement => statement is Define)
-	s.definitions = defines
+	s.definitions = defines.map(function_of)
 	s.records = added_records(Records(), library)
 	s.definitions = shaped_definitions(s.definitions, s)
 	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
@@ -211,11 +214,11 @@ with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fac
 # unless it is TYPED_WHEN_CALLED.
 block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	s.records = added_records(s.records, written)
-	s.definitions = s.definitions + written.filter(statement => statement is Define)
+	s.definitions = s.definitions + written.filter(statement => statement is Define).map(function_of)
 	# shaped once all are known: a pattern's builder may come after a definition naming its type
 	s.definitions = shaped_definitions(s.definitions, s)
 	# each definition as the typing stage keeps it, its written types' shapes known
-	statements = written.map(statement => if statement is Define then definition_keyed(function_key_of(statement), s) ?? statement else statement)
+	statements = written.map(statement => if statement is Define then held_function(statement, s).definer else statement)
 	# a statement wap refuses still lets the definitions beside it be typed, so their refusals are said with its own
 	typed = try statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø)) catch e {
 		typed_alone(statements, s)
@@ -228,7 +231,20 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 # each definition whose parameters all have their types typed, even when nothing calls it, unless TYPED_WHEN_CALLED;
 # one wap refuses ends alone. The catch is empty because function_typed has already kept its refusal for the end:
 # only what function_typed raises may reach it, never a raise that skips that record
-typed_alone(statements: list, s: TypingState) := for statement in statements { if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø and all_typed(statement, s.records) { try function_typed(statement, written_types(statement), s, statement) catch e { } } }
+typed_alone(statements: list, s: TypingState) := for statement in statements {
+	if statement is Define and fact_of(statement, TYPED_WHEN_CALLED) == ø {
+		held = held_function(statement, s)
+		if all_typed(held, s.records) { try function_typed(held, held.parameters, s, statement) catch e { } }
+	}
+}
+# a definition as the typing stage holds it
+held_function(definition: Node, s: TypingState) as Function := definition_keyed(function_key_of(definition), s) ?? function_of(definition)
+# a function the typing stage writes itself, held with the written ones
+function_added(definition: Node, s: TypingState) as Function := {
+	added = function_of(definition)
+	s.definitions += [added]
+	added
+}
 # the Defines each of these definitions became, in the order typed
 functions_typed_from(definitions: list, s: TypingState) as list := {
 	keys = definitions.map(function_key_of)
@@ -333,7 +349,7 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if known == ø then read else if base_of_optional(type) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
-names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #parameters_in(definition_at(definer, s)) == 0)
+names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #definition_at(definer, s).parameters == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
 variables_of(name: Node, s: TypingState, f: TypeFrame) as list<Binding> := if is_bound(name, DefinitionKind.Global) then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
