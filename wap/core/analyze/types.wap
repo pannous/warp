@@ -319,7 +319,7 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if known == ø then read else if base_of_optional(type) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
-names_constant(n: Node, expected: Node?, s: TypingState) as bool := function_type_parts(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #parameters_in(definition_at(definer, s)) == 0)
+names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #parameters_in(definition_at(definer, s)) == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
 variables_of(name: Node, s: TypingState, f: TypeFrame) as list := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {

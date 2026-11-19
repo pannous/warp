@@ -235,7 +235,7 @@ takes(definition: Node, given: list, s: TypingState, fit: function) as bool := {
 	letters = letters_bound(definition, given.map(value_type), s)
 	letters != ø and (1 to #given).all(at => argument_taken(given#at, parameters#at, letters, s, fit))
 }
-argument_taken(argument: Node, parameter: Node, letters: list, s: TypingState, fit: function) as bool := function_type_parts(type_given(parameter)) != ø or conforms(value_type(argument), type_given(parameter), s) or fit(with_letters(argument, letters), substituted(type_given(parameter), letters))
+argument_taken(argument: Node, parameter: Node, letters: list, s: TypingState, fit: function) as bool := signature(type_given(parameter)) != ø or conforms(value_type(argument), type_given(parameter), s) or fit(with_letters(argument, letters), substituted(type_given(parameter), letters))
 # an argument of the type its letters' binding gives it, `xs` of a list<α1> the call settles as a list<int>
 with_letters(argument: Node, letters: list) as Node := {
 	type = substituted(value_type(argument), letters)
@@ -278,7 +278,7 @@ type_weight(type: Node?, records: Records) as int := if type == ø then 0 else i
 # given, so `area(s)` in its body is the given type's own area.
 protocol_named(records: Records, type: Node?) as Node? := {
 	record = record_named(records, type)
-	if record == ø or not cases_of(record) is empty or fields_of(record) is empty or not fields_of(record).all(field => function_type_parts(declared_type(field)) != ø) { return ø }
+	if record == ø or not cases_of(record) is empty or fields_of(record) is empty or not fields_of(record).all(field => signature(declared_type(field)) != ø) { return ø }
 	record
 }
 # whether a value of the given type fits the protocol wanted: no protocol wanted, or every word of it done for the type
@@ -302,7 +302,7 @@ words_missing(definitions: list, types: list, s: TypingState) as text := {
 }
 does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, parameter_count(word)))
 # how many parameters a protocol's word takes besides the value's own, its field a function type (protocol_named checks it)
-parameter_count(word: Node) as int := #(function_type_parts(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters
+parameter_count(word: Node) as int := #(signature(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters
 # whether a definition takes a value of this type first, then as many parameters as a protocol's word
 does_as(definition: Node, given: Node, arity: int) as bool := {
 	parameters = parameters_in(definition)
@@ -399,7 +399,7 @@ result_of(n: Node, chosen: TypedFunction) as Node := if chosen.jumps then jumpin
 parameter_type(written: Node?, given: Node, letters: list, records: Records) as Node := if written == ø or takes_own_type(written, records) then given else substituted(written, letters)
 # whether a parameter of this written type is typed anew for each type given: a bare `list`, `enum` or `function`,
 # which take any list, enum or function value, a function type, whose function values each type it, and a protocol
-takes_own_type(written: Node, records: Records) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or function_type_parts(written) != ø or protocol_named(records, written) != ø
+takes_own_type(written: Node, records: Records) as bool := written == symbol(LIST_TYPE) or written == symbol(ENUM_TYPE) or written == symbol(FUNCTION_WORD) or signature(written) != ø or protocol_named(records, written) != ø
 parameter_typed(parameter: Node, type: Node, frame: TypeFrame) as Node := {
 	frame.variables += [[place_key(declared_name(parameter)), type]]
 	with_name_fact(parameter, TYPE, type)
