@@ -35,7 +35,7 @@ captures_loaded(form: Define, parameters: list<Node>, p: Program, f: Frame) as l
 # captures; else of a type of its own, a struct of what it captures, its function called directly. A function's name
 # as a value captures nothing.
 function_value_code(form: Node, p: Program, f: Frame) as Code := {
-	if function_type_parts(type_of(form)) != ø { return signature_value_code(form, p, f) }
+	if signature(type_of(form)) != ø { return signature_value_code(form, p, f) }
 	Code(layout(form, p), captures_code(form, f) + instruction(STRUCT_NEW, [closure_of(form, p)]))
 }
 # A function value of a signature: its function's adapter referred to, then its captures, the struct of them a λ
@@ -53,7 +53,7 @@ is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => 
 # none
 adapting_function(form: Node, own: Node, p: Program) as int := {
 	function = placed_for(p.functions, form) ?? pending_function(p, form) ?? refused(form, "the typing stage typed no function for this value")
-	parts = function_type_parts(type_of(form)) ?? refused(form, "this function value's type is no function type")
+	parts = signature(type_of(form)) ?? refused(form, "this function value's type is no function type")
 	parameters = signature_parameters(parts, p.m, p.records)
 	captures = if is_lambda(form) then local_get(0) + heap_instruction(REF_CAST_NULL, closure_of_type(own, form, p)) else []
 	added_function(p.m, [ANYREF] + parameters, signature_results(parts, p.m, p.records), [], captures + (1 to #parameters).flat_map(local_get) + instruction(CALL, [function.index]))
@@ -62,7 +62,7 @@ adapting_function(form: Node, own: Node, p: Program) as int := {
 # its function's reference, called by call_ref
 value_call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	type = type_of(called)
-	parts = function_type_parts(type) ?? refused(called, "this value's type is no function type")
+	parts = signature(type) ?? refused(called, "this value's type is no function type")
 	value = code(called, p, f)
 	f.slots += [Placed("value called by ${place_key(form)}", #f.slots, value.type, [], yes)]
 	held = local_get(f.slots.last.index)
