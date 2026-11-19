@@ -54,8 +54,8 @@ ATOM_TYPES = [CHAR_TYPE, INT_TYPE, FLOAT_TYPE, NUMBER_TYPE, TEXT_TYPE]
 # The type a key has: a variable's by its place's key, a generic letter's, an unknown's (α1) once settled
 class Binding { key: text; type: Node }
 # A function as its definition writes it: its name, its parameters' written types (ø where none is written), its
-# written result, its Define and the file of the module it is written in
-class Function { name: text; parameters: list<Node?>; result: Node?; definer: Node; module: text }
+# written result, its Define, the file of the module it is written in, and whether its written types' shapes are known
+class Function { name: text; parameters: list<Node?>; result: Node?; definer: Node; module: text; shaped: bool = no }
 # A call of a function typed only once its unknowns settle: the definition, the argument types, the call
 class Deferred { definition: Function; types: list<Node>; at: Node }
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
