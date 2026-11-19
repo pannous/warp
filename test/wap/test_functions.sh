@@ -234,4 +234,10 @@ print(text(safe("bad")))')" "boom
 3
 6
 0"
+check "an empty catch inside a block drops the error and goes on, as an empty then part does" "$(ran empty_catch 'f(x: int) := if x < 0 then raise("neg") else x
+g(c: bool) := { if c { try f(-1) catch e { } }; print "went on" }
+g(yes)
+if no { }
+print "done"')" "went on
+done"
 exit $((failures > 0))
