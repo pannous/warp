@@ -41,12 +41,12 @@ STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 # its shape as the Node pattern that takes a value apart, `taken`
-class Declared { name: text, shape: Node, holes: list, matcher: Matcher, taken: Node = Empty }
+class Declared { name: text, shape: Node, holes: list<text>, matcher: Matcher, taken: Node = Empty }
 
 # what a part of a pattern asks of the code at its place
 enum Test { Hole, Literal, Sequence, Pair, Repeat }
 # a hole's matcher knows, from when it was compiled, whether its type is a shape and which declared pattern it names
-class Matcher { test: Test, name: text = "", type: Node = Empty, shaped: bool = yes, pattern: Declared? = ø, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list = [] }
+class Matcher { test: Test, name: text = "", type: Node = Empty, shaped: bool = yes, pattern: Declared? = ø, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list<Matcher> = [] }
 
 # ---- holes
 
@@ -120,9 +120,9 @@ bound_in_order(holes: list, parts: list) as map := {
 }
 
 # the holes of a normalized pattern in the order they are written
-holes_in(n: Node) as list := hole_nodes(n).map(hole_key)
+holes_in(n: Node) as list<text> := hole_nodes(n).map(hole_key)
 # the holes themselves, each with its type as a fact
-hole_nodes(n: Node) as list := match n {
+hole_nodes(n: Node) as list<Node> := match n {
 	Symbol(name) => if is_hole(n) then [n] else []
 	List(items, bracket, separator) => items.flat_map(item => hole_nodes(item))
 	Key(left, op, right) => hole_nodes(left) + hole_nodes(right)
