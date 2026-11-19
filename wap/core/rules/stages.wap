@@ -139,10 +139,7 @@ list_heads(language: Language, items: list) as list<text> := {
 
 # A rule may refuse a spelling with a fix-it, `rule … => refuse "put the inner if in braces"`: the message, ø for a
 # template that writes code
-refusal_of(template: Node) as text? := match template {
-	List(items, Bracket.None, Separator.Space) => if #items == 2 and items#1 == symbol(REFUSE_WORD) and items#2 is text then text(items#2) else ø
-	_ => ø
-}
+refusal_of(template: Node) as text? := phrase_text(template, REFUSE_WORD)
 
 # ---- termination, checked once all rules are loaded
 

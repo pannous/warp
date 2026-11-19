@@ -33,14 +33,24 @@ declared_program(program: Node) as Node := {
 }
 # the files a program's `use` lines name, each once however often named, resolved against its own folder: plain
 # notation, readable before any stage
-used_files(program: Node) as list := top_level_statements(program).filter(is_use).map(statement => beside(file_of(program) ?? ".", used_path(statement))).unique
+used_files(program: Node) as list := files_named(program, USE_WORD).unique
+# the files a program's statements `word "path"` name, in order, each resolved against the folder of its statement
+files_named(program: Node, word: text) as list<text> := {
+	files = []
+	for statement in top_level_statements(program) {
+		path = phrase_text(statement, word)
+		if path != ø { files = files + [beside(file_of(statement) ?? file_of(program) ?? ".", path)] }
+	}
+	files
+}
 
 # `use "path"`: a statement that brings in a module, no code
-is_use(statement: Node) as bool := match statement {
-	List(items, Bracket.None, Separator.Space) => #items == 2 and items#1 == symbol(USE_WORD) and items#2 is text
-	_ => no
+is_use(statement: Node) as bool := phrase_text(statement, USE_WORD) != ø
+# the text of a phrase `word "text"`: the path of a use or an include, a rule's refusal; ø for any other code
+phrase_text(phrase: Node, word: text) as text? := match phrase {
+	List(items, Bracket.None, Separator.Space) => if #items == 2 and items#1 == symbol(word) and items#2 is text then text(items#2) else ø
+	_ => ø
 }
-used_path(statement: List) as text := match statement { List(items, bracket, separator) => text(items#2) }
 # the files a declared program uses, in the order written
 uses_of(program: Node) as list<text> := fact_items(program, USES).map(item => text(item))
 

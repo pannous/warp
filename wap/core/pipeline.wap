@@ -14,18 +14,17 @@ use "language.wap"
 use "paths.wap"
 
 # the patterns of the kernel forms and the rules of the spellings every program may use, loaded as data
-RULE_FILES = ["kernel/forms.wap"] + ["literals", "conditions", "loops", "matching", "data", "records", "definitions", "types", "ranges", "calls"].map(topic => "preload/sugar/${topic}.wap")
-# the standard language every program gets, as definitions: the prelude and the word files beside it
-PRELOAD_FILES = ["preload/prelude.wap", "preload/lists.wap", "preload/texts.wap", "preload/numbers.wap", "preload/nodes.wap"]
+RULES_FILE = "preload/rules.wap"
+# the standard language every program gets, as definitions
+PRELOAD_FILE = "preload/preload.wap"
+INCLUDE_WORD = "include"
 
 # the rules loaded from the wap folder, then the preload declared once: what it declares is the library every program
 # is bound in
 language_loaded(language: Language, wap_folder: text) as Node := {
-	for file in RULE_FILES { rules_loaded(language, operated_program(language, read_notation(in_folder(wap_folder, file)))) }
-	files = PRELOAD_FILES.map(file => in_folder(wap_folder, file))
-	statements = files.flat_map(file => top_level_statements(operated_file(language, file)))
-	# one program, its uses found beside the prelude
-	declared_operated(language, with_fact(List(statements, Bracket.None, Separator.Newline), SOURCE_FILE, Text(files#1)))
+	# each file read with the rules of the files before it loaded
+	for file in files_named(operated_file(language, in_folder(wap_folder, RULES_FILE)), USE_WORD) { rules_loaded(language, operated_file(language, file)) }
+	declared_operated(language, operated_file(language, in_folder(wap_folder, PRELOAD_FILE)))
 }
 # a file of the wap folder, its path spelled as a used module's is, so a place names its file one way
 in_folder(folder: text, file: text) as text := normalized_path(folder + "/" + file)
@@ -34,7 +33,23 @@ read_notation(file: text) as Node := notation(read(file), file)
 # read code with its operators read, its spellings rewritten by the shape rules, then declared
 declared_code(language: Language, code: Node) as Node := declared_operated(language, operated_program(language, code))
 declared_operated(language: Language, code: Node) as Node := declared_program(shaped_program(language, code))
-operated_file(language: Language, file: text) as Node := operated_program(language, read_notation(file))
+# a file's code with its operators read, each `include "file"` in it replaced by that file's statements, as they are
+# (wiki/use.md)
+operated_file(language: Language, file: text) as Node := {
+	code = operated_program(language, read_notation(file))
+	match code {
+		List(lines, Bracket.None, Separator.Newline) => refitted(List(lines.flat_map(line => included(language, file, line)), Bracket.None, Separator.Newline), code)
+		_ => code
+	}
+}
+# a line of a file, or the lines of the file it includes
+included(language: Language, file: text, line: Node) as list<Node> := {
+	path = phrase_text(line, INCLUDE_WORD) ?? return [line]
+	match operated_file(language, beside(file, path)) {
+		List(lines, Bracket.None, Separator.Newline) => lines
+		code => [code]
+	}
+}
 # a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
 declared_modules(language: Language, file: text) as list<Module> := {
 	code = operated_file(language, file)

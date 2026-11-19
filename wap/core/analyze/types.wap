@@ -54,9 +54,10 @@ ATOM_TYPES = [CHAR_TYPE, INT_TYPE, FLOAT_TYPE, NUMBER_TYPE, TEXT_TYPE]
 
 # The type a key has: a variable's by its place's key, a generic letter's, an unknown's (α1) once settled
 class Binding { key: text; type: Node }
-# A function as its definition writes it: its name, its parameters' written types (ø where none is written), its
-# written result, its Define, the file of the module it is written in, and whether its written types' shapes are known
-class Function { name: text; parameters: list<Node?>; result: Node?; definer: Node; module: text; shaped: bool = no }
+# A function as its definition writes it: its name, the key of the place its name is written at, which names it among
+# all, its parameters' written types (ø where none is written), its written result, its Define, the file of the module
+# it is written in, and whether its written types' shapes are known
+class Function { name: text; key: text; parameters: list<Node?>; result: Node?; definer: Node; module: text; shaped: bool = no }
 # A call of a function typed only once its unknowns settle: the definition, the argument types, the call
 class Deferred { definition: Function; types: list<Node>; at: Node }
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
@@ -149,7 +150,7 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	written = defines + s.lambdas + s.dispatchers
 	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
-	late = s.functions.drop(typed_before).filter(each => not (key_of(each.function) in library_keys)).map(each => each.define)
+	late = s.functions.drop(typed_before).filter(each => not (each.function.key in library_keys)).map(each => each.define)
 	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
@@ -247,7 +248,7 @@ function_added(definition: Node, s: TypingState) as Function := {
 # the Defines each of these definitions became, in the order typed
 functions_typed_from(definitions: list, s: TypingState) as list := {
 	keys = definitions.map(function_key_of)
-	s.functions.filter(typed => key_of(typed.function) in keys).map(typed => typed.define)
+	s.functions.filter(typed => typed.function.key in keys).map(typed => typed.define)
 }
 function_key_of(definition: Node) as text := place_key(declared_name(written_name(definition)))
 

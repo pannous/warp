@@ -62,7 +62,8 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 	# an arm naming a declared pattern on a value of the type it narrows, `Record(name, fields, variants)` on a Node: its
 	# holes hold their types too
 	named = if fact_of(pattern, SHAPE_OF) == ø then ø else shaped(symbol(text(fact_of(pattern, SHAPE_OF))), s)
-	if named != ø and same_type(narrowed_type(named), type) { holes_remembered(pattern, named, s, f) }
+	narrows = narrowed_type(named)
+	if named != ø and narrows != ø and same_type(narrows, type) { holes_remembered(pattern, named, s, f) }
 	if list_pattern_items(pattern) != ø { return list_pattern_typed(pattern, type, s, f) }
 	# a case of an optional's value: `Text(name)` fits a Node? holding a text node, never ø
 	if base_of_optional(type) != ø and (pattern is Call or is_case_name(pattern)) { return pattern_typed(pattern, base_of_optional(type), s, f) }
@@ -74,7 +75,7 @@ pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node :
 # declared pattern's holes named in it hold their holes' types, `fields` a List
 shape_pattern_typed(pattern: Node, type: Node, s: TypingState, f: TypeFrame) as Node := {
 	holes_remembered(pattern, type, s, f)
-	with_type_of(pattern_typed(pattern, narrowed_type(type), s, f), type)
+	with_type_of(pattern_typed(pattern, shape_narrows(type), s, f), type)
 }
 # the variables a declared pattern's arm names at its holes, of their holes' types, `fields` a List: known before the
 # pattern binds them as the narrowed type's parts, as a variable's first type is its type
@@ -146,7 +147,7 @@ list_missing(rows: list, types: list, s: TypingState) as list? := {
 	ø
 }
 # how many items a list pattern names by place, besides its rest
-fixed_count(pattern: Node) as int := #(list_pattern_items(pattern) ?? []).filter(item => rest_named(item) == ø)
+fixed_count(pattern: Node) as int := #((list_pattern_items(pattern) ?? []).filter(item => rest_named(item) == ø))
 # whether a pattern fits lists of a count, or longer ones: any name, a list pattern of that many items, or of no more
 # and a rest
 fits_count(pattern: Node, count: int, longer: bool) as bool := {

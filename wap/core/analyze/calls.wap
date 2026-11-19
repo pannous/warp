@@ -49,8 +49,8 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	# `n is symbol` on a Node tests the kind even beside a maker symbol(name) (core/analyze/shapes.wap kind_named)
 	kind = if fact_of(n, PREDICATE) == ø then ø else kind_named(called, value_type(given#1), s)
 	if kind != ø { return typed_form(shape_test(arguments#1, kind, n, s), s, f, ø) }
-	known = candidates.map(definition => key_of(definition))
-	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(key_of(definition)))]
+	known = candidates.map(definition => definition.key)
+	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(definition.key))]
 	made = made_from_map(n, called, candidates, given, s)
 	if made != ø { return typed_form(made, s, f, expected) }
 	meant = chosen_definition(n, called, scopes, given, expected, s)
@@ -187,11 +187,13 @@ candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø t
 # the definition that typed function came from, so typing a typed form again changes nothing
 definition_at(definer: Node, s: TypingState) as Function := definition_keyed(place_key(definer), s) ?? definition_keyed(typed_from(place_key(definer), s), s) ?? refused(definer, "the typing stage found no definition here")
 typed_from(key: text, s: TypingState) as text := {
-	for typed in s.functions { if place_key(declared_name(signed_name(typed))) == key { return key_of(typed.function) } }
+	for typed in s.functions { if place_key(declared_name(signed_name(typed))) == key { return typed.function.key } }
 	""
 }
+# the one definition of a key, ø when none has it: a key names one definition, so two of one key are refused
 definition_keyed(key: text, s: TypingState) as Function? := {
-	keyed = items_named(s.definition_keys, s.definitions, key, definition => key_of(definition))
+	keyed = items_named(s.definition_keys, s.definitions, key, definition => definition.key)
+	if #keyed > 1 { refused(symbol(key), "two definitions share the key ${key}") }
 	if keyed is empty then ø else keyed#1
 }
 
@@ -222,7 +224,7 @@ fewest_conversions(definitions: list<Function>, given: list, s: TypingState) as 
 }
 conversions_taken(definition: Function, given: list, s: TypingState) as int := {
 	types = definition.parameters
-	#(1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s))
+	#((1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s)))
 }
 # whether a definition takes these arguments, each one fitting its parameter
 # (a parameter typed by generic letters takes an argument whose type binds them alike, and one of a function type a
@@ -265,7 +267,7 @@ structure(type: Node?) as int := {
 # of equally specific definitions, those of the innermost scope: a program's `===(a: T, b: T)` hides the library's
 innermost(definitions: list<Function>, scopes: list) as list<Function> := {
 	for scope in scopes {
-		inner = definitions.filter(definition => scope.any(candidate => key_of(candidate) == key_of(definition)))
+		inner = definitions.filter(definition => scope.any(candidate => candidate.key == definition.key))
 		if inner { return inner }
 	}
 	definitions
@@ -303,7 +305,7 @@ words_missing(definitions: list<Function>, types: list, s: TypingState) as text 
 }
 does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, parameter_count(word)))
 # how many parameters a protocol's word takes besides the value's own, its field a function type (protocol_named checks it)
-parameter_count(word: Node) as int := #(signature(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters
+parameter_count(word: Node) as int := #((signature(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters)
 # whether a definition takes a value of this type first, then as many parameters as a protocol's word
 does_as(definition: Function, given: Node, arity: int) as bool := {
 	types = definition.parameters
@@ -331,7 +333,7 @@ candidates_text(definitions: list<Function>) as text := definitions.map(definiti
 # reached: from a block, a call, or alone
 # It ends alone when wap refuses it: refused once, and each caller is refused naming it
 function_typed(definition: Function, argument_types: list, s: TypingState, at: Node) as TypedFunction := {
-	key = key_of(definition)
+	key = definition.key
 	name = definition.name
 	if s.refusals.any(each => each.key == key) { refused(at, "this calls ${name}, which wap refuses") }
 	try shaped_typed(shaped_once(definition, s), argument_types, s, at) catch e {
@@ -353,13 +355,13 @@ result_given(body: Node, frame: TypeFrame, name: Node, s: TypingState) as Node? 
 	result
 }
 shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Node) as TypedFunction := match definition.definer { Define(name, parameters, body) => {
-	key = key_of(definition)
+	key = definition.key
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
-	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, substituted(argument_types#place, letters), letters, s.records))
+	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place, letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
-		if key_of(typed.function) == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
+		if typed.function.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
 			# a call of itself before its result is known gives no value; a function giving one refuses below
 			typed.called_unknown = typed.called_unknown or not typed.done and typed.result == ø
 			return typed
@@ -416,10 +418,8 @@ parameters_in(definition: Define) as list := match definition { Define(name, par
 function_of(definition: Node) as Function := {
 	written = written_name(definition)
 	name = declared_name(written)
-	Function(text(name), written_types(definition), declared_type(written), definition, file_of(name) ?? "")
+	Function(text(name), place_key(name), written_types(definition), declared_type(written), definition, file_of(name) ?? "")
 }
-# the key of the place a function's name is written at, which names it among all
-key_of(function: Function) as text := function_key_of(function.definer)
 # whether a definition's parameters all have their types, none a generic letter or a function type, whose function
 # values each type it anew: typed even when nothing calls it
 all_typed(definition: Function, records: Records) as bool := definition.parameters.all(type => once_typed(type, records))
