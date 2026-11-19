@@ -53,7 +53,7 @@ field_made(field: Node, value: Node, s: TypingState) as Node := {
 }
 # the constructor's parameter that gives a field its default, ø when none does
 defaulting(record: Node, field: Node, s: TypingState) as Node? := {
-	named = definitions_named(record_name(record), s).flat_map(definition => parameters_in(definition)).filter(parameter => text(declared_name(parameter)) == text(declared_name(field)) and defaulted(parameter))
+	named = definitions_named(record_name(record), s).flat_map(definition => parameters_in(definition.definer)).filter(parameter => text(declared_name(parameter)) == text(declared_name(field)) and defaulted(parameter))
 	if named is empty then ø else named#1
 }
 field_typed(item: Node, record: Node, s: TypingState, f: TypeFrame) as Node := match item { Key(name, Op.Colon, value) => {

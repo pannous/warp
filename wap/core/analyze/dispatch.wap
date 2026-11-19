@@ -27,10 +27,10 @@ NARROWING_WORD = "narrowed"
 
 # The dispatching function a call of these definitions with arguments of these types means; ø when no argument is an
 # any or a number that some definition wants of a type it may hold
-dispatching(called: Node, candidates: list, types: list, s: TypingState) as Node? := {
+dispatching(called: Node, candidates: list<Function>, types: list, s: TypingState) as Function? := {
 	counted = candidates.filter(definition => takes_count(definition, #types))
 	if not counted.any(definition => tested_places(definition, types, s) != []) { return ø }
-	name = placed_like(symbol("${called}(${types_text(types)})"), written_name(counted#1))
+	name = placed_like(symbol("${called}(${types_text(types)})"), written_name(counted#1.definer))
 	known = definition_keyed(place_key(name), s)
 	if known != ø { return known }
 	reads = parameters_of(name, types)
@@ -39,11 +39,11 @@ dispatching(called: Node, candidates: list, types: list, s: TypingState) as Node
 	taking = order.filter(definition => takes(definition, tested_reads(definition, reads, types, s), s, (argument, wanted) -> fits(argument, wanted, s)))
 	untested = taking.filter(definition => tested_places(definition, types, s) == [])
 	last = if untested is empty then raised("${called}: no definition takes these values' types", name, s) else named_call(text(called), untested, reads, name)
-	tried = taking.filter(definition => tested_places(definition, types, s) != []).map(definition => [tests_of(definition, reads, types, s, name), named_call(text(declared_name(written_name(definition))), [definition], reads, name)])
-	dispatcher_made(name, reads, chained(tried, last, name), order.map(definition => declared_type(written_name(definition))), s)
+	tried = taking.filter(definition => tested_places(definition, types, s) != []).map(definition => [tests_of(definition, reads, types, s, name), named_call(definition.name, [definition], reads, name)])
+	dispatcher_made(name, reads, chained(tried, last, name), order.map(definition => definition.result), s)
 }
 # The dispatching function a read of this field on an any means, `.name(any)`; ø when no record has the field
-field_dispatching(key: Node, s: TypingState) as Node? := {
+field_dispatching(key: Node, s: TypingState) as Function? := {
 	holders = s.records.items.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
 	if holders is empty { return ø }
 	name = placed_like(symbol("${FIELD_MARK}${key}(${ANY_TYPE})"), declared_name(field_named(holders#1, key)))
@@ -61,12 +61,11 @@ parameters_of(name: Node, types: list) as list := (1 to #types).map(at => {
 })
 # The dispatching function, kept with the typing stage's definitions and placed with the program's functions; its
 # result written when every choice writes its own, so a choice calling back through the dispatch finds it
-dispatcher_made(name: Node, reads: list, body: Node, results: list, s: TypingState) as Node := {
+dispatcher_made(name: Node, reads: list, body: Node, results: list, s: TypingState) as Function := {
 	written = if results.all(result => result != ø) then Key(name, Op.Colon, results.drop(1).fold(results#1, (a, b) -> joined_type(a, b, s))) else name
 	dispatcher = placed_like(Define(written, List(reads.map(read => Key(read, Op.Colon, value_type(read))), Bracket.Round, Separator.Comma), body), name)
-	s.definitions += [dispatcher]
 	s.dispatchers += [dispatcher]
-	dispatcher
+	function_added(dispatcher, s)
 }
 # the choices, each [its tests, its code], tried in order: the first whose tests all pass runs, else the last
 chained(choices: list, last: Node, at: Node) as Node := {
@@ -82,19 +81,19 @@ chained(choices: list, last: Node, at: Node) as Node := {
 # argument's type: an `is` test there chooses it
 # a parameter's type a test chooses by: written, no any, no generic letter, none that takes its argument's own type
 dispatchable(type: Node?, records: Records) as bool := once_typed(type, records) and type != symbol(ANY_TYPE)
-tested_places(definition: Node, types: list, s: TypingState) as list := (1 to #types).filter(at => dispatchable(type_given(parameters_in(definition)#at), s.records) and tested_fit(type_given(parameters_in(definition)#at), types#at, s))
+tested_places(definition: Function, types: list, s: TypingState) as list := (1 to #types).filter(at => dispatchable(definition.parameters#at, s.records) and tested_fit(definition.parameters#at, types#at, s))
 tested_fit(wanted: Node, given: Node, s: TypingState) as bool := boxed_fit(wanted, given) or conversion(given, wanted, s) == Conversion.Narrowed
 # the arguments as a definition's call reads them once its tests pass: each tested one of its parameter's type
-tested_reads(definition: Node, reads: list, types: list, s: TypingState) as list := {
+tested_reads(definition: Function, reads: list, types: list, s: TypingState) as list := {
 	places = tested_places(definition, types, s)
-	(1 to #reads).map(at => if at in places then with_type_of(reads#at, type_given(parameters_in(definition)#at)) else reads#at)
+	(1 to #reads).map(at => if at in places then with_type_of(reads#at, definition.parameters#at) else reads#at)
 }
-tests_of(definition: Node, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, type_given(parameters_in(definition)#place), at, s))
+tests_of(definition: Function, reads: list, types: list, s: TypingState, at: Node) as list := tested_places(definition, types, s).map(place => test_of(reads#place, definition.parameters#place, at, s))
 # whether an any's value is of the type, `x is int`, or a value of a shape (core/analyze/shapes.wap)
 test_of(read: Node, type: Node, at: Node, s: TypingState) as Node := if narrowed_type(type) != ø then shape_test(read, type, at, s) else with_fact(with_type_of(placed_like(Prim(symbol(BOXED_TEST), [read]), at), symbol(BOOL_TYPE)), TESTED, type)
 # a call of one of these definitions, chosen among them as any call is
-named_call(word: text, definitions: list, arguments: list, at: Node) as Node := {
-	called = with_fact(with_binding(placed_like(symbol(word), at), DefinitionKind.Function), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+named_call(word: text, definitions: list<Function>, arguments: list, at: Node) as Node := {
+	called = with_fact(with_binding(placed_like(symbol(word), at), DefinitionKind.Function), CANDIDATES, List([List(definitions.map(definition => declared_name(written_name(definition.definer))), Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 	placed_like(Call(called, arguments), at)
 }
 raised(message: text, at: Node, s: TypingState) as Node := raising(Text(message), at, s)

@@ -42,7 +42,7 @@ settled_by(bound: list<Binding>, s: TypingState) := {
 }
 # A call of a function for types an unknown still holds: typed once the unknowns settle, so no instance is made for a
 # guess; meanwhile of its written result type, which a function typed later must write
-deferred_typed(definition: Define, types: list, letters: list<Binding>, s: TypingState, at: Node) as TypedFunction := match definition { Define(name, parameters, body) => {
+deferred_typed(definition: Function, types: list, letters: list<Binding>, s: TypingState, at: Node) as TypedFunction := match definition.definer { Define(name, parameters, body) => {
 	typed = TypedFunction(place_key(declared_name(name)), types)
 	typed.result = substituted(declared_type(name) ?? refused(at, UNSETTLED), letters)
 	typed.signed = with_signature(name, types, typed.result)
@@ -78,12 +78,12 @@ facts_settled(n: Node, s: TypingState) as Node := {
 # fit them (a T bound to two types)
 # fit them (a T bound to two types). Function types come last: a function value's function is typed for parameter
 # types the other parameters bound, `map(xs: list<T>, f: (T) -> U)` binds U by typing f for T.
-letters_bound(definition: Node, types: list, s: TypingState) as list<Binding>? := {
+letters_bound(definition: Function, types: list, s: TypingState) as list<Binding>? := {
 	bound = []
-	parameters = parameters_in(definition)
-	in_order = (1 to #types).filter(at => signature(type_given(parameters#at)) == ø) + (1 to #types).filter(at => signature(type_given(parameters#at)) != ø)
+	written = definition.parameters
+	in_order = (1 to #types).filter(at => signature(written#at) == ø) + (1 to #types).filter(at => signature(written#at) != ø)
 	for at in in_order {
-		wanted = type_given(parameters#at)
+		wanted = written#at
 		# a letter an earlier argument bound, wanted of a value that wraps into it, is checked by conversion as the call
 		# fits its arguments, not unified again: `add(xs, 3)` of a list<int?> takes the 3 as an int?. Other bound letters
 		# are unified again, which settles unknown item types
@@ -148,8 +148,8 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	key = text((function_value_parts(type) ?? return ø)#1)
 	definition = definition_keyed(key, s) ?? return ø
 	closure = if is_lambda_key(key, s) then [type] else []
-	if #parameters_in(definition) != #closure + #parameters { return ø }
-	typed = function_typed(definition, closure + parameters, s, definition)
+	if #definition.parameters != #closure + #parameters { return ø }
+	typed = function_typed(definition, closure + parameters, s, definition.definer)
 	# its parameters take the wanted ones as they are: that type or a shape of it, `(pair: Pair)` where `(Node)` is, or
 	# a reference's optional, `(type: Node?)` where `(Node)` is; a plain value's optional would hold it boxed
 	taken = typed.arguments[#closure ..]

@@ -63,7 +63,7 @@ typing_joined(modules: list<Module>) := {
 		statements = []
 		try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
 		run.joined[key] = statements
-		run.state.definitions += statements.filter(statement => statement is Define)
+		run.state.definitions += statements.filter(statement => statement is Define).map(function_of)
 		run.state.records = added_records(run.state.records, statements)
 	}
 	for key in joining {
@@ -229,11 +229,12 @@ module_probed(key: text, own: list) as Probed := {
 	p.lines = refusals_of(key).map(refusal => refusal.replace("\n", " "))
 	for definition in own {
 		name = declared_name(written_name(definition))
-		if not all_typed(definition, run.state.records) { p.by_calls += 1 } else {
+		held = function_of(definition)
+		if not all_typed(held, run.state.records) { p.by_calls += 1 } else {
 			p.functions += 1
 			before = copied(run.state)
 			try {
-				typed = function_typed(definition, written_types(definition), run.state, definition)
+				typed = function_typed(held, held.parameters, run.state, definition)
 				# counted before the unknowns left open default to any: typed alone, a global's empty `{}` is settled by
 				# the other functions that fill it, as the whole program types it
 				found = anys_in(typed.define)
@@ -266,7 +267,7 @@ functions_probe(file: text) as Probed := {
 # a typing state that knows the library's definitions and records
 typing_state(library: list) as TypingState := {
 	s = TypingState()
-	s.definitions = library.filter(statement => statement is Define)
+	s.definitions = library.filter(statement => statement is Define).map(function_of)
 	s.records = added_records(Records(), library)
 	s
 }
@@ -318,7 +319,7 @@ CALLS = "this calls "
 class Family { root: Refusal, name: text, size: int = 1 }
 refused_name(refusal: Refusal) as text := {
 	definition = definition_keyed(refusal.key, run.state)
-	if definition == ø then refusal.key else definition_name(definition)
+	if definition == ø then refusal.key else definition.name
 }
 called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
 family_of(root: Refusal, refusals: list) as Family := {
