@@ -1,6 +1,6 @@
-# Patterns: code with holes, matched against code (notes/first_principles.md "Holes", wiki/pattern.md). Reads a
-# pattern as the operator stage wrote it, in the very language it matches, and compiles it once to a Matcher, which
-# rules/matcher.wap matches Nodes with, binding each hole.
+# Patterns: code with holes, declared and compiled to a Matcher (notes/first_principles.md "Holes", wiki/pattern.md).
+# Reads a pattern as the operator stage wrote it, in the very language it matches, and compiles it once to the Matcher
+# that rules/matcher.wap matches Nodes with, binding each hole.
 #
 #   unless $c $body                 a phrase: the word unless, then two holes
 #   $a ÷ $b                         (Call ÷ $a $b), as the operator stage reads it
