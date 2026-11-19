@@ -94,7 +94,7 @@ parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name
 # A call of a function the program or the preload defined, its arguments of its parameters' types
 call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
-	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and function_type_parts(type_of(called)) != ø { return value_call_code(form, called, arguments, p, f) }
+	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and function_type_parts(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
