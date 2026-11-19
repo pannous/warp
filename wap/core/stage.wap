@@ -207,12 +207,30 @@ captures_of(function: Node) as list := match fact_of(function, CAPTURES) {
 # SIGNATURE on its name, `(int, text) -> int`; a call's DEFINED_AT then names the one function it means
 TYPE = "type"
 SIGNATURE = "signature"
+# A list's places by name, for a list that only grows or is changed in place, as the typing state's definitions and a
+# program's records are: indexed up to `count`, extended for the items added since
+class NameIndex { places: map<text, list<int>> = {}, count: int = 0 }
+# the items of a name in the order written; an item at an indexed place that bears another name now is refused, the
+# list having changed other than in place
+items_named(index: NameIndex, items: list<T>, name: text, name_of: (T) -> text) as list<T> := {
+	while index.count < #items {
+		key = name_of(items[index.count])
+		index.places[key] = (if index.places.has(key) then index.places[key] else []) + [index.count]
+		index.count += 1
+	}
+	places = if index.places.has(name) then index.places[name] else []
+	places.map(place => if name_of(items[place]) == name then items[place] else refused(items[place], "this item is no longer named ${name}: the list it is indexed in changed other than in place"))
+}
+# The Records a program declares, in the order written, found by name through their index; added_records is their
+# only writer, so the index keeps up with the list
+class Records { items: list<Node> = [], names: NameIndex = NameIndex() }
+added_records(records: Records, added: list<Node>) as Records := Records(records.items + added.filter(statement => statement is Record), records.names)
 # A record's TYPE is its name, `Point`; these find a record among the Records a program declares, and its fields,
 # each a typed name `x: int` (declared_name, declared_type)
-record_named(records: list, type: Node?) as Node? := {
+record_named(records: Records, type: Node?) as Node? := {
 	if type == ø or not type is symbol { return ø }
 	# the one declared last: a program's own class, or a used module's, shadows the preload's of the same name
-	named = records.filter(record => record_name(record) == text(type))
+	named = items_named(records.names, records.items, text(type), record => record_name(record))
 	if named is empty then ø else named.last
 }
 record_name(record: Record) as text := match record { Record(name, fields, variants) => text(name) }
@@ -223,11 +241,11 @@ case_name(case: Node) as Node := match case { Call(called, fields) => called; _ 
 case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling
-case_declaring(records: list, name: Node) as Node := declaring(records, name)#2
-enum_declaring(records: list, name: Node) as Node := declaring(records, name)#1
-declaring(records: list, name: Node) as list := {
+case_declaring(records: Records, name: Node) as Node := declaring(records, name)#2
+enum_declaring(records: Records, name: Node) as Node := declaring(records, name)#1
+declaring(records: Records, name: Node) as list := {
 	key = place_key(fact_of(name, DEFINED_AT) ?? refused(name, "this case name reached here unbound"))
-	for record in records { for case in cases_of(record) { if place_key(case_name(case)) == key { return [record, case] } } }
+	for record in records.items { for case in cases_of(record) { if place_key(case_name(case)) == key { return [record, case] } } }
 	refused(name, "no enum the program declares has this case")
 }
 

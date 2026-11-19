@@ -56,11 +56,11 @@ typing_joined(modules: list) := {
 			run.refusals[key] = []
 			statements = prepared_once(module, modules)
 			run.state.definitions += statements.filter(statement => statement is Define)
-			run.state.records += statements.filter(statement => statement is Record)
+			run.state.records = added_records(run.state.records, statements)
 			for statement in statements.filter(statement => not (statement is Define) and not (statement is Record)) {
 				before = copied(run.state)
 				try typed_form(statement, run.state, run.frame, ø) catch e {
-					run.state = before
+					run.state = rolled_back(before)
 					run.refusals[key] += ["a top-level statement: " + e.message]
 				}
 			}
@@ -191,7 +191,7 @@ module_probed(key: text, own: list) as Probed := {
 				if found > 0 { p.lines += ["any\t${name}: ${found} places typed any"] }
 				p.anys += found
 			} catch e {
-				run.state = before
+				run.state = rolled_back(before)
 				p.lines += ["type\t${name}: " + e.message.replace("\n", " ")]
 			}
 		}
@@ -215,16 +215,30 @@ functions_probe(file: text) as Probed := {
 typing_state(library: list) as TypingState := {
 	s = TypingState()
 	s.definitions = library.filter(statement => statement is Define)
-	s.records = library.filter(statement => statement is Record)
+	s.records = added_records(Records(), library)
 	s
+}
+# The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
+# shared with the state that refused, forget the places past them
+rolled_back(before: TypingState) as TypingState := {
+	truncated(before.definition_names, #before.definitions)
+	truncated(before.definition_keys, #before.definitions)
+	truncated(before.records.names, #before.records.items)
+	before
+}
+truncated(index: NameIndex, count: int) := {
+	if index.count > count {
+		for name in index.places.keys { index.places[name] = index.places[name].filter(place => place < count) }
+		index.count = count
+	}
 }
 # a typing state that starts where another stands, its lists its own: what one function's typing adds stays its own
 copied(base: TypingState) as TypingState := {
 	s = TypingState()
 	s.definitions = base.definitions + []
-	s.definition_names = NameIndex({}, base.definition_names.count)
-	for name in base.definition_names.places.keys { s.definition_names.places[name] = base.definition_names.places[name] }
-	s.records = base.records + []
+	s.definition_names = base.definition_names
+	s.definition_keys = base.definition_keys
+	s.records = base.records
 	s.functions = base.functions + []
 	s.globals = base.globals + []
 	s.lambdas = base.lambdas + []
