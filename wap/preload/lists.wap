@@ -43,11 +43,7 @@ remove_at(xs: list<T>, at: int): T := {
 }
 
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
-map(xs: list<T>, f: (T) -> U): list<U> := {
-	out: list<U> = []
-	for x in xs { out.add(f(x)) }
-	out
-}
+map(xs: list<T>, f: (T) -> U): list<U> := (0 upto #xs).map(at => f(xs[at]))
 # each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
 map(r: Range, f: (int) -> U): list<U> := {
 	out: list<U> = []
