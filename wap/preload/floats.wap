@@ -1,3 +1,6 @@
+# float is the fast variant of exact 'real' numbers which are represented as fractions, decimals, quotient, or special numbers like pi 
+# All numbers are exact numbers by default. If we want floats, we need to mark them explicitly e.g. a:float = 3.14f 
+# f32 and f64 are technical terms / types which are allowed but should be avoided in user space 
 # The words the preload's floats are made of, which programs do not see: a float's bits, the truncated quotient and
 # remainder of ints (warp's ÷ and % floor; they come later on top of these), and a float's shortest text, the warp
 # runtime's algorithm (core/runtime/floats.warp)
@@ -19,7 +22,7 @@ powered(a: T, b: int, one: T): T := {
 # ∞, -∞ and NaN by name (the warp runtime's algorithm, core/runtime/floats.warp)
 # the largest float beyond the finite ones
 infinity(): float := float_of_bits(9218868437227405312)
-float_text(x: float): text := {
+float_text(x: float): text := { # todo refactor as  polymorphic text(x: float): text   or   float as text {}  once wap allows it
 	if x != x { return "NaN" }
 	if x == infinity() { return "∞" }
 	if x == -infinity() { return "-∞" }
@@ -43,7 +46,7 @@ positive_float_text(x: float): text := {
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
 # bit is even, as a reader rounds half to even); the multiple of the largest power of ten among them, nearest x
-float_digits(x: float): list<int> := {
+float_digits(x: float): list<int> := { # todo:  ... :(digits:int, shift:int)  Once we allow multi return 
 	exponent = 0
 	mantissa = x
 	while mantissa >= 10.0 {

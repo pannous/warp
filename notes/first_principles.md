@@ -32,6 +32,7 @@ only with the user's OK.
   `Key`.
 - **Blocks are values.** `{ it * 2 }` is a function of `it`. A parameter declared `block` takes the code unevaluated.
 - **Emptiness is tested loosely.** `if no x`, `x is empty` and `if x` test emptiness; `x is ø` tests only for missing.
+- Scope: local > parameter > program > used module > preload, with a loud clash between two modules
 -  dynamic where we can't infer the type (fully in the future)
 - The compiler’s own source stays fully typed, so the self-build stays fast and checked.
 - Loud boundaries. Where a dynamic value enters a typed place, check it there and fail with the position.
