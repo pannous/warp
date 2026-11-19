@@ -15,7 +15,7 @@ use "../stage.wap"
 use "../type_notation.wap"
 
 # the instructions that compare two values of a type on the stack, giving yes or no
-type_equality(type: Node, p: Program) as list := {
+type_equality(type: Node, p: Program) as list<int> := {
 	if base_of_optional(type) != ø { return parts_compared(p, "optional_equal ${type}", layout_of(type, p.m, p.records), optionals_compared(type, p)) }
 	if item_type(type) != ø { return parts_compared(p, "list_equal ${type}", list_layout(type, p), lists_compared(type, p)) }
 	record = record_named(p.records, type)
@@ -24,7 +24,7 @@ type_equality(type: Node, p: Program) as list := {
 	equality(layout_of(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this type yet"), p)
 }
 # the instructions that compare two values of a wasm type: an int, float, yes/no or character, a text, an `any`
-equality(type: list, p: Program) as list := {
+equality(type: list, p: Program) as list<int> := {
 	if type == I64 { return I64_EQ }
 	if type == F64 { return F64_EQ }
 	if type == I32 { return I32_EQ }
@@ -35,10 +35,10 @@ equality(type: list, p: Program) as list := {
 # A call of the helper comparing two values of one layout by their parts, its locals after the two values; the helper
 # takes its place before its code is written, so its code may call it again
 class Compared { locals: list; code: list }
-parts_compared(p: Program, key: text, layout: list, compared: function) as list := {
-	for each in p.helpers { if each#1 == key { return instruction(CALL, [each#2]) } }
+parts_compared(p: Program, key: text, layout: list, compared: function) as list<int> := {
+	if p.helpers.has(key) { return instruction(CALL, [p.helpers[key]]) }
 	index = reserved_function(p.m, [layout, layout], [I32])
-	p.helpers += [[key, index]]
+	p.helpers[key] = index
 	made = compared()
 	bodied(p.m, index, made.locals, made.code + i32_const(1))
 	instruction(CALL, [index])
@@ -47,9 +47,9 @@ parts_compared(p: Program, key: text, layout: list, compared: function) as list 
 # Two cases: one tag and, for a case with fields, equal fields. Tags count the cases of every enum, so one helper
 # serves them all. Its locals: 0 and 1 the cases.
 cases_compared(p: Program) as function := () => Compared([], tag_in(0, p) + tag_in(1, p) + I32_EQ + NO_UNLESS_YES + p.records.items.flat_map(record => cases_of(record).filter(case => case_fields(case) is not empty).flat_map(case => fields_compared(record, case, p))))
-tag_in(local: int, p: Program) as list := local_get(local) + tagged(p.m)
+tag_in(local: int, p: Program) as list<int> := local_get(local) + tagged(p.m)
 # When both cases are this one, each of its fields of the two compared by the field's equality
-fields_compared(record: Node, case: Node, p: Program) as list := {
+fields_compared(record: Node, case: Node, p: Program) as list<int> := {
 	cast = case_struct_of(record, case, p.m, p.records)
 	field = (local, at) => local_get(local) + heap_instruction(REF_CAST_NULL, cast) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
 	fields = case_fields(case)
@@ -75,7 +75,7 @@ optionals_compared(type: Node, p: Program) as function := () => {
 }
 
 # when either of locals 0 and 1 is ø: yes when both are, else no
-missing_compared() as list := local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
+missing_compared() as list<int> := local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
 # count.
@@ -97,7 +97,7 @@ any_equality_function(p: Program) as int := {
 	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing_compared() + boxed + texts + same)
 }
 # when the value in local 0 is of a type: no unless local 1 is too, else both taken out and compared
-compared_as(type: int, taken: list, compare: list) as list := {
+compared_as(type: int, taken: list, compare: list) as list<int> := {
 	both = local_get(0) + heap_instruction(REF_CAST, type) + taken + local_get(1) + heap_instruction(REF_CAST, type) + taken
 	local_get(0) + heap_instruction(REF_TEST, type) + IF + VOID_BLOCK + local_get(1) + heap_instruction(REF_TEST, type) + NO_UNLESS_YES + both + compare + RETURN + END
 }

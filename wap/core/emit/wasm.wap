@@ -78,7 +78,7 @@ default_of(value_type: list<int>) as list<int> := {
 }
 
 # whether a value type is a nullable reference, and the heap type it refers to
-is_reference(type: list<int>) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
+is_reference(type: list<int>) as bool := type == ANYREF or #type > 1 and type#1 == NULLABLE_REFERENCE
 heap_of(reference: list<int>) as list<int> := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 # a nullable reference to the declared type of that index
 nullable(type_index: int) as list<int> := [NULLABLE_REFERENCE] + signed(type_index)
