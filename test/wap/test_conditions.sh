@@ -146,4 +146,12 @@ again(n: int) as text := {
 	if escape == ø then "none" else "some"
 }
 print(again(0) + " " + again(5) + " " + again(9))')" "first none some"
+check "a guard of either test, a or b, leaves what neither finds for the statements after it" "$(ran guard_or 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+read(n: int) as int := {
+	escape = found(n)
+	if escape == ø or n > 8 { return 0 }
+	escape.reads + 1
+}
+print(text(read(5)) + " " + text(read(0)) + " " + text(read(9)))')" "6 0 0"
 exit $((failures > 0))
