@@ -78,7 +78,8 @@ wap/
                               topologically, the minus rule, aliases to canonical words; unrelated mixes refused
 
     rules/                    the rule engine
-      patterns.wap            matching a rule's pattern: holes, typed holes, rests, guards
+      patterns.wap            a rule's pattern declared and compiled to a Matcher: holes, typed holes, rests, guards
+      matching.wap            code matched against a Matcher, its holes bound; how specific a matcher is
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              the stage a rule runs in, read off its pattern; rules indexed by head
       lowering.wap            the spellings milestone 1 lowers by hand, until the engine runs the rule files
