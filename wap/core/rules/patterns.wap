@@ -184,7 +184,7 @@ pattern_taken(called: Node, parts: list, builder: Node) as Node := {
 	if #parts != #holes { refused(called, "${text(called)} takes ${#holes} parts, not ${#parts}") }
 	bindings = {}
 	for at in 1 to #parts { bindings[HOLE_SIGN + text(holes#at)] = parts#at }
-	holes_filled(fact_of(builder, PATTERN_TAKEN), bindings)
+	holes_filled(fact_of(builder, PATTERN_TAKEN) ?? refused(called, "${text(called)} names a pattern whose shape was not taken"), bindings)
 }
 # lowered code with each hole replaced by its binding; a `...` in it spreads a list, no repetition as in a template
 holes_filled(n: Node, bindings: map<text, Node>) as Node := match n {

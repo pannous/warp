@@ -277,8 +277,19 @@ typing_state(library: list) as TypingState := {
 }
 # The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
 # shared with the state that refused, forget the places past them
+# a refused function named as its callers' refusals name it (core/analyze/calls.wap called_name), a function value
+# found among the state's lambdas
+named_in(refusal: Refusal, s: TypingState) as text := {
+	lambda = s.lambdas.filter(each => function_key_of(each) == refusal.key)
+	definition = definition_keyed(refusal.key, s) ?? (if lambda is empty then ø else function_of(lambda#1))
+	if definition == ø then refusal.key else called_name(definition)
+}
+# each refused function's name, taken before a rollback drops the function value it may name
+refused_names: map = {}
 rolled_back(before: TypingState) as TypingState := {
+	global refused_names
 	# what was refused stays known: a function refused once is refused to every caller after it, as the typing says
+	for refusal in run.state.refusals.filter(each => not refused_names.has(each.key)) { refused_names[refusal.key] = named_in(refusal, run.state) }
 	before.refusals = run.state.refusals
 	truncated(before.definition_names, #before.definitions)
 	truncated(before.definition_keys, #before.definitions)
@@ -321,10 +332,7 @@ for file in args {
 CALLS_REFUSED = ", which wap refuses"
 CALLS = "this calls "
 class Family { root: Refusal, name: text, size: int = 1 }
-refused_name(refusal: Refusal) as text := {
-	definition = definition_keyed(refusal.key, run.state)
-	if definition == ø then refusal.key else definition.name
-}
+refused_name(refusal: Refusal) as text := if refused_names.has(refusal.key) then refused_names[refusal.key] else named_in(refusal, run.state)
 called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
 family_of(root: Refusal, refusals: list) as Family := {
 	family = Family(root, refused_name(root))
@@ -339,11 +347,29 @@ family_of(root: Refusal, refusals: list) as Family := {
 	family
 }
 families = run.state.refusals.filter(each => called_refused(each) == "").map(root => family_of(root, run.state.refusals)).sorted(by: family => -family.size)
+# who unblocks a family: the owner of its root's file, by the longest path of the Owners table (notes/wap.md "Owners")
+# that the file starts with; a root no row names says so, for warp-lead to give it one
+OWNERS_TABLE = "/../notes/wap.md"
+OWNERS_COLUMN = " | "
+NO_OWNER = "no owner in notes/wap.md"
+class Owned { path: text, owner: text }
+owned_in(row: text) as list<Owned> := {
+	cells = row.split(OWNERS_COLUMN)
+	if #cells != 3 { return [] }
+	cells#3.split("; ")#1.replace(" |", "").split(", ").map(path => Owned("wap/" + path, cells#2))
+}
+owned = read(program.folder + OWNERS_TABLE).split("\n").filter(line => line.starts_with("| ")).flat_map(owned_in)
+owner_of(file: text) as text := {
+	rows = owned.filter(each => file.starts_with(each.path)).sorted(by: each => -#each.path)
+	if rows is empty then NO_OWNER else rows#1.owner
+}
+# the file a family's root is refused in, as its refusal names it first (core/errors.wap place_of)
+root_file(family: Family) as text := family.root.message.split(" line ")#1
 # each closure typed and emitted whole, the slowest first: where a faster compiler pays most
 for whole in closures.values.filter(each => each.file != "").sorted(by: each => -each.ms) {
 	print "closure\t${whole.ms} ms\t${whole.file} and the ${whole.modules - 1} modules it reaches, typed: ${whole.typed}"
 }
-for family in families { print "family\t${family.size} blocked by ${family.name}: " + family.root.message.replace("\n", " ") }
+for family in families { print "family\t${family.size} blocked by ${family.name}\t${owner_of(root_file(family))}\t" + family.root.message.replace("\n", " ") }
 print "total\t${total.whole} of ${total.files} files typed whole, ${total.typed} of ${total.functions} functions typed, ${total.anys} places typed any"
 if front_refused > 0 {
 	print "front\t${front_refused} refusals of reading, lowering or binding wap's own source"
