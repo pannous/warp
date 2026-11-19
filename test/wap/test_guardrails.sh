@@ -8,16 +8,19 @@
 #   one-ranking      definitions are ordered only by `ranked` (analyze/calls.wap): no other sort in core/analyze or core/emit
 #   long-file        no wap file over 300 lines: its owner splits it along a real seam
 #   repeated-code    no line or list written twice in a file (scripts/repeated-code.sh)
+#   same-shape       no function body or { } block of SHAPE_FLOOR tokens or more with the shape of another, names,
+#                    numbers and texts erased (guardrail_shapes.awk): two such are one function or one table
 #   one-owner        every wap file and test/wap script falls under exactly one row of notes/wap.md "Owners": a path or
 #                    folder in its files column (wap/'s own paths written without it), or a row's "<folder> … no other
 #                    row names"; a clause in words, a role row's "any file", owns nothing
 # Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
 # the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
 # until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
-RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code one-owner"
+RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape one-owner"
 OWNERS=notes/wap.md
 RELATION=conversion
 LONGEST=300
+SHAPE_FLOOR=20
 DECIDING='(^|[^a-z_])(if|match)[ (]|==|!=|[?][?]|^[a-z_]+ = '
 SAME_TYPE_NAMES='^(same|fits)_types?$'
 TYPE_PARAMETERS="given|held|these|those"
@@ -57,6 +60,9 @@ long_file() {
 }
 repeated_code() {
 	bash scripts/repeated-code.sh "$root" --list $wap_files | sed -E 's/^([^:]+):([0-9]+) (.*)/repeated-code\t\1\t\1:\2\t\3/'
+}
+same_shape() {
+	LC_ALL=C awk -v least=$SHAPE_FLOOR -f test/wap/guardrail_shapes.awk $wap_files
 }
 # the owner rows' files, `<row> <path>` a line, a folder ending in /, and `<row> * <folder>` for a catch-all
 owned_paths() {

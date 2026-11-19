@@ -11,6 +11,8 @@ use "fits.wap"
 use "letters.wap"
 use "shapes.wap"
 
+# What a condition finds of a variable: its key, the arm it holds in (1 then, 2 else), the type it reads as there
+class Finding { key: text; arm: int; type: Node }
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
 # An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`; a variable tested of a
@@ -18,26 +20,26 @@ use "shapes.wap"
 if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	tested = condition_typed(condition, s, f)
 	findings = found(condition, tested, s, f)
-	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, findings.filter(finding => finding#2 == at).map(finding => [finding#1, finding#3]), s, f, expected))
+	typed = (1 to 2).map(at => present_typed([then_part, else_part]#at, findings.filter(finding => finding.arm == at), s, f, expected))
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
 	chosen = (1 to 2).map(at => text_read(typed#at, value_type(typed#(3 - at)), s))
 	joined_of(refitted(If(tested, chosen#1, chosen#2), n), chosen, s)
 }
-# an arm typed with the variables known in it, each [its key, the type it reads as]
-present_typed(part: Node, known: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
+# an arm typed with what is known of its variables in it, each read there as its finding's type
+present_typed(part: Node, known: list<Finding>, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	before = f.present
 	# a new list: `+=` would change the one `before` holds too, and the narrowing would outlive its arm
-	f.present = f.present + known
+	f.present = f.present + known.map(finding => [finding.key, finding.type])
 	typed = typed_form(part, s, f, expected)
 	f.present = before
 	typed
 }
-# what a condition finds of its variables, each [its key, the arm, the type it reads as there], from the condition as
-# written and as typed: `a and b` (If(a, b, no)) what each part finds in its then-arm
-found(condition: Node, tested: Node, s: TypingState, f: TypeFrame) as list := {
+# what a condition finds of its variables, from the condition as written and as typed: `a and b` (If(a, b, no)) what
+# each part finds in its then-arm
+found(condition: Node, tested: Node, s: TypingState, f: TypeFrame) as list<Finding> := {
 	parts = conjoined(condition)
 	typed_parts = conjoined(tested)
-	if parts != ø and typed_parts != ø { return (found(parts#1, typed_parts#1, s, f) + found(parts#2, typed_parts#2, s, f)).filter(finding => finding#2 == 1) }
+	if parts != ø and typed_parts != ø { return (found(parts#1, typed_parts#1, s, f) + found(parts#2, typed_parts#2, s, f)).filter(finding => finding.arm == 1) }
 	one = present_tested(condition, s, f) ?? type_tested(tested)
 	if one == ø then [] else [one]
 }
@@ -46,18 +48,18 @@ conjoined(n: Node) as list? := match n {
 	If(first, second, otherwise) => if otherwise is False then [first, second] else ø
 	_ => ø
 }
-# the variable a condition finds present, [its key, the arm: 1 then, 2 else, its value's type]: `x != ø` and `if x`
-# in the then-arm, `x == ø` in the else-arm; ø for any other condition
-present_tested(condition: Node, s: TypingState, f: TypeFrame) as list? := match condition {
-	Symbol(name) => if is_variable(condition) and base_of_optional(variable_type(condition, s, f)) != ø then [place_key(defined_at(condition)), 1, base_of_optional(variable_type(condition, s, f))] else ø
-	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then [place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))] else ø
+# the variable a condition finds present, of its value's type: `x != ø` and `if x` in the then-arm, `x == ø` in the
+# else-arm; ø for any other condition
+present_tested(condition: Node, s: TypingState, f: TypeFrame) as Finding? := match condition {
+	Symbol(name) => if is_variable(condition) and base_of_optional(variable_type(condition, s, f)) != ø then Finding(place_key(defined_at(condition)), 1, base_of_optional(variable_type(condition, s, f))) else ø
+	Call(called, arguments) => if #arguments == 2 and arguments#2 is Empty and is_variable(arguments#1) and (text(called) == UNEQUAL_WORD or text(called) == EQUAL_WORD) then Finding(place_key(defined_at(arguments#1)), if text(called) == UNEQUAL_WORD then 1 else 2, base_of_optional(variable_type(arguments#1, s, f))) else ø
 	_ => ø
 }
-# the variable a typed condition finds of a type, [its key, the then-arm, the type]: `x is int` of a number x, a
-# shape's test of a Node (core/analyze/shapes.wap shape_test)
-type_tested(tested: Node) as list? := match tested {
-	Prim(operation, arguments) => if text(operation) == BOXED_TEST and is_variable(arguments#1) then [place_key(defined_at(arguments#1)), 1, fact_of(tested, TESTED)] else ø
-	Case(subject, arms) => if fact_of(tested, TESTED) != ø and is_variable(subject) then [place_key(defined_at(subject)), 1, fact_of(tested, TESTED)] else ø
+# the variable a typed condition finds of a type, in the then-arm: `x is int` of a number x, a shape's test of a Node
+# (core/analyze/shapes.wap shape_test)
+type_tested(tested: Node) as Finding? := match tested {
+	Prim(operation, arguments) => if text(operation) == BOXED_TEST and is_variable(arguments#1) then Finding(place_key(defined_at(arguments#1)), 1, fact_of(tested, TESTED)) else ø
+	Case(subject, arms) => if fact_of(tested, TESTED) != ø and is_variable(subject) then Finding(place_key(defined_at(subject)), 1, fact_of(tested, TESTED)) else ø
 	_ => ø
 }
 is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø
