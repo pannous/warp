@@ -56,7 +56,7 @@ write_bytes(path: text, bytes: list<int>) := {
 raise(message: text): never := prim raise_text(message)
 
 # how many items a list holds, a list of any items: a bare `list` fits every list<T>
-#(xs: list): int := prim array_len(xs)
+#(xs: list): int := prim list_count(xs)
 
 # arithmetic and comparisons of ints and of floats, each one wasm instruction; a call picks the overload its
 # arguments' types fit
@@ -207,7 +207,7 @@ list(r: Range): list<int> := {
 # the largest int, where a range left open ends: `xs[2 ..]` is Range(2, LAST_INT), every item from the place 2 on
 LAST_INT := 0x7FFFFFFFFFFFFFFF
 # the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]
-slice(xs: list<T>, r: Range): list<T> := prim array_slice(xs, r.from, (if r.last < #xs then r.last + 1 else #xs) - r.from)
+slice(xs: list<T>, r: Range): list<T> := prim list_slice(xs, r.from, (if r.last < #xs then r.last + 1 else #xs) - r.from)
 
 # a float's 64 bits as an int, and a character's code: `ord('a')` is 97
 float_bits(x: float): int := prim i64_reinterpret_f64(x)
