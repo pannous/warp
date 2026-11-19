@@ -191,4 +191,36 @@ print(h(1))
 print text(f(-1))')" "51
 one
 negative"
+check "a function with no written result joins its returns as an if joins its arms: return ø beside a Node gives a Node?, in one giving nothing it just returns" "$(ran return_join 'found(x: int) := {
+	if x > 2 { return ø }
+	Text("small")
+}
+print(if found(1) then "some" else "none")
+print(if found(5) then "some" else "none")
+class R { error: text = "" }
+fail(r: R, why: text) := {
+	if r.error != "" { return ø }
+	r.error = why
+}
+r = R()
+fail(r, "one")
+fail(r, "two")
+print(r.error)')" "some
+none
+one"
+check "try gives its body's value, or its else part's where the body raises" "$(ran try_else 'print text(try raise("x") else 7)
+f(x: int) as int := if x < 0 then raise("neg") else x
+print text(try f(-1) else 0)
+print text(try f(5) else 0)')" "7
+0
+5"
+check "a refused function ends only itself: its siblings are typed anyway, each caller is refused naming it, all said together" "$(ran refused_alone 'bad(x: int) as int := x + "a"
+worse(x: int) as int := bad(x) + 1
+also(x: int) as text := 3
+good(x: int) as int := x * 2
+print(text(good(21)))' | grep -o 'line [0-9]*:\|calls bad' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: "
+check "a program statement wap refuses still lets the functions beside it be typed: all refusals said together" "$(ran refused_beside 'bad(x: int) as int := x + "a"
+worse(x: int) as int := bad(x) + 1
+also(x: int) as text := 3
+print(text(worse(21)))' | grep -o 'line [0-9]*:\|calls [a-z]*' | tr '\n' ' ')" "line 1: line 2: calls bad line 3: line 4: calls worse "
 exit $((failures > 0))

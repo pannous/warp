@@ -63,6 +63,7 @@ precedence_groups = [
 ]
 
 operators = [
+# TODO What is the last entry? Looks like something with magic values, so should be an enum?
 	Operator(".", "dot", infix: "access"),
 	Operator("?.", "safe_dot", infix: "access"),
 	# what repeats or is the rest, `$p...`, `number...` (wiki/signature.md); between two operands `...` is `to`
@@ -71,6 +72,7 @@ operators = [
 	Operator("³", "cube", postfix: "superscript"),
 	# an optional's value, raising when it is missing: `x!` is required(x) (wiki/optional.md)
 	Operator("!", "required", postfix: "superscript"),
+	# Operator("!", "negation", prefix: "unary"),
 	Operator("#", "count", prefix: "count", infix: "access"),
 	Operator("^", "power", infix: "power"),
 	Operator("↑", "arrow_up", infix: "power"),
@@ -95,9 +97,9 @@ operators = [
 	Operator("<=", "less_or_equal", infix: "comparison"),
 	Operator(">=", "greater_or_equal", infix: "comparison"),
 	Operator("in", "in", infix: "comparison"),
-	Operator("==", "equal", infix: "equality"),
+	Operator("is", "is", infix: "equality"), // combines isa wit equal 3 is int and 3 is 3 !
+	Operator("==", "equal", infix: "equality"),// is
 	Operator("!=", "not_equal", infix: "equality"),
-	Operator("is", "is", infix: "equality"),
 	Operator("===", "identical", infix: "equality"),
 	Operator("!==", "not_identical", infix: "equality"),
 	Operator("≈", "approximately", infix: "equality"),
@@ -137,7 +139,7 @@ precedence_below = ["has", "precedence", "below"]
 
 aliases = [
 	# symbols
-	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"),
+	Alias("::", "."), Alias("×", "*"), Alias("⋅", "*"), Alias("**", "^"), Alias("/!", "÷"), Alias("⦼", "rem"),
 	Alias("‐", "-"), Alias("‑", "-"), Alias("‒", "-"), Alias("–", "-"), Alias("—", "-"), Alias("―", "-"),
 	Alias("≤", "<="), Alias("≥", ">="), Alias("≠", "!="),
 	Alias("...", "to", Fixity.Infix), Alias("…", "to"), Alias("..=", "to"), Alias("..<", ".."),

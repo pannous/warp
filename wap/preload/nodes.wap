@@ -20,10 +20,11 @@ enum Node {
 }
 
 # The operators a node carries, each its own value:
-# `Op.Add as text` is "+" (text(op) below)
+# todo: put into operators.md ?
+# `Op.Add as text` is "+" (text(op) below) TODO word(Op.Add) = "add" as definable alias def add(my_class,b){} ?
 enum Op {
 	Colon, Dot, SafeDot, Coalesce, Scope, Define, Assign, Arrow, ArrowUp, ArrowDown
-	Add, Sub, Mul, Div, FloorDiv, Mod, Rem /*todo (card remainder-as-mod-alias) map Remainder to mod at alias level and get rid of it*/, Pow, LogBase, LogOf, Shl, Shr
+	Add, Sub, Mul, Div, FloorDiv, Mod /* %: -7 mod 3 is 2*/ , Rem /* ⦼: -7 rem 3 is -1 */, Pow, LogBase, LogOf, Shl, Shr
 	AddAssign, SubAssign, MulAssign, DivAssign, FloorDivAssign, ModAssign, PowAssign, AndAssign, OrAssign, XorAssign
 	Lt, Gt, Le, Ge, Eq, Is, Ne, Identical, NotIdentical, Similar, Rough
 	And, Or, Xor, Not, BitAnd, BitOr
@@ -33,7 +34,7 @@ enum Op {
 	None
 	# any other operator, `a ⊕ b` of key(a, "⊕", b): its spelling is its own (`op as text` is "⊕"), each joining the
 	# runtime's spellings at its first use (card enum-op-should)
-	Other
+	Other # Other(sign:char) todo: carry it's codepoint (or text?)
 }
 
 # A list's bracket: `Bracket.Square as text` is "[", an unbracketed list's None is ""
@@ -123,6 +124,7 @@ text(op: Op): text := match op {
 	Op.LogOf => "⌟"
 	Op.Shl => "<<"
 	Op.Shr => ">>"
+	# todo assignment change is a UNIVERSAL pattern a ⊕= b  => a = a ⊕ b  for ALL operators automatically!
 	Op.AddAssign => "+="
 	Op.SubAssign => "-="
 	Op.MulAssign => "*="
@@ -246,3 +248,21 @@ same_code(a: Node, b: Node): bool := match [a, b] {
 	[Type(name, body), Type(other_name, other_body)] => name == other_name and body == other_body
 	_ => prim tag_equal(a, b)
 }
+
+# A node as a condition reads it, as warp's runtime does (core/runtime/conversions.warp node_truthy), wherever it was
+# written: Empty, no and an Error are empty, a number, character, text or word when 0 or blank, a list without items,
+# a key when both its sides are; any other node is not
+empty(n: Node): bool := match unwrapped(n) {
+	Empty => yes
+	False => yes
+	Error(node) => yes
+	Number(value) => number_empty(value)
+	Char(value) => ord(value) == 0
+	Text(value) => empty(value)
+	Symbol(name) => empty(name)
+	List(items, bracket, separator) => empty(items)
+	Key(left, op, right) => empty(left) and empty(right)
+	_ => no
+}
+# the `is` narrows the number to an int or a float, so each arm picks its own empty
+number_empty(value: number): bool := if value is int then empty(value) else empty(value)

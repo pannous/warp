@@ -21,6 +21,8 @@ class Module {
 	exports: list<list<int>> = []
 	# passive segments, each its bytes, for `array.new_data`; numbered first, so an index is final when added
 	texts: list<list<int>> = []
+	# exception tags, each its bytes
+	tags: list<list<int>> = []
 	# the functions `ref.func` refers to, declared once each
 	referenced: list<int> = []
 }
@@ -165,6 +167,13 @@ added_global(m: Module, type: list<int>, mutability: int, initial: list<int>) as
 
 exported(m: Module, name: text, kind: int, index: int) := { m.exports += [named(name) + [kind] + unsigned(index)] }
 
+# An exception tag whose exceptions carry values of these types: its index
+added_tag(m: Module, parameters: list<list<int>>) as int := {
+	m.tags += [[EXCEPTION_TAG] + unsigned(added_type(m, function_type(parameters, [])))]
+	#m.tags - 1
+}
+# a block of a type running `body`, an exception of the tag thrown in it caught: its values taken to the label that far out
+try_table(type: list<int>, tag: int, label: int, body: list<int>) as list<int> := TRY_TABLE + type + unsigned(1) + [CATCH] + unsigned(tag) + unsigned(label) + body + END
 # Bytes kept passive, for `array.new_data`: their segment index.
 added_text(m: Module, bytes: list<int>) as int := {
 	m.texts += [bytes]
@@ -185,5 +194,5 @@ module_bytes(m: Module) as list<int> := {
 	passive = m.texts.map(bytes => [PASSIVE_SEGMENT] + bytes_vector(bytes))
 	memory_pages = [[0x00] + unsigned(1)]
 	segment_count = [DATA_COUNT_SECTION] + unsigned(#unsigned(#passive)) + unsigned(#passive)
-	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + declared_references(m) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive)
+	MAGIC + VERSION + section(TYPE_SECTION, type_entries(m)) + section(IMPORT_SECTION, m.imports) + section(FUNCTION_SECTION, declarations) + section(MEMORY_SECTION, memory_pages) + section(TAG_SECTION, m.tags) + section(GLOBAL_SECTION, m.globals) + section(EXPORT_SECTION, m.exports) + declared_references(m) + segment_count + section(CODE_SECTION, codes) + section(DATA_SECTION, passive)
 }

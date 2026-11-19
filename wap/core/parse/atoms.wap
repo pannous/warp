@@ -44,11 +44,11 @@ name_read(r: Reader) := {
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
 	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
 	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
-	word_token(r, end)
+	symbol_token(r, end)
 }
 
-# the word from the reader's place up to `end`, as one token
-word_token(r: Reader, end: int) := token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+# the symbol from the reader's place up to `end`, as one token
+symbol_token(r: Reader, end: int) := token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
 
 # A word glued to `://` begins a URL, `http://x.com/a?b=1`, any scheme alike: one Text up to the next blank,
 # bracket or separator, as today's warp reads it (reader.md §6, URLs)
@@ -63,7 +63,7 @@ glyphs_read(r: Reader, c: text) := {
 	end = r.at + 1
 	while end < r.n and r.code[end] == c { end += 1 }
 	while end < r.n and r.code[end] == '=' { end += 1 }
-	word_token(r, end)
+	symbol_token(r, end)
 }
 
 # `12`, `-3`, `1_000`, `3.5`, `3.`, `1e-3`, `0xFF`: an int, or a float when it has a point or a negative exponent

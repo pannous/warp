@@ -9,6 +9,7 @@ use "host.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 use "patterns.wap"
 use "places.wap"
@@ -23,6 +24,11 @@ waiting_function(p: Program, key: text) as Placed? := {
 defined_name(form: Define) as Node := match form { Define(name, parameters, body) => declared_name(name) }
 function_key(form: Define) as text := place_key(defined_name(form))
 
+# a parameter given the frame's next slot, of a type
+slotted(f: Frame, parameter: Node, type: list) as Placed := {
+	f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, type, [], yes)]
+	f.slots.last
+}
 # A function: its parameters the first slots of a new frame, its body's value its result. It waits no longer, so a
 # call inside its own body finds it neither waiting nor placed.
 emitted_function(waiting: Define, p: Program) as Placed := {
@@ -31,7 +37,7 @@ emitted_function(waiting: Define, p: Program) as Placed := {
 }
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
 	f = Frame(function: yes)
-	for parameter in items_of(parameters) { f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, parameter_type(parameter, p), [], yes)] }
+	for parameter in items_of(parameters) { slotted(f, parameter, parameter_type(parameter, p)) }
 	f.parameter_count = #f.slots
 	types = f.slots.map(slot => slot.type)
 	signed = signed_result(declared_name(name), p)

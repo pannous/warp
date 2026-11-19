@@ -12,6 +12,7 @@ use "wasm.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 
 # the instructions that compare two values of a type on the stack, giving yes or no
 type_equality(type: Node, p: Program) as list := {
@@ -70,8 +71,11 @@ optionals_compared(type: Node, p: Program) as function := () => {
 	base = base_of_optional(type)
 	boxed = WORD_LAYOUTS.has(text(base)) and WORD_LAYOUTS[text(base)] in PLAIN_VALUES
 	held = local => local_get(local) + (if boxed then instruction(STRUCT_GET, [box_index(p.m, text(base)), 0]) else [])
-	Compared([], both_missing_compared() + held(0) + held(1) + type_equality(base, p) + NO_UNLESS_YES)
+	Compared([], missing_compared() + held(0) + held(1) + type_equality(base, p) + NO_UNLESS_YES)
 }
+
+# when either of locals 0 and 1 is ø: yes when both are, else no
+missing_compared() as list := local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The helper of text_equal: yes when both texts have the same bytes. Its locals: 0 and 1 the texts, 2 the length, 3 a
 # count.
@@ -90,10 +94,8 @@ any_equality_function(p: Program) as int := {
 	boxed = BOXED_WORDS.flat_map(word => compared_as(box_index(p.m, word), instruction(STRUCT_GET, [box_index(p.m, word), 0]), equality(WORD_LAYOUTS[word], p)))
 	texts = compared_as(text_type(p.m), [], equality(nullable(text_type(p.m)), p))
 	same = local_get(0) + REF_CAST + EQ_HEAP + local_get(1) + REF_CAST + EQ_HEAP + REF_EQ
-	added_function(p.m, [ANYREF, ANYREF], [I32], [], both_missing_compared() + boxed + texts + same)
+	added_function(p.m, [ANYREF, ANYREF], [I32], [], missing_compared() + boxed + texts + same)
 }
-# the code for ø in locals 0 or 1: yes when both are ø, no when one is, else nothing
-both_missing_compared() as list := local_get(0) + REF_IS_NULL + IF + VOID_BLOCK + local_get(1) + REF_IS_NULL + RETURN + END + local_get(1) + REF_IS_NULL + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 # when the value in local 0 is of a type: no unless local 1 is too, else both taken out and compared
 compared_as(type: int, taken: list, compare: list) as list := {
 	both = local_get(0) + heap_instruction(REF_CAST, type) + taken + local_get(1) + heap_instruction(REF_CAST, type) + taken
