@@ -11,8 +11,6 @@ use "fits.wap"
 use "letters.wap"
 use "shapes.wap"
 
-# What a condition finds of a variable: its key, the arm it holds in (1 then, 2 else), the type it reads as there
-class Finding { key: text; arm: int; type: Node }
 # A choice: its condition a bool, each part expected the If's type; with both parts of one type (a part that never
 # finishes fits any) the If has it
 # An optional variable tested, `if x != ø`, is its value in the arm where it is present, `x!`; a variable tested of a
@@ -26,14 +24,14 @@ if_typed(n: Node, condition: Node, then_part: Node, else_part: Node, s: TypingSt
 	# a character beside a text is its text: `if c then 'a' else ""` is a text
 	chosen = (1 to 2).map(at => text_read(typed#at, value_type(typed#(3 - at)), s))
 	finishing = (1 to 2).filter(at => not jumps(chosen#at))
-	if #finishing == 1 { f.present = f.present + findings.filter(finding => finding.arm == finishing#1).map(finding => [finding.key, finding.type]) }
+	if #finishing == 1 { f.present = f.present + findings.filter(finding => finding.arm == finishing#1) }
 	joined_of(refitted(If(tested, chosen#1, chosen#2), n), chosen, s)
 }
 # an arm typed with what is known of its variables in it, each read there as its finding's type
 present_typed(part: Node, known: list<Finding>, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	before = f.present
 	# a new list: `+=` would change the one `before` holds too, and the narrowing would outlive its arm
-	f.present = f.present + known.map(finding => [finding.key, finding.type])
+	f.present = f.present + known
 	typed = typed_form(part, s, f, expected)
 	f.present = before
 	typed

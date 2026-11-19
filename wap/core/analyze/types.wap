@@ -96,6 +96,8 @@ class TypedFunction {
 	# whether it never returns: its result written `never`, or its body jumps and nothing returns
 	jumps: bool = no
 }
+# What a condition finds of a variable: its key, the arm it holds in (1 then, 2 else), the type it reads as there
+class Finding { key: text; arm: int; type: Node }
 # The function whose body is being typed: its variables' types, each [key, type], and its written result type
 class TypeFrame {
 	variables: list = []
@@ -104,9 +106,9 @@ class TypeFrame {
 	returns: list = []
 	# the generic letters its parameters bound, each [letter, type] (core/analyze/calls.wap)
 	letters: list = []
-	# the variables a condition around knows, each [key, type]: an optional one present, read as its value; one any or
-	# a number holds, of the type tested, read as that (if_typed)
-	present: list = []
+	# what the conditions around find of their variables: an optional one present, read as its value; one any or a
+	# number holds, of the type tested, read as that (core/analyze/conditions.wap if_typed)
+	present: list<Finding> = []
 	# the name of the function typed, ø for the program
 	function: Node? = ø
 	# the globals it reads before the statements that give them their values (TypedFunction late)
@@ -297,7 +299,7 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	if binding == BOUND_GLOBAL and f.function != ø and place_key(defined_at(n)) in s.unset { f.late = f.late + [n] }
 	if type == ø and binding == BOUND_CAPTURE { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	read = with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it"))
-	known = type_keyed(place_key(defined_at(n)), f.present)
+	known = found_type(place_key(defined_at(n)), f.present)
 	if known == ø then read else if base_of_optional(type) != ø then word_called(n, REQUIRED_WORD, [read], ø, s) else with_type_of(placed_like(Prim(symbol(OPTIONAL_VALUE), [read]), n), known)
 }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
@@ -306,13 +308,18 @@ names_constant(n: Node, expected: Node?, s: TypingState) as bool := function_typ
 variables_of(name: Node, s: TypingState, f: TypeFrame) as list := if text(fact_of(name, BINDING)) == BOUND_GLOBAL then s.globals else f.variables
 remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
 	variable = [place_key(defined_at(name)), type]
-	f.present = f.present.filter(known => known#1 != variable#1)
+	f.present = f.present.filter(known => known.key != variable#1)
 	if text(fact_of(name, BINDING)) == BOUND_GLOBAL { s.globals += [variable] } else { f.variables += [variable] }
 }
 variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := substituted(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s.settled)
 # the type of the variable of this key among these, each [key, type]
 type_keyed(key: text, variables: list) as Node? := {
 	for variable in variables { if variable#1 == key { return variable#2 } }
+	ø
+}
+# the type a condition around finds a variable of, ø where none finds it
+found_type(key: text, present: list<Finding>) as Node? := {
+	for finding in present { if finding.key == key { return finding.type } }
 	ø
 }
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")

@@ -137,4 +137,13 @@ print(tried(0) + " " + tried(5))
 print(handled(0) + " " + handled(5))')" "none some
 none some
 none some"
+check "a variable given a new value after its guard may be missing again" "$(ran guard_reset 'class Escape { reads: int }
+found(n: int) as Escape? := if n > 1 then Escape(n) else ø
+again(n: int) as text := {
+	escape = found(n)
+	if escape == ø { return "first" }
+	escape = found(n - 4)
+	if escape == ø then "none" else "some"
+}
+print(again(0) + " " + again(5) + " " + again(9))')" "first none some"
 exit $((failures > 0))
