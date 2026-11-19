@@ -64,7 +64,7 @@ module_names(module: Node) as list := declarations_of(module).map(declaration =>
 clashes_refused(modules: list) := for later in 2 to #modules {
 	for earlier in modules.take(later - 1) {
 		for name in module_names(modules#later) {
-			for other in module_names(earlier) { if text(other) == text(name) { refused(name, "${module_name(earlier)}.wap line ${line_of(other)} and ${module_name(modules#later)}.wap line ${line_of(name)} both define ${name}: rename one, or call it ${module_name(earlier)}.${name}") } }
+			for other in module_names(earlier) { if text(other) == text(name) { refused(name, "${module_name(earlier)}.wap line ${line_of(other)} and ${module_name(modules#later)}.wap line ${line_of(name)} both define ${name}: rename one") } }
 		}
 	}
 }

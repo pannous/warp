@@ -63,4 +63,17 @@ check "a module in a folder uses one beside its folder, loaded once" "$(ran use_
 use "speak.wap"
 shout()')" "loaded
 HEY"
+# a name means local > parameter > program > used module > preload; two used modules defining one name clash
+printf '%s\n' 'twice(n: int) as int := n * 2' 'show(n: int) as text := "a " + text(n)' >"$stage/a.wap"
+printf '%s\n' 'twice(n: int) as int := n + n' >"$stage/b.wap"
+check "a used module's word hides the preload's of the same parameters" "$(ran module_over_preload 'use "a.wap"
+print(show(3))')" "a 3"
+check "a.twice is the used module a's word, beside the program's own twice" "$(ran module_named 'use "a.wap"
+twice(n: int) as int := n * 10
+print(text(a.twice(3)))
+print(text(twice(3)))')" "6
+30"
+check "two used modules defining one name are refused naming both, even where nothing calls it" "$(ran module_clash 'use "a.wap"
+use "b.wap"
+print("x")' | grep -o 'a.wap line [0-9]* and b.wap line [0-9]* both define twice')" "a.wap line 1 and b.wap line 1 both define twice"
 exit $((failures > 0))
