@@ -124,7 +124,7 @@ class TypeFrame {
 	variables: list<Binding> = []
 	result: Node? = ø
 	# the types its returns give, ø for a bare return
-	returns: list = []
+	returns: list<Node?> = []
 	# the generic letters its parameters bound (core/analyze/calls.wap)
 	letters: list<Binding> = []
 	# what the conditions around find of their variables: an optional one present, read as its value; one any or a
@@ -198,7 +198,10 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Break() => jumping(n)
 	Continue() => jumping(n)
 	# `{}`: the map its place wants, else a map of texts to an unknown type its first entry settles, as `[]`
-	EmptyMap() => with_type_of(n, if key_type(expected) != ø then expected else map_type(symbol(TEXT_TYPE), unknown_type(s)))
+	EmptyMap() => {
+		wanted = base_or_self(expected)
+		with_type_of(n, if key_type(wanted) != ø then wanted else map_type(symbol(TEXT_TYPE), unknown_type(s)))
+	}
 	Record(name, fields, variants) => n
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)

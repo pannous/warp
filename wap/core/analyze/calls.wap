@@ -365,7 +365,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place ?? refused(at, "an argument reached typing without its type"), letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
-		if typed.function.key == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
+		if typed.function.key == key and same_types(typed.arguments.map(type => type_substituted(type, s.settled)), types) {
 			# a call of itself before its result is known gives no value; a function giving one refuses below
 			typed.called_unknown = typed.called_unknown or not typed.done and typed.result == ø
 			return typed
