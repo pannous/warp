@@ -23,6 +23,10 @@ CONTINUATION_BITS := 64
 byte_count(t: text): int := prim array_len(t)
 byte_at(t: text, at: int): int := prim array_get_u(t, at)
 bytes_between(t: text, start: int, stop: int): text := prim array_slice(t, start, stop - start)
+# a text of `count` zero bytes, and one of them set: how a text is made from bytes
+# TODO (card shared-module-loading) these two move to host.wap once a module can be used by two files of one program
+text_made(count: int): text := prim text_made(count)
+set_text_byte(t: text, at: int, b: int) := prim text_byte_set(t, at, b)
 # a text of one byte
 byte_text(b: int): text := {
 	t = text_made(1)
