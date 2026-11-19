@@ -80,3 +80,12 @@ pattern Break = (Break)
 
 # the innermost loop's next run started at once: `continue`
 pattern Continue = (Continue)
+
+# the literals, Node's cases without fields, which a template writes by name, `False()`: the one it names, as a list of
+# it (Empty is one), none for any other name
+literal_named(name: text) as list<Node> := match name {
+	"True" => [True]
+	"False" => [False]
+	"Empty" => [Empty]
+	_ => []
+}

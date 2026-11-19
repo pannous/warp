@@ -31,6 +31,11 @@ filled(language: Language, template: Node, bindings: map<text, Node>) as Node :=
 		pattern = pattern_called(language, head)
 		if pattern == ø { Key(built(language, head, bindings), Op.None, grown(built_items(language, arguments, bindings), Bracket.Round, separator)) } else { instance(language, pattern, built_items(language, arguments, bindings)) }
 	}
+	# a literal called by its case's name, `False()` (kernel/forms.wap literal_named)
+	Key(head, Op.None, Empty) => {
+		literal = if head is symbol then literal_named(text(head)) else []
+		if literal is empty then Key(built(language, head, bindings), Op.None, Empty) else literal#1
+	}
 	Key(left, op, right) => Key(built(language, left, bindings), op, built(language, right, bindings))
 	List(items, bracket, separator) => grown(built_items(language, items, bindings), bracket, separator)
 	Text(value) => Text(interpolated(value, bindings))

@@ -77,4 +77,12 @@ check "a key in brackets in a pattern fits the key written bare" "$(ran bare_key
 rule nm ($f: $t) => $f: 1
 m = mk { a: int; b: int }
 print text(m.a + m.b)')" "2"
+check "a rule of one word rewrites that word standing alone, a template writes a literal by its case" "$(ran lone_word 'rule shout => print "HI"
+rule never => False()
+rule shout $x => print "phrase"
+shout
+shout 1
+print(text(never))')" "HI
+phrase
+no"
 exit $((failures > 0))
