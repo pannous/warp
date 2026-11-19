@@ -11,12 +11,10 @@ use "../parsing/phrase_blocks.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
 
-# a List's items: the node itself when it is a list, else its items as one: a curly block `{a}` is no list value
-listed_reader = "listed"
 # the node cases: the type a case tests as (a List is any group) and the reader of each part, in order
 case_types = {"Number": "number", "Char": "codepoint", "Text": "text", "Symbol": "symbol", "Key": "key"}
 case_readers = {"Number": ["itself"], "Char": ["itself"], "Text": ["itself"], "Symbol": ["name_of"],
-	"Key": ["key_of", "op_of", "value_of"], "List": [listed_reader, "bracket_of", "separator_of"], "Meta": ["itself", "itself"]}
+	"Key": ["key_of", "op_of", "value_of"], "List": ["itself", "bracket_of", "separator_of"], "Meta": ["itself", "itself"]}
 # a node's position rides with it unseen, so no node is a Meta: its arm matches none, never a list of its parts
 unseen_cases = ["Meta"]
 subject_name = HiddenWord.MatchSubject as text
@@ -37,11 +35,7 @@ bound_part(read: Node, reader: text) as Node := if reader in spelled_readers the
 
 applied(word: text, argument: Node) as Node := List([symbol(word), argument], Bracket.Round, Separator.None)
 
-part_of(subject: Node, reader: text) as Node := {
-	if reader == "itself" { return subject }
-	if reader == listed_reader { return chosen(type_test_of(subject, "list"), subject, Key(subject, Op.As, symbol("list"))) }
-	applied(reader, subject)
-}
+part_of(subject: Node, reader: text) as Node := if reader == "itself" then subject else applied(reader, subject)
 
 # `Key(left, Op.Colon, right)`: the case's name and its parts, else ø
 case_pattern(pattern: Node) as list? := match pattern {
