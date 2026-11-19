@@ -11,6 +11,7 @@ use "../stage.wap"
 use "../type_notation.wap"
 use "../../kernel/forms.wap"
 use "fits.wap"
+use "dispatch.wap"
 
 # the names of a function value's own function and of its first parameter, the value itself
 LAMBDA_NAME = "λ"
@@ -75,8 +76,22 @@ as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 	parts = function_type_parts(wanted) ?? return ø
 	own = value_type(value)
 	typed = value_function_typed(parts.parameters, own, s) ?? return ø
+	if not same_types(typed.arguments[#typed.arguments - #parts.parameters ..], parts.parameters) { return shape_taking(value, typed, parts, s, wanted) }
 	if typed.result == ø or not conversion(typed.result, parts.result, s) in STATIC_CONVERSIONS { return ø }
 	with_fact(with_fact(with_type_of(value, wanted), FUNCTION_VALUE, own), DEFINED_AT, declared_name(typed.signed))
+}
+# A function taking shapes where one taking their types is wanted, `pair_name(pair: Pair)` where `(Node) -> text` is:
+# a function the typing stage writes once, taking those types and calling it, so each shape is checked where the value
+# is called, as a direct call checks it
+shape_taking(value: Node, typed: TypedFunction, parts: FunctionParts, s: TypingState, wanted: Node) as Node := {
+	definition = definition_keyed(typed.key, s) ?? refused(value, "the typing stage found no definition of this function")
+	word = text(declared_name(written_name(definition)))
+	name = placed_like(symbol("${word}(${parts.parameters.map(text).join(", ")})"), value)
+	made = definitions_named(text(name), s)
+	reads = parameters_of(name, parts.parameters)
+	taking = if made is empty then dispatcher_made(name, reads, named_call(word, [definition], reads, name), [typed.result], s) else made#1
+	called = declared_name(written_name(taking))
+	as_function_type(with_type_of(with_fact(placed_like(symbol(text(called)), value), DEFINED_AT, called), function_value_type(place_key(called), [])), wanted, s) ?? refused(value, "the function written for these shapes takes others")
 }
 # the function type a function value's written signature gives, `(int) -> int` of `inc(a: int) as int`: ø unless
 # its function writes each parameter's type and its result

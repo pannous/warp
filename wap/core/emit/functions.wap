@@ -25,7 +25,7 @@ defined_name(form: Define) as Node := match form { Define(name, parameters, body
 function_key(form: Define) as text := place_key(defined_name(form))
 
 # a parameter given the frame's next slot, of a type
-slotted(f: Frame, parameter: Node, type: list) as Placed := {
+slotted(f: Frame, parameter: Node, type: list<int>) as Placed := {
 	f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, type, [], yes)]
 	f.slots.last
 }
@@ -57,7 +57,7 @@ function_placed(form: Define, p: Program) as Placed := match form { Define(name,
 SIGNATURE_LESS = "this function reached the emitter without its signature"
 # a typed function's parameter and result types, as typing signed it
 signed_parts(name: Node) as FunctionParts := function_type_parts(fact_of(name, SIGNATURE)) ?? refused(name, SIGNATURE_LESS)
-signed_result(name: Node, p: Program) as list := {
+signed_result(name: Node, p: Program) as list<int> := {
 	result = signed_parts(name).result
 	if text(result) == EMPTY_TYPE_WORD then [] else if text(result) == NEVER_WORD then NEVER else layout_of(result, p.m, p.records) ?? refused(name, "the emitter has no value layout for this function's result yet")
 }
@@ -66,33 +66,33 @@ signed_result(name: Node, p: Program) as list := {
 class Held { type_index: int, taken: list<int> }
 # at is the code that asks
 held_in_any(type: Node, at: Node, p: Program) as Held := {
-	if WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES {
+	if text(type) in BOXED_WORDS {
 		box = box_index(p.m, text(type))
 		return Held(box, instruction(STRUCT_GET, [box, 0]))
 	}
 	Held(referenced(layout_of(type, p.m, p.records) ?? []) ?? refused(at, "a value any holds is tested for references and plain values, not this type"), [])
 }
 # a value any holds, known of a type: cast to it, a plain one taken out of its box
-held_value(type: Node, at: Node, p: Program) as list := {
+held_value(type: Node, at: Node, p: Program) as list<int> := {
 	held = held_in_any(type, at, p)
 	heap_instruction(REF_CAST, held.type_index) + held.taken
 }
 # The type a function gives back: its body's value and every return's, all of one type
-result_type(name: Node, body: Code, f: Frame) as list := {
+result_type(name: Node, body: Code, f: Frame) as list<int> := {
 	result = if body.type == NEVER then (if f.returns is empty then NEVER else f.returns#1) else body.type
 	for returned in f.returns { if returned != result { refused(name, "this function gives back values of different types") } }
 	result
 }
 # the wasm function of a frame and its body, its value the result: its index
-function_of(m: Module, parameters: list, body: Code, f: Frame) as int := {
+function_of(m: Module, parameters: list<list<int>>, body: Code, f: Frame) as int := {
 	results = if valued(body.type) then [body.type] else []
 	added_function(m, parameters, results, f.slots[f.parameter_count ..].map(slot => slot.type), body.instructions)
 }
 
 # a parameter's type, as the typing stage gives it
-parameter_type(parameter: Node, p: Program) as list := layout(declared_name(parameter), p)
+parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name(parameter), p)
 # A call of a function the program or the preload defined, its arguments of its parameters' types
-call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Code := {
+call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not (binding_of(called) in [BOUND_FUNCTION, BOUND_LIBRARY])) and function_type_parts(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	function = called_function(form, called, p, f)
@@ -103,7 +103,7 @@ call_code(form: Node, called: Node, arguments: list, p: Program, f: Frame) as Co
 }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
-passes(given: list, taken: list, m: Module) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
+passes(given: list<int>, taken: list<int>, m: Module) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
 called_function(form: Node, called: Node, p: Program, f: Frame) as Placed := {
 	binding = binding_of(called)
 	if binding != BOUND_FUNCTION and binding != BOUND_LIBRARY { refused(form, "the emitter calls functions, not a ${binding} yet") }

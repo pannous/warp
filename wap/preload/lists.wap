@@ -28,18 +28,32 @@ count(x: T): int := #x
 # (wiki/reference.md)
 copy(xs: list<T>): list<T> := xs[0 ..]
 # a new list of a's items, then b's: `[1, 2] + [3]` is [1, 2, 3]
-+(a: list<T>, b: list<T>): list<T> := prim array_joined(a, b)
++(a: list<T>, b: list<T>): list<T> := {
+	out = copy(a)
+	for x in b { out.add(x) }
+	out
+}
 # an item put at the end of a list, which grows in place: every name holding it sees the item
 add(xs: list<T>, item: T) := prim list_add(xs, item)
 # the last item taken off a list; an empty one raises
 pop(xs: list<T>): T := prim list_pop(xs)
+# the item at a place counting from 0 taken out, the items after it moved down one, in their order
+remove_at(xs: list<T>, at: int): T := {
+	if at < 0 or at >= #xs { raise "this list has no item at this place" }
+	removed = xs[at]
+	for place in at + 1 upto #xs { xs[place - 1] = xs[place] }
+	xs.pop()
+	removed
+}
 
-# each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
-map(xs: list<T>, f: (T) -> U): list<U> := {
-	out: list<U> = []
-	for x in xs { out = out + [f(x)] }
+# the items without their repeats, each where it first appears: `[1, 2, 1].unique` is [1, 2]
+unique(xs: list<T>): list<T> := {
+	out: list<T> = []
+	for x in xs { if not out.contains(x) { out.add(x) } }
 	out
 }
+# each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
+map(xs: list<T>, f: (T) -> U): list<U> := (0 upto #xs).map(at => f(xs[at]))
 # each int's result, in order: `(0 upto 3).map(at => at * 2)` is [0, 2, 4]
 map(r: Range, f: (int) -> U): list<U> := {
 	out: list<U> = []
@@ -49,7 +63,7 @@ map(r: Range, f: (int) -> U): list<U> := {
 # the items that fit a test, in order
 filter(xs: list<T>, fits: (T) -> bool): list<T> := {
 	out: list<T> = []
-	for x in xs { if fits(x) { out = out + [x] } }
+	for x in xs { if fits(x) { out.add(x) } }
 	out
 }
 # each item's list of results, joined: `[1, 2].flat_map(x => [x, x])` is [1, 1, 2, 2]

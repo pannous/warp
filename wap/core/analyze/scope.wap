@@ -221,9 +221,7 @@ with_captures(function: Node, scope: list, depth: int) as Node := {
 # the defining names of the captures read anywhere in n
 captured_definers(n: Node) as list := match n {
 	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [fact_of(n, DEFINED_AT)] else []
-	Key(left, op, right) => captured_definers(left) + captured_definers(right)
-	List(items, bracket, separator) => items.flat_map(captured_definers)
-	_ => []
+	_ => direct_parts(n).flat_map(captured_definers)
 }
 # whether a defining name belongs to a function around the one at depth, not to the program or the library
 from_enclosing_function(definer: Node, scope: list, depth: int) as bool := {
@@ -269,12 +267,15 @@ qualified_case(n: Node, subject: Node, key: Node, scope: list) as Node? := {
 	}
 	ø
 }
-# A case name two enums of one depth share: the one taking as many values as a call gives, else it reads two ways and
-# is refused naming both; a program's enum hides the library's case of that name
+# A case name enums share: of the cases taking as many values as a call gives the innermost, `Key(k, op, v)` the
+# preload's Node.Key beside a used module's fieldless LexemeKind.Key; with none taking them the innermost of the name;
+# two such of one depth read two ways and are refused naming both
 unambiguous_case(name: Node, meant: Definition, given: int?, scope: list) as Definition := {
-	cases = scope.filter(definition => definition.kind == BOUND_CASE and definition.name == text(name) and definition.depth == meant.depth)
-	taking = cases.filter(definition => definition.fields == given)
-	if #taking == 1 or #cases == 1 { return if #taking == 1 then taking#1 else meant }
+	named = scope.filter(definition => definition.kind == BOUND_CASE and definition.name == text(name))
+	taking = named.filter(definition => definition.fields == given)
+	depth = if taking is empty then meant.depth else taking.map(definition => definition.depth).fold(taking#1.depth, (a, b) -> if a > b then a else b)
+	cases = (if taking is empty then named else taking).filter(definition => definition.depth == depth)
+	if #cases == 1 { return cases#1 }
 	owners = cases.map(definition => definition.owner)
 	refused(name, "${name} is a case of each of ${owners.join(", ")}: write ${owners.map(owner => owner + "." + text(name)).join(" or ")}")
 }

@@ -81,12 +81,43 @@ rem(a: int, b: int): int := truncated_remainder(a, b)
 !=(a: enum, b: enum): bool := not(a == b)
 +(a: text, b: text): text := prim text_joined(a, b)
 
+# a map's keys and its values as it holds them, an entry the same place in both, not copied
+held_keys(m: map<K, V>): list<K> := prim map_keys_held(m)
+held_values(m: map<K, V>): list<V> := prim map_values_held(m)
+# the place of a key among a map's keys, counting from 1; 0 when the map lacks it. The keys are searched in order
+key_place(m: map<K, V>, key: K): int := {
+	keys = held_keys(m)
+	for at in 1 to #keys { if keys#at == key { return at } }
+	0
+}
+# a map's value by its key: `m["a"]`, `m.a`; a key the map lacks raises
+#(m: map<K, V>, key: K): V := {
+	at = key_place(m, key)
+	if at == 0 { raise "this map has no such key" }
+	held_values(m)#at
+}
+# a key given its value: `m["a"] = 1` changes the value of a key the map holds, and adds the key and the value at the
+# end otherwise
+set(m: map<K, V>, key: K, value: V) := {
+	at = key_place(m, key)
+	values = held_values(m)
+	if at == 0 {
+		held_keys(m).add(key)
+		values.add(value)
+	} else { values[at - 1] = value }
+}
 # a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
-keys(m: map<K, V>): list<K> := prim map_keys(m)
+keys(m: map<K, V>): list<K> := copy(held_keys(m))
 # whether a map holds a key
-has(m: map<K, V>, key: K): bool := m.keys().contains(key)
+has(m: map<K, V>, key: K): bool := key_place(m, key) > 0
 # a key taken out of a map with its value, the others kept in their order; a missing key leaves the map as it was
-remove(m: map<K, V>, key: K) := prim map_remove(m, key)
+remove(m: map<K, V>, key: K) := {
+	at = key_place(m, key)
+	if at > 0 {
+		held_keys(m).remove_at(at - 1)
+		held_values(m).remove_at(at - 1)
+	}
+}
 
 # the int a text of decimal digits writes, a leading - its sign: `int("-42")` is -42; any other text raises
 int(t: text): int := {
@@ -110,7 +141,7 @@ text(t: text): text := t
 int(n: int): int := n
 float(x: float): float := x
 bool(b: bool): bool := b
-text(c: char): text := prim char_text(c)
+text(c: char): text := encoded(ord(c), 1, 1)
 text(b: bool): text := if b then "yes" else "no"
 # an optional's text: its value's, or ø when it is missing
 text(x: T?): text := if missing(x) then "ø" else text(x!)

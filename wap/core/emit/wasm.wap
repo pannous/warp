@@ -64,6 +64,7 @@ i32_const(n: int) as list<int> := I32_CONST + signed(n)
 i64_const(n: int) as list<int> := I64_CONST + signed(n)
 f64_const(x: float) as list<int> := F64_CONST + little_endian(float_bits(x), 8)
 local_get(local: int) as list<int> := instruction(LOCAL_GET, [local])
+local_set(local: int) as list<int> := instruction(LOCAL_SET, [local])
 # the null reference of a heap type, `ref.null any`
 null_of(heap_type: list<int>) as list<int> := REF_NULL + heap_type
 
@@ -77,7 +78,7 @@ default_of(value_type: list<int>) as list<int> := {
 }
 
 # whether a value type is a nullable reference, and the heap type it refers to
-is_reference(type: list<int>) as bool := type#1 == NULLABLE_REFERENCE or type == ANYREF
+is_reference(type: list<int>) as bool := type == ANYREF or #type > 1 and type#1 == NULLABLE_REFERENCE
 heap_of(reference: list<int>) as list<int> := if reference#1 == NULLABLE_REFERENCE then reference[1 ..] else reference
 # a nullable reference to the declared type of that index
 nullable(type_index: int) as list<int> := [NULLABLE_REFERENCE] + signed(type_index)

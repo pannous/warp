@@ -47,7 +47,9 @@ instance_from_map(n: Node, record: Node, map: Node, s: TypingState) as Node := {
 }
 # a field's value made into the field's type by that type's maker, `int(m["age"])`
 field_made(field: Node, value: Node, s: TypingState) as Node := {
-	maker = text((type_parts(declared_type(field)) ?? [declared_type(field)])#1)
+	# a field of no written type holds the value as it is, its type the value's
+	type = declared_type(field) ?? return value
+	maker = text((type_parts(type) ?? [type])#1)
 	named_call(maker, definitions_named(maker, s), [value], value)
 }
 # the constructor's parameter that gives a field its default, ø when none does
@@ -123,8 +125,8 @@ entry_key(key: Node, s: TypingState, f: TypeFrame) as Node := {
 	typed
 }
 entry_value(entry: Key) as Node := match entry { Key(key, op, value) => value }
-# a map's value by its key, `m["a"]` or `m.a`: of the map's value type
-entry_read_typed(n: Node, map: Node, key: Node) as Node := with_type_of(refitted(Get(map, key), n), held_type(value_type(map)))
+# a map's value by its key, `m["a"]` or `m.a`: the preload's `#` of the map and the key
+entry_read_typed(n: Node, map: Node, key: Node, s: TypingState) as Node := word_called(n, PLACE_WORD, [map, key], ø, s)
 
 # A list's item by its place, `xs#i`, an int counting from 1: of the list's item type; on a value that is no list,
 # the call `#(x, i)`, as a Range answers it
@@ -142,7 +144,7 @@ item_got(n: Node, held: Node, place: Node, s: TypingState) as Node := {
 item_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame) as Node := {
 	held = typed_form(subject, s, f, ø)
 	map_key = key_type(value_type(held))
-	if map_key != ø { return entry_read_typed(n, held, typed_form(key, s, f, map_key)) }
+	if map_key != ø { return entry_read_typed(n, held, typed_form(key, s, f, map_key), s) }
 	range = typed_form(key, s, f, ø)
 	if fits_type(range, symbol(RANGE_TYPE)) { return word_called(n, SLICE, [held, range], ø, s) }
 	one = with_type(placed_like(Number(1), key), INT_TYPE)

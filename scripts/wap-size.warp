@@ -6,9 +6,6 @@ use "../wap/core/parse/reader.wap"
 
 TOP_COUNT := 20
 
-# The Meta arms come last: under the old compiler a `Meta(node, data)` arm also takes a phrase of three items
-# (card match-arm-meta)
-
 # the nodes of a notation: every node counts one, a Meta node only its node
 size_of(n: Node) as int := match n {
 	List(items, bracket, separator) => 1 + items.map(size_of).sum()

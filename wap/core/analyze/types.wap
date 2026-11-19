@@ -237,14 +237,16 @@ function_key_of(definition: Node) as text := place_key(declared_name(written_nam
 try_typed(n: Node, body: Node, handler: Fn, s: TypingState, f: TypeFrame, expected: Node?) as Node := match handler { Fn(parameters, handling) => {
 	caught = items_of(parameters).map(parameter => parameter_typed(parameter, symbol(NODE_TYPE), f))
 	handled = present_typed(handling, [], s, f, expected)
-	joined_of(refitted(Try(body, refitted(Fn(with_items(parameters, caught), handled), handler)), n), [body, handled], s)
+	parts = parts_fitted([body, handled], s)
+	joined_of(refitted(Try(parts#1, refitted(Fn(with_items(parameters, caught), parts#2), handler)), n), parts, s)
 } }
 # The function left with a value, expected the function's written result type; the code after it never runs
 return_typed(n: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	typed = typed_form(value, s, f, f.result)
 	# a value returned is of the written result, as the body's is: `return ø` a P? of a function giving P?
 	given = if f.result == ø then typed else converted(typed, f.result, s, value, "the function says it gives a")
-	f.returns += [value_type(given)]
+	# a value that never finishes, `return refused(n, …)`, gives nothing back
+	if not jumps(given) { f.returns += [value_type(given)] }
 	jumping(refitted(Return(given), n))
 }
 
@@ -279,8 +281,12 @@ name_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 # a list's item or a record's field given a value of its type; the Set itself gives none
 item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) as Node := {
 	wanted = value_type(place)
-	given = typed_form(value, s, f, wanted)
-	refitted(Set(place, converted(given, wanted, s, n, "the place holds a")), n)
+	given = converted(typed_form(value, s, f, wanted), wanted, s, n, "the place holds a")
+	# a place read by a call of `#`, a map's entry, is given its value by a call of `set` with the same parts
+	match place {
+		Call(called, parts) => if text(called) == PLACE_WORD then word_called(n, SET_WORD, parts + [given], ø, s) else refitted(Set(place, given), n)
+		_ => refitted(Set(place, given), n)
+	}
 }
 
 # A call's function known by its caller: a function calls the globals its callee reads late too; the program's call

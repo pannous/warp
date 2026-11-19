@@ -41,10 +41,7 @@ is_use(statement: Node) as bool := match statement {
 }
 used_path(statement: List) as text := match statement { List(items, bracket, separator) => text(items#2) }
 # the files a declared program uses, in the order written
-uses_of(program: Node) as list := match fact_of(program, USES) {
-	List(items, bracket, separator) => items.map(text)
-	_ => []
-}
+uses_of(program: Node) as list := fact_items(program, USES).map(text)
 
 # The modules a program uses, each file read once by read_file (text to operated code), the modules they use too,
 # every module after the ones it uses, so their rules are loaded before it is shaped. Modules may use each other: a
@@ -72,10 +69,7 @@ module_of(file: text, modules: list) as Node := {
 }
 
 # what a declared program declares, `name: signature` each
-declarations_of(program: Node) as list := match fact_of(program, DECLARATIONS) {
-	List(items, bracket, separator) => items
-	_ => []
-}
+declarations_of(program: Node) as list := fact_items(program, DECLARATIONS)
 
 # a statement with what it declares, if it defines a name
 declared_statement(statement: Node) as Node := {
