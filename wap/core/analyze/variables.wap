@@ -23,7 +23,7 @@ program_variable(name: Node, scope: Scope) as Definition := {
 }
 
 # the definitions of the program and the library, the ones `global x = …` sees
-program_scope(scope: Scope) as Scope := Scope(every_definition(scope).filter(definition => definition.depth <= PROGRAM_DEPTH))
+program_scope(scope: Scope) as Scope := scope_of(every_definition(scope).filter(definition => definition.depth <= PROGRAM_DEPTH))
 
 # The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
 # not see yet. Nested Blocks and functions keep theirs; a Set inside another form (an If's branch) is the Block's.

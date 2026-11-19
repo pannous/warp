@@ -12,7 +12,7 @@ use "../wap/core/language.wap"
 PRELOAD_FOLDER = "wap/preload/"
 language = base_language()
 preload = language_loaded(language, program.folder + "/../wap")
-library_scope = Scope(preload_scope(declarations_of(preload)))
+library_scope = scope_of(preload_scope(declarations_of(preload)))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 

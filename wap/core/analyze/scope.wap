@@ -37,22 +37,18 @@ RECORD_KIND = "record"
 # (owner: a case's enum)
 # a case's owner is its enum, its fields how many values it takes
 class Definition { name: text; kind: text; definer: Node; depth: int; owner: text = ""; fields: int = 0 }
-# The definitions a name may mean, frame by frame, innermost first: a block's, a function's parameters …, the
-# program's, then the used modules' and the preload's; each frame finds its definitions of a name through its index
-class Scope { definitions: list<Definition>; outer: Scope? = ø; names: NameIndex = NameIndex() }
+# The definitions a name may mean, layer by layer, innermost first: a block's, a function's parameters …, the
+# program's, then the used modules' and the preload's; each layer finds its definitions of a name through its index
+class Layer { definitions: list<Definition>; index: NameIndex = NameIndex() }
+class Scope { layers: list<Layer> = [] }
+# a scope of these definitions alone
+scope_of(definitions: list<Definition>) as Scope := Scope([Layer(definitions)])
 # a scope with these definitions in front of it, innermost
-within(scope: Scope, definitions: list<Definition>) as Scope := if definitions is empty then scope else Scope(definitions, scope)
+within(scope: Scope, definitions: list<Definition>) as Scope := if definitions is empty then scope else Scope([Layer(definitions)] + scope.layers)
 # the definitions of a name, innermost first
-named_in(scope: Scope, name: text) as list<Definition> := {
-	found = items_named(scope.names, scope.definitions, name, definition => definition.name)
-	outer = scope.outer
-	if outer == ø then found else found + named_in(outer, name)
-}
+named_in(scope: Scope, name: text) as list<Definition> := scope.layers.flat_map(layer => items_named(layer.index, layer.definitions, name, definition => definition.name))
 # every definition, innermost first
-every_definition(scope: Scope) as list<Definition> := {
-	outer = scope.outer
-	if outer == ø then scope.definitions else scope.definitions + every_definition(outer)
-}
+every_definition(scope: Scope) as list<Definition> := scope.layers.flat_map(layer => layer.definitions)
 
 # the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
 # two modules defining one name are refused, used or not
@@ -61,14 +57,14 @@ bound_program(program: Block, preload: list, modules: list) as Block := {
 	late_reads_checked(bound(program, scope_around(preload, modules), PROGRAM_DEPTH))
 }
 # the words around a program: the modules it uses, then the preload's, outermost
-scope_around(preload: list, modules: list) as Scope := Scope(modules_scope(modules) + preload_scope(preload))
+scope_around(preload: list, modules: list) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
 # the preload's words, outermost
 preload_scope(preload: list) as list := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
 library_words(declaration: Node, depth: int) as list := match declaration {
 	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, depth)]
-	Record(name, fields, variants) => definitions_made_by(declaration, [], depth)
+	Record(name, fields, variants) => definitions_made_by(declaration, Scope(), depth)
 	_ => refused(declaration, "a library declares names and records")
 }
 
@@ -235,7 +231,7 @@ with_captures(function: Node, scope: Scope, depth: int) as Node := {
 	with_fact(function, CAPTURES, List(captured, Bracket.Square, Separator.Comma))
 }
 # the defining names of the captures read anywhere in n
-captured_definers(n: Node) as list := match n {
+captured_definers(n: Node) as list<Node> := match n {
 	Symbol(name) => if fact_of(n, BINDING) == symbol(BOUND_CAPTURE) then [fact_of(n, DEFINED_AT)] else []
 	Key(left, op, right) => captured_definers(left) + captured_definers(right)
 	List(items, bracket, separator) => items.flat_map(captured_definers)
