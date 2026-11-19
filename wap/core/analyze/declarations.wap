@@ -18,6 +18,7 @@
 use "../errors.wap"
 use "../rules/lowering.wap"
 use "../stage.wap"
+use "definers.wap"
 use "../../kernel/forms.wap"
 
 use "../paths.wap"
@@ -85,23 +86,6 @@ declared_statement(statement: Node) as Node := {
 	if declaration == ø then statement else with_fact(statement, DECLARES, declaration)
 }
 
-# a statement with an id on each name it defines (core/stage.wap DEFINER), where declaration_of finds them: a class's
-# or an enum's name, its fields and its cases, the name before := or =
-names_identified(statement: Node, ids: Definers) as Node := match statement {
-	Record(name, fields, variants) => refitted(Record(identified(name, ids), heads_identified(fields, ids), heads_identified(variants, ids)), statement)
-	Call(called, arguments) => if text(called) == ":=" or text(called) == "=" then refitted(Call(called, [head_identified(arguments#1, ids)] + arguments.drop(1)), statement) else statement
-	_ => statement
-}
-# a list of heads, a class's fields or an enum's cases, each with its id
-heads_identified(heads: Node, ids: Definers) as Node := match heads { List(items, bracket, separator) => refitted(List(items.map(head => head_identified(head, ids)), bracket, separator), heads); _ => heads }
-# the head of a definition with an id on its name: `f(a)`, `f(a): int`, `x`, `let x`, a case `Leaf(value: int)`
-head_identified(head: Node, ids: Definers) as Node := match head {
-	Key(name, Op.Colon, type) => refitted(Key(head_identified(name, ids), Op.Colon, type), head)
-	Key(name, Op.None, group) => refitted(Key(head_identified(name, ids), Op.None, group), head)
-	Symbol(word) => identified(head, ids)
-	List(items, Bracket.None, Separator.Space) => if #items == 2 then refitted(List([items#1, head_identified(items#2, ids)], Bracket.None, Separator.Space), head) else head
-	_ => head
-}
 # name: signature of a definition, ø of any other statement: `f(a, b) := …`, `n := 1`, `x = 1` as operated code reads
 # them, (Call := f(a, b) …), (Call = x 1); a class or an enum declares itself, its cases as lowering writes them
 declaration_of(statement: Node) as Node? := match statement {
