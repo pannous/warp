@@ -145,10 +145,30 @@ with_name_fact(n: Node, name: text, value: Node) as Node := match n {
 	Key(written, Op.Colon, type) => refitted(Key(with_name_fact(written, name, value), Op.Colon, type), n)
 	_ => with_fact(n, name, value)
 }
-# A definition's key: the file, line and column of the name that defined it, the name (a rule's template places all
-# the names it binds where the rewritten code was), and the signature of a typed function, which tells its typed
+# A definition's identity. Each name that defines something carries its DEFINER fact, an id "file#n" one counter of
+# its module gives out: the declaration prescan to the top level's names, the binding analysis to a function's
+# parameters, variables and pattern names, typing to the names it writes. Two definitions one rule writes at one
+# place are two ids, and formatting changes none; positions are only for messages. The count a stage leaves is its
+# program's fact DEFINERS, where the next stage goes on counting.
+DEFINER = "definer"
+DEFINERS = "definers"
+class Definers { file: text; count: int = 0 }
+# a module's counter, going on from the count its program holds
+definers_of(program: Node) as Definers := Definers(file_of(program) ?? ".", match fact_of(program, DEFINERS) {
+	Number(count) => count
+	_ => 0
+})
+# a program with the count its stage left
+with_definers(program: Node, ids: Definers) as Node := with_fact(program, DEFINERS, Number(ids.count))
+# a defining name with its id: the one it has, or the counter's next
+identified(definer: Node, ids: Definers) as Node := {
+	if fact_of(definer, DEFINER) != ø { return definer }
+	ids.count += 1
+	with_fact(definer, DEFINER, Text("${ids.file}#${ids.count}"))
+}
+# A definition's key: its definer's id, the name, and the signature of a typed function, which tells its typed
 # versions apart
-place_key(definer: Node) as text := if line_of(definer) == ø then refused(definer, "a definition without a position") else "${file_of(definer)}:${line_of(definer)}:${column_of(definer)} ${text(definer)}${signature_key(definer)}"
+place_key(definer: Node) as text := "${text(fact_of(definer, DEFINER) ?? refused(definer, "a definition without an id"))} ${text(definer)}${signature_key(definer)}"
 signature_key(definer: Node) as text := if fact_of(definer, SIGNATURE) == ø then "" else " ${fact_of(definer, SIGNATURE)}"
 
 # DEFINED_AT on a bound name: the name that defined it, positioned (core/analyze/scope.wap learns it; its other
