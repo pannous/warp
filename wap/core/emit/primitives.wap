@@ -53,7 +53,7 @@ memory_operations(p: Program) as map<text, WasmOperation> := {
 # the code of an operation of wasm types: its operands, each int it takes as an i32 wrapped, its instructions, then an
 # i32 it gives extended to the int its definition writes
 wasm_called(form: Node, arguments: list<Code>, operation: WasmOperation, p: Program) as Code := {
-	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == operation.takes#at then [] else if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else refused(form, "operand ${at} of this primitive is not of the wasm type it takes")))
+	narrowed = (1 to #arguments).flat_map(at => arguments#at.instructions + (if arguments#at.type == operation.takes#at or arguments#at.type == NEVER then [] else if arguments#at.type == I64 and operation.takes#at == I32 then I32_WRAP_I64 else refused(form, "operand ${at} of this primitive is not of the wasm type it takes")))
 	Code(given_layout(form, p), narrowed + operation.code + (if operation.gives == [I32] and given_layout(form, p) == I64 then I64_EXTEND_I32_U else []))
 }
 
