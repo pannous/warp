@@ -62,7 +62,6 @@ WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
 WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap/ and the census script of main's tip, extracted to run them: one folder per job
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
-WAP_CENSUS_EVERY = datetime.timedelta(hours=4)  # a census takes ~35 min (70 s a file); drop this once it is fast
 WAP_CENSUS_PID = os.path.join(REPO, "data/vitals/wap-census.pid")
 WAP_CENSUS_LOG = os.path.join(REPO, "data/vitals/wap-census.log")
 WAP_CENSUS_JOBS = 4  # census runs at once, each in a machine-wide job slot (scripts/job-slot.sh, niced): ~25 s each
@@ -219,10 +218,8 @@ def wap_census_job():
 
 
 def census_due(censuses, tree):
-    """whether to start the census job: wap/ changed since the newest census, which is older than WAP_CENSUS_EVERY, and none runs"""
-    if censuses and censuses[-1]["tree"] == tree or census_job_running():
-        return False
-    return not censuses or datetime.datetime.now() - datetime.datetime.strptime(censuses[-1]["time"], "%Y-%m-%d %H:%M") >= WAP_CENSUS_EVERY
+    """whether to start the census job: wap/ changed since the newest census and none runs (a census takes ~1 min)"""
+    return not (censuses and censuses[-1]["tree"] == tree or census_job_running())
 
 
 def wap_hello():
