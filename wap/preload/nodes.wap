@@ -248,3 +248,13 @@ same_code(a: Node, b: Node): bool := match [a, b] {
 	[Type(name, body), Type(other_name, other_body)] => name == other_name and body == other_body
 	_ => prim tag_equal(a, b)
 }
+
+# an Error's message, the text it was raised with: `e.message` of `catch e` after `raise "boom"` is "boom"
+# (wiki/Error.md)
+message(e: Node): text := match unwrapped(e) {
+	Error(node) => match unwrapped(node) {
+		Text(value) => value
+		_ => text(node)
+	}
+	_ => raise "only an Error has a message: `catch e` names one, `if r failed` tests for one"
+}
