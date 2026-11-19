@@ -36,8 +36,10 @@ pop(xs: list<T>): T := prim list_pop(xs)
 # the item at a place counting from 0 taken out, the items after it moved down one, in their order
 remove_at(xs: list<T>, at: int) := {
 	if at < 0 or at >= #xs { raise "this list has no item at this place" }
+	removed = xs[at]
 	for place in at + 1 upto #xs { xs[place - 1] = xs[place] }
 	xs.pop()
+	removed
 }
 
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
