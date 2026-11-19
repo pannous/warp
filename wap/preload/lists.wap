@@ -33,6 +33,14 @@ copy(xs: list<T>): list<T> := xs[0 ..]
 add(xs: list<T>, item: T) := prim list_add(xs, item)
 # the last item taken off a list; an empty one raises
 pop(xs: list<T>): T := prim list_pop(xs)
+# the item at a place counting from 0 taken out, the items after it moved down one, in their order
+remove_at(xs: list<T>, at: int): T := {
+	if at < 0 or at >= #xs { raise "this list has no item at this place" }
+	removed = xs[at]
+	for place in at + 1 upto #xs { xs[place - 1] = xs[place] }
+	xs.pop()
+	removed
+}
 
 # the items without their repeats, each where it first appears: `[1, 2, 1].unique` is [1, 2]
 unique(xs: list<T>): list<T> := {
