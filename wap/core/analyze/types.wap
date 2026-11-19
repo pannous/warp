@@ -55,7 +55,11 @@ ARROW = "->"
 # What the stage knows of the whole program: the definitions seen so far, the functions typed, the globals' types
 class TypingState {
 	definitions: list = []
-	records: list = []
+	# the definitions' places by name, for definitions_named, and by the key of the place each is written at, for
+	# definition_keyed (core/analyze/calls.wap)
+	definition_names: NameIndex = NameIndex()
+	definition_keys: NameIndex = NameIndex()
+	records: Records = Records()
 	functions: list = []
 	globals: list = []
 	# the keys of the globals functions read before the statements that give them their values, until those statements
@@ -114,14 +118,12 @@ typed_program(program: Block, preload: Block) as Block := typed_among(program, s
 # the whole program typed, its value shown: a last statement that gives one is `print(show(it))`, by the show its
 # type has, as every program value shows itself
 typed_shown(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), yes)
-# A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
-retyped(program: Block) as Block := typed_among(program, [], no)
 # the program typed, after the library's records and those of its definitions it calls
 typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines
-	s.records = library.filter(statement => statement is Record)
+	s.records = added_records(Records(), library)
 	s.definitions = shaped_definitions(s.definitions, s)
 	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
 	if s.refusals { refused_all(s, []) }
@@ -136,7 +138,7 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
 	late = s.functions.drop(typed_before).filter(each => not (each.key in library_keys)).map(each => each.define)
-	whole = refitted(Block(s.records + functions_typed_from(written, s) + late + statements), typed)
+	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # every function wap refuses, then what else stopped the program, said together
@@ -193,7 +195,7 @@ with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fac
 # written as each of its typed versions; one whose parameters all have their types is typed even when nothing calls it,
 # unless it is TYPED_WHEN_CALLED.
 block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
-	s.records = s.records + written.filter(statement => statement is Record)
+	s.records = added_records(s.records, written)
 	s.definitions = s.definitions + written.filter(statement => statement is Define)
 	# shaped once all are known: a pattern's builder may come after a definition naming its type
 	s.definitions = shaped_definitions(s.definitions, s)
