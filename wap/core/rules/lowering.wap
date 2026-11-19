@@ -15,8 +15,6 @@
 #   f(x) := body             (Call := f(x) body) → Define(f, [x], body); `n := 1` → Define(n, [], 1)
 #   x => x + 1               (Call => x (x + 1)) → Fn([x], x + 1); `(a, b) -> a + b` likewise, -> and => both
 #                            write a function value
-#   yes no ø                 the canonical words of the literals (the preload's aliases bring true, null …) → True,
-#                            False, Empty
 #   { a; b }                 a block of code → Block([a, b]); a program's statements likewise
 #   (x + 1)  (a; b)          a group: its one statement, several a Block
 #   [a, b]                   a list, data as the reader reads it, its items lowered
@@ -40,9 +38,9 @@ use "../language.wap"
 
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
-# the words that are a kernel form alone: the canonical words of the literals, the statements that leave a loop or
-# a function, and empty braces, until rules of one word write them (preload/sugar/)
-WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue": Continue(), "return": Return(Empty)}
+# the words that are a kernel form alone: the statements that leave a loop or a function, and empty braces, until
+# rules of one word write them (preload/sugar/; the literals' words are preload/sugar/literals.wap)
+WORD_FORMS = {"break": Break(), "continue": Continue(), "return": Return(Empty)}
 WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
 # program's
