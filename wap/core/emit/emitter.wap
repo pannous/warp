@@ -128,14 +128,20 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
 	EmptyMap() => map_code(form, [], p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(list_item(type_of(form)), items_fitted(item_type(type_of(form)), items, p, f), p))
+	List(items, Bracket.Square, separator) => list_code(form, items, p, f)
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
-	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head) ?? refused(head, "no class has this name"), items, p, f)
 	Prim(operation, arguments) => primitive_code(form, operation, arguments.map(argument => code(argument, p, f)), p)
 	Fn(parameters, body) => function_value_code(form, p, f)
 	Symbol(name) => name_code(form, p, f)
 	_ => literal(form, p.m) ?? refused(form, "not a kernel form")
+}
+
+# A list's items, each fitted to its item type, in a new list
+list_code(form: Node, items: list<Node>, p: Program, f: Frame) as Code := {
+	item = list_item(type_of(form))
+	Code(layout(form, p), list_made(item, items_fitted(item, items, p, f), p))
 }
 
 # Statements run in order, the value the last one's, every other value dropped. The functions the block defines are
@@ -161,7 +167,7 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code, p: Progra
 try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code := match handler {
 	Fn(parameters, handling) => {
 		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
-		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
+		error = slotted(f, items_of(parameters)#1, known_layout(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
 		type = typed_layout(form, p)
 		caught = BLOCK + text_layout(p.m) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END
