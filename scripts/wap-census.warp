@@ -33,13 +33,13 @@ declared_once(module: Node) as Node := {
 	shared.declared[key]
 }
 # a file with the modules it uses, theirs first, as declared_modules gives them
-modules_of(file: text) as list := {
+modules_of(file: text) as list<Module> := {
 	code = operated_once(file)
-	(modules_used(code, operated_once) + [code]).map(declared_once)
+	(modules_used(code, operated_once) + [code]).map(declared_once).map(module_declared)
 }
-prepared_once(module: Node, modules: list) as list := {
+prepared_once(module: Module, modules: list<Module>) as list := {
 	global shared
-	key = file_of(module) ?? ""
+	key = module.file
 	if not shared.prepared.has(key) { shared.prepared[key] = statements_in(prepared(language, module, modules, preload)) }
 	shared.prepared[key]
 }
@@ -53,12 +53,12 @@ prepared_once(module: Node, modules: list) as list := {
 # with the file).
 class Run { state: TypingState, frame: TypeFrame, joined: map = {}, refusals: map = {}, probed: map = {} }
 run = Run(typing_state(library), TypeFrame())
-typing_joined(modules: list) := {
+typing_joined(modules: list<Module>) := {
 	global run
-	keys = modules.map(module => file_of(module) ?? "")
+	keys = modules.map(module => module.file)
 	joining = keys.filter(key => not run.joined.has(key))
-	for module in modules.filter(module => (file_of(module) ?? "") in joining) {
-		key = file_of(module) ?? ""
+	for module in modules.filter(module => module.file in joining) {
+		key = module.file
 		run.refusals[key] = []
 		statements = []
 		try statements = prepared_once(module, modules) catch e { statements = bound_alone(module, modules) }
@@ -77,9 +77,9 @@ typing_joined(modules: list) := {
 	}
 }
 # a module's statements bound one by one, as probe binds a file's (which reports their refusals)
-bound_alone(module: Node, modules: list) as list := {
-	words = scope_around(library_around(module, preload), modules_of_uses(module, modules))
-	statements = statements_in(lowered_program(language, module))
+bound_alone(module: Module, modules: list<Module>) as list := {
+	words = scope_around(library_around(module.code, preload), codes_of(modules_of_uses(module, modules)))
+	statements = statements_in(lowered_program(language, module.code))
 	bound_each(statements, within(words, defined_in(statements, words, PROGRAM_DEPTH)), no)
 }
 # statements bound one by one in a scope, those that bind kept; each refusal reported where it is `shown`
@@ -112,11 +112,11 @@ whole_typed(file: text) as Outcome := {
 closures: map = {}
 whole_once(file: text) as Outcome := {
 	global closures
-	keys = modules_of(file).map(module => file_of(module) ?? "")
+	keys = modules_of(file).map(module => module.file)
 	key = keys.sorted().join(" ")
 	if closures.has(key) { return closures[key] }
 	for inner in keys {
-		held = modules_of(inner).map(module => file_of(module) ?? "")
+		held = modules_of(inner).map(module => module.file)
 		if #held < #keys and held.all(each => each in keys) {
 			refused = whole_once(inner)
 			if not refused.typed {
@@ -173,7 +173,7 @@ declaration_word(declaration: Node) as text := match declaration {
 used_scope(file: text) as list := {
 	try {
 		modules = modules_of(file)
-		return modules_scope(modules_of_uses(modules#(#modules), modules))
+		return modules_scope(codes_of(modules_of_uses(modules#(#modules), modules)))
 	} catch e { report("declare", e.message) }
 	[]
 }
@@ -258,10 +258,10 @@ functions_probe(file: text) as Probed := {
 	if in_preload(file) { return module_probed(file, library.filter(statement => statement is Define and file_of(written_name(statement)) == file)) }
 	typing_joined(modules)
 	for module in modules {
-		key = file_of(module) ?? ""
+		key = module.file
 		module_probed(key, run.joined[key].filter(statement => statement is Define))
 	}
-	run.probed[file_of(modules.last) ?? ""]
+	run.probed[modules.last.file]
 }
 # a typing state that knows the library's definitions and records
 typing_state(library: list) as TypingState := {

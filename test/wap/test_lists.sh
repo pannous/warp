@@ -91,4 +91,6 @@ check "an optional value is in a list when it is there, a missing one in none" "
 print(text(found(2) in [1, 2]) + " " + text(found(3) in [1, 2]) + " " + text(found(0) in [1, 2]) + " " + text([1, 2].contains(found(1))))')" "yes no no yes"
 check "a missing value is in a list that holds a missing value" "$(ran missing_in 'found(n: int) as int? := if n > 0 then n else ø
 print(text(found(0) in [found(1), found(0)]) + " " + text(found(0) in [found(1)]))')" "yes no"
+check "a list finds its first item that fits a test, none when no item does" "$(ran list_find 'xs = [1, 2, 3]
+print(text(xs.find(x => x > 1) ?? 0) + " " + text(xs.find(x => x > 5) ?? 0) + " " + (["a", "bc"].find(t => #t == 2) ?? "none"))')" "2 0 bc"
 exit $((failures > 0))

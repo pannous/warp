@@ -36,19 +36,19 @@ declared_code(language: Language, code: Node) as Node := declared_operated(langu
 declared_operated(language: Language, code: Node) as Node := declared_program(shaped_program(language, code))
 operated_file(language: Language, file: text) as Node := operated_program(language, read_notation(file))
 # a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
-declared_modules(language: Language, file: text) as list := {
+declared_modules(language: Language, file: text) as list<Module> := {
 	code = operated_file(language, file)
-	(modules_used(code, file => operated_file(language, file)) + [code]).map(module => declared_operated(language, module))
+	(modules_used(code, file => operated_file(language, file)) + [code]).map(module => module_declared(declared_operated(language, module)))
 }
-# declared code lowered and bound inside the modules it uses and the preload's declarations
-prepared(language: Language, code: Node, modules: list, preload: Node) as Block := bound_program(lowered_program(language, code), library_around(code, preload), modules_of_uses(code, modules))
-# the modules a declared program uses, declared
-modules_of_uses(code: Node, modules: list) as list := uses_of(code).map(file => module_of(file, modules))
+# a declared module lowered and bound inside the modules it uses and the preload's declarations
+prepared(language: Language, module: Module, modules: list<Module>, preload: Node) as Block := bound_program(lowered_program(language, module.code), library_around(module.code, preload), modules_of_uses(module, modules))
+# the modules a declared module uses
+modules_of_uses(module: Module, modules: list<Module>) as list<Module> := module.uses.map(file => module_of(file, modules))
 # the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
 # the preload's code with the modules it uses, whose words only the preload sees
 library_code_of(language: Language, preload: Node) as Block := {
-	modules = modules_used(preload, file => operated_file(language, file)).map(module => declared_operated(language, module)) + [preload]
+	modules = (modules_used(preload, file => operated_file(language, file)).map(module => declared_operated(language, module)) + [preload]).map(module_declared)
 	Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
 }
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
