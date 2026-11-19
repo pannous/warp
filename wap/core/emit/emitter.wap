@@ -162,7 +162,7 @@ if_code(form: Node, condition: Code, then_part: Code, else_part: Code) as Code :
 try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code := match handler {
 	Fn(parameters, handling) => {
 		tried = choice_fitted(form, labelled(f, [OTHER_LABEL, OTHER_LABEL, OTHER_LABEL], () => code(body, p, f)), body, p)
-		error = slotted(f, listed(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
+		error = slotted(f, items_of(parameters)#1, layout_of(symbol(NODE_TYPE), p.m, p.records))
 		instead = arm_code(form, handling, p, f)
 		type = joined(tried.type, instead.type)
 		caught = BLOCK + nullable(text_type(p.m)) + try_table(block_type(type), RAISED_TAG, 0, kept(tried, type)) + instruction(BRANCH, [1]) + END

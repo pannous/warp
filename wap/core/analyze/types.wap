@@ -114,8 +114,6 @@ typed_program(program: Block, preload: Block) as Block := typed_among(program, s
 # the whole program typed, its value shown: a last statement that gives one is `print(show(it))`, by the show its
 # type has, as every program value shows itself
 typed_shown(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), yes)
-# A typed program typed again, after a typed rule rewrote it (stage 3): what it held keeps its types
-retyped(program: Block) as Block := typed_among(program, [], no)
 # the program typed, after the library's records and those of its definitions it calls
 typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()

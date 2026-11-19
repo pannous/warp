@@ -42,17 +42,13 @@ MUTABLE = 1
 FUNCTION_KIND = 0x00
 MEMORY_KIND = 0x02
 
-# where a data segment lives: placed in the memory, or kept passive for `array.new_data`
-ACTIVE_SEGMENT = 0x00
 # an element segment that only declares the functions `ref.func` refers to, by their indices
 DECLARED_FUNCTIONS = [0x03, 0x00]
 # a tag of an exception, the only kind of tag, and a try_table's clause catching one tag's exceptions with their values
 EXCEPTION_TAG = 0x00
 CATCH = 0x00
+# a data segment kept passive, for `array.new_data`
 PASSIVE_SEGMENT = 0x01
-
-# every memory segment starts at a multiple of this, the size of the largest value, as WASI requires of its records
-DATA_ALIGNMENT = 8
 
 # Instructions, each its opcode bytes; `instruction(opcode, indices)` adds the unsigned immediates it takes.
 UNREACHABLE = [0x00]
