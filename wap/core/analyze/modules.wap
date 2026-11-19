@@ -10,7 +10,7 @@ use "declarations.wap"
 
 # the words of the modules a program uses, each module named too; a word an earlier module defines identically is
 # that module's, one word
-modules_scope(modules: list) as list<Definition> := (1 to #modules).flat_map(at => [Definition(module_name(modules#at), DefinitionKind.Module, modules#at, MODULE_DEPTH)] + declarations_of(modules#at).filter(declaration => not modules.take(at - 1).any(earlier => defines_identically(earlier, modules#at, declaration))).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+modules_scope(modules: list<Node>) as list<Definition> := (1 to #modules).flat_map(at => [Definition(module_name(modules#at), DefinitionKind.Module, modules#at, MODULE_DEPTH)] + declarations_of(modules#at).filter(declaration => not modules.take(at - 1).any(earlier => defines_identically(earlier, modules#at, declaration))).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
 module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
 # the names a module declares itself: its functions, variables and types, not their fields or cases
@@ -18,7 +18,7 @@ module_names(module: Node) as list := declarations_of(module).map(declaration_na
 # Two used modules defining one word alike, refused naming both, even where nothing calls it: the same name taking the
 # same parameter types, or one type's or variable's name, unless both definitions are identical; words of one name
 # taking other types are one word's overloads
-clashes_refused(modules: list) := for later in 2 to #modules {
+clashes_refused(modules: list<Node>) := for later in 2 to #modules {
 	for earlier in modules.take(later - 1) {
 		for declaration in declarations_of(modules#later) {
 			for other in declarations_of(earlier) { if declared_alike(other) == declared_alike(declaration) and not defines_identically(earlier, modules#later, declaration) { refused(declaration_name(declaration), "${module_name(earlier)}.wap line ${line_of(declaration_name(other))} and ${module_name(modules#later)}.wap line ${line_of(declaration_name(declaration))} both define ${declared_alike(declaration)}: rename one") } }
