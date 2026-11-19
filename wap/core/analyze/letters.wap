@@ -144,14 +144,10 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	closure = if is_lambda_key(key, s) then [type] else []
 	if #parameters_in(definition) != #closure + #parameters { return ø }
 	typed = function_typed(definition, closure + parameters, s, definition)
+	# its parameters take the wanted ones as they are: that type or a shape of it, `(pair: Pair)` where `(Node)` is, or
+	# a reference's optional, `(type: Node?)` where `(Node)` is; a plain value's optional would hold it boxed
 	taken = typed.arguments[#closure ..]
-	if (1 to #parameters).all(at => takes_as_wanted(parameters#at, taken#at, s)) then typed else ø
-}
-# whether a function value's parameter takes the wanted one as it is: that type, a shape of it, `(pair: Pair)` where
-# `(Node)` is, or a reference's optional, `(type: Node?)` where `(Node)` is; a plain value's optional holds it boxed
-takes_as_wanted(wanted: Node, taken: Node, s: TypingState) as bool := {
-	way = conversion(wanted, taken, s)
-	way in [Conversion.Same, Conversion.Narrowed] or way == Conversion.Wrapped and not is_plain(wanted)
+	if (1 to #parameters).all(at => conversion(parameters#at, taken#at, s) in [Conversion.Same, Conversion.Narrowed] + (if is_plain(parameters#at) then [] else [Conversion.Wrapped])) then typed else ø
 }
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to
