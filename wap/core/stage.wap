@@ -263,7 +263,7 @@ fields_of(record: Record) as list := match record { Record(name, fields, variant
 cases_of(record: Record) as list := match record { Record(name, fields, variants) => match variants { List(items, bracket, separator) => items } }
 case_name(case: Node) as Node := match case { Call(called, fields) => called; _ => case }
 # the patterns of a case pattern's fields, `r` and `0` of `Circle(r, 0)`
-case_fields(case: Node) as list := match case { Call(called, fields) => fields; _ => [] }
+case_fields(case: Node) as list<Node> := match case { Call(called, fields) => fields; _ => [] }
 # the declared case a bound case name means, by the place its DEFINED_AT names (core/analyze/scope.wap), and the enum
 # declaring it: two enums may each have a case of one spelling
 case_declaring(records: Records, name: Node) as Node := declaring(records, name)#2

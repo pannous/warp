@@ -158,10 +158,12 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 	}
 	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
+	settled_late = s.functions.drop(typed_before)
+	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
 	library_keys = written.map(function_key_of)
 	# the program's functions first typed once the unknowns settled, which no block placed
-	late = s.functions.drop(typed_before).filter(each => not (each.function.key in library_keys)).map(each => each.define)
+	late = settled_late.filter(each => not (each.function.key in library_keys) and s.functions.any(kept => kept === each)).map(each => each.define)
 	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
