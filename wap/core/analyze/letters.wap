@@ -128,7 +128,12 @@ value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunc
 	closure = if is_lambda_key(key, s) then [type] else []
 	if #parameters_in(definition) != #closure + #parameters { return ø }
 	typed = function_typed(definition, closure + parameters, s, definition)
-	if same_types(typed.arguments[#closure ..], parameters) then typed else ø
+	if same_types(typed.arguments[#closure ..], parameters) or takes_shapes(typed.arguments[#closure ..], parameters, s) then typed else ø
+}
+# whether a function's parameter types are those wanted or shapes of them, one at least, `(Pair)` where `(Node)` is
+takes_shapes(taken: list, wanted: list, s: TypingState) as bool := {
+	ways = (1 to #wanted).map(at => conversion(wanted#at, taken#at, s))
+	ways.all(way => way in [Conversion.Same, Conversion.Narrowed]) and ways.contains(Conversion.Narrowed)
 }
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to

@@ -249,4 +249,9 @@ check "a function that calls itself and gives no value needs no written result t
 countdown(3)')" "3
 2
 1"
+check "a function taking a shape is a value where one taking the shape's type is wanted, the shape checked when called" "$(ran shape_value 'pattern Pair = (Pair $left: Node $right: Node)
+first_name(items: list<T>, name_of: (T) -> text) as text := name_of(items#1)
+pair_name(pair: Pair) as text := "a pair"
+items: list<Node> = [Pair(Text("a"), Number(1))]
+print first_name(items, pair_name)')" "a pair"
 exit $((failures > 0))
