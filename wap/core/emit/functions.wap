@@ -18,10 +18,8 @@ use "function_values.wap"
 
 # the function a name defines, its body emitted now if it waits
 pending_function(p: Program, called: Node) as Placed? := waiting_function(p, defining_key(called))
-waiting_function(p: Program, key: text) as Placed? := {
-	for waiting in p.pending { if function_key(waiting) == key { return emitted_function(waiting, p) } }
-	ø
-}
+# A function waits until it is placed: its body is emitted then, so a call inside its own body finds it placed
+waiting_function(p: Program, key: text) as Placed? := if p.pending.has(key) and placed_by_key(p.functions, key) == ø then function_placed(p.pending[key], p) else ø
 defined_name(form: Define) as Node := match form { Define(name, parameters, body) => declared_name(name) }
 function_key(form: Define) as text := place_key(defined_name(form))
 
@@ -30,12 +28,7 @@ slotted(f: Frame, parameter: Node, type: list<int>) as Placed := {
 	f.slots += [Placed(place_key(declared_name(parameter)), #f.slots, type, [], yes)]
 	f.slots.last
 }
-# A function: its parameters the first slots of a new frame, its body's value its result. It waits no longer, so a
-# call inside its own body finds it neither waiting nor placed.
-emitted_function(waiting: Define, p: Program) as Placed := {
-	p.pending = p.pending.filter(other => function_key(other) != function_key(waiting))
-	function_placed(waiting, p)
-}
+# A function: its parameters the first slots of a new frame, its body's value its result
 function_placed(form: Define, p: Program) as Placed := match form { Define(name, parameters, body) => {
 	f = Frame(function: yes)
 	for parameter in items_of(parameters) { slotted(f, parameter, parameter_type(parameter, p)) }
@@ -96,9 +89,13 @@ parameter_type(parameter: Node, p: Program) as list<int> := layout(declared_name
 call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not names_function(called)) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
-	if names_function(called) and p.in_place.has(defining_key(called)) { return match p.in_place[defining_key(called)] { Prim(operation, given) => primitive_code(p.in_place[defining_key(called)], operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p) } }
+	kept = if names_function(called) and p.in_place.has(defining_key(called)) then p.in_place[defining_key(called)] else ø
+	if kept is Prim { return match kept { Prim(operation, given) => {
+		arity_checked(form, arguments, #given)
+		primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p)
+	} } }
 	function = called_function(form, called, p, f)
-	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
+	arity_checked(form, arguments, #function.parameters)
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
 	if not (1 to #given).all(at => passes(given#at.type, function.parameters#at, p.m)) { refused(form, "the arguments are not of the parameters' types") }
 	finished(Code(function.type, given.flat_map(argument => argument.instructions) + instruction(CALL, [function.index])))
@@ -108,13 +105,14 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 # variable). A call compiles to its arguments, fitted to the primitive's operands, then the primitive in place, as a
 # built-in's header line keeps its body for an importer (wiki/wasm-representation.md); the function itself is emitted
 # only as a function value.
-kept_in_place(definition: Define, p: Program) := match definition { Define(name, parameters, body) => match body {
+kept_in_place(definition: Define, key: text, p: Program) := match definition { Define(name, parameters, body) => match body {
 	Prim(operation, given) => if given.all(each => each is symbol) and given.map(each => text(each)) == items_of(parameters).map(parameter => text(declared_name(parameter))) {
 		result = signed_parts(declared_name(name)).result
-		p.in_place[function_key(definition)] = if text(result) == EMPTY_TYPE_WORD then body else with_fact(body, TYPE, result)
+		p.in_place[key] = if text(result) == EMPTY_TYPE_WORD then body else with_fact(body, TYPE, result)
 	}
 	_ => ø
 } }
+arity_checked(form: Node, arguments: list<Node>, taken: int) := if #arguments != taken { refused(form, "the call gives ${#arguments} arguments, the function takes ${taken}") }
 # whether a value of one wasm type may be passed where another is taken: the same type, code that never finishes, or a
 # list where any list is taken (a list<T> given to a `list` parameter, its type extending the list base)
 passes(given: list<int>, taken: list<int>, m: WasmModule) as bool := given == taken or given == NEVER or (taken == nullable(list_base(m)) and given#1 == NULLABLE_REFERENCE)
