@@ -7,7 +7,6 @@
 # time (/usr/bin/time -l: CPU, wall, peak memory) and the function profile of scripts/profile.sh -a (warp --profile),
 # and steps: when each `rebuild step` began (stamped below)
 set -uo pipefail
-LOCK_HELD_ELSEWHERE=75  # lockf's status when the slot is taken
 FIRST_IN_LINE_RETRY=2  # seconds between the oldest waiter's tries of the slots
 IN_LINE_RETRY=5  # seconds between the others' looks at the line
 # an endless loop in a compile is stopped by the kernel (ulimit -t) and escalated as an urgent card, never left to spin
@@ -17,6 +16,7 @@ CPU_LIMIT_FACTOR=4
 CPU_LIMIT_FLOOR=900  # seconds
 CPU_LIMIT_STATUS=152  # 128 + SIGXCPU
 source "$(dirname "$0")/lib/platform.sh"
+source "$(dirname "$0")/lib/slots.sh"
 store=$warp_store
 scripts=$(cd "$(dirname "$0")" && pwd)
 log=${1:?usage: build-slot.sh <log> <command…>}
@@ -100,11 +100,9 @@ while :; do
 	[ -e "$ticket" ] || touch "$ticket"
 	place=$(place_in_line)
 	if [ "$place" = 1 ]; then
-		for slot in $(seq "$(build_slots)"); do
-			lockf -s -t 0 "$store/build-slots/$slot" bash -c 'rm -f "$ticket"; ulimit -t "$cpu_seconds"; set -o pipefail; measured "$@" 2>&1 | stamped' measured "$@" >>"$log" 2>&1
-			status=$?
-			[ $status = $LOCK_HELD_ELSEWHERE ] || { endless_build $status "$@"; exit $status; }
-		done
+		slot_tried "$store/build-slots" "$(build_slots)" bash -c 'rm -f "$ticket"; ulimit -t "$cpu_seconds"; set -o pipefail; measured "$@" 2>&1 | stamped' measured "$@" >>"$log" 2>&1
+		status=$?
+		[ $slot_held = no ] || { endless_build $status "$@"; exit $status; }
 	fi
 	[ -n "$waited" ] || { echo "build-slot.sh: all $(build_slots) build slots taken, waiting: number $place in line" >&2; waited=1; }
 	if [ "$place" = 1 ]; then sleep $FIRST_IN_LINE_RETRY; else sleep $IN_LINE_RETRY; fi

@@ -8,6 +8,7 @@
 use "types.wap"
 use "calls.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../errors.wap"
 use "../../kernel/forms.wap"
 use "matching.wap"

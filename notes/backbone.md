@@ -199,7 +199,8 @@ checked) and a line here when its language changed. The lead reviews it against 
       wap3.wasm, and wap2 and wap3 are the same bytes;
    4. test/wap/run.sh passes with wap2 as the compiler;
    5. wap1 compiling wap/compiler.wap takes under a minute on the Mac;
-   6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds.
+   6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds;
+   7. no boxed `any` is left in wap's own source: the boxed-any allowlist of test/wap/test_guardrails.sh is empty.
    Until then nothing lands that turns no function of wap green, unless it fixes a wrong value.
 
 After that, the test pass rate is a ballpark of how well the engine works, nothing more. Then the user and the
@@ -246,8 +247,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   (`inc() := { c = c + 1 }`; scope's, binding a bare name to `self.c`), a getter without parentheses
   (`double := v * 2`), defaults (`n: int = 1`), `init`, and `extends`. Built: methods written after a class's fields,
   each a function taking `self` first, so `b.area()` and `b.area` both call it.
-- **Module namespaces:** a name two used modules define is read as overloads of one name; a qualified `m.f` that
-  names the module is not built.
+- **Module scoping** (user 2026-11-19): a name is looked up local > parameter > program > used module > preload, the
+  nearest scope that defines it wins and shadows the rest; two used modules defining the same name are a loud clash
+  naming both places, called or not, never overloads of one name; `m.f` picks one module's word explicitly. Not
+  built yet.
 - **`#` of a text:** counts its characters (UTF-8, not bytes), as warp does; `#"abc"` is refused until then.
 - **Enums, the rest of wiki/enum.md:** `as index` and `as position`, cases with spellings (`Error = "error"`),
   `2 as Coin`, and `==` of cases with fields (by their fields). Built so far: `enum Coin { Penny, Dime }`, cases with
@@ -257,6 +260,12 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 ## Debts
 
 (Each compromise against a principle, with its reason. Empty at the start.)
+
+- **Boxed `any` in wap's own source** (user 2026-11-19): a value of wap's source whose type typing can't name yet is
+  boxed as `any` and checked where it enters a typed place, though the compiler's source should stay fully typed
+  (first_principles.md). Only analyze/types.wap decides what is boxed; the emitter never infers it. Each boxed spot
+  is one entry in test/wap/guardrails_allowed.txt, which may only shrink. Paid off when that list is empty, which
+  milestone 2 requires.
 
 - **A decimal literal is a binary float (f64), not exact:** `0.1 + 0.2` is 0.30000000000000004 in wap and 0.3 in warp,
   whose decimal literals are exact (notes/decisions.md core-round-untyped-half, exact-decimal-big; tests

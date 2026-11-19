@@ -4,6 +4,7 @@
 use "types.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 use "calls.wap"
 use "fits.wap"

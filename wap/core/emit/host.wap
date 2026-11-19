@@ -7,6 +7,7 @@ use "wasm.wap"
 use "opcodes.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "primitives.wap"
 
 # print_text writes through WASI's fd_write(fd, iovecs, count, written), which the native warp and the browser both
@@ -15,6 +16,8 @@ STDOUT = 1
 STDERR = 2
 # the status a program that raised exits with
 RAISED_STATUS = 1
+# the module's one exception tag, a raise's, carrying its text: emitted declares it first
+RAISED_TAG = 0
 NEWLINE = 10
 IOVEC_ADDRESS = 0
 WRITTEN_ADDRESS = 8
@@ -51,14 +54,17 @@ host(p: Program, name: text) as int := p.host[name] ?? refused(Text(name), "the 
 
 printing_function(p: Program) as int := writing_function(p, STDOUT, [])
 error_writing_function(p: Program) as int := writing_function(p, STDERR, [])
-raising_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
+# a raise: its text thrown, for the innermost Try around it to catch (kernel-try)
+raising_function(p: Program) as int := added_function(p.m, [nullable(text_type(p.m))], [], [], local_get(0) + instruction(THROW, [RAISED_TAG]))
+# a raise no Try caught: its text written to stderr, the program ended
+uncaught_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
 # a raise of the text on the stack from inside a helper
 raise_called(p: Program) as list := instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
 # a raise of a message from inside a helper
 raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + raise_called(p)
 # a raise of a message and the text the code `ending` gives, joined
 raised_with(message: text, ending: list, p: Program) as list := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + raise_called(p)
-# The helper of print_text, error_text and raise_text: the text's bytes and a line end copied into the memory, grown as needed,
+# The helper of print_text, error_text and an uncaught raise: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
 writing_function(p: Program, file: int, after: list) as int := {
 	text_type_index = text_type(p.m)
