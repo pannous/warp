@@ -149,8 +149,8 @@ quoted(r: Reader, quote: text) := {
 		} else if r.code[at] == '\\' and quote != RAW_QUOTE {
 			escape = escaped(r, at)
 			if escape == ø { r.at = at; return failed(r, "a backslash escape the reader does not know") }
-			parts += [slice_of(r, copied, at), escape#1]
-			at += escape#2
+			parts += [slice_of(r, copied, at), escape.reads]
+			at += escape.taken
 			copied = at
 		} else { at += 1 }
 	}
@@ -196,19 +196,21 @@ hole_read(r: Reader, hole_closer: text, pieces: int) as int := {
 	r.at
 }
 
-# the escape at the backslash `at`: [what it reads as, the characters it takes], ø for an unknown one
-escaped(r: Reader, at: int) as list? := {
-	c = if at + 1 < r.n then r.code[at + 1] else ""
-	if ESCAPED_AS_IS.contains(c) { return [c, 2] }
-	if ESCAPE_LETTERS.contains(c) { return [ESCAPE_CHARACTERS[ESCAPE_LETTERS.find(c) - 1], 2] }
-	if LATER_ESCAPES.contains(c) { return ["\\" + c, 2] }
+# a backslash escape: the text it reads as and how many characters it takes, the backslash's included
+class Escape { reads: text; taken: int }
+# the escape at the backslash `at`, ø for an unknown one
+escaped(r: Reader, at: int) as Escape? := {
+	c = if at + 1 < r.n then text(r.code[at + 1]) else ""
+	if ESCAPED_AS_IS.contains(c) { return Escape(c, 2) }
+	if ESCAPE_LETTERS.contains(c) { return Escape(ESCAPE_CHARACTERS[ESCAPE_LETTERS.find(c) - 1], 2) }
+	if LATER_ESCAPES.contains(c) { return Escape("\\" + c, 2) }
 	if c == 'x' and at + 3 < r.n and is_hex_digit(r.code[at + 2]) and is_hex_digit(r.code[at + 3]) {
-		return [hex_number(slice_of(r, at + 2, at + 4)) as codepoint, 4]
+		return Escape(text(hex_number(slice_of(r, at + 2, at + 4)) as codepoint), 4)
 	}
 	if c == 'u' and peek_at(r, at + 2) == '{' {
 		end = at + 3
 		while end < r.n and is_hex_digit(r.code[end]) { end += 1 }
-		if end > at + 3 and peek_at(r, end) == '}' { return [hex_number(slice_of(r, at + 3, end)) as codepoint, end + 1 - at] }
+		if end > at + 3 and peek_at(r, end) == '}' { return Escape(text(hex_number(slice_of(r, at + 3, end)) as codepoint), end + 1 - at) }
 	}
 	ø
 }

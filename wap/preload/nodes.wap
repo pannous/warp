@@ -266,3 +266,13 @@ empty(n: Node): bool := match unwrapped(n) {
 }
 # the `is` narrows the number to an int or a float, so each arm picks its own empty
 number_empty(value: number): bool := if value is int then empty(value) else empty(value)
+
+# an Error's message, the text it was raised with: `e.message` of `catch e` after `raise "boom"` is "boom"
+# (wiki/Error.md)
+message(e: Node): text := match unwrapped(e) {
+	Error(node) => match unwrapped(node) {
+		Text(value) => value
+		_ => text(node)
+	}
+	_ => raise "only an Error has a message: `catch e` names one, `if r failed` tests for one"
+}
