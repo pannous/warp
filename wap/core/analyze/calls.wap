@@ -79,14 +79,14 @@ wants_at(definition: Function, at: int, type: Node?) as bool := {
 }
 # the results a call's definitions write, of those taking as many arguments
 results_written(argument: Node, s: TypingState) as list := match argument {
-	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).filter(result => result != ø)
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).compact()
 	_ => []
 }
 parameter_type_at(definition: Function, at: int) as Node? := if #definition.parameters < at then ø else definition.parameters#at
 # A call's arguments with the named ones, `f(b: 1, a: 5)`, put in their parameters' places, a left-out parameter
 # given its default: the same places for every definition the name may mean, else refused
 arranged_arguments(n: Node, called: Node, arguments: list, candidates: list<Function>) as list := {
-	arrangements = candidates.map(definition => arranged(definition, arguments)).filter(each => each != ø)
+	arrangements = candidates.map(definition => arranged(definition, arguments)).compact()
 	if arrangements is empty { refused(n, "no ${called} has parameters of these names: ${candidates_text(candidates)}") }
 	if arrangements.any(each => each != arrangements#1) { refused(n, "the names put the arguments in different places for ${candidates_text(candidates)}; give them in order") }
 	arrangements#1
@@ -175,7 +175,7 @@ made_from_map(n: Node, called: Node, candidates: list<Function>, given: list, s:
 # A type's own words travel with it: the definitions of a called name that the module of an argument's record declares
 # taking a value of that record, so a library's `show(xs#at)` finds a program's show(p: P), in the one ranking
 own_words(called: Node, given: list, s: TypingState) as list := {
-	records = given.map(argument => record_named(s.records, base_or_self(value_type(argument)))).filter(record => record != ø)
+	records = given.map(argument => record_named(s.records, base_or_self(value_type(argument)))).compact()
 	definitions_named(text(called), s).filter(definition => records.any(record => definition.module == (file_of(record) ?? "") and definition.parameters.any(type => takes_record(type, record))))
 }
 takes_record(type: Node?, record: Node) as bool := type != ø and text(base_or_self(type)) == record_name(record)
