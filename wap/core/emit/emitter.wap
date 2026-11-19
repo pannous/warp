@@ -127,7 +127,7 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
 	EmptyMap() => map_code(form, [], p, f)
-	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(fact_of(form, TYPE), items_fitted(item_type(fact_of(form, TYPE)), items, p, f), p))
+	List(items, Bracket.Square, separator) => Code(layout(form, p), list_made(type_of(form), items_fitted(item_type(type_of(form)), items, p, f), p))
 	Get(subject, key) => if fact_of(form, DEFINED_AT) != ø then call_code(form, form, [subject], p, f) else read_code(layout(form, p), place_of(subject, key, p, f))
 	Record(name, fields, variants) => Code([], [])
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_code(form, record_named(p.records, head), items, p, f)

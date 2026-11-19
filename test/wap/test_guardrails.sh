@@ -2,7 +2,7 @@
 # wap's guardrails as checks (user decision via warp-lead, 2026-11-18), so they hold when nobody is looking:
 #   one-fit          core/analyze has one type relation, `conversion`: no other function answers "does this type fit"
 #                    (a yes/no or Conversion with a parameter `wanted`, two of given, held, these, those, or named same_type(s) or fits_type)
-#   emit-reads-type  core/emit reads the TYPE fact only to lay it out (places.wap layout, typed_layout): no read that
+#   emit-reads-type  core/emit reads the TYPE fact (`, TYPE)` or type_of) only to lay it out (places.wap layout, typed_layout): no read that
 #                    chooses (an if, a comparison, a match, a `??` or a name held for later)
 #   dynamic-prim     a dynamic call is kernel typing writes: no `prim dispatched` anywhere, no `prim cast` in the preload
 #   one-ranking      definitions are ordered only by `ranked` (analyze/calls.wap): no other sort in core/analyze or core/emit
@@ -55,7 +55,7 @@ one_fit() {
 	}' wap/core/analyze/*.wap
 }
 emit_reads_type() {
-	grep -nE ', TYPE\)' wap/core/emit/*.wap | grep -vE '^wap/core/emit/places\.wap:[0-9]+:(typed_)?layout\(' |
+	grep -nE ', TYPE\)|type_of\(' wap/core/emit/*.wap | grep -vE '^wap/core/emit/(places\.wap:[0-9]+:(typed_)?layout|values\.wap:[0-9]+:type_of)\(' |
 		filed emit-reads-type | awk -F'\t' -v deciding="$DECIDING" '$4 ~ deciding'
 }
 dynamic_prim() {

@@ -77,9 +77,11 @@ PLAIN_VALUES = [I32, I64, F64]
 # box apart from a character's though both hold an i32, and keeps every box apart from any other struct of one field.
 box_index(m: Module, word: text) as int := added_group(m, BOXED_WORDS.map(each => struct_type([field_type(WORD_LAYOUTS[each], IMMUTABLE)]))) + index_where(BOXED_WORDS, each => each == word) - 1
 BOXED_WORDS = WORD_LAYOUTS.keys.filter(word => WORD_LAYOUTS[word] in PLAIN_VALUES)
+# the type the typing stage gave a node, which every node reaching the emitter has
+type_of(n: Node) as Node := fact_of(n, TYPE) ?? refused(n, "this reached the emitter untyped")
 # the type word of a plain value, from the type the typing stage gave its form
 plain_word(form: Node) as text := {
-	type = fact_of(form, TYPE)
+	type = type_of(form)
 	if type is symbol and WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES then text(type) else refused(form, "this plain value reached the emitter without its type")
 }
 

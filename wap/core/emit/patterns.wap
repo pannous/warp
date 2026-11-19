@@ -58,7 +58,7 @@ class Part {
 # the parts of a case pattern, `Circle(r)`, each field of the value cast to the case, or of a list pattern, each item
 # and the rest; none for any other pattern
 field_parts(pattern: Node, value: list<int>, p: Program) as list<Part> := match pattern {
-	List(items, Bracket.Square, separator) => item_parts(items, value, fact_of(pattern, TYPE), p)
+	List(items, Bracket.Square, separator) => item_parts(items, value, type_of(pattern), p)
 	Call(called, patterns) => {
 		record = enum_declaring(p.records, called)
 		cast = case_struct_of(record, case_declaring(p.records, called), p.m, p.records)
@@ -92,7 +92,7 @@ shape_test(pattern: Node, value: list<int>, p: Program) as list<int>? := {
 	if is_case(case_name(pattern)) { return value + REF_IS_NULL + IF + I32 + i32_const(0) + ELSE + value + tagged(p.m) + i32_const(tag_of(case_name(pattern), p)) + I32_EQ + END }
 	items = list_pattern_items(pattern) ?? return ø
 	fixed = #items.filter(item => rest_named(item) == ø)
-	value + count_in(fact_of(pattern, TYPE), ø, p) + i32_const(fixed) + (if fixed < #items then I32_GE_U else I32_EQ)
+	value + count_in(type_of(pattern), ø, p) + i32_const(fixed) + (if fixed < #items then I32_GE_U else I32_EQ)
 }
 # the names of a pattern given their parts of the value, after every test fit; code that leaves nothing. _ gives none.
 names_held(pattern: Node, value: list<int>, type: list<int>, p: Program, f: Frame) as list<int> := {

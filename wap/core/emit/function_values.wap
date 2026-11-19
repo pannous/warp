@@ -20,7 +20,7 @@ use "../../kernel/forms.wap"
 captures_loaded(form: Define, parameters: list<Node>, p: Program, f: Frame) as list<int> := {
 	captures = captures_of(form)
 	value = if parameters is empty then ø else declared_name(parameters#1)
-	parts = if value == ø then ø else function_value_parts(fact_of(value, TYPE))
+	parts = if value == ø then ø else function_value_parts(type_of(value))
 	if captures is empty or parts == ø { return [] }
 	closure = closure_of(value, p)
 	loads = []
@@ -34,7 +34,7 @@ captures_loaded(form: Define, parameters: list<Node>, p: Program, f: Frame) as l
 # captures; else of a type of its own, a struct of what it captures, its function called directly. A function's name
 # as a value captures nothing.
 function_value_code(form: Node, p: Program, f: Frame) as Code := {
-	if function_type_parts(fact_of(form, TYPE)) != ø { return signature_value_code(form, p, f) }
+	if function_type_parts(type_of(form)) != ø { return signature_value_code(form, p, f) }
 	Code(layout(form, p), captures_code(form, f) + instruction(STRUCT_NEW, [closure_of(form, p)]))
 }
 # A function value of a signature: its function's adapter referred to, then its captures, the struct of them a λ
@@ -43,8 +43,8 @@ function_value_code(form: Node, p: Program, f: Frame) as Code := {
 signature_value_code(form: Node, p: Program, f: Frame) as Code := {
 	own = fact_of(form, FUNCTION_VALUE) ?? refused(form, "this function value reached the emitter without the function it is")
 	captures = if is_lambda(form) then captures_code(form, f) + instruction(STRUCT_NEW, [closure_of_type(own, form, p)]) else null_of(ANY_HEAP)
-	adapter = helper(p, "adapter ${defining_key(form)} ${fact_of(form, TYPE)}", q => adapting_function(form, own, q))
-	Code(layout(form, p), function_reference(p.m, adapter) + captures + instruction(STRUCT_NEW, [signature_value_index(fact_of(form, TYPE), p.m, p.records)]))
+	adapter = helper(p, "adapter ${defining_key(form)} ${type_of(form)}", q => adapting_function(form, own, q))
+	Code(layout(form, p), function_reference(p.m, adapter) + captures + instruction(STRUCT_NEW, [signature_value_index(type_of(form), p.m, p.records)]))
 }
 is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => no }
 # The function every value of a signature calls: its captures, then its parameters, given to the value's own function,
@@ -52,7 +52,7 @@ is_lambda(form: Node) as bool := match form { Fn(parameters, body) => yes; _ => 
 # none
 adapting_function(form: Node, own: Node, p: Program) as int := {
 	function = placed_for(p.functions, form) ?? pending_function(p, form) ?? refused(form, "the typing stage typed no function for this value")
-	parts = function_type_parts(fact_of(form, TYPE)) ?? refused(form, "this function value's type is no function type")
+	parts = function_type_parts(type_of(form)) ?? refused(form, "this function value's type is no function type")
 	parameters = signature_parameters(parts, p.m, p.records)
 	captures = if is_lambda(form) then local_get(0) + heap_instruction(REF_CAST_NULL, closure_of_type(own, form, p)) else []
 	added_function(p.m, [ANYREF] + parameters, signature_results(parts, p.m, p.records), [], captures + (1 to #parameters).flat_map(local_get) + instruction(CALL, [function.index]))
@@ -60,7 +60,7 @@ adapting_function(form: Node, own: Node, p: Program) as int := {
 # A call of a function value of a signature: the value kept in a slot of its own, then its captures, the arguments and
 # its function's reference, called by call_ref
 value_call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame) as Code := {
-	type = fact_of(called, TYPE)
+	type = type_of(called)
 	parts = function_type_parts(type) ?? refused(called, "this value's type is no function type")
 	value = code(called, p, f)
 	f.slots += [Placed("value called by ${place_key(form)}", #f.slots, value.type, [], yes)]
@@ -81,5 +81,5 @@ captured_variable(definer: Node, f: Frame) as Placed := {
 	placed_by_key(f.slots, place_key(definer)) ?? refused(definer, "this capture reached the emitter before its value")
 }
 # the GC struct of a typed function value
-closure_of(n: Node, p: Program) as int := closure_of_type(fact_of(n, TYPE), n, p)
-closure_of_type(type: Node?, n: Node, p: Program) as int := function_value_index(type, p.m, p.records) ?? refused(n, "this is no function value")
+closure_of(n: Node, p: Program) as int := closure_of_type(type_of(n), n, p)
+closure_of_type(type: Node, n: Node, p: Program) as int := function_value_index(type, p.m, p.records) ?? refused(n, "this is no function value")
