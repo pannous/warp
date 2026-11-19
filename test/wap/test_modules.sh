@@ -86,4 +86,12 @@ class Box { name: text }
 print(boxed(3))
 print(Box("x").name)')" "3
 x"
+# a case name two enums share: the case taking as many values as the call gives, though another hides it by scope
+printf '%s\n' 'enum Token { Atom, Key }' >"$stage/tokens.wap"
+check "a call of a case name picks the case taking its values: Key(a, op, b) is Node's beside a used module's fieldless Key" "$(ran case_by_count 'use "tokens.wap"
+shown(n: Node) as text := match n { Key(left, op, right) => "key"; _ => "other" }
+token = Key
+print(shown(Key(symbol("a"), Op.Colon, Number(1))))
+print(if token == Token.Key then "token" else "other")')" "key
+token"
 exit $((failures > 0))

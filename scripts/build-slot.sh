@@ -13,7 +13,8 @@ IN_LINE_RETRY=5  # seconds between the others' looks at the line
 # (a module compile looped 3 h 15 min unnoticed, 2026-11-16): each process may use this many times the CPU of main's
 # last whole compiler build, never less than the floor
 CPU_LIMIT_FACTOR=4
-CPU_LIMIT_FLOOR=900  # seconds
+# seconds: above a whole rebuild by an older, slower seed (about 1200 s, 2026-11-19), which a floor of 900 stopped as endless
+CPU_LIMIT_FLOOR=2400
 CPU_LIMIT_STATUS=152  # 128 + SIGXCPU
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/slots.sh"
@@ -22,7 +23,13 @@ scripts=$(cd "$(dirname "$0")" && pwd)
 log=${1:?usage: build-slot.sh <log> <command…>}
 shift
 record=${WARP_BUILD_RECORD:-}
-main_build_cpu() { awk '$1=="user"{print int($2)}' "$store/main/warp.record/time" 2>/dev/null; }
+# the CPU seconds of main's last measured build: main's own record, else the newest one in the store (a compiler taken
+# from the store unbuilt has none, which left the floor alone as the limit)
+main_build_cpu() {
+	local record=$store/main/warp.record/time
+	[ -f "$record" ] || record=$(ls -t "$store"/*/warp.record/time 2>/dev/null | head -1)
+	[ -n "$record" ] && awk '$1=="user"{print int($2)}' "$record"
+}
 cpu_limit() {
 	local limit=$(( ${1:-0} * CPU_LIMIT_FACTOR ))
 	[ "$limit" -gt $CPU_LIMIT_FLOOR ] && echo "$limit" || echo $CPU_LIMIT_FLOOR
