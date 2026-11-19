@@ -55,3 +55,6 @@ parse("f(x) := x") is Definition' true
 is! 'pattern Fn = (Fn $parameters: List $body: Node)
 pattern Try = (Try $body: Node $handler: Fn)
 Try(Symbol("b"), Fn([Symbol("x")], Symbol("x"))) is Try' true
+is! 'pattern Call = (Call $called: Node $arguments...: Node)
+n = parse("(Call f a b)")
+[1, 2].map(i => match n { Call(called, arguments) => "${called} ${#arguments}"; _ => "none" })' ["f 2", "f 2"]
