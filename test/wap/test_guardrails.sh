@@ -2,8 +2,8 @@
 # wap's guardrails as checks (user decision via warp-lead, 2026-11-18), so they hold when nobody is looking:
 #   one-fit          core/analyze has one type relation, `conversion`: no other function answers "does this type fit"
 #                    (a yes/no or Conversion with a parameter `wanted`, two of given, held, these, those, or named same_type(s) or fits_type)
-#   emit-reads-type  core/emit reads the TYPE fact (`, TYPE)` or type_of) only to lay it out (places.wap layout, typed_layout): no read that
-#                    chooses (an if, a comparison, a match, a `??` or a name held for later)
+#   emit-infers-type core/emit computes no type: it reads the TYPE and BINDING facts typing and binding wrote and may
+#                    choose by them, but calls no word of core/analyze and builds no type node (type_notation's builders)
 #   dynamic-prim     a dynamic call is kernel typing writes: no `prim dispatched` anywhere, no `prim cast` in the preload
 #   one-ranking      definitions are ordered only by `ranked` (analyze/calls.wap): no other sort in core/analyze or core/emit
 #   long-file        no wap file over 300 lines: its owner splits it along a real seam
@@ -23,7 +23,7 @@
 # Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
 # the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
 # until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
-RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any emit-boxes one-owner in-tree"
+RULES="one-fit emit-infers-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any emit-boxes one-owner in-tree"
 # the rules no allowlist line excuses: a spot of theirs is a failure at once
 UNLISTED="emit-boxes in-tree"
 OWNERS=notes/wap.md
@@ -32,7 +32,8 @@ LONGEST=300
 SHAPE_FLOOR=20
 # where a type is written: after `:`, `->`, `<`, `,` or `as`, or as an optional
 ANY_TYPE='(:|->|<|,|[^a-z_]as)[ \t]*any([^a-z_?]|$)|[^a-z_.]any[?]'
-DECIDING='(^|[^a-z_])(if|match)[ (]|==|!=|[?][?]|^[a-z_]+ = '
+# the words that build a type node (core/type_notation.wap); taking one apart is reading it
+TYPE_BUILDERS="generic_type|type_built|function_type_of|optional_type|list_type|map_type|function_value_type"
 SAME_TYPE_NAMES='^(same|fits)_types?$'
 TYPE_PARAMETERS="given|held|these|those"
 
@@ -56,9 +57,13 @@ one_fit() {
 		if (name != relation && (wanted || typed >= 2 || name ~ named)) printf "one-fit\t%s\t%s:%d\t%s\n", name, FILENAME, FNR, substr($0, 1, 100)
 	}' wap/core/analyze/*.wap
 }
-emit_reads_type() {
-	grep -nE ', TYPE\)|type_of\(' wap/core/emit/*.wap | grep -vE '^wap/core/emit/(places\.wap:[0-9]+:(typed_)?layout|values\.wap:[0-9]+:type_of)\(' |
-		filed emit-reads-type | awk -F'\t' -v deciding="$DECIDING" '$4 ~ deciding'
+# the functions core/analyze defines, a name the emitter's own files or the shared ones define too left out
+analyze_words() {
+	grep -ohE '^[a-z_]+\(' wap/core/analyze/*.wap | tr -d '(' | sort -u |
+		grep -vxF -f <(grep -ohE '^[a-z_]+\(' wap/core/emit/*.wap wap/core/*.wap | tr -d '(' | sort -u)
+}
+emit_infers_type() {
+	grep -nE "(^|[^a-z_.])($(analyze_words | paste -sd'|' -)|$TYPE_BUILDERS)\(" wap/core/emit/*.wap | filed emit-infers-type
 }
 dynamic_prim() {
 	{ grep -nE 'prim dispatched\b' $wap_files; grep -nE 'prim cast\b' wap/preload/*.wap; } | filed dynamic-prim

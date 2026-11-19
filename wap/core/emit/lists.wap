@@ -19,6 +19,7 @@ GROWTH = 4
 NO_SUCH_ITEM = "this list has no item at this place"
 POPPED_EMPTY = "pop of an empty list"
 NO_MAP_TYPE = "this is no map type"
+NO_ITEM_LAYOUT = "the emitter has no value layout for this list's items yet"
 LIST_ITEM = "list_item"
 LIST_SET = "list_set"
 LIST_COUNT = "list_count"
@@ -34,7 +35,8 @@ typed_helper_called(operation: text, type: Node, p: Program) as list<int> := ins
 counted_items(p: Program) as list<int> := instruction(STRUCT_GET, [list_base(p.m), LIST_COUNT_AT]) + I64_EXTEND_I32_U
 
 # a new list of these items' code, of a list type
-list_made(type: Node, items: list<Code>, p: Program) as list<int> := i32_const(#items) + items.flat_map(item => item.instructions) + instruction(ARRAY_NEW_FIXED, [items_array(type, p), #items]) + instruction(STRUCT_NEW, [list_struct(type, p)])
+# a new list of items of a type
+list_made(item: Node, items: list<Code>, p: Program) as list<int> := i32_const(#items) + items.flat_map(each => each.instructions) + instruction(ARRAY_NEW_FIXED, [item_array(item, p.m, p.records) ?? refused(item, NO_ITEM_LAYOUT), #items]) + instruction(STRUCT_NEW, [items_list(item, p.m, p.records) ?? refused(item, NO_ITEM_LAYOUT)])
 
 # The helpers of list_item and list_set, an item at a place counted from 0: locals 0 the list, 1 the place, for
 # list_set 2 the value. A place at or past the count raises.
@@ -66,17 +68,17 @@ list_slicing_function(p: Program, type: Node) as int := {
 }
 
 # a new map of these keys' and values' code
-map_made(map: Node, keys: list<Code>, values: list<Code>, p: Program) as list<int> := list_made(keys_of(map), keys, p) + list_made(values_of(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
+map_made(map: Node, keys: list<Code>, values: list<Code>, p: Program) as list<int> := list_made(map_key(map), keys, p) + list_made(map_value(map), values, p) + instruction(STRUCT_NEW, [map_struct(map, p)])
 
 # the wasm types of a list: the struct, a reference to it, the array of its items, an item's layout
-list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+list_struct(type: Node, p: Program) as int := list_index(type, p.m, p.records) ?? refused(type, NO_ITEM_LAYOUT)
 # REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): one layout per item type (an array of i64 for list<int>,
 # of references for list<Node>) means a list<int> can never stand where a list of anything is wanted without a copy,
 # and lists are shared, so a copy changes meaning. Proposal: every list and map holds references (small ints as
 # i31, others boxed); `list<int>` is then a promise typing checks, with a cast at the read. Any list fits a bare
 # `list`, the list words exist once instead of once per item type, and wap's own lists (Nodes, texts) pay nothing.
 list_layout(type: Node, p: Program) as list<int> := nullable(list_struct(type, p))
-items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, "the emitter has no value layout for this list's items yet")
+items_array(type: Node, p: Program) as int := items_index(type, p.m, p.records) ?? refused(type, NO_ITEM_LAYOUT)
 list_item(type: Node) as Node := item_type(type) ?? refused(type, "this list type names no item type")
 item_layout(type: Node, p: Program) as list<int> := known_layout(list_item(type), p.m, p.records)
 # the count or the items array of the list in a local, or of the one on the stack for ø
@@ -90,5 +92,3 @@ map_struct(map: Node, p: Program) as int := map_index(map, p.m, p.records) ?? re
 # a map type's key type and value type, and the lists of them its parts are
 map_key(map: Node) as Node := key_type(map) ?? refused(map, NO_MAP_TYPE)
 map_value(map: Node) as Node := held_type(map) ?? refused(map, NO_MAP_TYPE)
-keys_of(map: Node) as Node := list_type(map_key(map))
-values_of(map: Node) as Node := list_type(map_value(map))
