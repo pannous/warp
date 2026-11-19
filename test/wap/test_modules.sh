@@ -76,4 +76,7 @@ print(text(twice(3)))')" "6
 check "two used modules defining one name are refused naming both, even where nothing calls it" "$(ran module_clash 'use "a.wap"
 use "b.wap"
 print("x")' | grep -o 'a.wap line [0-9]* and b.wap line [0-9]* both define twice')" "a.wap line 1 and b.wap line 1 both define twice"
+check "a variable named like a used module is the variable: a.twice() is twice(a)" "$(ran module_hidden 'use "a.wap"
+a = 7
+print(text(a.twice()))')" "14"
 exit $((failures > 0))

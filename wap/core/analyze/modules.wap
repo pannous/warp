@@ -33,7 +33,7 @@ declared_alike(declaration: Node) as text := match declaration {
 	Key(name, Op.Colon, signature) => if signature == ø then text(name) else "${name}(${items_of(signature).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
 	_ => text(declaration_name(declaration))
 }
-# A used module's word named by the module, `a.twice` or `a.twice(3)`, read as twice(a, 3) is: the definitions of
+# A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
 # that name the module declares, bound as the bare name would be were they the only ones; ø where the subject names no
 # module, or names something nearer, a variable `a`
 module_word(n: Node, subject: Node, key: text, scope: list) as Node? := {
