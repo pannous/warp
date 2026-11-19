@@ -63,17 +63,20 @@ field_parts(pattern: Node, value: list<int>, p: Program) as list<Part> := match 
 	Call(called, patterns) => {
 		record = enum_declaring(p.records, called)
 		cast = case_struct_of(record, case_declaring(p.records, called), p.m, p.records)
-		types = case_fields(case_declaring(p.records, called)).map(field => layout_of(declared_type(field), p.m, p.records))
+		types = case_fields(case_declaring(p.records, called)).map(field => known_layout(field_declared(field), p.m, p.records))
 		(1 to #patterns).map(at => Part(patterns#at, value + heap_instruction(REF_CAST_NULL, cast) + instruction(STRUCT_GET, [cast, at + #fields_of(record)]), types#at))
 	}
 	_ => []
 }
 # A list pattern's parts: its items by their places, then the rest, the items after them as a new list
 item_parts(items: list<Node>, value: list<int>, type: Node, p: Program) as list<Part> := {
-	fixed = items.filter(item => rest_named(item) == ø)
-	parts = (1 to #fixed).map(at => Part(fixed#at, value + items_in(type, ø, p) + i32_const(at - 1) + instruction(ARRAY_GET, [items_array(type, p)]), item_layout(type, p)))
-	rests = items.filter(item => rest_named(item) != ø).map(item => Part(rest_named(item), value + i64_const(#fixed) + value + count_in(type, ø, p) + i32_const(#fixed) + I32_SUB + I64_EXTEND_I32_U + typed_helper_called(LIST_SLICE, type, p), list_layout(type, p)))
-	parts + rests
+	fixed = #items.filter(item => rest_named(item) == ø)
+	(1 to #items).map(at => item_part(items#at, at, fixed, value, type, p))
+}
+# an item by its place, or the rest after the fixed items
+item_part(item: Node, at: int, fixed: int, value: list<int>, type: Node, p: Program) as Part := {
+	rest = rest_named(item)
+	if rest == ø then Part(item, value + items_in(type, ø, p) + i32_const(at - 1) + instruction(ARRAY_GET, [items_array(type, p)]), item_layout(type, p)) else Part(rest, value + i64_const(fixed) + value + count_in(type, ø, p) + i32_const(fixed) + I32_SUB + I64_EXTEND_I32_U + typed_helper_called(LIST_SLICE, type, p), list_layout(type, p))
 }
 # Whether the value fits a pattern, yes or no: a case by its tag, a list by its count, then each part by its own
 # pattern, tested only once the shape fits; a literal by equality. `value` is the code that gives the value, of the
@@ -114,7 +117,7 @@ error_node_function(p: Program) as int := {
 	node = record_named(p.records, symbol(NODE_TYPE)) ?? refused(Text(NODE_TYPE), "a Try's handler takes the raise as a Node, and the program declares no Node")
 	tag = word => i32_const(declared_tag(node_case(node, word), p))
 	made = word => instruction(STRUCT_NEW, [case_struct_of(node, node_case(node, word), p.m, p.records)])
-	added_function(p.m, [nullable(text_type(p.m))], [layout_of(symbol(NODE_TYPE), p.m, p.records)], [], tag(ERROR_CASE) + tag(TEXT_CASE) + local_get(0) + made(TEXT_CASE) + made(ERROR_CASE))
+	added_function(p.m, [nullable(text_type(p.m))], [known_layout(symbol(NODE_TYPE), p.m, p.records)], [], tag(ERROR_CASE) + tag(TEXT_CASE) + local_get(0) + made(TEXT_CASE) + made(ERROR_CASE))
 }
 node_case(node: Record, word: text) as Node := {
 	named = cases_of(node).filter(case => text(case_name(case)) == word)
