@@ -179,6 +179,10 @@ pick(b: Box?, xs: list<int>) as list<int> := {
 	xs.map(x => x + b.n)
 }
 print(text(pick(Box(10), [1, 2])))')" "[11, 12]"
+check "a shape test narrows an optional value to the shape, as it does a present one" "$(ran optional_shape 'f(n: Node?) as text := if n is Text { match n { Text(value) => value } } else "other"
+print f(Text("a"))
+print f(ø)')" "a
+other"
 check "a condition finds an item at a written place present, on the right of an or too" "$(ran item_present 'first_or(xs: list<int?>) as int := if xs#1 == ø or xs#1 < 0 then 0 else xs#1 + 1
 print(text(first_or([4, ø])) + " " + text(first_or([ø, 2])) + " " + text(first_or([-3])))')" "5 0 0"
 exit $((failures > 0))

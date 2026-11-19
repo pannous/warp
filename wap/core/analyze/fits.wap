@@ -123,10 +123,11 @@ as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 	way = conversion(value_type(n), wanted, s)
 	if way == Conversion.Read then as_read(n, base_of(wanted), s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
 }
-# a value of a kind where its bare kind's word is wanted: `list`, `function`, `enum`
+# a value of a kind where its bare kind's word is wanted: `list`, `function` (a function value or a written function
+# type, `(int) -> int`), `enum`
 bare_fit(given: Node, wanted: Node, records: Records) as bool := {
 	if wanted == symbol(LIST_TYPE) { return item_type(given) != ø }
-	if wanted == symbol(FUNCTION_WORD) { return function_value_parts(given) != ø }
+	if wanted == symbol(FUNCTION_WORD) { return function_value_parts(given) != ø or signature(given) != ø }
 	if wanted != symbol(ENUM_TYPE) { return no }
 	record = record_named(records, given) ?? return no
 	not cases_of(record) is empty
