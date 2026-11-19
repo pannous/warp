@@ -355,17 +355,19 @@ name_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 		if case != ø { return case_call_typed(case, case, [], s, f) }
 		return if names_constant(n, expected, s) then call_typed(n, n, [], s, f, expected) else function_named_typed(n)
 	}
-	type = variable_type(n, s, f)
-	# a global a function reads before the statement that gives it its value is read when the function is called
-	# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
-	if type == ø and is_bound(n, DefinitionKind.Global) and f.function != ø {
-		type = unknown_type(s)
-		remembered(n, type, s, f)
-		s.unset = s.unset + [place_key(defined_at(n))]
-	}
+	type = variable_type(n, s, f) ?? read_before_given(n, s, f)
 	if is_bound(n, DefinitionKind.Global) and f.function != ø and place_key(defined_at(n)) in s.unset { f.late = f.late + [n] }
 	if type == ø and is_bound(n, DefinitionKind.Capture) { refused(n, "a named function inside a function reads the variables around it with closures, not yet; a function value `x => …` can") }
 	as_found(n, with_fact(n, TYPE, type ?? refused(n, "this name is read before any value is given to it")), s, f)
+}
+# a global a function reads before the statement that gives it its value is read when the function is called
+# (wiki/Footguns.md: free variables are read at call time): of a type its statement settles
+read_before_given(n: Node, s: TypingState, f: TypeFrame) as Node? := {
+	if not is_bound(n, DefinitionKind.Global) or f.function == ø { return ø }
+	type = unknown_type(s)
+	remembered(n, type, s, f)
+	s.unset = s.unset + [place_key(defined_at(n))]
+	type
 }
 # A path's read as a condition around finds it: an optional's value where it is known present, `x!`, a boxed value of
 # the type it is known to hold; as it is where nothing finds it
