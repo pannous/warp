@@ -60,15 +60,15 @@ class TypingState {
 	definition_names: NameIndex = NameIndex()
 	definition_keys: NameIndex = NameIndex()
 	records: Records = Records()
-	functions: list = []
+	functions: list<TypedFunction> = []
 	globals: list = []
 	# the keys of the globals functions read before the statements that give them their values, until those statements
-	unset: list = []
+	unset: list<text> = []
 	# the functions of the function values met, and the keys of the variables they capture
-	lambdas: list = []
+	lambdas: list<Node> = []
 	# the functions dynamic calls dispatch through (core/analyze/dispatch.wap)
-	dispatchers: list = []
-	captured: list = []
+	dispatchers: list<Node> = []
+	captured: list<text> = []
 	# the empty lists' item types a use has to settle, α1, α2 …: how many there are, and each settled, [unknown, type]
 	unknowns: int = 0
 	settled: list = []
