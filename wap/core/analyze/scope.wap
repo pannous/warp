@@ -65,8 +65,8 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	Item(subject, key) => refitted(Item(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)
-	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type), n)
-	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(head, Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
+	Key(name, Op.Colon, type) => refitted(Key(bound(name, scope, depth), Op.Colon, type_bound(type, scope)), n)
+	Key(head, Op.None, List(items, Bracket.Curly, separator)) => refitted(Key(type_bound(head, scope), Op.None, List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator)), n)
 	List(items, Bracket.Curly, separator) => refitted(List(items.map(field => field_bound(field, scope, depth)), Bracket.Curly, separator), n)
 	Record(name, fields, variants) => n
 	Number(value) => n
@@ -76,6 +76,16 @@ bound(n: Node, scope: list, depth: int) as Node := match n {
 	False => n
 	Empty => n
 	_ => refused(n, "the binding analysis reads only kernel forms; the lowering should have removed this")
+}
+# A written type with each record name in it bound to the Record its scope sees, `Box` of `b: Box` or `list<Box>?`
+type_bound(type: Node, scope: list) as Node := match type {
+	Symbol(name) => {
+		for definition in scope { if definition.kind == RECORD_KIND and definition.name == name { return with_fact(type, DECLARED_BY, record_declared(definition.definer)) } }
+		type
+	}
+	List(items, bracket, separator) => refitted(List(items.map(item => type_bound(item, scope)), bracket, separator), type)
+	Call(called, arguments) => refitted(Call(called, arguments.map(argument => type_bound(argument, scope))), type)
+	_ => type
 }
 # An arm: the name its pattern holds a new variable of the arm, which its result sees; `_` and literals name none
 arm_bound(arm: Arm, scope: list, depth: int) as Node := match arm {
@@ -157,7 +167,7 @@ all_bound(forms: list, scope: list, depth: int) as list := forms.map(form => bou
 # A function's parameters and body, one depth further in than the function's definition, the body seeing the
 # parameters before the names around it
 parameters_bound(parameters: List, scope: list, depth: int) as Node := match parameters {
-	List(items, bracket, separator) => refitted(List(items.map(p => default_bound(bound(p, parameter_definitions(parameters, depth + 1), depth + 1), scope, depth)), bracket, separator), parameters)
+	List(items, bracket, separator) => refitted(List(items.map(p => default_bound(bound(p, parameter_definitions(parameters, depth + 1) + scope, depth + 1), scope, depth)), bracket, separator), parameters)
 }
 # a parameter's default value, `y: int = k`, bound where the function is defined
 default_bound(parameter: Node, scope: list, depth: int) as Node := {
