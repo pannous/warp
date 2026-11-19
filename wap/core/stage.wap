@@ -176,6 +176,9 @@ TYPE_TEST_WORD = "is"
 BOXED_TEST = "boxed_test"
 # `prim cast(x)`, x an any: its value as the Prim's type, checked, raising with the place when it holds another type
 CHECKED_CAST = "cast"
+# `prim box(x)`, x a plain value (int, float, bool, char) going into an any or an optional: x in its box, the Prim's
+# type the one wanted; only typing writes it (notes/decisions.md wap-boxed-any-debt)
+BOXED_VALUE = "box"
 TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
 # on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no

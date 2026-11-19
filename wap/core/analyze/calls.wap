@@ -51,7 +51,7 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	made = made_from_map(n, called, candidates, given, s)
 	if made != ø { return typed_form(made, s, f, expected) }
 	meant = chosen_definition(n, called, scopes, given, expected, s)
-	taken = texts_read(meant, given, s) + defaults_given(meant, #given, s, f)
+	taken = arguments_fitted(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	called_reads(chosen, n, s, f)
 	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
@@ -133,16 +133,17 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 # a character where a text is wanted, as its text: a written one is that text, any other the call text(c)
 as_text(character: Node, s: TypingState) as Node := if character is Char then char_text(character) else word_called(character, TEXT_FUNCTION, [character], ø, s)
 char_text(character: Node) as Node := with_type(refitted(Text(text(character)), character), TEXT_TYPE)
-# a call's typed arguments, a char where its parameter wants a text (its letters bound by the call) read as its text
-texts_read(definition: Node, given: list, s: TypingState) as list := {
+# a call's typed arguments as their parameters (their letters bound by the call) have them: a char read as its text,
+# a plain value boxed for an any or an optional
+arguments_fitted(definition: Node, given: list, s: TypingState) as list := {
 	letters = letters_bound(definition, given.map(value_type), s) ?? []
 	wanted = parameters_in(definition).map(parameter => substituted(type_given(parameter), letters))
-	(1 to #given).map(at => text_read(given#at, wanted#at, s))
+	(1 to #given).map(at => as_wanted(given#at, wanted#at, s))
 }
 # the call of a word with these typed arguments, the definition chosen among all of the word's
 word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) as Node := {
 	meant = chosen_definition(n, symbol(word), [definitions_named(word, s)], given, expected, s)
-	taken = texts_read(meant, given, s)
+	taken = arguments_fitted(meant, given, s)
 	chosen = function_typed(meant, taken.map(value_type), s, n)
 	result_of(refitted(Call(calling(symbol(word), chosen), taken), n), chosen)
 }

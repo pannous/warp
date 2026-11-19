@@ -88,7 +88,7 @@ class Program {
 }
 # The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
 class Frame {
-	slots: list = []
+	slots: list<Placed> = []
 	parameter_count: int = 0
 	# a function's frame takes returns, the program's does not; the types of the values returned so far
 	function: bool = no
@@ -96,7 +96,7 @@ class Frame {
 	# the layout of the function's result as its signature says, which a returned value is made to fit
 	signed: list = []
 	# the labels open around the code being emitted, the innermost last
-	labels: list = []
+	labels: list<text> = []
 }
 # A definition where wasm keeps it: its index, the type of its value (a function's result) and, for a function,
 # its parameters' types. Its key is where it was defined: file, line and column.
@@ -176,7 +176,7 @@ block_type(type: list) as list := if valued(type) then type else VOID_BLOCK
 # a part's code where its choice has the type: its value kept, or dropped when the choice has none
 kept(part: Code, type: list) as list := if valued(type) then part.instructions else dropped(part)
 arm_code(choice: Node, part: Node, p: Program, f: Frame) as Code := choice_fitted(choice, labelled(f, [OTHER_LABEL], () => code(part, p, f)), part, p)
-# a part's value made to fit its choice's type, an If's or a Case's: 3 in `if b then 3 else ø`, an int?, is boxed
+# a part's value made to fit its choice's type, an If's or a Case's
 choice_fitted(choice: Node, given: Code, part: Node, p: Program) as Code := {
 	wanted = typed_layout(choice, p)
 	if wanted == ø then given else fitted(given, wanted, part, p)
@@ -206,23 +206,19 @@ return_code(form: Node, value: Node, p: Program, f: Frame) as Code := {
 	Code(NEVER, given.instructions + RETURN)
 }
 
-# the code of items made to fit the type a list or a map holds: `[1, "a"]` as a list<any> boxes the 1
+# the code of items made to fit the type a list or a map holds
 # REVIEW (notes/wap_review.md "Dynamic types", 2026-11-18): `fitted` is a second answer to "does it fit", on wasm
 # layouts. Its last case turns an any given where a reference is wanted into ø (DROP + null_of): the program goes on
 # with a missing value. That place is exactly where dynamic typing needs its checked cast (ref.test, else raise
 # naming both types and the place). Once typing writes every conversion into the kernel (core/analyze/fits.wap),
 # the emitter only emits the conversion it is handed and this function goes.
 # DONE: the checked cast (wap-any-cast); the rest stands.
-# A value given where a type is wanted, made to fit it: a plain value boxed for its optional or for `any`, any
-# reference taken as itself where `any` is wanted, an `any` cast to the wanted reference type (checked_cast); any
-# other value as it is, for its taker to check. `form` is the value's code, whose type picks a plain value's box.
+# DONE: the boxing, typing's `prim box` (wap-box-kernel).
+# A value given where a type is wanted, made to fit it: any reference taken as itself where `any` is wanted, an `any`
+# cast to the wanted reference type (checked_cast); any other value as it is, for its taker to check. A plain value
+# arrives boxed already, by typing's `prim box`. `form` is the value's code, the place a failed cast names.
 fitted(given: Code, wanted: list, form: Node, p: Program) as Code := {
-	m = p.m
 	if given.type == wanted { return given }
-	if given.type in PLAIN_VALUES and is_reference(wanted) {
-		box = box_index(m, plain_word(form))
-		if wanted in [nullable(box), ANYREF] { return Code(wanted, given.instructions + instruction(STRUCT_NEW, [box])) }
-	}
 	if wanted == ANYREF and is_reference(given.type) { return Code(wanted, given.instructions) }
 	if given.type == ANYREF and is_reference(wanted) { return Code(wanted, given.instructions + cast_called(wanted, "one", form, p)) }
 	given
@@ -247,7 +243,7 @@ items_fitted(type: Node, items: list, p: Program, f: Frame) as list := items.map
 # a function's value made to fit its signed result, a frame without one leaving it as it is
 signed_fit(given: Code, form: Node, f: Frame, p: Program) as Code := if valued(f.signed) then fitted(given, f.signed, form, p) else given
 # code emitted inside wasm's structured instructions, which open these labels
-labelled(f: Frame, labels: list, emit: function) as Code := {
+labelled(f: Frame, labels: list<text>, emit: function) as Code := {
 	f.labels += labels
 	emitted_code = emit()
 	f.labels = f.labels[.. #f.labels - #labels]
