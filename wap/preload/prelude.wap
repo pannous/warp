@@ -11,10 +11,6 @@ print(t: text) := prim print_text(t)
 eprint(t: text) := prim error_text(t)
 # a got-it note on the standard error: `hint "write a + b for a plus b"` prints "hint: write a + b for a plus b"
 hint(message: text) := eprint("hint: " + message)
-# the text of the file at a path, relative to the current folder or from the root (/…)
-read(path: text): text := prim read_text(path)
-# the command line: the program's file as it was named, then its arguments
-arguments(): list<text> := prim arguments()
 # the arguments after the program's file: `warp prog.wasm a b` gives ["a", "b"]
 args := arguments().drop(1)
 # the running program: its file, as the command line names it, and that file's folder
@@ -25,8 +21,6 @@ folder_of(file: text): text := {
 	parts = file.split("/")
 	if #parts == 1 then "." else parts[.. #parts - 1].join("/")
 }
-# bytes written to the file at a path, made anew or emptied first: what a compiler writes its module with
-write_bytes(path: text, bytes: list<int>) := prim bytes_written(path, bytes)
 # the program stopped with a message on the standard error, then a line end; it never finishes
 raise(message: text): never := prim raise_text(message)
 
