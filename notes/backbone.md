@@ -136,8 +136,9 @@ checked) and a line here when its language changed. The lead reviews it against 
   - Two operators with no relation between them, mixed without brackets, are refused with a fix-it, never guessed.
   - A cycle is refused when the table is loaded.
   - The wiki's rule that superscripts bind tighter (`x²⁺³ == x⁵`) is one relation in this table.
-- **Juxtaposition and calls.** `square 3 * 3` reads two ways, so it is refused (wiki/precedence.md). Juxtaposition
-  is a precedence group with its own relations like any other, not a parser branch.
+- **Juxtaposition and calls.** A spaced call takes the whole operator phrase after it: `square 3 * 3` is
+  `square(9)` (wiki/precedence.md, decision spaced-call-precedence). Juxtaposition is a precedence group with its own
+  relations like any other, not a parser branch.
 - **Aliases, one mechanism with its nuances:**
   - word aliases (`through` for `to`) and symbol aliases (`…` for `to`, `≤` for `<=`);
   - aliases limited to one fixity (a word that is only infix);
@@ -175,9 +176,8 @@ checked) and a line here when its language changed. The lead reviews it against 
 - **The reader** comes first and gets special care: notes/reader.md, a data reader inspired by wasp's node parsing
   (not a copy). Three strictly separate steps: (1) the data reader parses any data into Node and knows no language;
   (2) then structural language matching (spelling rules); (3) then the analyzer (user 2026-11-17).
-- **Was open, the reader:** reuse it as it is, or rewrite it as a pure notation reader whose keyword branches (about
-  1,700 lines today) become spelling rules. The recommendation is to reuse it for milestone 1 and rewrite it before
-  milestone 2.
+- **The reader, settled:** wap has its own pure notation reader (core/parse/), knowing no keyword; the old reader's
+  keyword branches became spelling rules (preload/sugar/).
 - **The old compiler** compiles the new backbone until the new backbone compiles itself, then retires.
 
 ## Milestones
@@ -237,8 +237,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 ## Open questions for the user
 
 1. ~~Layers~~: decided, four layers; kernel forms are named patterns of Node.
-2. **The reader:** reuse it for milestone 1 and rewrite it as a pure notation reader before milestone 2?
-   Recommended: yes.
+2. ~~The reader~~: decided, wap's own pure notation reader in core/parse/.
 3. ~~Folder~~: decided, wap/ (kernel/, core/; preload and library later).
 4. **The kernel list:** start the case-by-case discussion from notes/kernel.md's 13 forms plus primitives?
 
@@ -277,7 +276,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   whose decimal literals are exact (notes/decisions.md core-round-untyped-half, exact-decimal-big; tests
   test/numbers/test_number_and_unit_rules:7, test_fraction_written_form:11, test_declared_float_exact_reals:13). The
   compiler's own source barely uses decimals, so self-build does not wait for it; the exact number kind (the runtime's
-  exact numbers as preload warp) comes after self-build. No test pins the f64 value.
+  exact numbers as preload warp) comes after self-build. No test pins the f64 value. Where: core/parse/atoms.wap
+  number_read, preload/floats.wap; `1e21` likewise shows 1e21 where warp gives 1000000000000000000000.
 
 - **A slice past a list's end traps** (array_slice, wap/core/emit/primitives.wap): wasm's array.copy stops the
   program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
@@ -363,10 +363,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `receiver_fields`): a method of a preload or used module's class still writes `self.c`, and a function value inside
   a method that reads a bare field is not given self as a capture. Paid off when the binding sees the library's
   Records beside its declarations, and a field's capture captures its receiver.
-- **Decimal literals are floats, not exact** (wap/core/parse/atoms.wap number_read, wap/preload/floats.wap): `0.1 + 0.2`
-  shows 0.30000000000000004 where warp gives 0.3, and `1e21` shows 1e21 where warp gives 1000000000000000000000.
-  Reason: wap keeps f64 until after self-build; warp's decided exact numbers (and ints beyond int64) come after it.
-  Nothing pins the float digits.
 - **A one-letter literal key on a map read fails** (wap/core/analyze/data.wap): `m#"b"` gives the key as a char, so
   the wasm does not validate; `m#"bb"`, `m["b"]` and `m#k` work. Edge case, no wap source writes it.
 - **any compares other references by identity:** inside an `any`, refs other than boxes and texts compare by
