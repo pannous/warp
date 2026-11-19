@@ -15,7 +15,7 @@ ASSIGNMENT = "="
 
 # the group of that name; an unknown name in the table is refused
 group_named(language: Language, name: text) as Group := {
-	found = language.groups.filter(group => group.name == name)
+	found = items_named(language.group_names, language.groups, name, group => group.name)
 	if #found == 0 { raise "operator table: no precedence group " + name }
 	found#1
 }
@@ -103,7 +103,10 @@ declared_fixity(operator: Operator) as Fixity :=
 
 # the group of an operator in its first fixity: infix, then prefix, then postfix
 group_of_any(language: Language, spelling: text) as text := {
-	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] { if group_of(language, spelling, fixity) != "" { return group_of(language, spelling, fixity) } }
+	for fixity in [Fixity.Infix, Fixity.Prefix, Fixity.Postfix] {
+		group = group_of(language, spelling, fixity)
+		if group != "" { return group }
+	}
 	""
 }
 
@@ -111,22 +114,27 @@ group_of_any(language: Language, spelling: text) as text := {
 
 # the canonical word of a spelling written in that fixity: the spelling itself when no alias applies
 canonical(language: Language, spelling: text, fixity: Fixity) as text := {
-	if aliased(spelling, fixity) != spelling { return aliased(spelling, fixity) }
+	written = aliased(spelling, fixity)
+	if written != spelling { return written }
 	compound = compound_assignment(language, spelling)
 	if compound != "" { return compound }
 	spelling
 }
 # the canonical word the preload's aliases give a spelling, the spelling itself when none does
 aliased(spelling: text, fixity: Fixity) as text := {
-	for alias in aliases {
-		if alias.spelling == spelling and (alias.fixity == fixity or alias.fixity == Fixity.Anywhere) { return alias.canonical }
+	for alias in aliases_spelled(spelling) {
+		if alias.fixity == fixity or alias.fixity == Fixity.Anywhere { return alias.canonical }
 	}
 	spelling
 }
 
+# the preload's aliases of a spelling, looked up by it in alias_names
+alias_names = NameIndex()
+aliases_spelled(spelling: text) as list<Alias> := items_named(alias_names, aliases, spelling, alias => alias.spelling)
+
 # a discouraged alias, ø for any other spelling
 discouraged_alias(spelling: text) as Alias? := {
-	for alias in aliases { if alias.spelling == spelling and alias.discouraged { return alias } }
+	for alias in aliases_spelled(spelling) { if alias.discouraged { return alias } }
 	ø
 }
 
@@ -141,8 +149,8 @@ compound_assignment(language: Language, spelling: text) as text := {
 
 # the operator of that canonical spelling, ø when there is none
 operator_spelled(language: Language, spelling: text) as Operator? := {
-	for operator in language.operators { if operator.spelling == spelling { return operator } }
-	ø
+	found = items_named(language.operator_names, language.operators, spelling, operator => operator.spelling)
+	if found is empty then ø else found#1
 }
 
 # the group an operator spelled so has in that fixity, "" when it has no such fixity
