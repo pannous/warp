@@ -12,6 +12,7 @@ use "opcodes.wap"
 use "primitives.wap"
 use "../errors.wap"
 use "../stage.wap"
+use "../type_notation.wap"
 use "../../kernel/forms.wap"
 
 # A function value's function starts by taking its captures out of its first parameter, the value, into variables of
