@@ -47,7 +47,8 @@ dispatching(called: Node, candidates: list<Function>, types: list, s: TypingStat
 field_dispatching(key: Node, s: TypingState) as Function? := {
 	holders = s.records.items.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
 	if holders is empty { return ø }
-	name = placed_like(symbol("${FIELD_MARK}${key}(${ANY_TYPE})"), declared_name(field_named(holders#1, key)))
+	held = field_named(holders#1, key) ?? refused(key, "the record holding this field has none")
+	name = placed_like(symbol("${FIELD_MARK}${key}(${ANY_TYPE})"), declared_name(held))
 	known = definition_keyed(place_key(name), s)
 	if known != ø { return known }
 	read = parameters_of(name, [symbol(ANY_TYPE)])#1

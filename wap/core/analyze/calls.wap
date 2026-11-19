@@ -131,7 +131,7 @@ part_typed(n: Node, subject: Node, key: Node, s: TypingState, f: TypeFrame, expe
 	if reader != ø { return typed_form(named_call(reader.name, [reader], [typed], n), s, f, expected) }
 	record = record_named(s.records, value_type(typed))
 	field = if record == ø then ø else field_named(record, key)
-	if field != ø { return with_type_of(refitted(Get(typed, key), n), declared_type(field)) }
+	if field != ø { return as_found(n, with_type_of(refitted(Get(typed, key), n), declared_type(field)), s, f) }
 	named = definitions_named(text(key), s)
 	if named is empty { refused(n, "no field or function ${key} for a value of type ${value_type(typed) ?? "none"}") }
 	chosen = function_typed(chosen_definition(n, key, [named], [typed], expected, s), [value_type(typed)], s, n)
