@@ -222,7 +222,7 @@ fewest_conversions(definitions: list<Function>, given: list, s: TypingState) as 
 }
 conversions_taken(definition: Function, given: list, s: TypingState) as int := {
 	types = definition.parameters
-	#(1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s))
+	#((1 to #given).filter(at => at <= #types and not fits_exactly(given#at, types#at, s)))
 }
 # whether a definition takes these arguments, each one fitting its parameter
 # (a parameter typed by generic letters takes an argument whose type binds them alike, and one of a function type a
@@ -303,7 +303,7 @@ words_missing(definitions: list<Function>, types: list, s: TypingState) as text 
 }
 does_word(given: Node, word: Node, s: TypingState) as bool := definitions_named(text(declared_name(word)), s).any(definition => does_as(definition, given, parameter_count(word)))
 # how many parameters a protocol's word takes besides the value's own, its field a function type (protocol_named checks it)
-parameter_count(word: Node) as int := #(signature(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters
+parameter_count(word: Node) as int := #((signature(declared_type(word)) ?? refused(word, "a protocol's word is a function type")).parameters)
 # whether a definition takes a value of this type first, then as many parameters as a protocol's word
 does_as(definition: Function, given: Node, arity: int) as bool := {
 	types = definition.parameters
@@ -356,7 +356,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	key = key_of(definition)
 	letters = letters_bound(definition, argument_types, s) ?? []
 	settled_by(letters, s)
-	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, substituted(argument_types#place, letters), letters, s.records))
+	types = (1 to #argument_types).map(place => parameter_type(definition.parameters#place, type_substituted(argument_types#place, letters), letters, s.records))
 	if (1 to #types).any(place => has_unknowns(types#place) and not takes_any_item(definition.parameters#place)) { return deferred_typed(definition, types, letters, s, at) }
 	for typed in s.functions {
 		if key_of(typed.function) == key and same_types(typed.arguments.map(type => substituted(type, s.settled)), types) {
