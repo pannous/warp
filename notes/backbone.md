@@ -384,3 +384,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a
   second mechanism (warp-simplifier measured it, 2026-11-19). Paid off when old warp no longer reads wap's source: Op
   then comes from the table.
+
+- **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
+  drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
+  List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
+  mark becomes the empty sequence.
