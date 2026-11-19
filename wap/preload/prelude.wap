@@ -141,7 +141,7 @@ text(t: text): text := t
 int(n: int): int := n
 float(x: float): float := x
 bool(b: bool): bool := b
-text(c: char): text := prim char_text(c)
+text(c: char): text := utf8_bytes(ord(c), 1, 1)
 text(b: bool): text := if b then "yes" else "no"
 # an optional's text: its value's, or ø when it is missing
 text(x: T?): text := if missing(x) then "ø" else text(x!)
