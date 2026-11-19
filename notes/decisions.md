@@ -234,3 +234,7 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - wap-boxed-any-debt (user, 2026-11-19, via warp-supervisor): boxed `any` in wap's own source is a debt. Only types.wap decides what is boxed (never the emitter); each boxed spot is one entry in test_guardrails' allowlist, which only shrinks and is empty before milestone 2 is done. Programs' truly dynamic values stay dynamic (first_principles.md).
 - kernel-try (user, 2026-11-19): Try(body, otherwise) is a kernel form: raise throws one wasm exception tag, Try catches it (try_table) into the otherwise; one refused function then ends only itself.
 - euclidean-modulo (user wiki edit, 2026-11-19, Footguns.md "Negative modulo"): % is Euclidean (0 ≤ r < |b|: 7 % -3 → 1), ÷ the matching quotient; rem / ⦼ is the truncated remainder.
+- eq-not-is (user, 2026-11-19): `==` stays equal only (`3 == int` is no); `is` is the broader word (isa, can-be, equal).
+- module-clash (user, 2026-11-19): two used modules defining one word: different parameter types are overloads; the same parameter types are a loud clash naming both places, unless both definitions are identical (wiki/use.md "which word a name means").
+- atom-into-node (user, 2026-11-19): a plain atom given where a Node is wanted becomes its case: `n: Node = 'a'` is Char('a'), likewise Number, Text, in arguments, assignments and branch arms.
+- operator-todos (2026-11-19, preload TODOs): Other(sign) payload parked; compound assignment for all operators is done (compound_assignment).

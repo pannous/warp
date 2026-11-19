@@ -60,20 +60,20 @@ raising_function(p: Program) as int := added_function(p.m, [nullable(text_type(p
 # a raise no Try caught: its text written to stderr, the program ended
 uncaught_function(p: Program) as int := writing_function(p, STDERR, i32_const(RAISED_STATUS) + instruction(CALL, [host(p, "proc_exit")]))
 # a raise of the text on the stack from inside a helper
-raise_called(p: Program) as list := instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
+raise_called(p: Program) as list<int> := instruction(CALL, [helper(p, "raise_text", raising_function)]) + UNREACHABLE
 # a raise of a message from inside a helper
-raised(message: text, p: Program) as list := text_literal(message, p.m).instructions + raise_called(p)
+raised(message: text, p: Program) as list<int> := text_literal(message, p.m).instructions + raise_called(p)
 # a raise of a message and the text the code `ending` gives, joined
-raised_with(message: text, ending: list, p: Program) as list := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + raise_called(p)
+raised_with(message: text, ending: list<int>, p: Program) as list<int> := text_literal(message, p.m).instructions + ending + instruction(CALL, [helper(p, "text_joined", joining_function)]) + raise_called(p)
 # The helper of print_text, error_text and an uncaught raise: the text's bytes and a line end copied into the memory, grown as needed,
 # written to that file, then the code after. Its locals: 0 the text, 1 its length, 2 a count.
-writing_function(p: Program, file: int, after: list) as int := {
+writing_function(p: Program, file: int, after: list<int>) as int := {
 	text_type_index = text_type(p.m)
-	the_text = instruction(LOCAL_GET, [0])
-	length = instruction(LOCAL_GET, [1])
-	count = instruction(LOCAL_GET, [2])
+	the_text = local_get(0)
+	length = local_get(1)
+	count = local_get(2)
 	byte_at_count = i32_const(BYTES_ADDRESS) + count + I32_ADD
-	measured = the_text + ARRAY_LEN + instruction(LOCAL_SET, [1])
+	measured = the_text + ARRAY_LEN + local_set(1)
 	grown = memory_grown(length, 2)
 	copied = counted(2, length, byte_at_count + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
 	line_end = i32_const(BYTES_ADDRESS) + length + I32_ADD + i32_const(NEWLINE) + instruction(I32_STORE8, [0, 0])
@@ -84,22 +84,20 @@ writing_function(p: Program, file: int, after: list) as int := {
 
 # the memory grown to hold that many bytes from BYTES_ADDRESS and a line end, the scratch local holding the pages
 # short: (bytes + length + line end + a page - 1) ÷ page - memory.size, grown when positive
-memory_grown(length: list, scratch: int) as list := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + instruction(LOCAL_GET, [scratch]) + instruction(MEMORY_GROW, [0]) + DROP + END
+memory_grown(length: list<int>, scratch: int) as list<int> := i32_const(BYTES_ADDRESS + 1 + PAGE_BYTES - 1) + length + I32_ADD + i32_const(PAGE_BYTES) + I32_DIV_U + instruction(MEMORY_SIZE, [0]) + I32_SUB + instruction(LOCAL_TEE, [scratch]) + i32_const(0) + I32_GT_S + IF + VOID_BLOCK + local_get(scratch) + instruction(MEMORY_GROW, [0]) + DROP + END
 
 # The helper of read_text: the file at a path, its bytes as a text; a path it cannot open raises "cannot read …".
 # Its locals: 0 the path, 1 to 4 the opening's (path_opened), 5 the file's size, 6 the text made, 7 the bytes read so
 # far.
 reading_function(p: Program) as int := {
 	type = text_type(p.m)
-	value_of = local => instruction(LOCAL_GET, [local])
-	kept_in = local => instruction(LOCAL_SET, [local])
 	opened = path_opened(1, 0, READ_AND_SEEK, "cannot read ", p)
-	seek = (whence) => value_of(4) + i64_const(0) + i32_const(whence) + i32_const(SIZE_ADDRESS) + instruction(CALL, [host(p, "fd_seek")]) + DROP
-	sized = seek(FROM_END) + i32_const(SIZE_ADDRESS) + instruction(I64_LOAD, [3, 0]) + I32_WRAP_I64 + kept_in(5) + seek(FROM_START) + memory_grown(value_of(5), 3)
-	read = transferred("fd_read", value_of(4), value_of(5), 7, p)
-	closed = value_of(4) + instruction(CALL, [host(p, "fd_close")]) + DROP
-	made = value_of(7) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(3, value_of(7), value_of(6) + value_of(3) + i32_const(BYTES_ADDRESS) + value_of(3) + I32_ADD + instruction(I32_LOAD8_U, [0, 0]) + instruction(ARRAY_SET, [type]))
-	added_function(p.m, [nullable(type)], [nullable(type)], [I32, I32, I32, I32, I32, nullable(type), I32], opened + sized + read + closed + made + value_of(6))
+	seek = (whence) => local_get(4) + i64_const(0) + i32_const(whence) + i32_const(SIZE_ADDRESS) + instruction(CALL, [host(p, "fd_seek")]) + DROP
+	sized = seek(FROM_END) + i32_const(SIZE_ADDRESS) + instruction(I64_LOAD, [3, 0]) + I32_WRAP_I64 + local_set(5) + seek(FROM_START) + memory_grown(local_get(5), 3)
+	read = transferred("fd_read", local_get(4), local_get(5), 7, p)
+	closed = local_get(4) + instruction(CALL, [host(p, "fd_close")]) + DROP
+	made = local_get(7) + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(6) + counted(3, local_get(7), local_get(6) + local_get(3) + i32_const(BYTES_ADDRESS) + local_get(3) + I32_ADD + instruction(I32_LOAD8_U, [0, 0]) + instruction(ARRAY_SET, [type]))
+	added_function(p.m, [nullable(type)], [nullable(type)], [I32, I32, I32, I32, I32, nullable(type), I32], opened + sized + read + closed + made + local_get(6))
 }
 
 # The helper of arguments: the command line as a list<text>, its first the program as the host names it. WASI's
@@ -109,28 +107,26 @@ reading_function(p: Program) as int := {
 arguments_function(p: Program) as int := {
 	type = text_type(p.m)
 	texts = list_type(symbol("text"))
-	value_of = local => instruction(LOCAL_GET, [local])
-	kept_in = local => instruction(LOCAL_SET, [local])
 	loaded = address => i32_const(address) + instruction(I32_LOAD, [2, 0])
-	addresses_size = value_of(0) + i32_const(4) + I32_MUL
-	sized = i32_const(0) + i32_const(4) + instruction(CALL, [host(p, "args_sizes_get")]) + DROP + loaded(0) + kept_in(0) + loaded(4) + kept_in(1)
-	got = memory_grown(addresses_size + value_of(1) + I32_ADD, 2) + i32_const(BYTES_ADDRESS) + i32_const(BYTES_ADDRESS) + addresses_size + I32_ADD + instruction(CALL, [host(p, "args_get")]) + DROP
-	byte = at => value_of(3) + at + I32_ADD + instruction(I32_LOAD8_U, [0, 0])
-	addressed = i32_const(BYTES_ADDRESS) + value_of(2) + i32_const(4) + I32_MUL + I32_ADD + instruction(I32_LOAD, [2, 0]) + kept_in(3)
-	measured = i32_const(0) + kept_in(4) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + byte(value_of(4)) + I32_EQZ + instruction(BRANCH_IF, [1]) + value_of(4) + i32_const(1) + I32_ADD + kept_in(4) + instruction(BRANCH, [0]) + END + END
-	copied = value_of(4) + instruction(ARRAY_NEW_DEFAULT, [type]) + kept_in(6) + counted(7, value_of(4), value_of(6) + value_of(7) + byte(value_of(7)) + instruction(ARRAY_SET, [type]))
-	each = counted(2, value_of(0), addressed + measured + copied + value_of(5) + value_of(2) + value_of(6) + instruction(ARRAY_SET, [items_array(texts, p)]))
-	made = value_of(0) + instruction(ARRAY_NEW_DEFAULT, [items_array(texts, p)]) + kept_in(5) + each + value_of(0) + value_of(5) + instruction(STRUCT_NEW, [list_struct(texts, p)])
+	addresses_size = local_get(0) + i32_const(4) + I32_MUL
+	sized = i32_const(0) + i32_const(4) + instruction(CALL, [host(p, "args_sizes_get")]) + DROP + loaded(0) + local_set(0) + loaded(4) + local_set(1)
+	got = memory_grown(addresses_size + local_get(1) + I32_ADD, 2) + i32_const(BYTES_ADDRESS) + i32_const(BYTES_ADDRESS) + addresses_size + I32_ADD + instruction(CALL, [host(p, "args_get")]) + DROP
+	byte = at => local_get(3) + at + I32_ADD + instruction(I32_LOAD8_U, [0, 0])
+	addressed = i32_const(BYTES_ADDRESS) + local_get(2) + i32_const(4) + I32_MUL + I32_ADD + instruction(I32_LOAD, [2, 0]) + local_set(3)
+	measured = i32_const(0) + local_set(4) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + byte(local_get(4)) + I32_EQZ + instruction(BRANCH_IF, [1]) + local_get(4) + i32_const(1) + I32_ADD + local_set(4) + instruction(BRANCH, [0]) + END + END
+	copied = local_get(4) + instruction(ARRAY_NEW_DEFAULT, [type]) + local_set(6) + counted(7, local_get(4), local_get(6) + local_get(7) + byte(local_get(7)) + instruction(ARRAY_SET, [type]))
+	each = counted(2, local_get(0), addressed + measured + copied + local_get(5) + local_get(2) + local_get(6) + instruction(ARRAY_SET, [items_array(texts, p)]))
+	made = local_get(0) + instruction(ARRAY_NEW_DEFAULT, [items_array(texts, p)]) + local_set(5) + each + local_get(0) + local_get(5) + instruction(STRUCT_NEW, [list_struct(texts, p)])
 	added_function(p.m, [], [list_layout(texts, p)], [I32, I32, I32, I32, I32, nullable(items_array(texts, p)), nullable(type), I32], sized + got + made)
 }
 
 # The code that opens the file at the path in local 0 with these open flags and rights, its descriptor left in the
 # local `first` + 3, raising the refusal and the path when it cannot. Its locals from `first`: whether the path starts
 # with / (1 or 0), the path's length after that, a count, the opened file.
-path_opened(first: int, open_flags: int, rights: int, refusal: text, p: Program) as list := {
+path_opened(first: int, open_flags: int, rights: int, refusal: text, p: Program) as list<int> := {
 	type = text_type(p.m)
-	value_of = at => instruction(LOCAL_GET, [first + at])
-	kept_in = at => instruction(LOCAL_SET, [first + at])
+	value_of = at => local_get(first + at)
+	kept_in = at => local_set(first + at)
 	path = local_get(0)
 	rooted = path + ARRAY_LEN + I32_EQZ + IF + I32 + i32_const(0) + ELSE + path + i32_const(0) + instruction(ARRAY_GET_U, [type]) + i32_const(SLASH) + I32_EQ + END + kept_in(0)
 	length = path + ARRAY_LEN + value_of(0) + I32_SUB + kept_in(1)
@@ -145,11 +141,9 @@ path_opened(first: int, open_flags: int, rights: int, refusal: text, p: Program)
 # (path_opened), 6 the bytes written so far.
 bytes_writing_function(p: Program) as int := {
 	ints = list_type(symbol("int"))
-	value_of = local => instruction(LOCAL_GET, [local])
-	kept_in = local => instruction(LOCAL_SET, [local])
-	file = value_of(5)
+	file = local_get(5)
 	opened = path_opened(2, CREATED_OR_EMPTIED, WRITE_RIGHT, "write: cannot open ", p)
-	placed = memory_grown(count_in(ints, 1, p), 4) + counted(4, count_in(ints, 1, p), i32_const(BYTES_ADDRESS) + value_of(4) + I32_ADD + items_in(ints, 1, p) + value_of(4) + instruction(ARRAY_GET, [items_array(ints, p)]) + I32_WRAP_I64 + instruction(I32_STORE8, [0, 0]))
+	placed = memory_grown(count_in(ints, 1, p), 4) + counted(4, count_in(ints, 1, p), i32_const(BYTES_ADDRESS) + local_get(4) + I32_ADD + items_in(ints, 1, p) + local_get(4) + instruction(ARRAY_GET, [items_array(ints, p)]) + I32_WRAP_I64 + instruction(I32_STORE8, [0, 0]))
 	written = transferred("fd_write", file, count_in(ints, 1, p), 6, p)
 	closed = file + instruction(CALL, [host(p, "fd_close")]) + DROP
 	added_function(p.m, [nullable(text_type(p.m)), list_layout(ints, p)], [], [I32, I32, I32, I32, I32], opened + placed + written + closed)
@@ -158,9 +152,9 @@ bytes_writing_function(p: Program) as int := {
 # The code that reads or writes (fd_read or fd_write) a file's bytes from BYTES_ADDRESS until the total is moved or
 # the file moves none, the count moved so far in the local `done`: iovec [bytes + done, total - done], then done +=
 # the count the call moved
-transferred(call: text, file: list, total: list, done: int, p: Program) as list := {
+transferred(call: text, file: list<int>, total: list<int>, done: int, p: Program) as list<int> := {
 	moved = i32_const(WRITTEN_ADDRESS) + instruction(I32_LOAD, [2, 0])
-	so_far = instruction(LOCAL_GET, [done])
+	so_far = local_get(done)
 	iovec = i32_const(IOVEC_ADDRESS) + i32_const(BYTES_ADDRESS) + so_far + I32_ADD + instruction(I32_STORE, [2, 0]) + i32_const(IOVEC_ADDRESS + 4) + total + so_far + I32_SUB + instruction(I32_STORE, [2, 0])
-	i32_const(0) + instruction(LOCAL_SET, [done]) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + so_far + total + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + file + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, call)]) + DROP + moved + I32_EQZ + instruction(BRANCH_IF, [1]) + so_far + moved + I32_ADD + instruction(LOCAL_SET, [done]) + instruction(BRANCH, [0]) + END + END
+	i32_const(0) + local_set(done) + BLOCK + VOID_BLOCK + LOOP + VOID_BLOCK + so_far + total + I32_GE_U + instruction(BRANCH_IF, [1]) + iovec + file + i32_const(IOVEC_ADDRESS) + i32_const(1) + i32_const(WRITTEN_ADDRESS) + instruction(CALL, [host(p, call)]) + DROP + moved + I32_EQZ + instruction(BRANCH_IF, [1]) + so_far + moved + I32_ADD + local_set(done) + instruction(BRANCH, [0]) + END + END
 }

@@ -165,12 +165,8 @@ template_heads(language: Language, n: Node) as list<text> := match n {
 }
 
 shrinking(rule: Rule) as bool := size_of(rule.template) < matcher_size(rule.matcher) and #holes_in(rule.template) == #holes_in(rule.template).unique
-matcher_size(m: Matcher) as int := 1 + m.parts.map(matcher_size).fold(0, (a, b) -> a + b)
-size_of(n: Node) as int := match n {
-	List(items, bracket, separator) => 1 + items.map(size_of).fold(0, (a, b) -> a + b)
-	Key(left, op, right) => 1 + size_of(left) + size_of(right)
-	_ => 1
-}
+matcher_size(m: Matcher) as int := 1 + m.parts.map(matcher_size).sum()
+size_of(n: Node) as int := 1 + direct_parts(n).map(size_of).sum()
 
 # ---- the stage
 

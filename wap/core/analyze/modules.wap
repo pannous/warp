@@ -5,10 +5,8 @@ use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 use "scope.wap"
+use "names.wap"
 use "declarations.wap"
-
-# a used module, by its file's name, `a` for "lib/a.wap", which `a.twice` reads one word of; never a name's meaning
-MODULE_KIND = "module"
 # the words of the modules a program uses, each module named too
 modules_scope(modules: list) as list := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
