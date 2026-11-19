@@ -197,6 +197,12 @@ class Range { from: int; last: int }
 # it walks a list
 #(r: Range): int := r.last - r.from + 1
 #(r: Range, at: int): int := r.from + at - 1
+# a range's ints as a list, which it is read as wherever a list is wanted: `(1 to 3).filter(odd)` (wiki/conversion.md)
+list(r: Range): list<int> := {
+	out: list<int> = []
+	for at in r { out.add(at) }
+	out
+}
 # the largest int, where a range left open ends: `xs[2 ..]` is Range(2, LAST_INT), every item from the place 2 on
 LAST_INT := 0x7FFFFFFFFFFFFFFF
 # the items of a list at the places of a range, counting from 0, up to the list's end: `[1, 2, 3][1 .. 9]` is [2, 3]

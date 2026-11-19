@@ -94,4 +94,8 @@ token = Key
 print(shown(Key(symbol("a"), Op.Colon, Number(1))))
 print(if token == Token.Key then "token" else "other")')" "key
 token"
+check "a module is one module however often a program names it" "$(ran use_named_twice 'use "speak.wap"
+use "speak.wap"
+say("once")')" "loaded
+once"
 exit $((failures > 0))
