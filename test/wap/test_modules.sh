@@ -79,4 +79,11 @@ print("x")' | grep -o 'a.wap line [0-9]* and b.wap line [0-9]* both define twice
 check "a variable named like a used module is the variable: a.twice() is twice(a)" "$(ran module_hidden 'use "a.wap"
 a = 7
 print(text(a.twice()))')" "14"
+# a type's name means the record its code sees: a used module's class beside the program's own of that name
+printf '%s\n' 'class Box { n: int }' 'boxed(n: int) as text := text(Box(n).n)' >"$stage/boxes.wap"
+check "a used module's code keeps its own class where the program declares another of that name" "$(ran module_class 'use "boxes.wap"
+class Box { name: text }
+print(boxed(3))
+print(Box("x").name)')" "3
+x"
 exit $((failures > 0))
