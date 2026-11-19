@@ -99,14 +99,13 @@ VALUE_FUNCTION_AT = 0
 VALUE_CAPTURES_AT = 1
 EMPTY_TYPE_WORD = "ø"
 signature_value_index(type: Node, m: WasmModule, records: Records) as int? := {
-	function = signature_function_index(type, m, records)
-	if function == ø then ø else added_type(m, struct_type([field_type(nullable(function), IMMUTABLE), field_type(ANYREF, IMMUTABLE)]))
-}
-signature_function_index(type: Node, m: WasmModule, records: Records) as int? := {
 	parts = signature(type)
-	if parts == ø { return ø }
-	added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
+	if parts == ø then ø else signature_struct(parts, m, records)
 }
+# a value of a signature: the reference to its function beside what it captures
+signature_struct(parts: Signature, m: WasmModule, records: Records) as int := added_type(m, struct_type([field_type(nullable(signature_function_index(parts, m, records)), IMMUTABLE), field_type(ANYREF, IMMUTABLE)]))
+# the function a value of a signature refers to: what it captures, then the signature's parameters
+signature_function_index(parts: Signature, m: WasmModule, records: Records) as int := added_type(m, function_type([ANYREF] + signature_parameters(parts, m, records), signature_results(parts, m, records)))
 signature_parameters(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := parts.parameters.map(parameter => known_layout(parameter, m, records))
 signature_results(parts: Signature, m: WasmModule, records: Records) as list<list<int>> := if text(parts.result) == EMPTY_TYPE_WORD then [] else [known_layout(parts.result, m, records)]
 # a type's layout, refused when the emitter has none for it yet
@@ -137,7 +136,8 @@ struct_of(record: Node, m: WasmModule, records: Records) as int := {
 # the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
 enum_base(m: WasmModule) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))
 tagged(m: WasmModule) as list<int> := instruction(STRUCT_GET, [enum_base(m), 0])
-field_layouts(fields: list<Node>, m: WasmModule, records: Records) as list<list<int>> := fields.map(field => field_type(layout_of(declared_type(field) ?? refused(field, "a field is written name: type"), m, records) ?? refused(field, "the emitter has no value layout for this field's type yet"), MUTABLE))
+field_declared(field: Node) as Node := declared_type(field) ?? refused(field, "a field is written name: type")
+field_layouts(fields: list<Node>, m: WasmModule, records: Records) as list<list<int>> := fields.map(field => field_type(known_layout(field_declared(field), m, records), MUTABLE))
 case_struct_of(record: Node, case: Node, m: WasmModule, records: Records) as int := {
 	base = struct_of(record, m, records)
 	fields = field_layouts(fields_of(record) + case_fields(case), m, records)

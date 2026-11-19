@@ -18,12 +18,14 @@
 #   one-owner        every wap file and test/wap script falls under exactly one row of notes/wap.md "Owners": a path or
 #                    folder in its files column (wap/'s own paths written without it), or a row's "<folder> … no other
 #                    row names"; a clause in words, a role row's "any file", owns nothing
+#   in-tree          every wap file has its line in notes/wap.md's tree, the block of "## The tree": a file `<name>.wap`
+#                    two spaces deeper than its folder's line `<folder>/`; never allowlisted
 # Today's exceptions are in guardrails_allowed.txt, `<rule> <key> <count>`, key a function for one-fit and a file for
 # the others. The list only shrinks: a count above it fails naming file:line and the rule, a count below it fails
 # until the line is lowered or dropped. Run it with bash test/wap/test_guardrails.sh; it compiles nothing
-RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any emit-boxes one-owner"
+RULES="one-fit emit-reads-type dynamic-prim one-ranking long-file repeated-code same-shape boxed-any emit-boxes one-owner in-tree"
 # the rules no allowlist line excuses: a spot of theirs is a failure at once
-UNLISTED="emit-boxes"
+UNLISTED="emit-boxes in-tree"
 OWNERS=notes/wap.md
 RELATION=conversion
 LONGEST=300
@@ -99,6 +101,19 @@ one_owner() {
 		if (count == 0) for (r in catch_all) if (index($0, catch_all[r]) == 1) count = 1
 		if (count != 1) printf "one-owner\t%s\t%s:1\tunder %d rows of %s \"Owners\", not one\n", $0, $0, count, owners
 	}' <(owned_paths) -
+}
+# the wap files notes/wap.md's tree places, a path a line: a line's indent says its depth, a folder line ending in /
+tree_paths() {
+	awk '/^## The tree/ { tree = 1 } tree && /^```/ { if (inside) exit; inside = 1; next }
+	inside && NF {
+		indent = match($0, /[^ ]/) - 1; depth = indent / 2
+		if (depth > 6 || indent % 2) next
+		path = ""; for (d = 0; d < depth; d++) path = path folder[d]
+		if ($1 ~ /\/$/) folder[depth] = $1; else if ($1 ~ /\.wap$/) print path $1
+	}' "$OWNERS"
+}
+in_tree() {
+	printf '%s\n' $wap_files | grep -vxF -f <(tree_paths) | awk '{ printf "in-tree\t%s\t%s:1\tno line in the tree of notes/wap.md\n", $0, $0 }'
 }
 
 found=$(for rule in $RULES; do ${rule//-/_}; done)

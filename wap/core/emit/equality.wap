@@ -20,7 +20,7 @@ type_equality(type: Node, p: Program) as list<int> := {
 	if item_type(type) != ø { return parts_compared(p, "list_equal ${type}", list_layout(type, p), lists_compared(type, p)) }
 	record = record_named(p.records, type)
 	if text(type) == ENUM_WORD or record != ø and cases_of(record) is not empty { return parts_compared(p, "tag_equal", nullable(enum_base(p.m)), cases_compared(p)) }
-	if record != ø { return parts_compared(p, "record_equal ${type}", layout_of(type, p.m, p.records), records_compared(record, p)) }
+	if record != ø { return parts_compared(p, "record_equal ${type}", known_layout(type, p.m, p.records), records_compared(record, p)) }
 	equality(known_layout(type, p.m, p.records), p)
 }
 # the instructions that compare two values of a wasm type: an int, float, yes/no or character, a text, an `any`
@@ -53,18 +53,18 @@ fields_compared(record: Node, case: Node, p: Program) as list<int> := {
 	cast = case_struct_of(record, case, p.m, p.records)
 	field = (local, at) => local_get(local) + heap_instruction(REF_CAST_NULL, cast) + instruction(STRUCT_GET, [cast, at + #fields_of(record)])
 	fields = case_fields(case)
-	compared = (1 to #fields).flat_map(at => field(0, at) + field(1, at) + type_equality(declared_type(fields#at), p) + NO_UNLESS_YES)
+	compared = (1 to #fields).flat_map(at => field(0, at) + field(1, at) + type_equality(field_declared(fields#at), p) + NO_UNLESS_YES)
 	tag_in(0, p) + i32_const(declared_tag(case, p)) + I32_EQ + IF + VOID_BLOCK + compared + END
 }
 # Two instances of a class: each field equal. Its locals: 0 and 1 the instances.
 records_compared(record: Node, p: Program) as function := () => {
 	at = [struct_of(record, p.m, p.records)]
-	Compared([], (1 to #fields_of(record)).flat_map(field => (0 to 1).flat_map(local => local_get(local) + instruction(STRUCT_GET, at + [field - 1])) + type_equality(declared_type(fields_of(record)#field), p) + NO_UNLESS_YES))
+	Compared([], (1 to #fields_of(record)).flat_map(field => (0 to 1).flat_map(local => local_get(local) + instruction(STRUCT_GET, at + [field - 1])) + type_equality(field_declared(fields_of(record)#field), p) + NO_UNLESS_YES))
 }
 # Two lists: one count and equal items in order. Its locals: 0 and 1 the lists, 2 a count.
 lists_compared(type: Node, p: Program) as function := () => {
 	item = local => items_in(type, local, p) + local_get(2) + instruction(ARRAY_GET, [items_array(type, p)])
-	Compared([I32], count_in(type, 0, p) + count_in(type, 1, p) + I32_EQ + NO_UNLESS_YES + counted(2, count_in(type, 0, p), item(0) + item(1) + type_equality(item_type(type), p) + NO_UNLESS_YES))
+	Compared([I32], count_in(type, 0, p) + count_in(type, 1, p) + I32_EQ + NO_UNLESS_YES + counted(2, count_in(type, 0, p), item(0) + item(1) + type_equality(list_item(type), p) + NO_UNLESS_YES))
 }
 # Two optionals: both ø, or both there and their values equal. Its locals: 0 and 1 the optionals.
 optionals_compared(type: Node, p: Program) as function := () => {
