@@ -16,8 +16,6 @@ use "matching.wap"
 
 # a hole in a declared pattern's taken shape is its builder's parameter after this sign (core/rules/patterns.wap)
 HOLE_MARK = "$"
-# a definition whose written types have their shapes known
-SHAPED = "shaped"
 # the raise where a value is not of the shape a place wants
 OTHER_SHAPE = "this value is of another shape than the"
 
@@ -36,7 +34,12 @@ shaped(type: Node, s: TypingState) as Node := {
 }
 # definitions with the shapes their written types name, each shaped once
 shaped_definitions(definitions: list<Function>, s: TypingState) as list<Function> := definitions.map(definition => shaped_once(definition, s))
-shaped_once(definition: Function, s: TypingState) as Function := if fact_of(definition.definer, SHAPED) != ø then definition else function_of(with_fact(shaped_definition(definition.definer, s), SHAPED, True))
+shaped_once(definition: Function, s: TypingState) as Function := {
+	if definition.shaped { return definition }
+	known = function_of(shaped_definition(definition.definer, s))
+	known.shaped = yes
+	known
+}
 # a definition with the shapes its parameters' and its result's written types name
 shaped_definition(definition: Node, s: TypingState) as Node := match definition {
 	Define(name, parameters, body) => refitted(Define(shaped_key(name, s), with_items(parameters, items_of(parameters).map(parameter => shaped_key(parameter, s))), body), definition)
