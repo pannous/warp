@@ -63,7 +63,7 @@ emitted(program: Block) as Module := {
 # the host functions the primitives of a program call, each once, in the order met
 host_calls(program: Node) as list<text> := {
 	names = RAISING_CALLS.map(name => name)
-	for operation in primitives_in(program).filter(operation => HOST_CALLS.has(operation)) { for name in HOST_CALLS[operation] { if not names.contains(name) { names.add(name) } } }
+	for operation in primitives_in(program).filter(operation => HOST_FUNCTIONS.has(operation)) { if not names.contains(operation) { names.add(operation) } }
 	names
 }
 primitives_in(n: Node) as list<text> := match n {
@@ -170,7 +170,7 @@ try_code(form: Node, body: Node, handler: Node, p: Program, f: Frame) as Code :=
 	_ => refused(handler, "a Try's handler is a function written in place, `error => …`")
 }
 # the program's code, a raise no Try caught written and the program ended
-uncaught_ended(body: list<int>, p: Program) as list<int> := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + instruction(CALL, [helper(p, "uncaught", uncaught_function)])
+uncaught_ended(body: list<int>, p: Program) as list<int> := BLOCK + nullable(text_type(p.m)) + try_table(VOID_BLOCK, RAISED_TAG, 0, body) + RETURN + END + uncaught(p)
 # a structured instruction's type: the value it leaves, or none
 block_type(type: list<int>) as list<int> := if valued(type) then type else VOID_BLOCK
 # a part's code where its choice has the type: its value kept, or dropped when the choice has none
