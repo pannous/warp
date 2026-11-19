@@ -41,10 +41,10 @@ bound_program(program: Block, preload: list, modules: list) as Block := {
 # the words around a program: the modules it uses, then the preload's, outermost
 scope_around(preload: list, modules: list) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
 # the preload's words, outermost
-preload_scope(preload: list) as list := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
+preload_scope(preload: list) as list<Definition> := preload.flat_map(declaration => library_words(declaration, PRELOAD_DEPTH))
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
-library_words(declaration: Node, depth: int) as list := match declaration {
+library_words(declaration: Node, depth: int) as list<Definition> := match declaration {
 	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then BOUND_GLOBAL else BOUND_LIBRARY, name, depth)]
 	Record(name, fields, variants) => definitions_made_by(declaration, Scope(), depth)
 	_ => refused(declaration, "a library declares names and records")
@@ -102,7 +102,7 @@ arm_bound(arm: Arm, scope: Scope, depth: int) as Node := match arm {
 # a pattern's names bound: a case, `Dot`, or a case with the variables its fields fill, `Circle(r)`; `_` names none
 pattern_bound(pattern: Node, scope: Scope, depth: int) as Node := match pattern {
 	Symbol(name) => if name == WILDCARD then pattern else pattern_name_bound(pattern, scope, depth)
-	Call(called, fields) => if shape_called(called, scope) then with_fact(pattern_bound(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth), SHAPE_OF, called) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
+	Call(called, fields) => if shape_called(called, scope) then with_fact(pattern_bound(pattern_shape(called, fields, scope), scope, depth), SHAPE_OF, called) else refitted(Call(if rest_named(pattern) == ø then pattern_name_bound(called, scope, depth) else called, fields.map(field => pattern_bound(field, scope, depth))), pattern)
 	List(items, Bracket.Square, separator) => refitted(List(items.map(item => pattern_bound(item, scope, depth)), Bracket.Square, separator), pattern)
 	Get(subject, key) => bound(pattern, scope, depth)
 	_ => pattern
@@ -113,6 +113,8 @@ pattern_name_bound(name: Node, scope: Scope, depth: int) as Node := {
 	if not names_case(name, scope) { return resolved(name, scope, depth) }
 	with_fact(with_fact(name, BINDING, symbol(BOUND_CASE)), DEFINED_AT, definitions_meant(text(name), scope)#1.definer)
 }
+# the shape a declared pattern's call stands for, `Pair(a, b)` as its builder takes it apart
+pattern_shape(called: Node, fields: list, scope: Scope) as Node := pattern_taken(called, fields, pattern_builder_meant(called, scope) ?? refused(called, "no declared pattern builds this shape"))
 # whether an arm's call is a declared pattern's, `Call(f, args)` of a pattern Call: its builder the name means, no case
 shape_called(called: Node, scope: Scope) as bool := pattern_builder_meant(called, scope) != ø
 # the name of the pattern builder a call means, which carries the pattern (core/rules/patterns.wap pattern_builder)
@@ -136,9 +138,9 @@ names_predicate(name: Node, scope: Scope) as bool := {
 	not meant is empty and meant.all(definition => definition.kind == BOUND_FUNCTION or definition.kind == BOUND_LIBRARY)
 }
 arm_result(arm: Arm) as Node := match arm { Arm(pattern, result) => result }
-pattern_variables(pattern: Node, scope: Scope, depth: int) as list := match pattern {
+pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
-	Call(called, fields) => if shape_called(called, scope) then pattern_variables(pattern_taken(called, fields, pattern_builder_meant(called, scope)), scope, depth) else fields.flat_map(field => pattern_variables(field, scope, depth))
+	Call(called, fields) => if shape_called(called, scope) then pattern_variables(pattern_shape(called, fields, scope), scope, depth) else fields.flat_map(field => pattern_variables(field, scope, depth))
 	List(items, Bracket.Square, separator) => items.flat_map(item => pattern_variables(item, scope, depth))
 	Get(subject, key) => []
 	Number(value) => []
@@ -188,17 +190,19 @@ handler_bound(handler: Fn, scope: Scope, depth: int) as Node := match handler { 
 } }
 # A method's receiver fields: in a function whose first parameter is `self` of a class, each field of the class by its
 # bare name, `c` for `self.c`, read and set; the function's parameters and locals hide them
-receiver_fields(parameters: List, scope: Scope, depth: int) as list := {
+receiver_fields(parameters: List, scope: Scope, depth: int) as list<Definition> := {
 	receiver = match parameters { List(items, bracket, separator) => if items is empty then ø else items#1 }
-	if receiver == ø or text(parameter_name(receiver)) != SELF_WORD or declared_type(receiver) == ø { return [] }
-	for definition in named_in(scope, text(declared_type(receiver))) {
+	if receiver == ø { return [] }
+	type = declared_type(receiver) ?? return []
+	if text(parameter_name(receiver)) != SELF_WORD { return [] }
+	for definition in named_in(scope, text(type)) {
 		if definition.kind == RECORD_KIND {
 			return fields_of(definition.definer).map(field => Definition(text(declared_name(field)), BOUND_FIELD, parameter_name(receiver), depth))
 		}
 	}
 	[]
 }
-parameter_definitions(parameters: List, depth: int) as list := match parameters {
+parameter_definitions(parameters: List, depth: int) as list<Definition> := match parameters {
 	List(items, bracket, separator) => items.map(p => Definition(text(parameter_name(p)), BOUND_PARAMETER, parameter_name(p), depth))
 }
 

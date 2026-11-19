@@ -4,13 +4,14 @@
 
 use "scope.wap"
 use "names.wap"
+use "types.wap"
 use "../errors.wap"
 use "../stage.wap"
 use "../../kernel/forms.wap"
 
 # The variables a Block names without a value (VARIABLES, core/rules/lowering.wap): `let x` a new one of the block,
 # `global x` the program's x, which the block then reads and changes as its own
-named_variables(block: Node, scope: Scope, depth: int) as list := fact_items(block, VARIABLES).map(naming => named_variable(naming, scope, depth))
+named_variables(block: Node, scope: Scope, depth: int) as list<Definition> := fact_items(block, VARIABLES).map(naming => named_variable(naming, scope, depth))
 named_variable(naming: Node, scope: Scope, depth: int) as Definition := match naming {
 	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then Definition(text(name), BOUND_GLOBAL, program_variable(name, scope).definer, depth) else Definition(text(name), local_kind(depth), name, depth)
 	_ => refused(naming, "a variable is named name: kind")
@@ -25,12 +26,12 @@ program_scope(scope: Scope) as Scope := scope_of(every_definition(scope).filter(
 
 # The definitions a Block makes: each function it defines, and each name it gives a value to that this function does
 # not see yet. Nested Blocks and functions keep theirs; a Set inside another form (an If's branch) is the Block's.
-defined_in(statements: list, scope: Scope, depth: int) as list := {
+defined_in(statements: list, scope: Scope, depth: int) as list<Definition> := {
 	made = []
 	for statement in statements { made = made + definitions_made_by(statement, within(scope, made), depth) }
 	made
 }
-definitions_made_by(n: Node, scope: Scope, depth: int) as list := match n {
+definitions_made_by(n: Node, scope: Scope, depth: int) as list<Definition> := match n {
 	Define(name, parameters, body) => [Definition(text(declared_name(name)), BOUND_FUNCTION, declared_name(name), depth)]
 	Record(name, fields, variants) => [Definition(text(name), RECORD_KIND, n, depth)] + cases_of(n).map(case => Definition(text(case_name(case)), BOUND_CASE, case_name(case), depth, text(name), #case_fields(case)))
 	Set(place, value) => assigned_variables(n, declared_name(place), scope, depth) + definitions_made_by(value, scope, depth)
@@ -50,7 +51,7 @@ definitions_made_by(n: Node, scope: Scope, depth: int) as list := match n {
 # none for `global x = …`, the program's, or for a variable its function has. A name that is a variable of the
 # program or of a function around, defined before it, reads two ways, so the assignment is refused naming both; one
 # defined only later is no variable yet, so the assignment makes its own.
-assigned_variables(set: Node, place: Node, scope: Scope, depth: int) as list := {
+assigned_variables(set: Node, place: Node, scope: Scope, depth: int) as list<Definition> := {
 	if not place is symbol or fact_of(set, ASSIGNS) == symbol(BOUND_GLOBAL) { return [] }
 	name = text(place)
 	if fact_of(set, ASSIGNS) != symbol(BOUND_LOCAL) {
@@ -108,7 +109,7 @@ global_changes(n: Node, in_function: bool) as list := match n {
 	_ => direct_parts(n).flat_map(part => global_changes(part, in_function))
 }
 # whether a place given a value is a program variable given another value than its first
-is_change(place: Node) as bool := fact_of(place, BINDING) == symbol(BOUND_GLOBAL) and not same_place(place, fact_of(place, DEFINED_AT))
+is_change(place: Node) as bool := fact_of(place, BINDING) == symbol(BOUND_GLOBAL) and not same_place(place, defined_at(place))
 same_place(a: Node, b: Node) as bool := line_of(a) == line_of(b) and column_of(a) == column_of(b)
 
 # the reads in a function, defined at line, of program variables that change after it, refused unless declared
@@ -125,4 +126,7 @@ changes_after(name: text, line: int, changes: list) as bool := {
 	no
 }
 # the names a Block declares the program's, `global x`
-globals_named(block: Node) as list := fact_items(block, VARIABLES).filter(naming => text(naming.value) == BOUND_GLOBAL).map(naming => text(naming.key))
+globals_named(block: Node) as list<text> := fact_items(block, VARIABLES).flat_map(naming => match naming {
+	Key(name, Op.Colon, kind) => if text(kind) == BOUND_GLOBAL then [text(name)] else []
+	_ => []
+})

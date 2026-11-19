@@ -8,7 +8,7 @@ use "scope.wap"
 use "names.wap"
 use "declarations.wap"
 # the words of the modules a program uses, each module named too
-modules_scope(modules: list) as list := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
+modules_scope(modules: list) as list<Definition> := modules.flat_map(module => [Definition(module_name(module), MODULE_KIND, module, MODULE_DEPTH)] + declarations_of(module).flat_map(declaration => library_words(declaration, MODULE_DEPTH)))
 # a module's name, its file's without the folder and the extension
 module_name(module: Node) as text := (file_of(module) ?? "").split("/").last.split(".")#1
 # the names a module declares itself: its functions, variables and types, not their fields or cases
@@ -25,6 +25,7 @@ clashes_refused(modules: list) := for later in 2 to #modules {
 declaration_name(declaration: Node) as Node := match declaration {
 	Key(name, Op.Colon, signature) => name
 	Record(name, fields, variants) => name
+	_ => refused(declaration, "a module declares a name with its signature, or a type")
 }
 # a declaration as two modules may not both write it: `twice(int)`, a type's or a variable's bare name
 declared_alike(declaration: Node) as text := match declaration {

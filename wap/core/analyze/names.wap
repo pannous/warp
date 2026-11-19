@@ -26,7 +26,7 @@ every_definition(scope: Scope) as list<Definition> := scope.layers.flat_map(laye
 # The definitions a name may mean, innermost first: the one it finds, or, when that is a function, every function of
 # that name around it, its overloads, up to a variable of that name, which hides the rest. The typing stage picks
 # among several by the arguments' types.
-definitions_meant(name: text, scope: Scope) as list := {
+definitions_meant(name: text, scope: Scope) as list<Definition> := {
 	meant = []
 	for definition in named_in(scope, name) {
 		if definition.kind != RECORD_KIND and definition.kind != MODULE_KIND {
