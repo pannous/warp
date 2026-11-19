@@ -53,7 +53,7 @@ lead first, as a change of this table.
 | operators | core/parse/operators.wap, table in the preload | wap-operators | notation | operated |
 | shape rules (stage 1) | core/rules/, preload/sugar/ | lead, until the rule engine has an owner | operated | surface |
 | declare | core/analyze/declarations.wap | wap-binding | surface | declared |
-| signature rules (stage 2) | core/rules/ | as stage 1 | declared | kernel |
+| lower | core/rules/lowering.wap | as stage 1 | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-reader | bound kernel | typed kernel |
 | kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader (engine: wap-operators) | typed kernel | typed kernel |
@@ -83,10 +83,11 @@ The languages, each a set of Node shapes:
 - **operated:** notation in which every operator phrase is read by the table: `a + b * c` is
   `(Call + a (Call * b c))`, every alias replaced by its canonical word (`≤` → `<=`), a prefix or postfix operator
   a `Call` of one argument, by the one minus rule. A mix of unrelated groups is refused. Juxtaposition that is no
-  operator (`print x`, `square 3`) stays a phrase: deciding it needs declarations, stage 2. `=` keys are the call
-  `(Call = x 1)`; a glue key `Key(f, Op.None, (args))` stays, for stage 2 to read as a call, an index or a
-  constructor. Until the rule engine runs, core/rules/lowering.wap reads exactly these: a glued call, an operator
-  call (`=` → Set, `:=` → Define, `=>` → Fn), a phrase headed by a word, `{…}`, the literal words `yes` `no` `ø`.
+  operator (`print x`, `square 3`) stays a phrase: the lowering makes it a call, and typing refuses one whose head
+  holds no function. `=` keys are the call `(Call = x 1)`; a glue key `Key(f, Op.None, (args))` stays, for the
+  lowering to read as a call or a constructor. core/rules/lowering.wap reads exactly these: a glued call, an operator
+  call (`=` → Set, `:=` → Define, `=>` → Fn), a phrase headed by a word, `{…}`; words such as `yes`, `break` or
+  `global` are rules (preload/sugar/).
 - **surface:** any warp: operated, with the spellings of stage 1 rewritten (`for`, `unless`, `a if c` …). What remains
   is either kernel or needs a declaration to decide.
 - **declared:** surface, unchanged, plus facts: each top-level definition's `declares`, `name: signature` (`f: [a, b]`,
@@ -342,7 +343,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A bare `break`, `continue` or `return` is lowering's word form, not a rule** (wap/core/rules/lowering.wap
   `WORD_FORMS`), while `while c { b }` and `return x` are rules (wap/preload/sugar/loops.wap). Reason: a rule whose
   pattern is a word alone has no head, so the termination check (core/rules/stages.wap `terminating`) sees it fire
-  anywhere and refuses it. Paid off when a lone word is its own head.
+  anywhere and refuses it. Paid off when a lone word is its own head. Paid off: S3, wap-rules-statements d313356f76.
 - **Ints have no `÷` or `%` yet** (wap/preload/floats.wap holds only the truncated quotient and rem, which programs do
   not see): warp's `÷` and its floored `%` (`-7 % 2` is 1) are to be defined on top of them, and `quotient` is warp's
   exact division (3.5), so the truncated one keeps that name hidden. Paid off when the preload defines `÷` and `%`.

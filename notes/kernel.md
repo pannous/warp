@@ -126,8 +126,8 @@ pattern asks:
 | 3 kind | after typing, on kernel code | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
 
 A rule's output is warp code and must type-check; a type error in it is the rule's bug, reported at the user's line
-with the rule named. A phrase no rule claims (`f x y` where nothing decides the reading) is refused with its
-readings, in one place: the end of stage 2.
+with the rule named. A phrase no rule claims is a call of its head, and typing refuses it when the head holds no function
+(`x = 3; x 4`).
 
 ## Growing the kernel
 
