@@ -132,6 +132,7 @@ wap/
       conditions.wap          unless, a if c, a ? b : c → If
       data.wap                xs#2 and other reaches → Get
       definitions.wap         definitions written other ways
+      literals.wap            yes, no, ø → True, False, Empty; no x → x is empty
       loops.wap               for, until, loop, n times, break, return → While and Return
       matching.wap            match x { … } → Case
       ranges.wap              a to b, a upto b → Range
