@@ -66,7 +66,7 @@ signed_result(name: Node, p: Program) as list<int> := {
 class Held { type_index: int, taken: list<int> }
 # at is the code that asks
 held_in_any(type: Node, at: Node, p: Program) as Held := {
-	if WORD_LAYOUTS.has(text(type)) and WORD_LAYOUTS[text(type)] in PLAIN_VALUES {
+	if text(type) in BOXED_WORDS {
 		box = box_index(p.m, text(type))
 		return Held(box, instruction(STRUCT_GET, [box, 0]))
 	}

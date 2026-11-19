@@ -97,7 +97,7 @@ added_variable(name: Node, type: list, p: Program, f: Frame) as Placed := {
 	f.slots += [Placed(defining_key(name), #f.slots, type, [], yes)]
 	f.slots.last
 }
-fetched(held: Placed) as list<int> := if held.local then instruction(LOCAL_GET, [held.index]) else instruction(GLOBAL_GET, [held.index])
+fetched(held: Placed) as list<int> := if held.local then local_get(held.index) else instruction(GLOBAL_GET, [held.index])
 # a value stored, and left on the stack
 kept(held: Placed) as list<int> := if held.local then instruction(LOCAL_TEE, [held.index]) else instruction(GLOBAL_SET, [held.index]) + fetched(held)
 # what a bound name refers to: local, parameter, capture, global, function or library
