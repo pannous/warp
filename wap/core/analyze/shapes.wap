@@ -53,8 +53,7 @@ shaped_key(n: Node, s: TypingState) as Node := match n {
 # The builder of a declared pattern of this name, which its taken shape and holes mark (core/rules/patterns.wap
 # pattern_builder); ø for any other name
 form_named(type: Node, s: TypingState) as Function? := {
-	builders = definitions_named(text(type), s).filter(definition => fact_of(declared_name(written_name(definition.definer)), PATTERN_TAKEN) != ø)
-	if builders is empty then ø else builders#1
+	definitions_named(text(type), s).find(definition => fact_of(declared_name(written_name(definition.definer)), PATTERN_TAKEN) != ø)
 }
 # the shape a declared pattern takes values apart by, its holes `$name`
 form_taken(form: Function) as Node := fact_of(declared_name(written_name(form.definer)), PATTERN_TAKEN) ?? refused(form.definer, "a pattern's builder carries its shape")

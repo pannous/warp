@@ -41,7 +41,7 @@ use "../language.wap"
 # the word that starts a primitive, only the preload writes it
 PRIMITIVE_WORD = "prim"
 # the words that are a kernel form alone: the canonical words of the literals, the statements that leave a loop or
-# a function, and empty braces (a rule cannot match a word alone: it would have no head)
+# a function, and empty braces, until rules of one word write them (preload/sugar/)
 WORD_FORMS = {"yes": True, "no": False, "ø": Empty, "break": Break(), "continue": Continue(), "return": Return(Empty)}
 WORD_FORMS[EMPTY_BRACES] = EmptyMap()
 # the words before an assigned name that say which variable it means: `let x = 1` a new one here, `global x = 1` the
