@@ -5,3 +5,4 @@
 'class S { fs: [int] }; l = [1, 2, 3]; x = S(l[1..]); #x.fs'	2
 'cos(0.0) + sin(0.0)'	1
 'use sound; x = C4; x'	261.63
+'f(n: Node, b: Node) as Node := b; f(n: Node, r: (Node) -> Node) as Node := r(n); [text(f(Symbol("a"), Symbol("b"))), text(f(Symbol("a"), x => x))]'	["b", "a"]
