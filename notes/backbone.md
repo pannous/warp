@@ -416,3 +416,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
   and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
   off when wap compiles itself: that branch lands.
+- **An overloaded function is not a value yet**: `parts.map(text)` types only as `parts.map(each => text(each))`
+  (shape_taking in analyze/function_values.wap). Reason: a value of a name with several definitions is refused until
+  a written function type picks one; the self-build census needs the function typed now. Paid off when the expected
+  `(Node) -> text` picks the overload: shape_taking goes back to `.map(text)`.
+- **A local named like a method shadows it**: a parameter `map` made `fields_of(record).map(…)` call the Node, so
+  instance_from_map (analyze/data.wap) names its map `source`. Reason: the self-build census needs the function typed
+  now. Paid off when `xs.map(…)` finds the list's method past a local of that name: the parameter is `map` again.
