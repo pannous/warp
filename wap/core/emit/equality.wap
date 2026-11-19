@@ -46,7 +46,7 @@ parts_compared(p: Program, key: text, layout: list, compared: function) as list 
 
 # Two cases: one tag and, for a case with fields, equal fields. Tags count the cases of every enum, so one helper
 # serves them all. Its locals: 0 and 1 the cases.
-cases_compared(p: Program) as function := () => Compared([], tag_in(0, p) + tag_in(1, p) + I32_EQ + NO_UNLESS_YES + p.records.flat_map(record => cases_of(record).filter(case => case_fields(case) is not empty).flat_map(case => fields_compared(record, case, p))))
+cases_compared(p: Program) as function := () => Compared([], tag_in(0, p) + tag_in(1, p) + I32_EQ + NO_UNLESS_YES + p.records.items.flat_map(record => cases_of(record).filter(case => case_fields(case) is not empty).flat_map(case => fields_compared(record, case, p))))
 tag_in(local: int, p: Program) as list := local_get(local) + tagged(p.m)
 # When both cases are this one, each of its fields of the two compared by the field's equality
 fields_compared(record: Node, case: Node, p: Program) as list := {

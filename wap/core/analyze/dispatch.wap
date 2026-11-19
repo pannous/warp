@@ -44,7 +44,7 @@ dispatching(called: Node, candidates: list, types: list, s: TypingState) as Node
 }
 # The dispatching function a read of this field on an any means, `.name(any)`; ø when no record has the field
 field_dispatching(key: Node, s: TypingState) as Node? := {
-	holders = s.records.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
+	holders = s.records.items.filter(record => cases_of(record) is empty and field_named(record, key) != ø)
 	if holders is empty { return ø }
 	name = placed_like(symbol("${FIELD_MARK}${key}(${ANY_TYPE})"), declared_name(field_named(holders#1, key)))
 	known = definition_keyed(place_key(name), s)
@@ -81,7 +81,7 @@ chained(choices: list, last: Node, at: Node) as Node := {
 # the places where a definition wants a type the any or number its argument gives may box, or a shape of its
 # argument's type: an `is` test there chooses it
 # a parameter's type a test chooses by: written, no any, no generic letter, none that takes its argument's own type
-dispatchable(type: Node?, records: list) as bool := type != ø and type != symbol(ANY_TYPE) and not has_letters(type, records) and not takes_own_type(type, records)
+dispatchable(type: Node?, records: Records) as bool := type != ø and type != symbol(ANY_TYPE) and not has_letters(type, records) and not takes_own_type(type, records)
 tested_places(definition: Node, types: list, s: TypingState) as list := (1 to #types).filter(at => dispatchable(type_given(parameters_in(definition)#at), s.records) and tested_fit(type_given(parameters_in(definition)#at), types#at, s))
 tested_fit(wanted: Node, given: Node, s: TypingState) as bool := boxed_fit(wanted, given) or conversion(given, wanted, s) == Conversion.Narrowed
 # the arguments as a definition's call reads them once its tests pass: each tested one of its parameter's type

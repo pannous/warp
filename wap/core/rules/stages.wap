@@ -9,6 +9,7 @@
 # again until none fits, then its parts. Each node a rule builds is placed where the rewritten code was and carries
 # the rule (fact RULE, core/stage.wap). Rules terminate by construction, checked when they are loaded.
 use "patterns.wap"
+use "matcher.wap"
 use "templates.wap"
 use "lowering.wap"
 use "../parse/reader.wap"

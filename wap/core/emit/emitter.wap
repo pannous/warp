@@ -50,7 +50,7 @@ emitted(program: Block) as Module := {
 	p = Program(m)
 	for name in host_calls(program) { p.host[name] = imported(m, WASI, name, HOST_FUNCTIONS[name]#1, HOST_FUNCTIONS[name]#2) }
 	added_tag(m, [nullable(text_type(m))])
-	p.records = match program { Block(statements) => statements.filter(statement => statement is Record) }
+	p.records = added_records(Records(), match program { Block(statements) => statements })
 	f = Frame()
 	body = code(program, p, f)
 	exported(m, "main", FUNCTION_KIND, function_of(m, [], Code([], uncaught_ended(dropped(body), p)), f))
@@ -74,15 +74,15 @@ primitives_in(n: Node) as list := match n {
 class Program {
 	m: Module
 	# the host functions imported: name → index
-	host: map = {}
-	functions: list = []
-	globals: list = []
+	host: map<text, int> = {}
+	functions: list<Placed> = []
+	globals: list<Placed> = []
 	# the Defines whose body is not emitted yet
-	pending: list = []
+	pending: list<Node> = []
 	# the helper functions primitives call, each [operation, index]
 	helpers: list = []
 	# the Records the program declares, which lay out their instances
-	records: list = []
+	records: Records = Records()
 }
 # The function being emitted: its parameters, then its locals, each a Placed numbered as wasm numbers them
 class Frame {

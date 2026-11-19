@@ -69,7 +69,7 @@ global_reading(outer: Definition, name: text) as text := if outer.kind == BOUND_
 # the variable of that name the program or a function around the one at depth defines, ø when the name is none
 outer_variable(name: text, scope: list, depth: int) as Definition? := {
 	for definition in scope {
-		if definition.name == name { return if definition.depth > LIBRARY_DEPTH and definition.depth < depth and definition.kind != BOUND_FUNCTION then definition else ø }
+		if definition.name == name { return if definition.depth >= PROGRAM_DEPTH and definition.depth < depth and definition.kind != BOUND_FUNCTION then definition else ø }
 	}
 	ø
 }

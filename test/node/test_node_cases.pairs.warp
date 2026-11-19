@@ -46,3 +46,5 @@ f(n) := match n { Key(key, op, width): width as text, _: "none" }
 f(parse("a: 3"))'	"3"
 # a Meta arm is a node case, never a list of its parts: a list of three items falls through to the next arm
 'n = parse("a b c"); match n { Meta(node, data): "meta"; List(items, bracket, separator): "list ${#items}"; _: "other" }'	"list 3"
+# a List's items are a list, a curly block's too: `{a b}` gives its two items
+'f(n: Node) as list := match n { List(items, bracket, separator): items; _: [] }; #f(List([Symbol("a"), Symbol("b")], Bracket.Curly, Separator.None))'	2
