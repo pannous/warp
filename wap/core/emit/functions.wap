@@ -95,7 +95,7 @@ call_code(form: Node, called: Node, arguments: list<Node>, p: Program, f: Frame)
 	if is_case(called) { return case_value_code(form, called, arguments, p, f) }
 	if (not called is symbol or not names_function(called)) and signature(fact_of(called, TYPE)) != ø { return value_call_code(form, called, arguments, p, f) }
 	kept = if names_function(called) and p.in_place.has(defining_key(called)) then in_place_body(p.in_place[defining_key(called)]) else ø
-	if kept is Prim { return match kept { Prim(operation, given) => primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p) } }
+	if kept is Prim { return in_place_code(kept, arguments, p, f) }
 	function = called_function(form, called, p, f)
 	if #arguments != #function.parameters { refused(form, "the call gives ${#arguments} arguments, the function takes ${#function.parameters}") }
 	given = (1 to #arguments).map(at => fitted(code(arguments#at, p, f), function.parameters#at, arguments#at, p))
@@ -110,6 +110,8 @@ is_in_place(definition: Define) as bool := match definition { Define(name, param
 	Prim(operation, given) => given.all(each => each is symbol) and given.map(each => text(each)) == items_of(parameters).map(parameter => text(declared_name(parameter)))
 	_ => no
 } }
+# a call of a function kept in place: its arguments, fitted to the primitive's operands, then the primitive
+in_place_code(kept: Prim, arguments: list<Node>, p: Program, f: Frame) as Code := match kept { Prim(operation, given) => primitive_code(kept, operation, (1 to #arguments).map(at => fitted(code(arguments#at, p, f), layout(given#at, p), arguments#at, p)), p) }
 # its primitive, typed as the function's signature says (a generic body's own type is its type variable)
 in_place_body(definition: Define) as Node := match definition { Define(name, parameters, body) => {
 	result = signed_parts(declared_name(name)).result
