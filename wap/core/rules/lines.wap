@@ -36,7 +36,7 @@ unglued(language: Language, n: Node) as Node := match n {
 }
 # the code a block is glued to at its end, and that block: `1{else 2}`, `i in xs{…}` the operator's right side; ø when
 # no block ends it
-block_split(n: Node) as list? := match n {
+block_split(n: Node) as list<Node>? := match n {
 	Key(word, Op.None, block) => if is_block(block) then [word, block] else ø
 	Call(called, arguments) => {
 		inner = if arguments is empty then ø else block_split(arguments.last)

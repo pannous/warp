@@ -34,6 +34,12 @@ add(xs: list<T>, item: T) := prim list_add(xs, item)
 # the last item taken off a list; an empty one raises
 pop(xs: list<T>): T := prim list_pop(xs)
 
+# the items without their repeats, each where it first appears: `[1, 2, 1].unique` is [1, 2]
+unique(xs: list<T>): list<T> := {
+	out: list<T> = []
+	for x in xs { if not out.contains(x) { out.add(x) } }
+	out
+}
 # each item's result, in order: `[1, 2].map(x => x * 10)` is [10, 20]
 map(xs: list<T>, f: (T) -> U): list<U> := {
 	out: list<U> = []
