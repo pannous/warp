@@ -23,7 +23,7 @@ INCLUDE_WORD = "include"
 # is bound in
 language_loaded(language: Language, wap_folder: text) as Node := {
 	# each file read with the rules of the files before it loaded
-	for file in files_named(operated_program(language, read_notation(in_folder(wap_folder, RULES_FILE))), INCLUDE_WORD) { rules_loaded(language, operated_file(language, file)) }
+	for file in files_named(operated_file(language, in_folder(wap_folder, RULES_FILE)), USE_WORD) { rules_loaded(language, operated_file(language, file)) }
 	declared_operated(language, operated_file(language, in_folder(wap_folder, PRELOAD_FILE)))
 }
 # a file of the wap folder, its path spelled as a used module's is, so a place names its file one way

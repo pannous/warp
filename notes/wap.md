@@ -120,7 +120,7 @@ wap/
 
   preload/                    the standard language every program gets: whole definitions, data and rules
     preload.wap               the word files below, included in place: the one library every program is bound in
-    rules.wap                 the kernel forms' patterns and the sugar/ files, included in place, in load order
+    rules.wap                 the kernel forms' patterns and the sugar/ files, used in load order
     prelude.wap               the built-ins (print …), each a function whose body may be a Prim
     operators.wap             the operator table: precedence groups and their relations, operators, aliases
     nodes.wap                 warp's Node, case for case as core/node.warp declares it, and the words over it
