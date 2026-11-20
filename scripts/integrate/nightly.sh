@@ -52,10 +52,12 @@ say "sweeps of $tip in $SNAPSHOT"
 full_suite_rate() {
 	grep -aom1 '[0-9]* of [0-9]* failed' "$1" | awk '{ printf "%.1f", 100 * ($3 - $1) / $3 }' | grep . || echo —
 }
-# newly_red <sweep>: the lines passing in the main checkout's results and not in the snapshot's
+# newly_red <sweep>: the lines passing in the previous nightly run's results and not in the snapshot's (the main
+# checkout's copy may already be a later sweep's, other runs commit it between nightlies)
 newly_red() {
 	local file=test/$1.txt
-	comm -13 <(grep -aE "$PASSING" "$SNAPSHOT/$file" | cut -c6- | sort) <(grep -aE "$PASSING" "$main/$file" | cut -c6- | sort) |
+	local previous_run=$(git -C "$main" log -1 --format=%H --grep='^chore: nightly pass rates' origin/main -- "$file")
+	comm -13 <(grep -aE "$PASSING" "$SNAPSHOT/$file" | cut -c6- | sort) <(git -C "$main" show "${previous_run}:$file" | grep -aE "$PASSING" | cut -c6- | sort) |
 		head -"$NEWLY_RED_SHOWN" | sed "s|^|$1: |"
 }
 
