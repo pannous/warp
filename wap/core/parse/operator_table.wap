@@ -108,10 +108,37 @@ group_of_any(language: Language, spelling: text) as text := {
 	""
 }
 
+# ---- a program's own words
+
+# the words code defines, `length = 3` or `f(size: int) := …`, each a key of words: no alias reads them as its
+# canonical word, so a program's own `length` stays apart from `count` (wiki/alias.md "ambiguous resolution")
+words_defined(n: Node, words: map<text, bool>) := {
+	side = defining_side(n)
+	if side != ø { for word in defined_by(side) { words[word] = yes } }
+	for part in direct_parts(n) { words_defined(part, words) }
+}
+# the side of a definition that names what it defines, ø for any other node
+defining_side(n: Node) as Node? := match n {
+	Key(left, op, right) => if op in [Op.Assign, Op.Define] then left else ø
+	_ => ø
+}
+# the words a defining side names: a name, a typed one, a function and its parameters, `f(x) as int`'s f and x
+defined_by(side: Node) as list<text> := match side {
+	Symbol(spelling) => [spelling]
+	Key(name, op, value) => if op in [Op.Colon, Op.Assign] then defined_by(name) else if op == Op.None then defined_by(name) + parameters_defined(value) else []
+	List(items, Bracket.None, Separator.Space) => defined_by(items#1)
+	_ => []
+}
+parameters_defined(parameters: Node) as list<text> := match parameters {
+	List(items, Bracket.Round, separator) => items.flat_map(defined_by)
+	_ => []
+}
+
 # ---- spellings
 
 # the canonical word of a spelling written in that fixity: the spelling itself when no alias applies
 canonical(language: Language, spelling: text, fixity: Fixity) as text := {
+	if language.defined_words.has(spelling) { return spelling }
 	written = aliased(spelling, fixity)
 	if written != spelling { return written }
 	compound = compound_assignment(language, spelling)
