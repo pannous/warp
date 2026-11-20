@@ -128,7 +128,12 @@ bound_as(letter: Node, type: Node, bound: list<Binding>, s: TypingState) as list
 	held = type_keyed(text(letter), bound)
 	if held == ø { return if type == letter then bound else bound + [Binding(text(letter), type)] }
 	if same_type(held, type) or reads_as(held, type) { return bound }
-	if has_unknowns(held) or has_unknowns(type) then unified(held, type, bound, s) else ø
+	if has_unknowns(held) or has_unknowns(type) { return unified(held, type, bound, s) }
+	# bound to a shape and to the type it narrows, the letter is that type: `[Call(…)] + inner` of a list<Node> adds
+	# two list<Node>s
+	if same_type(narrowed_type(type) ?? type, held) { return bound }
+	if same_type(narrowed_type(held) ?? held, type) { return bound.filter(binding => binding.key != text(letter)) + [Binding(text(letter), type)] }
+	ø
 }
 # the type a value of the given type reads as where the wanted one is, by that type's word (calls.wap as_read): an
 # atom as its case where a Node is (preload/nodes.wap Node(…)), a char as its text, a range as its list of ints

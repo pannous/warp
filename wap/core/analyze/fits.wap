@@ -86,6 +86,10 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	# a shape's value is a value of the type it narrows: a Record where a Node is
 	narrows = narrowed_type(given)
 	if narrows != ø and conversion(narrows, wanted, s) == Conversion.Same { return Conversion.Same }
+	# a list of a shape's values is a list of the type it narrows, its items those values as they are
+	given_item = item_type(given)
+	wanted_item = item_type(wanted)
+	if given_item != ø and wanted_item != ø and same_type(narrowed_type(given_item) ?? given_item, wanted_item) { return Conversion.Same }
 	narrowing = narrowed_type(wanted)
 	if narrowing != ø and same_type(given, narrowing) { return Conversion.Narrowed }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
