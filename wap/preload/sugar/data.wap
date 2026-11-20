@@ -11,6 +11,3 @@ rule ($subject#$key[$index]) => Get($subject, $key)[$index]
 
 # a list's item by its index, counting from 0 (wiki/indexing.md): `xs[0]` is the first item, `xs#1`
 rule $subject[$index] => Item($subject, $index)
-# a map's entry given a value by any spelling of its place, `m["a"] = 1`, `m.a = 1`: typing reads a place of no list as
-# a call of `#`, and the map's set gives it its value
-rule #($m: map, $k) = $v => set($k, of: $m, to: $v)
