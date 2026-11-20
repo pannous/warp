@@ -20,6 +20,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "definers.wap"
 use "../bindings.wap"
+use "../parse/operator_table.wap"
 use "types.wap"
 use "variables.wap"
 use "../../kernel/forms.wap"
@@ -238,7 +239,12 @@ resolved(name: Node, scope: Scope, depth: int) as Node := resolved_taking(name, 
 called_bound(called: Node, given: int, scope: Scope, depth: int) as Node := if called is symbol then resolved_taking(called, given, scope, depth) else bound(called, scope, depth)
 resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
 	meant = definitions_meant(text(name), scope)
-	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
+	if meant is empty {
+		# a name nothing defines is read as the word its alias gives, `length` count (preload/operators.wap aliases)
+		alias = aliased(text(name), Fixity.Anywhere)
+		if alias != text(name) and not definitions_meant(alias, scope) is empty { return resolved_taking(refitted(symbol(alias), name), given, scope, depth) }
+		refused(name, "nothing defines this name, neither the program nor the library")
+	}
 	innermost = if meant#1.kind == DefinitionKind.Case then unambiguous_case(name, meant#1, given, scope) else meant#1
 	# a name a rule read as a function binds to a function, never to a variable of that name in its way
 	if fact_of(name, READ_WITH) != ø and not innermost.kind in [DefinitionKind.Function, DefinitionKind.Library] { refused(name, "a rule reads ${name} as the function ${fact_of(name, READ_WITH)}, but a variable of that name hides it: rename the variable") }
