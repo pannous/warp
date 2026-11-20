@@ -361,9 +361,14 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A list's brackets and separator are spelled twice**, in wap/preload/nodes.wap (opening, closing, separator_text) and
   wap/core/format.wap: warp, which compiles the compiler, refuses the preload's own Node enum, so format.wap cannot use
   nodes.wap. Paid off when wap compiles itself and the compiler sees the preload: format.wap's three go.
+  Paid off: format.wap uses the preload's opening, closing and separator_text (wap-debts-front).
 - **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
   char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
   a typed rule sees only its hole's type.
+- **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
+  §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
+  `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
+  Paid off: the reader writes `Error(why: where)` and the compiler refuses it where it reads a file (wap-debts-front).
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
@@ -447,12 +452,19 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a
   second mechanism (warp-simplifier measured it, 2026-11-19). Paid off when old warp no longer reads wap's source: Op
   then comes from the table.
+  Found (wap-debts-front): 48 of 63 cases have no row of their name (sub/subtract, lt/less, the derived compound
+  assignments, Div / vs ÷); paid off by renaming the cases after the rows, plus a rule for the derived ones.
 
 - **The literals a template writes are named twice** (wap/kernel/forms.wap literal_named): `True()`, `False()` and
   `Empty()` are spelled out beside preload/nodes.wap's declaration of Node's fieldless cases. The general rule is that
   a template's glued call of an enum's fieldless case builds that case. Reason: templates are built before the
   preload's Records are declared, so they can't look the cases up. Paid off when templates see the declared Records:
   the table goes for that lookup.
+- **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
+  drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
+  List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
+  mark becomes the empty sequence.
+  Paid off: NOTHING_WRITTEN is the empty statement sequence, and spread needs no mark (wap-debts-front).
 
 - **Overloads rank by weights, not by subsumption** (wap/core/analyze/calls.wap most_specific, ranked: typing weight,
   written structure, derived), and `text(1 to 3)` is refused as reading two ways. Reason: paused for the self-build

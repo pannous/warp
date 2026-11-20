@@ -17,7 +17,6 @@ long-file wap/core/analyze/types.wap 1
 repeated-code wap/core/analyze/data.wap 1
 same-shape wap/core/analyze/scope.wap 1
 same-shape wap/core/emit/equality.wap 1
-same-shape wap/core/format.wap 1
 same-shape wap/core/parse/operators.wap 2
 same-shape wap/core/rules/lines.wap 1
 same-shape wap/core/stage.wap 3

@@ -207,8 +207,7 @@ code(n: Node): text := match n {
 	Meta(node, data) => code(node)
 	_ => text(n)
 }
-# a list's brackets and separator as written; core/format.wap keeps its own copy while warp compiles it, which
-# cannot take the preload's Node (notes/backbone.md)
+# a list's brackets and separator as written
 opening(bracket: Bracket): text := match bracket {
 	Bracket.Curly => "{"
 	Bracket.Square => "["
