@@ -71,26 +71,39 @@ without_runtime_noise() { grep -v '^wasm-rt warning'; }
 sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
 # folders that live in their own repositories, checked out once beside warp: each tree reaches them at the same path,
 # a git-ignored link to the checkout (CI clones them there); one line each, <path in the tree> <checkout>
+# wap's own repository github.com/pannous/wap: what of it warp's tree keeps reaching at the old places
+WAP_CHECKOUT=$HOME/dev/angles/wap
+WAP_LINKED="wap
+test/wap
+notes/backbone.md
+notes/wap.md
+notes/wap_review.md
+notes/kernel.md
+notes/rules.md
+notes/reader.md
+notes/operators.md
+notes/rewrites.md
+notes/agents/wap-owner.md
+notes/agents/simplifier.md"
 LINKED_CHECKOUTS="
 samples $HOME/dev/angles/samples
-wap $HOME/dev/angles/wap/wap
-test/wap $HOME/dev/angles/wap/test/wap
+$(echo "$WAP_LINKED" | sed "s|.*|& $WAP_CHECKOUT/&|")
 "
 # checkouts_linked <tree>: each of LINKED_CHECKOUTS is there in <tree> (the link, a CI clone, or an older commit's own
-# folder), linked to its checkout where missing; a folder of what runs left there before it moved goes to
+# folder), linked to its checkout (a folder or a single file) where missing; what runs left there before it moved goes to
 # <tree>/data/<name>-leftovers.<time>, said so; a checkout missing, it refuses
 checkouts_linked() {
 	local tree=$1 name checkout link leftovers failed=0
 	while read -r name checkout; do
 		[ -n "$name" ] || continue
 		link=$tree/$name leftovers=$tree/data/$(echo "$name" | tr / -)-leftovers
-		{ [ -L "$link" ] && [ -d "$link" ]; } || [ -d "$link/.git" ] && continue
-		if [ -d "$link" ] && [ ! -L "$link" ]; then
+		{ [ -L "$link" ] && [ -e "$link" ]; } || [ -d "$link/.git" ] && continue
+		if [ -e "$link" ] && [ ! -L "$link" ]; then
 			[ -n "$(git -C "$tree" ls-files -- "$name" | head -1)" ] && continue
 			mkdir -p "$tree/data" && mv "$link" "$leftovers.$(date +%s)" || { failed=1; continue; }
 			echo "$name: what runs had left in $link moved to $leftovers.*; $link is now the link to $checkout" >&2
 		fi
-		if [ -d "$checkout" ] && [ ! -L "$link" ]; then mkdir -p "$(dirname "$link")" && ln -s "$checkout" "$link"; continue; fi
+		if [ -e "$checkout" ] && [ ! -L "$link" ]; then mkdir -p "$(dirname "$link")" && ln -s "$checkout" "$link"; continue; fi
 		echo "$name: no checkout at $checkout for $link: clone its repository there" >&2
 		failed=1
 	done <<<"$LINKED_CHECKOUTS"
