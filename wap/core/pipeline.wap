@@ -79,9 +79,9 @@ declared_modules(language: Language, file: text) as list<Module> := {
 	used_modules(language, code) + [declared_module(language, code)]
 }
 # the modules operated code uses, theirs first, each declared
-used_modules(language: Language, code: Node) as list<Module> := modules_used(code, file => if language.modules.has(module_key(file)) then language.modules[module_key(file)].code else operated_file(language, file)).map(module => declared_once(language, module))
+used_modules(language: Language, code: Node) as list<Module> := modules_used(code, file => if language.modules.has(module_key(file)) then language.modules[module_key(file)].code else operated_file(language, file)).map(module => used_module(language, module))
 # a used module declared, or the one this compile declared already from its file; code of no file is declared anew
-declared_once(language: Language, code: Node) as Module := {
+used_module(language: Language, code: Node) as Module := {
 	key = module_key(file_of(code) ?? return declared_module(language, code))
 	if language.modules.has(key) { return language.modules[key] }
 	module = declared_module(language, code)
