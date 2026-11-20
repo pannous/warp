@@ -56,8 +56,8 @@ lead first, as a change of this table.
 | lower | core/rules/lowering.wap | wap-reader | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-binding | bound kernel | typed kernel |
+| kind rules (stage 3): in the type walk, on each node as typing writes it, before elaborate | core/rules/typed.wap, engine core/rules/ | wap-reader | a node as typed | its rewrite, typed in place |
 | elaborate | core/analyze/types.wap, calls.wap | wap-binding | typed kernel | typed kernel, one instance per tuple |
-| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -349,10 +349,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   program without naming the user's line. Refusing it by name would need bounds checks the slice's caller writes, for
   example the preload's `slice` taking a Range and raising when it does not fit.
 
-- **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
-  and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
-  a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
-  versions typing made before, not a new one.
 - **The class rule's helper words are ordinary words** (wap/preload/sugar/records.wap `member_as "field"`,
   `member_of`, `shown_case`): a program writing them is rewritten too. Words only rule files may write need a private
   word in the reader; paid off when a program meets one.
