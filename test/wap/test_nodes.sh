@@ -21,4 +21,8 @@ check "a node is empty as warp reads it in a condition" "$(ran node_empty 'a = s
 print [Empty, False, Number(0), Text(""), List([], Bracket.Square, Separator.Comma), Key(Text(""), Op.Colon, Number(0)), positioned(Number(0), 1, 1)].map(n => if n then "t" else "f").join("")
 print [True, a, Number(2), Text("x"), List([a], Bracket.Round, Separator.Space), Key(a, Op.Colon, Number(0))].map(n => if n then "t" else "f").join("")')" "fffffff
 tttttt"
+check "a Node pattern looks through the Meta a node's position wraps it in; a Meta pattern sees the Meta" "$(ran through_meta 'n = positioned(Text("hi"), 1, 1)
+print(match n { Text(t) => t; _ => "other" })
+print(match n { Meta(inner, data) => "meta"; _ => "other" })')" "hi
+meta"
 exit $((failures > 0))
