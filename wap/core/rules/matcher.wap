@@ -109,7 +109,11 @@ rest_matches(m: Matcher, items: list, bindings: map<text, Node>) as bool := {
 of_shape(m: Matcher, n: Node) as bool := {
 	if m.stage == TYPED_STAGE { return if spelling_written(m.type) == VALUE_HOLE then gives_value(n) else fits_type(n, m.type) }
 	if m.stage == DECLARED_STAGE { return hole_declaration(m, n) != ø }
-	if m.pattern != ø { return matches(m.pattern.matcher, n, {}) }
+	pattern = m.pattern ?? return of_type(m, n)
+	matches(pattern.matcher, n, {})
+}
+# whether code is of the shape a hole's type names, Symbol, List, Key, Text, Number or Node
+of_type(m: Matcher, n: Node) as bool := {
 	type = spelling_written(m.type)
 	if m.type == Empty or type == NODE_TYPE { return yes }
 	match type {
