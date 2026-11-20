@@ -245,3 +245,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - wap-census-only (user, 2026-11-19): until wap compiles itself, wap work comes only from the self-build census; anything else is one Debts line in notes/backbone.md, no work, no question.
 - wap-census-only dropped (user, 2026-11-20): wap work follows the board and the usual card rules; the review order stays in notes/backbone.md.
 - library-words-as-rules (user, 2026-11-20): no role annotations; the words typing used by name become ordinary rewrite rules in wap/preload/sugar/ (`m#k = v` → `set(m, k, v)`, the last statement → `print(show(…))`); core knows no library word by name.
+- set-of-to (user, 2026-11-20): wap's map setter is `set(key, of: m, to: v)`, read `set k of: m to: v`; `m#k = v` rewrites to it. Named arguments already exist (wiki/function.md:152).
