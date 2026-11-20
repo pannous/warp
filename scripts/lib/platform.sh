@@ -69,3 +69,14 @@ libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_libra
 without_runtime_noise() { grep -v '^wasm-rt warning'; }
 # the SHA-256 of a file, 64 hex digits (sha256sum on Linux, shasum on the Mac)
 sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
+# warp's sample programs live in their own repository, github.com/pannous/samples (user 2026-11-20), checked out once
+# beside warp; each tree reaches them at <tree>/samples, a git-ignored link to that checkout (CI clones it there)
+samples_checkout=$HOME/dev/angles/samples
+# samples_linked <tree>: <tree>/samples is the samples, linked to the checkout where missing; no checkout, it refuses
+samples_linked() {
+	local link=$1/samples
+	[ -d "$link" ] && return
+	[ -d "$samples_checkout" ] && [ ! -L "$link" ] && { ln -s "$samples_checkout" "$link"; return; }
+	echo "samples: no checkout at $samples_checkout for $link: git clone https://github.com/pannous/samples $samples_checkout" >&2
+	return 1
+}

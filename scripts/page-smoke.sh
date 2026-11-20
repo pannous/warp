@@ -10,6 +10,7 @@ PAGE_SMOKE=(samples/hello/hello.warp samples/web/component_totals.warp)  # hello
 built=
 [ "${1-}" = --built ] && { built=1; shift; }
 tree=$(cd "${1:?usage: page-smoke.sh [--built] <tree>}" && pwd) || exit 2
+source "$(dirname "$0")/lib/platform.sh"; samples_linked "$tree" || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
 if [ -z "$built" ]; then
 	mkdir -p "$tree/data"

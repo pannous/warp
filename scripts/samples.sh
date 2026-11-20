@@ -40,6 +40,7 @@ CHECK_LINE='^# check: '
 HOST_LINE='^# host: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
+samples_linked "$tree" || exit 2
 shift $(( $# > 0 ))
 results=$tree/data/samples
 mkdir -p "$results/out"

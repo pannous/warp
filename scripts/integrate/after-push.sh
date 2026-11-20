@@ -47,6 +47,7 @@ state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
 say() { echo "after-push: $(date '+%H:%M:%S') $*"; }
 main_tip() { git -C "$TREE" ls-remote origin refs/heads/main | cut -f1; }
+samples_linked "$TREE" || say "RED: no samples for $TREE"
 # origin's main fetched, only its ref: a concurrent push of another branch can't fail the fetch on that branch's ref
 # lock ("cannot lock ref … expected old tip", card after-push); a race on main itself is fetched once more a moment later
 fetched_main() { git -C "$TREE" fetch -q origin main || { sleep 5; git -C "$TREE" fetch -q origin main; }; }
