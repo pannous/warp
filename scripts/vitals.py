@@ -17,6 +17,14 @@ ARGUMENTS = [a for a in sys.argv[1:] if not a.startswith("--")]
 SINCE = ARGUMENTS[0] if ARGUMENTS else "2026-10-29"
 OUT = ARGUMENTS[1] if len(ARGUMENTS) > 1 else os.path.join(REPO, "data/vitals/vitals.html")
 TEMPLATE = os.path.join(REPO, "scripts/vitals.html")
+WAP_OUT = os.path.join(os.path.dirname(OUT), "wap-vitals.html")  # the same page with only wap's section (user 2026-11-20)
+WAP_PAGE = [  # what the wap page says instead, applied to the filled template
+    ("<title>Warp Vitals</title>", "<title>wap Vitals</title>"),
+    ("<h1>Warp vitals</h1>", "<h1>wap vitals</h1>"),
+    ("warp compiler · since self-hosting", "wap, the new compiler · its road to self-build"),
+    ("How many tests pass in each lane, and how heavy the compiler is, rebuilt from git history.", "wap's size, self-build, tests and speed."),
+    ("</style>", ".page > *:not(header):not(#wap-section) { display: none; }\n</style>"),
+]
 CODE_SUFFIXES = (".warp", ".c", ".h", ".js", ".sh", ".py")
 CORE_GROUPS = [("parsing", ["core/parsing"]), ("passes", ["core/passes"]),
                ("analysis", ["core/analysis", "core/commands", "core/(top)"]), ("emitter", ["core/emitter"]),
@@ -645,8 +653,15 @@ os.makedirs(os.path.dirname(CHANGES_CACHE), exist_ok=True)
 with open(CHANGES_CACHE + ".new", "w") as kept:
     json.dump(whole_changes, kept, separators=(",", ":"))
 os.replace(CHANGES_CACHE + ".new", CHANGES_CACHE)
-with open(TEMPLATE) as template, open(OUT, "w") as page:
-    page.write(template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/")))
+with open(TEMPLATE) as template:
+    filled = template.read().replace("__DATA__", json.dumps(data, separators=(",", ":")).replace("</", "<\\/"))
+with open(OUT, "w") as page:
+    page.write(filled)
+for old, new in WAP_PAGE:
+    assert filled.count(old) >= 1, f"the wap page's replacement no longer finds {old!r} in {TEMPLATE}"
+    filled = filled.replace(old, new, 1)
+with open(WAP_OUT, "w") as page:
+    page.write(filled)
 first, last = rows[0], rows[-1]
 core = lambda row: sum(row[3][:-1])
 latest = "; ".join(f"{name} {points[-1][2]}/{points[-1][3]}" for name, _, points, _ in data["tiers"] if points)
