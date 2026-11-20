@@ -27,10 +27,10 @@ CHOICE = "?"
 OPEN_SIDE = "ø"
 
 # the program with its operator phrases read, after its own declarations joined the table (core/parse/operator_table.wap),
-# wherever they stand; a word it defines stays as written, no alias reads it
+# wherever they stand; a word the program defines stays as written, no alias reads it (core/pipeline.wap
+# program_words_defined)
 operated_program(language: Language, program: Node) as Node := {
 	placements = []
-	words_defined(program, language.defined_words)
 	operators_declared(language, program, placements)
 	for placement in placements { placed(language, placement) }
 	related_groups(language)

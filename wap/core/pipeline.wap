@@ -25,7 +25,19 @@ INCLUDE_WORD = "include"
 language_loaded(language: Language, wap_folder: text) as Node := {
 	# each file read with the rules of the files before it loaded
 	for file in files_named(operated_file(language, in_folder(wap_folder, RULES_FILE)), USE_WORD) { rules_loaded(language, operated_file(language, file)) }
+	program_words_defined(language, in_folder(wap_folder, PRELOAD_FILE))
 	declared_operated(language, operated_file(language, in_folder(wap_folder, PRELOAD_FILE)))
+}
+# the names a program's files define at their top, the files it uses and includes too, known before any is read, so
+# no alias reads them (core/parse/operator_table.wap words_defined)
+program_words_defined(language: Language, file: text) := {
+	program = read_notation(file)
+	for module in [program] + modules_used(program, read_notation) { file_words_defined(language, module) }
+}
+# the names a file defines at its top and those of the files it includes
+file_words_defined(language: Language, code: Node) := {
+	words_defined(code, language.defined_words)
+	for included in files_named(code, INCLUDE_WORD) { file_words_defined(language, read_notation(included)) }
 }
 # a file of the wap folder, its path spelled as a used module's is, so a place names its file one way
 in_folder(folder: text, file: text) as text := normalized_path(folder + "/" + file)
@@ -53,9 +65,7 @@ included(language: Language, file: text, line: Node) as list<Node> := {
 }
 # a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
 declared_modules(language: Language, file: text) as list<Module> := {
-	# the words every file of the program defines, known before any is read: no alias reads them
-	program = read_notation(file)
-	for module in [program] + modules_used(program, read_notation) { words_defined(module, language.defined_words) }
+	program_words_defined(language, file)
 	code = operated_file(language, file)
 	used_modules(language, code) + [declared_module(language, code)]
 }
