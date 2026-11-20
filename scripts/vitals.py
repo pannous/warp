@@ -69,7 +69,7 @@ JOB_SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job-slot.sh
 WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
-WAP_TESTS_SUMMARY = os.path.join(REPO, "data/wap-tests/summary.txt")  # written by test/wap/run.sh
+WAP_TESTS_SUMMARIES = [os.path.join(tree, "data/wap-tests/summary.txt") for tree in (REPO, "/Volumes/Worktrees/integrate")]  # written by test/wap/run.sh; the integrator runs it on each landing, so its tree has the newest
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
 CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound(?:, typed: (\w+), emitted: (\w+))?")  # a preload file has no typed/emitted: it is typed by function
 CENSUS_TOTAL = re.compile(r"(\d+) of (\d+) files typed whole, (\d+) of (\d+) functions typed")
@@ -251,8 +251,9 @@ def wap_road():
     if not any(s["kind"] == "hello" and s["tree"] == tree for s in snapshots) and (measured := wap_hello()):
         snapshots.append({"kind": "hello", "time": commit_date(TIP), "commit": TIP[:10], "tree": tree, **measured})
         append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
-    if os.path.exists(WAP_TESTS_SUMMARY) and (match := WAP_TESTS_LINE.search(open(WAP_TESTS_SUMMARY).read())):
-        written = datetime.datetime.fromtimestamp(os.path.getmtime(WAP_TESTS_SUMMARY)).strftime("%Y-%m-%d %H:%M")
+    summary = max((path for path in WAP_TESTS_SUMMARIES if os.path.exists(path)), key=os.path.getmtime, default=None)
+    if summary and (match := WAP_TESTS_LINE.search(open(summary).read())):
+        written = datetime.datetime.fromtimestamp(os.path.getmtime(summary)).strftime("%Y-%m-%d %H:%M")
         if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
             snapshots.append({"kind": "tests", "time": written, "passed": int(match[1]), "failed": int(match[2])})
             append_snapshot(WAP_SNAPSHOTS, snapshots[-1])

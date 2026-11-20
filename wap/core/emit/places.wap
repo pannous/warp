@@ -56,7 +56,7 @@ field_filled(field: Node, value: Node, p: Program, f: Frame) as list<int> := {
 }
 given_value(field: Node) as Node := match field { Key(name, Op.Colon, value) => value; _ => refused(field, NOT_A_FIELD) }
 # a list and the wasm index of an item's place, counted from 1 in warp and from 0 in wasm
-item_reached(subject: Node, key: Node, p: Program, f: Frame) as list<int> := code(subject, p, f).instructions + code(key, p, f).instructions + I32_WRAP_I64 + i32_const(1) + I32_SUB
+item_reached(subject: Node, key: Node, p: Program, f: Frame) as list<int> := code(subject, p, f).instructions + code(key, p, f).instructions + i64_const(1) + I64_SUB
 
 # A value given to a place: a name, which then has that value, or a list's item, which leaves none
 assigned_code(form: Node, place: Node, value: Node, p: Program, f: Frame) as Code := match place {
