@@ -33,12 +33,17 @@ positive_float_text(x: float): text := {
 	count = digit_count(digits)
 	exponent = count - 1 - found#2
 	if exponent >= 15 or exponent < -5 {
-		rest = if count > 1 then "." + padded(truncated_remainder(digits, power_of_ten(count - 1)), count - 1) else ""
-		return text(quotient(digits, power_of_ten(count - 1))) + rest + "e" + text(exponent)
+		return pointed(digits, count - 1) + "e" + text(exponent)
 	}
 	if exponent >= count - 1 { return text(digits) + zeros(exponent - count + 1) }
-	if exponent >= 0 { return text(quotient(digits, power_of_ten(count - 1 - exponent))) + "." + padded(truncated_remainder(digits, power_of_ten(count - 1 - exponent)), count - 1 - exponent) }
+	if exponent >= 0 { return pointed(digits, count - 1 - exponent) }
 	"0." + zeros(-1 - exponent) + text(digits)
+}
+# digits with a point before their last `places`, none when there are none: 1234 and 2 give 12.34
+pointed(digits: int, places: int): text := {
+	if places == 0 { return text(digits) }
+	power = power_of_ten(places)
+	text(quotient(digits, power)) + "." + padded(truncated_remainder(digits, power), places)
 }
 # [digits, shift] of a positive float: its shortest digits, digits · 10^-shift reads back as x. x · 10^shift has 17
 # digits, and the whole numbers between the halfways to its neighbours read back as x (the halfways too when x's last
@@ -124,9 +129,7 @@ float_scaled(x: float, gap: float, shift: int): list<float> := {
 	left = shift
 	while left != 0 {
 		step = if left > power_step() then power_step() else if left < 0 - power_step() then 0 - power_step() else left
-		power = 1.0
-		count = if step < 0 then 0 - step else step
-		for k in 1 to count { power = power * 10.0 }
+		power = 10.0 ^ (if step < 0 then 0 - step else step)
 		if step > 0 {
 			product = hi * power
 			lo = product_error(hi, power, product) + lo * power
@@ -168,16 +171,8 @@ digit_count(n: int): int := {
 	}
 	count
 }
-power_of_ten(n: int): int := {
-	power = 1
-	for k in 1 to n { power = power * 10 }
-	power
-}
+power_of_ten(n: int): int := 10 ^ n
 # n's digits, zeros before them up to width
 padded(n: int, width: int): text := zeros(width - digit_count(n)) + text(n)
 # a text of count zero digits
-zeros(count: int): text := {
-	all = ""
-	for k in 1 to count { all = all + "0" }
-	all
-}
+zeros(count: int): text := "0" * count
