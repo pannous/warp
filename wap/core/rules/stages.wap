@@ -21,6 +21,7 @@ use "../../kernel/forms.wap"
 use "../parse/atoms.wap"
 use "../analyze/declarations.wap"
 use "lines.wap"
+use "termination.wap"
 use "../language.wap"
 
 RULE_WORD = "rule"
@@ -145,39 +146,6 @@ list_heads(language: Language, items: list) as list<text> := {
 # A rule may refuse a spelling with a fix-it, `rule … => refuse "put the inner if in braces"`: the message, ø for a
 # template that writes code
 refusal_of(template: Node) as text? := phrase_text(template, REFUSE_WORD)
-
-# ---- termination, checked once all rules are loaded
-
-# Every rule's template names heads that may fire again where it built. Following those from head to head must
-# never come back, unless each rule on the way writes less code than it matched (each hole counted once) or takes a fact.
-terminating(language: Language, rules: Rules) := {
-	for head in rules.by_head.keys { cycle_refused(language, rules, head, []) }
-}
-
-cycle_refused(language: Language, rules: Rules, head: text, path: list) := {
-	if path.contains(head) {
-		closing = path[path.index_of(head) ..] + [head]
-		growing = rules_on(rules, closing).filter(rule => not shrinking(rule) and rule.fact == "")
-		if growing is not empty { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
-		return
-	}
-	if not rules.by_head.has(head) { return }
-	for rule in rules.by_head[head] { for next in template_heads(language, rule.template) { cycle_refused(language, rules, next, path + [head]) } }
-}
-
-rules_on(rules: Rules, heads: list<text>) as list<Rule> := heads.filter(head => rules.by_head.has(head)).flat_map(head => rules.by_head[head])
-
-# the heads of every node a template spells (not the code its holes bring)
-template_heads(language: Language, n: Node) as list<text> := match n {
-	List(items, bracket, separator) => heads_of(language, n) + items.flat_map(item => template_heads(language, item))
-	Key(left, op, right) => (if op == Op.None and pattern_called(language, left) != ø then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
-	Symbol(name) => heads_of(language, n)
-	_ => []
-}
-
-shrinking(rule: Rule) as bool := size_of(rule.template) < matcher_size(rule.matcher) and #holes_in(rule.template) == #holes_in(rule.template).unique
-matcher_size(m: Matcher) as int := 1 + m.parts.map(matcher_size).sum()
-size_of(n: Node) as int := 1 + direct_parts(n).map(size_of).sum()
 
 # ---- the stage
 
