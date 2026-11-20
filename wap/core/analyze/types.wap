@@ -33,6 +33,7 @@ use "../type_notation.wap"
 use "../../kernel/forms.wap"
 use "letters.wap"
 use "shapes.wap"
+use "../rules/typed.wap"
 
 # the types of the literals, as a program writes them
 INT_TYPE = "int"
@@ -91,6 +92,9 @@ class TypingState {
 	refusals: list<Refusal> = []
 	# the ids of the names typing writes once for the whole program (core/stage.wap DEFINER)
 	ids: Definers = Definers(".")
+	# the typed rules, which fire on each node as typing writes it (core/rules/typed.wap), and how deep they refire
+	kind_rules: KindRules? = ø
+	refirings: int = 0
 }
 # a function's typed instances so far, and one more
 instances_of(key: text, s: TypingState) as list<TypedFunction> := if s.instances.has(key) then s.instances[key] else []
@@ -145,13 +149,14 @@ class TypeFrame {
 }
 
 # the program typed, after the preload's functions it calls
-typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), no)
+typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), no, ø)
 # the whole program typed, its value shown: a last statement that gives one is `print(show(it))`, by the show its
 # type has, as every program value shows itself
-typed_shown(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), yes)
+typed_shown(program: Block, preload: Block, rules: KindRules) as Block := typed_among(program, statements_in(preload), yes, rules)
 # the program typed, after the library's records and those of its definitions it calls
-typed_among(program: Block, library: list, shown: bool) as Block := {
+typed_among(program: Block, library: list, shown: bool, rules: KindRules?) as Block := {
 	s = TypingState()
+	s.kind_rules = rules
 	s.ids = definers_of(program)
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines.map(function_of)
@@ -190,8 +195,10 @@ jumping(n: Node) as Node := with_fact(n, JUMPS, True)
 typed_like(n: Node, source: Node) as Node := if jumps(source) then jumping(n) else with_type_of(n, value_type(source))
 statements_in(block: Block) as list := match block { Block(statements) => statements }
 
-# a kernel form with the types it learned, expected the type its place wants, ø for any
-typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match n {
+# a kernel form with the types it learned, expected the type its place wants, ø for any, then rewritten by a typed rule
+# that fits it (core/rules/typed.wap); the code a typed rule's hole took as it is
+typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := if fact_of(n, TYPED_HOLE) != ø then n else kind_rewritten(form_typed(n, s, f, expected), s, f, expected)
+form_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := match n {
 	Block(statements) => block_typed(n, statements, s, f, expected)
 	Define(name, parameters, body) => n
 	Set(place, value) => set_typed(n, place, value, s, f)

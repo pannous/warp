@@ -57,9 +57,11 @@ library_words(declaration: Node, depth: int) as list<Definition> := match declar
 }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
-bound(n: Node, scope: Scope, depth: int) as Node := match n {
+# code bound inside a scope; a typed rule's hole holds code bound and typed already, which stays as it is
+bound(n: Node, scope: Scope, depth: int) as Node := if fact_of(n, TYPED_HOLE) != ø then n else form_bound(n, scope, depth)
+form_bound(n: Node, scope: Scope, depth: int) as Node := match n {
 	Symbol(name) => resolved(n, scope, depth)
-	Block(statements) => block_bound(n, statements, within(scope, named_variables(n, scope, depth)), depth)
+	Block(statements) => refitted(Block(all_bound(statements, block_scope(n, statements, scope, depth), depth)), n)
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if is_kind_word(fact_of(n, ASSIGNS), DefinitionKind.Global) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
@@ -164,7 +166,11 @@ argument_bound(argument: Node, scope: Scope, depth: int) as Node := if is_named(
 is_named(argument: Node) as bool := match argument { Key(name, Op.Colon, value) => name is symbol; _ => no }
 # an instance's field or a map's entry, `x: 1`: its value bound, its name a word, no variable
 field_bound(field: Node, scope: Scope, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field); _ => refused(field, NOT_A_FIELD) }
-block_bound(block: Node, statements: list, scope: Scope, depth: int) as Node := refitted(Block(all_bound(statements, within(scope, defined_in(statements, scope, depth)), depth)), block)
+# the scope inside a block: its variables, then what its statements define, innermost
+block_scope(block: Node, statements: list, scope: Scope, depth: int) as Scope := {
+	variables = within(scope, named_variables(block, scope, depth))
+	within(variables, defined_in(statements, variables, depth))
+}
 all_bound(forms: list, scope: Scope, depth: int) as list := forms.map(form => bound(form, scope, depth))
 
 
@@ -238,9 +244,6 @@ resolved(name: Node, scope: Scope, depth: int) as Node := resolved_taking(name, 
 # a called name resolved by how many values the call gives, which picks among cases of one name
 called_bound(called: Node, given: int, scope: Scope, depth: int) as Node := if called is symbol then resolved_taking(called, given, scope, depth) else bound(called, scope, depth)
 resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
-	# a variable bound before keeps its binding: typed code bound again after a typed rule (core/rules/typed.wap), whose
-	# lifted function values read their captures at the top; a function's name is chosen anew among its overloads
-	if fact_of(name, BINDING) != ø and not is_bound(name, DefinitionKind.Function) and not is_bound(name, DefinitionKind.Library) { return name }
 	meant = definitions_meant(text(name), scope)
 	if meant is empty {
 		# a name nothing defines is read as the word its alias gives, `length` count (preload/operators.wap aliases)

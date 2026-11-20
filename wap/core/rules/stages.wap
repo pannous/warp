@@ -23,6 +23,7 @@ use "../analyze/declarations.wap"
 use "lines.wap"
 use "termination.wap"
 use "../language.wap"
+use "../bindings.wap"
 
 RULE_WORD = "rule"
 PATTERN_WORD = "pattern"
@@ -243,6 +244,12 @@ rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 	current
 }
 
+# a typed rule's holes, each the code it took marked typed already, a sequence's items each (core/bindings.wap TYPED_HOLE)
+typed_holes(bindings: map<text, Node>) as map<text, Node> := {
+	marked: map<text, Node> = {}
+	for hole in bindings.keys { marked[hole] = if hole.ends_with(REST_MARK) then with_parts(bindings[hole], part => with_fact(part, TYPED_HOLE, True)) else with_fact(bindings[hole], TYPED_HOLE, True) }
+	marked
+}
 # the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits; two equally
 # specific ones are refused
 rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
@@ -262,7 +269,8 @@ rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 	if best == ø { return [] }
 	refusal = refusal_of(best.template)
 	if refusal != ø { refused(n, refusal) }
-	result = built(language, best.template, with_fresh_names(best_bindings, best.fresh))
+	taken_holes = if matcher_stage(best.matcher) == TYPED_STAGE then typed_holes(best_bindings) else best_bindings
+	result = built(language, best.template, with_fresh_names(taken_holes, best.fresh))
 	taken = if best.fact == "" or result is Empty then result else with_fact(result, best.fact, False)
 	[if taken is Empty then taken else with_fact(taken, RULE, best.written)]
 }
