@@ -221,7 +221,7 @@ don't touch may run beside them. One owner per file, as below; a part in another
 review.
 
 1. **wap2 is wap's seed, and the compiler under test is a parameter** (milestone 2 points 3, 4, 5). Owner
-   wap-operators: compile.sh `--compiler <module>`, run.sh `--stage <n>`, test_self.sh's stage-3 == stage-4 bytes
+   wap-operators: compile.sh `--compiler <module>`, run.sh `--stage <n>`, test_self.sh's wap2-runs-hello
    and timed lines, the census on wap2, wap2 published through refresh-seed's A B C stages. Old warp stays a frozen
    fallback and still builds the native warp and the playground. Done when test/wap and the census run on wap2.
 2. **The old-warp Debts paid as one batch, facts that replace first**, test/wap on wap2 before and after:
