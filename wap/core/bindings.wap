@@ -4,6 +4,10 @@
 
 use "stage.wap"
 
+# READ_WITH on a name a declaration rule read (stage 2, core/rules/matcher.wap): the name of the declaration it was read
+# as, the definition the name must bind to
+READ_WITH = "read with"
+
 # BINDING on a bound name: what it refers to, the word of its DefinitionKind as a Symbol (DEFINED_AT, the name that
 # defined it, is in core/stage.wap, which records read too)
 BINDING = "binding"

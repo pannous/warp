@@ -11,6 +11,8 @@ use "../stage.wap"
 use "../type_notation.wap"
 use "../parse/atoms.wap"
 use "../../kernel/forms.wap"
+use "../bindings.wap"
+use "../analyze/modules.wap"
 
 # whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
 # Round brackets around one key or call only group it: `($f: $t)` in a pattern is the key, and code in such brackets is
@@ -30,9 +32,12 @@ item_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := match m.
 hole_matches(m: Matcher, n: Node, bindings: map<text, Node>) as bool := {
 	if not of_shape(m, n) { return no }
 	if bindings.has(m.name) { return "${bindings[m.name]}" == "${n}" }
-	bindings[m.name] = n
+	bindings[m.name] = taken_by_hole(m, n)
 	yes
 }
+# the code a hole takes; a name a declaration hole read carries the name of the declaration it was read as, so binding
+# refuses a local that hides that declaration (core/bindings.wap READ_WITH)
+taken_by_hole(m: Matcher, n: Node) as Node := if m.stage == DECLARED_STAGE then with_fact(n, READ_WITH, declaration_name(hole_declaration(m, n)!)) else n
 
 # whether code is a literal matcher's atom: a word spelled by any alias of it, anything else written alike
 same_atom(m: Matcher, n: Node) as bool := match m.literal {
@@ -101,7 +106,7 @@ rest_matches(m: Matcher, items: list, bindings: map<text, Node>) as bool := {
 # whether code has the shape a hole asks for
 of_shape(m: Matcher, n: Node) as bool := {
 	if m.stage == TYPED_STAGE { return fits_type(n, m.type) }
-	if m.stage == DECLARED_STAGE { return declared_as(m, n) }
+	if m.stage == DECLARED_STAGE { return hole_declaration(m, n) != ø }
 	if m.pattern != ø { return matches(m.pattern.matcher, n, {}) }
 	type = spelling_written(m.type)
 	if m.type == Empty or type == NODE_TYPE { return yes }
@@ -115,17 +120,18 @@ of_shape(m: Matcher, n: Node) as bool := {
 	}
 }
 
-# whether code is a name the declarations in force declare as a declaration hole asks: as a function, or as a test of
-# one value, its result bool
-declared_as(m: Matcher, n: Node) as bool := {
-	if not (n is symbol) or is_hole(n) or not m.declarations!.by_name.has(spelling_written(n)) { return no }
-	functions = m.declarations!.by_name[spelling_written(n)].filter(declares_function)
-	if spelling_written(m.type) == FUNCTION_HOLE { return functions is not empty }
-	functions.any(declaration => #declared_parameters(declaration) == 1 and declared_result(declaration) == symbol(BOOL_TYPE))
+# the declaration of a name, among those in force, that a declaration hole asks for: a function, or a test of one
+# value, its result bool; ø when the code is no such name
+hole_declaration(m: Matcher, n: Node) as Node? := {
+	declared = m.declarations.by_name
+	if not is_name(n) or not declared.has(spelling_written(n)) { return ø }
+	functions = declared[spelling_written(n)].filter(declares_function)
+	tests = if spelling_written(m.type) == FUNCTION_HOLE then functions else functions.filter(declaration => #declared_parameters(declaration) == 1 and declared_result(declaration) == symbol(BOOL_TYPE))
+	if tests is empty then ø else tests#1
 }
 
 # the stage a matcher's rule runs in, the latest any of its holes asks for: stage 3 on typed code
-matcher_stage(m: Matcher) as int := if m.test == Test.Hole then m.stage else m.parts.map(matcher_stage).fold(SHAPE_STAGE, max)
+matcher_stage(m: Matcher) as int := if m.test == Test.Hole then m.stage else m.parts.map(matcher_stage).fold(SHAPE_STAGE, (a, b) -> max(a, b))
 
 # how many literal parts a pattern names: the more, the more specific
 specificity(m: Matcher) as int := match m.test {
