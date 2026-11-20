@@ -247,9 +247,11 @@ rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 # a typed rule's holes, each the code it took marked typed already, a sequence's items each (core/bindings.wap TYPED_HOLE)
 typed_holes(bindings: map<text, Node>) as map<text, Node> := {
 	marked: map<text, Node> = {}
-	for hole in bindings.keys { marked[hole] = if hole.ends_with(REST_MARK) then with_parts(bindings[hole], part => with_fact(part, TYPED_HOLE, True)) else with_fact(bindings[hole], TYPED_HOLE, True) }
+	for hole in bindings.keys { marked[hole] = if hole.ends_with(REST_MARK) then with_parts(bindings[hole], marked_typed) else marked_typed(bindings[hole]) }
 	marked
 }
+# code marked typed already; ø stays bare, as typing leaves it, so a later stage types it as ø
+marked_typed(code: Node) as Node := if code is Empty then code else with_fact(code, TYPED_HOLE, True)
 # the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits; two equally
 # specific ones are refused
 rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
