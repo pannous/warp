@@ -7,7 +7,6 @@ use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
 use "tokens.wap"
 use "../language.wap"
-use "../analyze/declarations.wap"
 
 # the assignment a compound one means, `+=` is `=` of `+`
 ASSIGNMENT = "="

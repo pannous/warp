@@ -117,6 +117,14 @@ PATTERN_HOLES = "pattern_holes"
 PATTERN_TAKEN = "pattern_taken"
 # a pattern a declared pattern's call wrote, `Record(n, f, v)` in an arm, carries the pattern's name
 SHAPE_OF = "shape_of"
+# the program's statements: lines, `;` statements, or the one statement; a run
+# within the run (`a; b` on a line of many, or the two statements a rule wrote) gives its own
+top_level_statements(program: Node) as list<Node> := match program {
+	List(items, Bracket.None, separator) => if is_run(separator) then items.flat_map(top_level_statements) else [program]
+	_ => [program]
+}
+# the separators of statements: lines and `;`
+is_run(separator: Separator) as bool := separator == Separator.Newline or separator == Separator.Semicolon
 # a list's items, none of any other node
 items_of(n: Node) as list := match n {
 	List(items, bracket, separator) => items
