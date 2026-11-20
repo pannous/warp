@@ -150,17 +150,7 @@ trim(t: text): text := {
 }
 is_blank_byte(b: int): bool := b in BLANK_BYTES
 # t with its letters A to Z in lower case: `"Hé ABC".lower()` is "hé abc"
-lower(t: text): text := {
-	out = ""
-	start = 0
-	for at in 0 .. byte_count(t) {
-		if byte_at(t, at) >= UPPER_A_BYTE and byte_at(t, at) <= UPPER_Z_BYTE {
-			out = out + bytes_between(t, start, at) + text(char(byte_at(t, at) + CASE_DISTANCE))
-			start = at + 1
-		}
-	}
-	out + bytes_between(t, start, byte_count(t))
-}
+lower(t: text): text := t.bytes.map(b => byte_text(if b >= UPPER_A_BYTE and b <= UPPER_Z_BYTE then b + CASE_DISTANCE else b)).join("")
 # the parts of t between its separators, in order: `"a/b".split("/")` is ["a", "b"], a text without one is its only part
 split(t: text, separator: text): list<text> := {
 	parts: list<text> = []

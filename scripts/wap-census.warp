@@ -26,16 +26,18 @@ use "../wap/core/analyze/types.wap"
 use "../wap/core/analyze/variables.wap"
 use "../wap/core/emit/emitter.wap"
 
-# the folder of the preload, as the census is given its files and as their places spell them
-PRELOAD_FOLDER = "wap/preload/"
+# wap's folder and its preload's, from the tree's root, where the census runs and as its files are given and their
+# places spell them (git ls-files), wherever the census itself lies or was compiled to
+WAP_FOLDER = "wap"
+PRELOAD_FOLDER = WAP_FOLDER + "/preload/"
 language = base_language()
-preload = language_loaded(language, program.folder + "/../wap")
+preload = language_loaded(language, WAP_FOLDER)
 library_scope = scope_of(preload_scope(declarations_of(preload)))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
 # the names every file given and the modules it uses define, known before any is read, as the compiler does
 # (core/pipeline.wap program_words_defined)
-for file in args { program_words_defined(language, file) }
+for file in args { program_words_defined(language, read_notation(file)) }
 
 # Each module read, declared and prepared once a run, shared by every file and function probe that uses it: a file's
 # modules are the same values whichever file reaches them, as the compiler makes them (core/pipeline.wap
@@ -75,7 +77,7 @@ prepared_once(module: Module, modules: list<Module>) as list := {
 # so it changes how no other form types; a top-level statement's refusal is kept with its module. A module that cannot
 # be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
 # with the file).
-class Run { state: TypingState, frame: TypeFrame, joined: map<text, list> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
+class Run { state: TypingState, frame: TypeFrame, joined: map<text, list<Node>> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list<Module>) := {
 	global run
@@ -356,14 +358,15 @@ CALLS = "this calls "
 class Family { root: Refusal, name: text, size: int = 1 }
 refused_name(refusal: Refusal) as text := if refused_names.has(refusal.key) then refused_names[refusal.key] else named_in(refusal, run.state)
 called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
-family_of(root: Refusal, refusals: list) as Family := {
+# the functions not yet blocked whose refusals name a blocked one as their callee
+callers_of(blocked: list<text>, refusals: list<Refusal>) as list<text> := refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked)).map(refused_name).unique
+family_of(root: Refusal, refusals: list<Refusal>) as Family := {
 	family = Family(root, refused_name(root))
 	blocked = [family.name]
-	grown = yes
-	while grown {
-		callers = refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked))
-		blocked = blocked + callers.map(refused_name).unique
-		grown = callers is not empty
+	callers = callers_of(blocked, refusals)
+	while callers is not empty {
+		blocked = blocked + callers
+		callers = callers_of(blocked, refusals)
 	}
 	family.size = #blocked
 	family
@@ -371,7 +374,7 @@ family_of(root: Refusal, refusals: list) as Family := {
 families = run.state.refusals.filter(each => called_refused(each) == "").map(root => family_of(root, run.state.refusals)).sorted(by: family => -family.size)
 # who unblocks a family: the owner of its root's file, by the longest path of the Owners table (notes/wap.md "Owners")
 # that the file starts with; a root no row names says so, for warp-lead to give it one
-OWNERS_TABLE = "/../notes/wap.md"
+OWNERS_TABLE = "notes/wap.md"
 OWNERS_COLUMN = " | "
 NO_OWNER = "no owner in notes/wap.md"
 class Owned { path: text, owner: text }
@@ -380,7 +383,7 @@ owned_in(row: text) as list<Owned> := {
 	if #cells != 3 { return [] }
 	cells#3.split("; ")#1.replace(" |", "").split(", ").map(path => Owned("wap/" + path, cells#2))
 }
-owners_table: text = read(program.folder + OWNERS_TABLE)
+owners_table: text = read(OWNERS_TABLE)
 owned = owners_table.split("\n").filter(line => line.starts_with("| ")).flat_map(owned_in)
 owner_of(file: text) as text := {
 	rows = owned.filter(each => file.starts_with(each.path)).sorted(by: each => -#each.path)
