@@ -38,9 +38,9 @@ DEFINITION = "="
 NO_HEAD = ""
 # the head of a pattern that is one word, before the word
 WORD_HEAD = "word "
-# what a rule writes that writes nothing, `=> ()`, a mark its list drops: not ø, a value a rule may write,
-# `rule ø => Empty()`
-NOTHING_WRITTEN = symbol("()")
+# what a rule writes that writes nothing, `=> ()`: the empty statement sequence, whose no statements its list takes in
+# its place; not ø, a value a rule may write, `rule ø => Empty()`
+NOTHING_WRITTEN = List([], Bracket.None, Separator.Newline)
 
 # code after a stage's rules, and whether any of them fired
 class Fired { code: Node, fired: bool }
@@ -220,7 +220,7 @@ declares(items: list) as bool := items#1 == symbol(RULE_WORD) or items#1 == symb
 
 # A rule's result as the items it stands for in its list or block: a statement sequence, `A; B`, its statements; a row a
 # rule wrote, `$a, $rest...`, its items; none for a rule that wrote nothing, `()`. Each item keeps the rule that wrote it.
-spread(result: Node) as list := if result == NOTHING_WRITTEN then [] else spread_items(result) ?? [result]
+spread(result: Node) as list := spread_items(result) ?? [result]
 # the items a rule's sequence or row stands for, ø for any other result
 spread_items(result: Node) as list? := match result {
 	List(items, Bracket.None, separator) => if STATEMENT_SEPARATORS.contains(separator) or separator == Separator.Comma and fact_of(result, RULE) != ø then items.map(item => with_rule_of(item, result)) else ø
