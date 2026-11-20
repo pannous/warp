@@ -57,4 +57,12 @@ files=(
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
 done
+# Stage 2: the module wap makes of its own compiler compiles a program, and that program runs. The module finds the
+# preload beside itself, so the stage folder holds a copy (the host reads no link out of a folder).
+self_built_hello() {
+	cp -R "$root/wap/preload" "$root/wap/kernel" "$stage/"
+	printf 'print "hello from wap"\n' >"$stage/hello.wap"
+	$warp "$compiler" "$compiler" "$stage/wap.wasm" 2>&1 && $warp "$stage/wap.wasm" "$stage/hello.wap" "$stage/hello.wasm" 2>&1 && $warp "$stage/hello.wasm" 2>&1
+}
+check "the compiler wap makes of itself compiles a program that runs" "$(self_built_hello)" "hello from wap"
 exit $((failures > 0))
