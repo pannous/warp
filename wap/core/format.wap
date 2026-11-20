@@ -143,11 +143,9 @@ phrase_item_text(language: Language, n: Node, last: bool, in_phrase: bool, sign_
 	formatted(language, n)
 }
 
-# whether a number is below its own zero: the `is` narrows it to an int or a float, so each compares with its type
-below_zero(value: number) as bool := if value is int then value < 0 else value < 0.0
 # a negative number, or a call of an operator that is prefix and infix alike, applied as prefix
 led_by_sign(language: Language, n: Node) as bool := match n {
-	Number(value) => below_zero(value)
+	Number(value) => value < 0
 	Call(called, arguments) => #arguments == 1 and group_of(language, formatted(language, called), Fixity.Infix) != "" and group_of(language, formatted(language, called), Fixity.Prefix) != ""
 	_ => no
 }
