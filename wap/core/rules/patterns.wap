@@ -33,10 +33,8 @@ use "../language.wap"
 TYPE_FACT = "type"
 # the shapes a hole can ask for, beside Node and the declared patterns
 SHAPES = ["Symbol", "List", "Key", "Text", "Number", "Char"]
-# the groups that are Empty when they hold nothing, `()` and `{}`: the host collapses empty round and curly groups to
-# ø; only their falsiness is pinned, so wap may keep the bracket once it reads its own Nodes. A rule's group of no
-# items fits either
-EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
+# the groups that are Empty when they hold nothing, `()`: a rule's round group of no items fits it
+EMPTY_GROUPS = [Bracket.Round]
 # the separators that end a statement, one for matching: a block's statements fit a pattern whether `;` or line ends
 # part them, and a pattern that parts them by spaces, `{ $a... $b... }`, fits either
 STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]

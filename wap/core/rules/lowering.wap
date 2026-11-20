@@ -61,8 +61,7 @@ lowered_form(language: Language, n: Node) as Node := match n {
 	True => n
 	False => n
 	Empty => n
-	# empty braces, a map with no entries yet
-	Symbol(name) => if name == EMPTY_BRACES then EmptyMap() else n
+	Symbol(name) => n
 	Call(called, arguments) => operator_lowered(language, n, text(called), arguments)
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => if head is symbol then Key(head, Op.None, fields_lowered(language, items, separator, n)) else not_lowered(n)
 	# a type written with its parts, `list<Node>`, stays as written: a named argument's or a case's field's type

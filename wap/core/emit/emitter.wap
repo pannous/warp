@@ -127,7 +127,6 @@ code(form: Node, p: Program, f: Frame) as Code := match form {
 	Break() => Code(NEVER, instruction(BRANCH, [jump(form, f, EXIT_LABEL)]))
 	Continue() => Code(NEVER, instruction(BRANCH, [jump(form, f, NEXT_LABEL)]))
 	List(entries, Bracket.Curly, separator) => map_code(form, entries, p, f)
-	EmptyMap() => map_code(form, [], p, f)
 	List(items, Bracket.Square, separator) => {
 		item = list_item(type_of(form))
 		Code(layout(form, p), list_made(item, items_fitted(item, items, p, f), p))
