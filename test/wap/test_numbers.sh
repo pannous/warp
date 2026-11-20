@@ -48,4 +48,8 @@ check "a value made into its own type is itself" "$(ran identity 'print text(int
 check "a value as a bool: no and 0 written as text are no, any other value its truth" "$(ran bool_of 'print text(bool("no")) + " " + text(bool("0")) + " " + text(bool("yes")) + " " + text(bool("")) + " " + text(bool([])) + " " + text(bool(3)) + " " + text("no" as bool)')" "no no yes no no yes no"
 check "a float's whole part, toward zero" "$(ran int_of_float 'print text(int(2.7)) + " " + text(2.7 as int) + " " + text(int(-2.7))')" "2 2 -2"
 check "rem and ⦼ give the truncated remainder, of the dividend's sign (wiki/Footguns.md)" "$(ran truncated 'print text(-7 rem 3) + " " + text(-7 ⦼ 3) + " " + text(7 rem -3)')" "-1 -1 1"
+# an int widens to a float where one is wanted (wiki/type.md "an int widening to a float is always fine")
+check "an int widens to a float: compared, added, passed, and a number against an int" "$(ran widening 'below(v: number) as bool := v < 0
+half(x: float) as float := x / 2.0
+print text(2.5 < 0) + " " + text(2.5 + 1) + " " + text(half(3)) + " " + text(below(-2.5)) + " " + text(below(2))')" "no 3.5 1.5 yes no"
 exit $((failures > 0))
