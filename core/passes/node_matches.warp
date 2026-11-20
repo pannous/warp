@@ -10,6 +10,7 @@ use "walk.warp"
 use "../parsing/phrase_blocks.warp"
 use "enum_declarations.warp"
 use "../analysis/words.warp"
+use "../analysis/diagnostics.warp"
 
 # a List's items as a list, a curly block's too (`{a}` is no list to `is list`): the node's own items, never a copy
 listed_reader = "listed"
@@ -189,6 +190,7 @@ arm_test(pattern: list, subject: Node) as Node := {
 # the kind test of a case, then the tests of its parts, those of a nested case's after the kind test it reads them by
 part_tests(pattern: list, subject: Node) as list := {
 	readers = case_readers[name_of(pattern#1)]
+	if name_of(pattern#1) in unseen_cases { diagnose(call_of("unseen_case_arm", [name_of(pattern#1)]), pattern#1) }
 	tests = [kind_test(name_of(pattern#1), subject)]
 	for i in 1 to #readers {
 		part = pattern#(i + 1)

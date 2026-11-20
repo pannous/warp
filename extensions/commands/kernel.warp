@@ -15,7 +15,6 @@ CLOSURE_CALL_PREFIX = "closure_call_"
 
 # the kernel form n is written in, or the surface form it still is: `if … then …` without else, `a ?: b`, `x += 1`
 form_of_node(n: Node) as text := match n {
-	Meta(node, _): form_of_node(node)
 	Symbol(name): if name in JUMP_WORDS then "loop" else "name"
 	Key(left, op, right): key_form(left, op, right)
 	List(items, bracket, separator): list_form(n)
@@ -58,7 +57,6 @@ def forms_counted(n: Node, counts: map, firsts: map) {
 # the parts of n that are code of their own: an `if`'s and a loop's condition and branches, not the keys that
 # spell them; a definition's body, not its head; an assignment's place without its type, `x: int = 1`
 form_parts(n: Node) as list := match n {
-	Meta(node, _): form_parts(node)
 	Key(left, Op.Else, right): if is_key(left, Op.Then) and is_key(key_of(left), Op.If) then [value_of(key_of(left)), value_of(left), right] else [left, right]
 	Key(left, Op.Then, right): if is_key(left, Op.If) then [value_of(left), right] else [left, right]
 	Key(left, Op.Do, right): if is_key(left, Op.While) then [value_of(left), right] else [left, right]
