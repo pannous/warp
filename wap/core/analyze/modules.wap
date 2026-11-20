@@ -37,7 +37,7 @@ declaration_name(declaration: Node) as Node := match declaration {
 }
 # a declaration as two modules may not both write it: `twice(int)`, a type's or a variable's bare name
 declared_alike(declaration: Node) as text := match declaration {
-	Key(name, Op.Colon, signature) => if signature is Empty then text(name) else "${name}(${items_of(signature).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
+	Key(name, Op.Colon, signature) => if not declares_function(declaration) then text(name) else "${name}(${declared_parameters(declaration).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
 	_ => text(declaration_name(declaration))
 }
 # A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
