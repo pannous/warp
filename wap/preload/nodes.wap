@@ -76,16 +76,17 @@ int_in(n: Node) := match n {
 # n where it was written, its facts kept
 positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
 
-# the facts a stage marked n with, and n with one more
+# the facts a stage marked n with; n with one more; n with exactly these, where it was written kept
 attributes_of(n: Node): list<Node> := match n {
 	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
 }
 # a Meta's data past its line and column
 facts_in(data: list<Node>): list<Node> := data[META_FACTS - 1 ..]
-with_attribute(n: Node, fact: Node): Node := match n {
-	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
-	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
+with_attribute(n: Node, fact: Node): Node := with_attributes(n, attributes_of(n) + [fact])
+with_attributes(n: Node, facts: list<Node>): Node := match n {
+	Meta(node, List(data, bracket, separator)) => Meta(node, List(data.take(META_FACTS - 1) + facts, bracket, separator))
+	_ => Meta(n, meta_data(NO_LINE, NO_LINE, facts))
 }
 
 # the node a Meta wraps, any other node itself

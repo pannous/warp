@@ -38,7 +38,7 @@ use "../language.wap"
 
 
 # the program as one Block of its statements
-lowered_program(language: Language, program: Node) as Block := staged(program, whole => lowered_block(language, statements_of(whole)))
+lowered_program(language: Language, program: Node) as Block := replaced(program, lowered_block(language, statements_of(program)))
 
 # Statements as one Block. A Variable alone, `global x`, is no code: it says which variable x is in the whole block,
 # the Block's fact VARIABLES, [x: global] (core/analyze/scope.wap)
@@ -53,7 +53,7 @@ variable_named(statement: Node) as Node := match statement {
 }
 
 # code as a kernel form, placed where the code was written (core/stage.wap)
-lowered(language: Language, n: Node) as Node := staged(n, form => lowered_form(language, form))
+lowered(language: Language, n: Node) as Node := replaced(n, lowered_form(language, n))
 lowered_form(language: Language, n: Node) as Node := match n {
 	Text(value) => n
 	Number(value) => n

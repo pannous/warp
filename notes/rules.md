@@ -41,7 +41,7 @@ termination, the stage-1 walk). Interface agreed with the lead 2026-11-17.
   waits under the shape it matches; only a bare hole is tried everywhere. Among fitting rules the most specific (most literal parts) wins;
   two equally specific ones are refused naming both.
 - **Walk:** top-down; a node is rewritten until no rule fits, then its parts. Built nodes take the rewritten code's
-  place (stage.wap `staged`) and carry the fact RULE, the rule's written head.
+  place (stage.wap `replaced`) and carry the fact RULE, the rule's written head.
 - **Modules:** a used module's rules apply to the program that uses it (`use` and `rule` build the language the
   program is written in): the `use` lines are read before shaping, each module is declared after the ones it uses.
 - **Hygiene:** a name a template binds by itself (`t = $a`) is made fresh per use (`t·3`, fact `fresh`).

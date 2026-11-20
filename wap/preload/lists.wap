@@ -99,6 +99,8 @@ join(xs: list<T>, separator: text): text := {
 # a list's text, its items' texts in brackets: `text([1, 2])` is "[1, 2]"
 text(xs: list<T>): text := "[" + xs.join(", ") + "]"
 
+# the items of a list of optionals that hold a value: `[1, ø, 3].compact()` is [1, 3]
+compact(xs: list<T?>): list<T> := xs.filter(x => x != ø)
 # the first n items, and the items after them: `[1, 2, 3].take(2)` is [1, 2], `[1, 2, 3].drop(2)` is [3]
 take(xs: list<T>, n: int): list<T> := xs[0 .. n]
 drop(xs: list<T>, n: int): list<T> := xs[min(n, #xs) .. #xs]
