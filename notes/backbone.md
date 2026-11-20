@@ -364,9 +364,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
   char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
   a typed rule sees only its hole's type.
-- **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
-  §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
-  `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
@@ -457,10 +454,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   preload's Records are declared, so they can't look the cases up. Paid off when templates see the declared Records:
   the table goes for that lookup.
 
-- **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
-  drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
-  List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
-  mark becomes the empty sequence.
 - **Overloads rank by weights, not by subsumption** (wap/core/analyze/calls.wap most_specific, ranked: typing weight,
   written structure, derived), and `text(1 to 3)` is refused as reading two ways. Reason: paused for the self-build
   census (user 2026-11-19). The subsumption ranking under the one conversion is built and parked on branch

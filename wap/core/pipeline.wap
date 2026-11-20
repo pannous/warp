@@ -2,6 +2,7 @@
 # compiler and the census (scripts/wap-census.warp), so neither can skip a stage.
 use "../kernel/forms.wap"
 use "stage.wap"
+use "errors.wap"
 use "parse/reader.wap"
 use "parse/operators.wap"
 use "parse/operator_table.wap"
@@ -42,7 +43,12 @@ file_words_defined(language: Language, code: Node) := {
 }
 # a file of the wap folder, its path spelled as a used module's is, so a place names its file one way
 in_folder(folder: text, file: text) as text := normalized_path(folder + "/" + file)
-read_notation(file: text) as Node := notation(read(file), file)
+read_notation(file: text) as Node := readable(notation(read(file), file))
+# notation the reader could read, an Error of it refused where the reader failed (core/parse/reader.wap notation)
+readable(code: Node) as Node := match code {
+	Error(Key(Text(why), op, failure)) => refused(failure, why)
+	_ => code
+}
 
 # read code with its operators read, its spellings rewritten by the shape rules, then declared
 declared_code(language: Language, code: Node) as Node := declared_operated(language, operated_program(language, code))
