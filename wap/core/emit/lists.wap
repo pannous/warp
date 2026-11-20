@@ -38,11 +38,11 @@ counted_items(p: Program) as list<int> := instruction(STRUCT_GET, [list_base(p.m
 # a new list of items of a type
 list_made(item: Node, items: list<Code>, p: Program) as list<int> := i32_const(#items) + items.flat_map(each => each.instructions) + instruction(ARRAY_NEW_FIXED, [item_array(item, p.m, p.records) ?? refused(item, NO_ITEM_LAYOUT), #items]) + instruction(STRUCT_NEW, [items_list(item, p.m, p.records) ?? refused(item, NO_ITEM_LAYOUT)])
 
-# The helpers of list_item and list_set, an item at a place counted from 0: locals 0 the list, 1 the place, for
+# The helpers of list_item and list_set, an item at a place counted from 0, an int: locals 0 the list, 1 the place, for
 # list_set 2 the value. A place at or past the count raises.
-item_reading_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32], [item_layout(type, p)], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + instruction(ARRAY_GET, [items_array(type, p)]))
-item_setting_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I32, item_layout(type, p)], [], [], place_checked(type, p) + items_in(type, 0, p) + local_get(1) + local_get(2) + instruction(ARRAY_SET, [items_array(type, p)]))
-place_checked(type: Node, p: Program) as list<int> := local_get(1) + count_in(type, 0, p) + I32_GE_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
+item_reading_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I64], [item_layout(type, p)], [], place_checked(type, p) + items_in(type, 0, p) + int_local(1) + instruction(ARRAY_GET, [items_array(type, p)]))
+item_setting_function(p: Program, type: Node) as int := added_function(p.m, [list_layout(type, p), I64, item_layout(type, p)], [], [], place_checked(type, p) + items_in(type, 0, p) + int_local(1) + local_get(2) + instruction(ARRAY_SET, [items_array(type, p)]))
+place_checked(type: Node, p: Program) as list<int> := int_local(1) + count_in(type, 0, p) + I32_GE_U + IF + VOID_BLOCK + raised(NO_SUCH_ITEM, p) + END
 
 # The helper of list_add: the item put at the count, the array first copied into a larger one when full. Its locals:
 # 0 the list, 1 the item, 2 the larger array.

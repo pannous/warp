@@ -35,6 +35,7 @@ smoke_only= queue=
 tree=$(cd "$tree" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")/.." && pwd)
 source "$scripts/lib/platform.sh"
+checkouts_linked "$tree" || exit 1
 MAIN_WARP=$warp_binary
 export WARP_BUILD_FIRST=1
 batch=$tree/data/integrate/batch

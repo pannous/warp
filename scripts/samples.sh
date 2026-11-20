@@ -40,6 +40,7 @@ CHECK_LINE='^# check: '
 HOST_LINE='^# host: '
 
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
+checkouts_linked "$tree" || exit 2
 shift $(( $# > 0 ))
 results=$tree/data/samples
 mkdir -p "$results/out"
@@ -50,10 +51,10 @@ mkdir -p "$results/out"
 "$tree/scripts/link-packages.sh" "$tree" >/dev/null || echo "samples: no packages linked: the package samples fail" >&2
 # the generated assets git ignores (ez_forest's tree meshes), published beside the release
 "$tree/scripts/sample-assets.sh" fetch >/dev/null || echo "samples: no assets fetched: ez_forest and tree_study fail" >&2
-# the compiled modules of test/fixtures/compiled (wasm/import_compiled links shapes.wasm, samples/wasm/shapes.wasm a
-# link to it), built behind this runtime.wasm
-for fixture in "$tree"/test/fixtures/compiled/*.warp; do
-	(cd "$tree" && "$WARP" build --module "${fixture#"$tree"/}" >/dev/null) || echo "samples: no ${fixture%.warp}.wasm: the samples and tests importing it fail" >&2
+# the compiled modules samples import, built from their sources beside them (wasm/import_compiled imports shapes), and
+# those of test/fixtures/compiled the tests import, built behind this runtime.wasm
+for module in "$tree"/samples/wasm/shapes.warp "$tree"/test/fixtures/compiled/*.warp; do
+	(cd "$tree" && "$WARP" build --module "${module#"$tree"/}" >/dev/null) || echo "samples: no ${module%.warp}.wasm: the samples and tests importing it fail" >&2
 done
 
 wall_seconds() {
