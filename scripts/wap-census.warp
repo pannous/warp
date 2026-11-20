@@ -312,6 +312,7 @@ copied(base: TypingState) as TypingState := {
 	s.definition_keys = base.definition_keys
 	s.records = base.records
 	s.functions = base.functions + []
+	for key in base.instances.keys { s.instances[key] = base.instances[key] + [] }
 	s.globals = base.globals + []
 	s.lambdas = base.lambdas + []
 	s.captured = base.captured + []

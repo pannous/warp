@@ -69,6 +69,8 @@ class TypingState {
 	definition_keys: NameIndex = NameIndex()
 	records: Records = Records()
 	functions: list<TypedFunction> = []
+	# the same typed functions by their function's key, where a call finds the instance it reuses
+	instances: map<text, list<TypedFunction>> = {}
 	globals: list<Binding> = []
 	# the keys of the globals functions read before the statements that give them their values, until those statements
 	unset: list<text> = []
@@ -89,6 +91,12 @@ class TypingState {
 	refusals: list<Refusal> = []
 	# the ids of the names typing writes once for the whole program (core/stage.wap DEFINER)
 	ids: Definers = Definers(".")
+}
+# a function's typed instances so far, and one more
+instances_of(key: text, s: TypingState) as list<TypedFunction> := if s.instances.has(key) then s.instances[key] else []
+instance_added(typed: TypedFunction, s: TypingState) := {
+	s.functions += [typed]
+	s.instances[typed.function.key] = instances_of(typed.function.key, s) + [typed]
 }
 # A name typing writes for a definer, with that definer's id: a λ its Fn's, a dispatcher its first candidate's, a
 # dispatcher's parameters its own; the name tells it from the definer and its siblings
