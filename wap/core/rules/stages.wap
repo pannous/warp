@@ -88,6 +88,7 @@ declaration_taken(language: Language, called: text, arguments: list) as list<Nod
 		rule_added(language, arguments#1, if #pattern == 1 then pattern#1 else List(pattern, Bracket.None, Separator.Space), arguments#2, if guarded then spelling_written(words.last) else "")
 		return []
 	}
+	if keyword == RULE_WORD or keyword == PATTERN_WORD { refused(arguments#1, "this ${keyword} reads as `${called}` with the ${keyword} on its left: put its pattern in brackets, `rule ($a = $b) => …`") }
 	ø
 }
 
