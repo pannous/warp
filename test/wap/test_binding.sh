@@ -56,4 +56,14 @@ k = Sep
 print text(#[Sep.None, Sep.Space])
 print text(k == Kind.Sep)')" "2
 yes"
+# a function value inside a function that declares `global x` reads the program's x, no capture of it (wiki/Footguns.md
+# "Closures capturing loop variables": an explicit `global` binds late)
+check "a function value reads a global its function names" "$(ran global_lambda 'count = 0
+bump() := {
+	global count
+	count = count + 1
+	[1, 2].map(x => x + count)
+}
+bump()
+print(text(bump()) + " " + text(count))')" "[3, 4] 2"
 exit $((failures > 0))

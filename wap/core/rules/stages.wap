@@ -183,7 +183,8 @@ shaped_program(language: Language, program: Node) as Node := {
 	terminating(language, language.typed_rules)
 	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them; a
 	# program of rules only is an empty block, as Empty carries no facts
-	with_facts_of(rewritten_by(language, language.shape_rules, rest).code ?? Block([]), program)
+	shaped = rewritten_by(language, language.shape_rules, rest).code ?? Block([])
+	with_facts_of(if shaped is Empty then Block([]) else shaped, program)
 }
 
 # Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none
