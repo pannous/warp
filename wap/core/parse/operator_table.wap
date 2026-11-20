@@ -7,6 +7,7 @@ use "../../kernel/forms.wap"
 use "../../preload/operators.wap"
 use "tokens.wap"
 use "../language.wap"
+use "../analyze/declarations.wap"
 
 # the assignment a compound one means, `+=` is `=` of `+`
 ASSIGNMENT = "="
@@ -108,10 +109,46 @@ group_of_any(language: Language, spelling: text) as text := {
 	""
 }
 
+# ---- a program's own words
+
+# A word a program defines is its own, no alias of another word (wiki/alias.md "ambiguous resolution"): a program's
+# `length` stays apart from `count`. What a file defines at its top, a function or a global, is the whole program's
+# (defined_words); a definition's parameters and what its value defines are its own while it is read (local_words).
+
+# the names code defines at its top, each a key of words
+words_defined(code: Node, words: map<text, bool>) := {
+	for statement in top_level_statements(code) { for word in named_by(statement) { words[word] = yes } }
+}
+# the side of a definition that names what it defines, ø for any other node
+definition_side(n: Node) as Node? := match n {
+	Key(left, op, right) => if op in [Op.Assign, Op.Define] then left else ø
+	_ => ø
+}
+# the names a definition defines, `f` of `f(x) := …`; its parameters, x
+named_by(n: Node) as list<text> := names_of(definition_side(n) ?? return [])
+parameters_defined(n: Node) as list<text> := parameters_named(definition_side(n) ?? return [])
+# the words a definition's own scope holds: its parameters and every name defined inside it, at any depth
+local_words_of(n: Node) as list<text> := if definition_side(n) == ø then [] else parameters_defined(n) + direct_parts(n).flat_map(names_within)
+names_within(n: Node) as list<text> := named_by(n) + parameters_defined(n) + direct_parts(n).flat_map(names_within)
+# the name a defining side names: a name, a typed one, a function's, `f(x) as int`'s f
+names_of(side: Node) as list<text> := match side {
+	Symbol(spelling) => [spelling]
+	Key(name, op, value) => if op in [Op.Colon, Op.Assign, Op.None] then names_of(name) else []
+	List(items, Bracket.None, Separator.Space) => names_of(items#1)
+	_ => []
+}
+# the parameters a defining side names, `f(x, y: int = 1)`'s x and y
+parameters_named(side: Node) as list<text> := match side {
+	Key(name, op, value) => if op == Op.None then items_of(value).flat_map(names_of) else if op == Op.Colon then parameters_named(name) else []
+	List(items, Bracket.None, Separator.Space) => parameters_named(items#1)
+	_ => []
+}
+
 # ---- spellings
 
 # the canonical word of a spelling written in that fixity: the spelling itself when no alias applies
 canonical(language: Language, spelling: text, fixity: Fixity) as text := {
+	if language.defined_words.has(spelling) or language.local_words.contains(spelling) { return spelling }
 	written = aliased(spelling, fixity)
 	if written != spelling { return written }
 	compound = compound_assignment(language, spelling)

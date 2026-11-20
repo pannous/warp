@@ -111,4 +111,8 @@ no"
 check "a list of a shape's values joins a list of the type it narrows" "$(ran shape_join 'xs: list<Node> = [Symbol("b")]
 ys = [Text("a")] + xs
 print(text(#ys))')" "2"
+check "a program's own length and count are two names; size still reads as count" "$(ran own_length 'scaled(length: int, count: int): int := length * 10 + count
+length = 3
+count = 4
+print text(scaled(length, count)) + " " + text(length) + " " + text([1, 2].size)')" "34 3 2"
 exit $((failures > 0))
