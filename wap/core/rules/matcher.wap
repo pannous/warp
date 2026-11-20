@@ -119,9 +119,9 @@ of_shape(m: Matcher, n: Node) as bool := {
 # one value, its result bool
 declared_as(m: Matcher, n: Node) as bool := {
 	if not (n is symbol) or is_hole(n) or not m.declarations!.by_name.has(spelling_written(n)) { return no }
-	functions = m.declarations!.by_name[spelling_written(n)].filter(declaration => declared_parameters(declaration) != ø)
+	functions = m.declarations!.by_name[spelling_written(n)].filter(declares_function)
 	if spelling_written(m.type) == FUNCTION_HOLE { return functions is not empty }
-	functions.any(declaration => #declared_parameters(declaration)! == 1 and declared_result(declaration) == symbol(BOOL_TYPE))
+	functions.any(declaration => #declared_parameters(declaration) == 1 and declared_result(declaration) == symbol(BOOL_TYPE))
 }
 
 # the stage a matcher's rule runs in, the latest any of its holes asks for: stage 3 on typed code

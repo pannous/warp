@@ -20,6 +20,7 @@ use "../stage.wap"
 use "../../kernel/forms.wap"
 use "../parse/atoms.wap"
 use "../analyze/declarations.wap"
+use "../analyze/modules.wap"
 use "lines.wap"
 use "../language.wap"
 
@@ -90,18 +91,21 @@ rule_added(language: Language, written: Node, pattern: Node, template: Node) := 
 	writes_nothing = ungrouped(template) is Empty
 	output = if writes_nothing then NOTHING_WRITTEN else ungrouped(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
-	typed = asks_value_type(compiled_pattern(language, normal))
+	stage = matcher_stage(compiled_pattern(language, normal))
+	typed = stage == TYPED_STAGE
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
 	if typed { normal = lowered(language, normal); output = if writes_nothing then output else lowered(language, output) }
 	matcher = compiled_pattern(language, normal)
 	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher))
-	rules = if typed then language.typed_rules else language.shape_rules
+	rules = rules_of_stage(language, stage)
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
 	# a rule loaded again, its file read twice, is the rule already there
 	if rules.by_head[rule.head].filter(other => "${other.written}" == "${written}") is not empty { return }
 	rules.by_head[rule.head].add(rule)
 	match normal { List(items, Bracket.None, Separator.Space) => words_told(language, items, #matcher.parts.filter(takes_block) > 0); _ => ø }
 }
+# the rules of a stage: 1 shapes, 2 declarations, 3 types
+rules_of_stage(language: Language, stage: int) as Rules := if stage == SHAPE_STAGE then language.shape_rules else if stage == DECLARED_STAGE then language.declared_rules else language.typed_rules
 # a phrase pattern's words told the operator stage: the first ones lead it, the words after the first are inner words
 words_told(language: Language, items: list, block: bool) := {
 	for word in list_heads(language, items) { if block or not language.phrase_words.leading.has(word) { language.phrase_words.leading[word] = block } }
@@ -179,11 +183,26 @@ size_of(n: Node) as int := 1 + direct_parts(n).map(size_of).sum()
 # a program's own rules and patterns taken in, then the program shaped by every shape rule loaded
 shaped_program(language: Language, program: Node) as Node := {
 	rest = rules_loaded(language, program)
-	terminating(language, language.shape_rules)
-	terminating(language, language.typed_rules)
+	for stage in [SHAPE_STAGE, DECLARED_STAGE, TYPED_STAGE] { terminating(language, rules_of_stage(language, stage)) }
 	# the rewritten program stands for the program: it keeps its facts, the file it was read from among them; a
 	# program of rules only is an empty block, as Empty carries no facts
 	with_facts_of(rewritten_by(language, language.shape_rules, rest).code ?? Block([]), program)
+}
+
+# A declared module rewritten by the declaration rules (stage 2), which read the declarations in force: the module's
+# own, then the library's, those of the modules it uses and the preload's. A name nothing at the top declares is no
+# function to them, so a local that hides a declared one is binding's to refuse (core/analyze/scope.wap)
+declared_rewritten(language: Language, module: Node, library: list) as Node := {
+	language.declarations.by_name = declarations_by_name(declarations_of(module) + library)
+	with_facts_of(rewritten_by(language, language.declared_rules, module).code ?? Block([]), module)
+}
+declarations_by_name(declarations: list) as map<text, list<Node>> := {
+	by_name: map<text, list<Node>> = {}
+	for declaration in declarations {
+		name = text(declaration_name(declaration))
+		by_name[name] = (if by_name.has(name) then by_name[name] else []) + [declaration]
+	}
+	by_name
 }
 
 # Code with a stage's rules applied top-down: a node rewritten by the most specific rule that fits, again until none

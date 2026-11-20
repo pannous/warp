@@ -5,3 +5,8 @@ rule $value as $type => $type($value)
 # a trait (wiki/trait.md), a Record of function-typed fields and no values: `trait shape { area(); scaled(by) }` is
 # Record(shape, [area: () -> any, scaled: (by) -> any], []); a class fits it by having each word (structurally)
 rule trait $name { ($word($parameters...))... } => Record($name, [($word: (($parameters...) -> any))...], [])
+# `a is not b` is not (a is b), never a test of `not b` (wiki/ambiguity.md "is not")
+rule $a is not $b => not ($a is $b)
+# a test of one value after `is`, declared with a result of yes or no, is a call of it: `xs is empty` is empty(xs); a
+# type's name stays a type test. A declaration rule: it asks what the word after `is` is declared as
+rule $x is $p: predicate => $p($x)
