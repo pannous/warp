@@ -21,9 +21,6 @@ use "shapes.wap"
 PLACE_WORD = "#"
 # the word that gives such a place its value, `m["a"] = 1` is `set(m, "a", 1)`
 SET_WORD = "set"
-# the word that shows a value in warp notation, the program's last value by it (core/analyze/types.wap typed_shown)
-SHOW_WORD = "show"
-PRINT_WORD = "print"
 # the word of an optional value known present, `x!` (named required): its value, raising when it is missing
 REQUIRED_WORD = "!"
 # the fact of a call of a function whose result is not known yet, its body calling itself: what to write instead

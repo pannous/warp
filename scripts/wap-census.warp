@@ -141,7 +141,7 @@ whole_once(file: text) as Outcome := {
 typed_whole(file: text) as Block := {
 	modules = modules_of(file)
 	whole = Block(modules.flat_map(module => prepared_once(module, modules)))
-	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
+	typed_by_rules(language, typed_program(whole, library_code), declarations_of(preload), library_code)
 }
 
 report(stage: text, message: text) := {
