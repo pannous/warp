@@ -7,8 +7,9 @@
 # with; no Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone.)
 # usage: scripts/refresh-seed.sh [--check] [--wap] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
 # --wap: wap's seed instead (notes/backbone.md "Architecture changes", step 1): wap-seed/wap.wasm beside the binary,
-# with the preload and kernel it reads beside it, compiles wap/compiler.wap; the stages must reach a fixpoint (C the
-# same bytes as B), and the release is wap-seed-<date>-<sha8> with wap-seed.lock. Old warp's seed is untouched by it.
+# with the preload and kernel it reads beside it, compiles wap/compiler.wap; the last stage is the new seed once it
+# compiles and runs hello (user 2026-11-20: no identical bytes asked), and the release is wap-seed-<date>-<sha8> with
+# wap-seed.lock. Old warp's seed is untouched by it.
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac: run it in
@@ -87,7 +88,6 @@ stage() {
 [ -z "$wap" ] || cp -R "${wap_beside[@]}" "$scratch/" || exit 2
 previous=$seed
 chosen=
-fixpoint=
 old_cost=
 new_cost=
 for name in $STAGES; do
@@ -96,13 +96,13 @@ for name in $STAGES; do
   [ "$previous" != "$seed" ] && chosen=$previous
   if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
     echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
-    fixpoint=1
     break
   fi
   previous=$scratch/$name.wasm
 done
+# wap's seed is the last stage built (at a fixpoint, the one before it: the same bytes)
+[ -z "$wap" ] || chosen=$previous
 [ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
-[ -z "$wap" ] || [ -n "$fixpoint" ] || { echo "refresh-seed: wap's stages reached no fixpoint (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
 # and the chosen stage runs a program (decision no-fixpoint): the last rebuild, by the chosen stage, runs hello; wap's
 # chosen stage compiles hello itself
 if [ -n "$wap" ]; then
