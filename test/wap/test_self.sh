@@ -5,7 +5,7 @@
 # 2026-11-18. Run it with bash test/wap/test_self.sh; the warp under test is WARP (default the warp on PATH)
 source "$(dirname "$0")/compile.sh"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
-# how long wap1 may take to compile wap's compiler (milestone 2, notes/backbone.md)
+# how many CPU seconds wap1 may take to compile wap's compiler (milestone 2, notes/backbone.md)
 SELF_COMPILE_SECONDS=60
 
 # what loading the module wap makes of a file of wap's own says: "loads", or the compiler's or the run's error
@@ -97,12 +97,13 @@ self_built_hello() {
 }
 check "the compiler wap makes of itself compiles a program that runs" "$(self_built_hello)" "hello from wap"
 # and compiles wap's compiler in under a minute (milestone 2, notes/backbone.md)
+# its CPU seconds (user and system), so the machine's load leaves the measure alone
 self_compile_time() {
 	wap1_built || return
-	local started=$(date +%s) seconds
-	$warp "$wap1" "$source_compiler" "$stage/self/wap2.wasm" 2>&1 || return
-	seconds=$(($(date +%s) - started))
-	[ $seconds -lt $SELF_COMPILE_SECONDS ] && echo "under a minute" || echo "$seconds s"
+	local cpu seconds TIMEFORMAT="%U %S"
+	cpu=$( { time $warp "$wap1" "$source_compiler" "$stage/self/wap2.wasm" >"$stage/self/compiled.txt" 2>&1; } 2>&1 ) || { cat "$stage/self/compiled.txt"; return; }
+	seconds=$(echo "$cpu" | awk '{ printf "%d", $1 + $2 }')
+	[ $seconds -lt $SELF_COMPILE_SECONDS ] && echo "under a minute" || echo "$seconds s CPU"
 }
 check "wap1 compiles wap's compiler in under a minute" "$(self_compile_time)" "under a minute"
 exit $((failures > 0))
