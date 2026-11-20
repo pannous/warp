@@ -113,8 +113,6 @@ SOURCE_FILE = "file"
 WRITTEN = "written"
 # a `{…}` the reader built from a block indented below its line, not one written there: `if c⏎\tbody`, not `Point{x: 1}`
 INDENTED = "indented"
-# empty braces as the reader reads them, one word: the host keeps no empty curly group, so `{}` could carry no facts
-EMPTY_BRACES = "{}"
 # what a declared pattern's builder carries on its name, so that binding finds the pattern through scope: its holes
 # in order, the Node pattern that takes it apart in an arm
 PATTERN_HOLES = "pattern_holes"

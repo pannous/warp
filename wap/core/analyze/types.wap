@@ -209,11 +209,6 @@ form_typed(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 	Return(value) => return_typed(n, value, s, f)
 	Break() => jumping(n)
 	Continue() => jumping(n)
-	# `{}`: the map its place wants, else a map of texts to an unknown type its first entry settles, as `[]`
-	EmptyMap() => {
-		wanted = base_or_self(expected)
-		with_type_of(n, if key_type(wanted) != ø then wanted else map_type(symbol(TEXT_TYPE), unknown_type(s)))
-	}
 	Record(name, fields, variants) => n
 	Key(head, Op.None, List(items, Bracket.Curly, separator)) => instance_typed(n, head, items, separator, s, f)
 	Get(subject, key) => if key is text then part_typed(n, subject, key, s, f, expected) else get_typed(n, subject, key, s, f)

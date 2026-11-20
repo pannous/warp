@@ -74,7 +74,6 @@ form_bound(n: Node, scope: Scope, depth: int) as Node := match n {
 	Return(value) => refitted(Return(bound(value, scope, depth)), n)
 	Break() => n
 	Continue() => n
-	EmptyMap() => n
 	Get(subject, key) => qualified_case(n, subject, key, scope) ?? refitted(Get(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	Item(subject, key) => refitted(Item(bound(subject, scope, depth), bound(key, scope, depth)), n)
 	List(items, Bracket.Square, separator) => refitted(List(all_bound(items, scope, depth), Bracket.Square, separator), n)

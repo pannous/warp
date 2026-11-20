@@ -476,6 +476,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`{}` is its own kernel form, EmptyMap** (wap/kernel/forms.wap), not Empty typed as the map wanted, as `[]` is an
   empty list (decided 2026-11-19). Reason: Empty carries no facts in warp's Node, so no TYPE can sit on it while old
   warp reads wap's source. Paid off when old warp no longer reads wap's source: `{}` reads as Empty, the form goes.
+  Paid off: `{}` reads as an empty curly list, typed by map_typed as `[]` by list_typed; EmptyMap and EMPTY_BRACES
+  are gone (wap-empty-map).
 - **An overloaded function is not a value yet**: `parts.map(text)` types only as `parts.map(each => text(each))`
   (shape_taking in analyze/function_values.wap). Reason: a value of a name with several definitions is refused until
   a written function type picks one; the self-build census needs the function typed now. Paid off when the expected

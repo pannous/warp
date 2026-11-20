@@ -51,10 +51,6 @@ pattern Record = (Record $name: Symbol $fields: List $variants: List)
 # (If c a b); with both parts of one type its value is the chosen part's, else it has none
 pattern If = (If $condition: Node $then_part: Node $else_part: Node)
 
-# a map with no entries yet, `{}`: its key and value types come from where it goes or what it is first given (a
-# map with entries is the curly list of its keys)
-pattern EmptyMap = (EmptyMap)
-
 # one arm of a Case: a pattern and the result when it fits the subject: `1 => "one"` is Arm(1, "one"), (Arm 1 "one")
 pattern Arm = (Arm $pattern: Node $result: Node)
 
