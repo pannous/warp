@@ -1,8 +1,0 @@
-# The literals' canonical words as their Node cases (wiki/Footguns.md; the aliases true, false, null … are rows of
-# preload/operators.wap): each word standing alone; a phrase it heads is another rule's
-rule yes => True()
-rule no => False()
-rule ø => Empty()
-
-# emptiness tested loosely (notes/first_principles.md): `if no xs` is `if xs is empty`
-rule no $x => $x is empty

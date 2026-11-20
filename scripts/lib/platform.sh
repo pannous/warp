@@ -73,6 +73,8 @@ sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64
 # a git-ignored link to the checkout (CI clones them there); one line each, <path in the tree> <checkout>
 LINKED_CHECKOUTS="
 samples $HOME/dev/angles/samples
+wap $HOME/dev/angles/wap/wap
+test/wap $HOME/dev/angles/wap/test/wap
 "
 # checkouts_linked <tree>: each of LINKED_CHECKOUTS is there in <tree> (the link, a CI clone, or an older commit's own
 # folder), linked to its checkout where missing; a folder of what runs left there before it moved goes to
