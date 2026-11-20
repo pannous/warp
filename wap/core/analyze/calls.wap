@@ -154,6 +154,16 @@ word_called(n: Node, word: text, given: list, expected: Node?, s: TypingState) a
 }
 # the definitions of functions of this name the typing stage holds
 definitions_named(name: text, s: TypingState) as list<Function> := items_named(s.definition_names, s.definitions, name, definition => definition.name)
+# a definition as typing reaches it: shaped, and bound if it is the library's (core/analyze/shapes.wap shaped_once),
+# kept in its place so it is shaped once
+reached(definition: Function, s: TypingState) as Function := {
+	if definition.shaped { return definition }
+	shaped = shaped_once(definition, s)
+	# the key's places indexed up to now, the list grown since included
+	items_named(s.definition_keys, s.definitions, definition.key, keyed => keyed.key)
+	for place in s.definition_keys.places[definition.key] { s.definitions[place] = shaped }
+	shaped
+}
 # a call's function, or a Get that calls one, marked with the function it calls
 calling(called: Node, chosen: TypedFunction) as Node := with_fact(with_binding(called, DefinitionKind.Function), DEFINED_AT, declared_name(signed_name(chosen)))
 # a class's maker given one map that none of its definitions takes, `person({name: "Ann"})`: the instance made from it
@@ -187,13 +197,13 @@ typed_from(key: text, s: TypingState) as text := {
 definition_keyed(key: text, s: TypingState) as Function? := {
 	keyed = items_named(s.definition_keys, s.definitions, key, definition => definition.key)
 	if #keyed > 1 { refused(symbol(key), "two definitions share the key ${key}") }
-	if keyed is empty then ø else keyed#1
+	if keyed is empty then ø else reached(keyed#1, s)
 }
 
 # The one definition that takes these typed arguments, by their types, then by the type expected; none or several
 # refused. A literal that reads both ways fits either: `"!"` a char or a text parameter.
 chosen_definition(n: Node, called: Node, scopes: list, given: list, expected: Node?, s: TypingState) as Function := {
-	candidates = scopes.flat_map(scope => scope)
+	candidates = scopes.flat_map(scope => scope).map(definition => reached(definition, s))
 	types = given.map(argument => value_of(argument, "to pass"))
 	dispatcher = dispatching(called, candidates, types, s)
 	if dispatcher != ø { return dispatcher }

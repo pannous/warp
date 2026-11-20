@@ -26,7 +26,7 @@ class KindRules { language: Language; scope: Scope }
 
 # the bound program typed, the typed rules firing as it is typed (a script's value is shown by one,
 # preload/sugar/calls.wap)
-typed_by_rules(language: Language, program: Block, library: list, preload: Block) as Block := {
+typed_by_rules(language: Language, program: Block, library: list, preload: Library) as Block := {
 	scope = block_scope(program, statements_in(program), scope_around(library, []), PROGRAM_DEPTH)
 	typed_program(program, preload, KindRules(language, scope))
 }
