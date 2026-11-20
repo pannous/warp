@@ -50,7 +50,7 @@ preload_scope(preload: list) as list<Definition> := preload.flat_map(declaration
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
 library_words(declaration: Node, depth: int) as list<Definition> := match declaration {
-	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then DefinitionKind.Global else DefinitionKind.Library, name, depth)]
+	Key(name, Op.Colon, signature) => [Definition(text(name), if signature is Empty then DefinitionKind.Global else DefinitionKind.Library, name, depth)]
 	Record(name, fields, variants) => definitions_made_by(declaration, Scope(), depth)
 	_ => refused(declaration, "a library declares names and records")
 }
@@ -222,9 +222,9 @@ parameter_definitions(parameters: List, depth: int) as list<Definition> := match
 # reads included (the function passes them on), each defining name once in the order first read; [] when it captures
 # nothing. A closure is built from them (core/emit/closures.wap).
 with_captures(function: Node, scope: Scope, depth: int) as Node := {
-	captured = []
+	captured: list<Node> = []
 	for definer in captured_definers(function) {
-		if from_enclosing_function(definer, scope, depth) and not identical_in(definer, captured) { captured = captured + [definer] }
+		if from_enclosing_function(definer, scope, depth) and not captured.any(other => same_definer(other, definer)) { captured = captured + [definer] }
 	}
 	with_fact(function, CAPTURES, List(captured, Bracket.Square, Separator.Comma))
 }
@@ -235,13 +235,12 @@ captured_definers(n: Node) as list<Node> := match n {
 }
 # whether a defining name belongs to a function around the one at depth, not to the program or the library
 from_enclosing_function(definer: Node, scope: Scope, depth: int) as bool := {
-	for definition in every_definition(scope) { if definition.definer === definer { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
+	for definition in every_definition(scope) { if same_definer(definition.definer, definer) { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
 	no
 }
-identical_in(n: Node, nodes: list) as bool := {
-	for other in nodes { if other === n { return yes } }
-	no
-}
+# whether two defining names are one definition's: by its id (core/stage.wap DEFINER), never by spelling, so a
+# parameter named as one around it is its own
+same_definer(a: Node, b: Node) as bool := fact_of(a, DEFINER) != ø and fact_of(a, DEFINER) == fact_of(b, DEFINER)
 
 # the name a parameter defines: `x`, or the x of `x: int`
 parameter_name(parameter: Node) as Node := if declared_name(parameter) is symbol then declared_name(parameter) else refused(parameter, "a parameter is a name, or a name and its type")
