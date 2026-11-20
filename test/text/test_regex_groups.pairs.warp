@@ -11,3 +11,5 @@
 'use regex; try { match_groups("a", "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)") } catch e { e.message }'	"find_all_groups: 10 groups in (a)(b)(c)(d)(e)(f)(g)(h)(i)(j), the host captures at most 9"
 'use regex; match_groups("[x](y)", "[[](x)[]][(]y[)]")'	["x"]
 'use regex; regex_group_count("([a-z])[(]x[)](b)")'	2
+# . is one character, a multi-byte one too (card core-regex-utf8)
+'use regex; [find_all("é😀a", "."), "😀" matches "^.$"]'	[["é", "😀", "a"], yes]

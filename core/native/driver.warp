@@ -327,6 +327,7 @@ srand48(seed: i64) from "c"
 sqrt(x: f64): f64 from "c"
 cbrt(x: f64): f64 from "c"
 regcomp(compiled: pointer, pattern: text, flags: i32): i32 from "c"
+setlocale(category: i32, locale: pointer): handle from "c"
 regexec(compiled: pointer, subject: pointer, count: i64, groups: pointer, flags: i32): i32 from "c"
 regerror(code: i32, compiled: pointer, buffer: pointer, size: i64): i64 from "c"
 regfree(compiled: pointer) from "c"
@@ -2623,6 +2624,9 @@ GROUPS = 10
 GROUP_BYTES = 160
 EXTENDED = 1
 ENHANCED = 256
+# the C library reads a pattern and its subject as UTF-8 characters, not bytes, in a UTF-8 LC_CTYPE (macOS: 2, Linux: 0)
+CHARACTER_CATEGORY_MACOS = 2
+CHARACTER_CATEGORY_LINUX = 0
 NOT_LINE_START = 1
 ANYREF = 7
 SQUARE_LIST = 1
@@ -2634,6 +2638,8 @@ regex_answered(caller: handle, context: handle, member: text, listed: pointer, r
 	subject = c_string(shown(caller, context, item_of(caller, context, listed, 1)))
 	pattern = shown(caller, context, item_of(caller, context, listed, 2))
 	compiled = allocate(REGEX_BYTES)
+	# `.` one character, `é` too: the regex reads UTF-8 (setlocale is the process's, the same each call)
+	if on_linux() { setlocale(CHARACTER_CATEGORY_LINUX, c_string("C.UTF-8")) } else { setlocale(CHARACTER_CATEGORY_MACOS, c_string("UTF-8")) }
 	code = regcomp(compiled, pattern, if on_linux() then EXTENDED else EXTENDED + ENHANCED)
 	if code != 0 {
 		message = allocate(PATH_BYTES)
