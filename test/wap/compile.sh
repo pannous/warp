@@ -8,13 +8,13 @@ source_compiler="$tree/wap/compiler.wap"
 compiler="$source_compiler"
 [ "$1" = --compiler ] && { compiler="$2"; shift 2; }
 # wap's compiler built by itself <n> times into <folder>: wap1.wasm by the source run by the old compiler, each next
-# one by the one before; prints the last module, or the failed step's error. A module reads its preload beside itself,
-# so the folder holds a copy (the host reads no link out of a folder)
+# one by the one before, a module the folder holds already kept; prints the last module, or the failed step's error.
+# A module reads its preload beside itself, so the folder holds a copy (the host reads no link out of a folder)
 compiler_built() {
 	local folder=$1 last=$2 built=$source_compiler n
 	mkdir -p "$folder" && cp -R "$tree/wap/preload" "$tree/wap/kernel" "$folder/" || return 1
 	for ((n = 1; n <= last; n++)); do
-		$warp "$built" "$source_compiler" "$folder/wap$n.wasm" 2>&1 || return 1
+		[ -f "$folder/wap$n.wasm" ] || $warp "$built" "$source_compiler" "$folder/wap$n.wasm" 2>&1 || return 1
 		built="$folder/wap$n.wasm"
 	done
 	echo "$built"

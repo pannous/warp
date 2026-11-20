@@ -46,6 +46,7 @@ source "$here/compile.sh"
 # --stage <n>: the compiler under test is wap<n>, wap built by itself n times (milestone 2: the tests pass with wap2)
 module=
 if [ -n "$built" ]; then
+	rm -rf "$results/stage"
 	module=$(compiler_built "$results/stage" "$built") || { echo "wap$built: $module"; exit 1; }
 	compiler=$module
 fi

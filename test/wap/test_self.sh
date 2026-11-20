@@ -105,4 +105,11 @@ self_compile_time() {
 	[ $seconds -lt $SELF_COMPILE_SECONDS ] && echo "under a minute" || echo "$seconds s"
 }
 check "wap1 compiles wap's compiler in under a minute" "$(self_compile_time)" "under a minute"
+# and the compiler reaches a fixed point: wap3 builds wap4 byte for byte as wap2 built wap3 (milestone 2)
+fixed_point() {
+	local wap4
+	wap4=$(compiler_built "$stage/self" 4) || { echo "$wap4"; return; }
+	cmp -s "$stage/self/wap3.wasm" "$wap4" && echo "the same bytes" || echo "wap3 and wap4 differ"
+}
+check "wap3 and wap4, each built by the one before, are the same bytes" "$(fixed_point)" "the same bytes"
 exit $((failures > 0))
