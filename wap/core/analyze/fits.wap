@@ -58,9 +58,10 @@ shape_base(type: Node) as Node? := narrowed_type(base_of_optional(type) ?? type)
 # Whether a typed node's value is of the type a typed rule's hole wants (a stage-3 rule, decision hole-types:
 # `$xs: list<int>`, `$f: (float) -> float`): its TYPE, or a function name's SIGNATURE, written as the hole writes it.
 # A node not typed yet fits nothing, so a typed rule fires only on settled types; a rest hole asks it of each item.
+# A generic's bare name takes it with any parts: `$m: map` any map<K, V>, `$xs: list` any list.
 fits_type(n: Node, wanted: Node) as bool := {
 	held = type_held(n)
-	held != ø and same_type(held, wanted)
+	held != ø and (same_type(held, wanted) or wanted is symbol and parts_of_type(text(wanted), held) != ø)
 }
 type_held(n: Node) as Node? := fact_of(n, TYPE) ?? fact_of(fact_of(n, DEFINED_AT) ?? return ø, SIGNATURE)
 same_types(these: list<Node>, those: list<Node>) as bool := #these == #those and (1 to #these).all(at => same_type(these#at, those#at))
