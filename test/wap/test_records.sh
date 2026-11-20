@@ -70,4 +70,10 @@ class Holder { item: Item? = ø }
 h = Holder(Item(1))
 h.item = ø
 print text(h.item == ø)')" "yes"
+check "records that refer to each other" "$(ran each_other 'class Item { n: int; box: Box? }
+class Box { item: Item }
+i = Item(7, ø)
+b = Box(i)
+i.box = b
+print text(b.item.n)')" "7"
 exit $((failures > 0))
