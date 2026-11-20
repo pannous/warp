@@ -82,12 +82,19 @@ RULE = "rule"
 # from stage to stage. A later fact of the same name replaces the earlier.
 with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
 # whether a stage has learned the fact of that name; one that holds ø is learned too, `o: text? = ø` a default
-has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => match fact { Key(Symbol(fact_name), Op.Colon, value) => fact_name == name; _ => no })
+has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => is_fact_named(fact, name))
+is_fact_named(fact: Node, name: text) as bool := match fact { Key(Symbol(fact_name), Op.Colon, value) => fact_name == name; _ => no }
+# the node as before any stage learned the fact of that name: a name bound again among several definitions forgets
+# the one definition it meant
+without_fact(n: Node, name: text) as Node := match n {
+	Meta(node, List(data, bracket, separator)) => Meta(node, List(data.filter(item => not is_fact_named(item, name)), bracket, separator))
+	_ => n
+}
 # the fact of that name, ø when no stage has learned it
 fact_of(n: Node, name: text) as Node? := {
 	found: Node? = ø
 	for fact in attributes_of(n) {
-		match fact { Key(Symbol(fact_name), Op.Colon, value) => if fact_name == name { found = value }; _ => ø }
+		match fact { Key(fact_name, op, value) => if is_fact_named(fact, name) { found = value }; _ => ø }
 	}
 	found
 }
