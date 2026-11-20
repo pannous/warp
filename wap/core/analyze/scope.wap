@@ -224,7 +224,7 @@ parameter_definitions(parameters: List, depth: int) as list<Definition> := match
 with_captures(function: Node, scope: Scope, depth: int) as Node := {
 	captured = []
 	for definer in captured_definers(function) {
-		if from_enclosing_function(definer, scope, depth) and not identical_in(definer, captured) { captured = captured + [definer] }
+		if from_enclosing_function(definer, scope, depth) and not captured.any(other => same_definer(other, definer)) { captured = captured + [definer] }
 	}
 	with_fact(function, CAPTURES, List(captured, Bracket.Square, Separator.Comma))
 }
@@ -235,13 +235,12 @@ captured_definers(n: Node) as list<Node> := match n {
 }
 # whether a defining name belongs to a function around the one at depth, not to the program or the library
 from_enclosing_function(definer: Node, scope: Scope, depth: int) as bool := {
-	for definition in every_definition(scope) { if definition.definer === definer { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
+	for definition in every_definition(scope) { if same_definer(definition.definer, definer) { return definition.depth > PROGRAM_DEPTH and definition.depth <= depth } }
 	no
 }
-identical_in(n: Node, nodes: list) as bool := {
-	for other in nodes { if other === n { return yes } }
-	no
-}
+# whether two defining names are one definition's: by its id (core/stage.wap DEFINER), never by spelling, so a
+# parameter named as one around it is its own
+same_definer(a: Node, b: Node) as bool := fact_of(a, DEFINER) != ø and fact_of(a, DEFINER) == fact_of(b, DEFINER)
 
 # the name a parameter defines: `x`, or the x of `x: int`
 parameter_name(parameter: Node) as Node := if declared_name(parameter) is symbol then declared_name(parameter) else refused(parameter, "a parameter is a name, or a name and its type")

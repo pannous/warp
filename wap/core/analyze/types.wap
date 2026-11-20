@@ -234,7 +234,7 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 	# each definition as the typing stage keeps it, its written types' shapes known
 	statements = written.map(statement => if statement is Define then held_function(statement, s).definer else statement)
 	# a statement wap refuses still lets the definitions beside it be typed, so their refusals are said with its own
-	typed = try statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø)) catch e {
+	typed = try (1 to #statements).map(at => typed_form(statements#at, s, f, if at == #statements then expected else ø)) catch e {
 		typed_alone(statements, s)
 		raise e.message
 	}
