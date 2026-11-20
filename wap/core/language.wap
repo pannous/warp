@@ -19,7 +19,7 @@ class Rules { by_head: map<text, list<Rule>> }
 # group_names and operator_names index groups and operators by name, so a spelling is looked up, not searched for;
 # looser_than: group name → every group it binds tighter than, the order of the groups' relations, derived from
 # `groups` whenever they change (core/parse/operator_table.wap related_groups)
-class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex() }
+class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex(), defined_words: map<text, bool> = {}, local_words: list<text> = [] }
 
 # the language every program starts from: the preload's operator table, copied row by row so that what a program
 # declares joins its own copy, no rules or patterns yet

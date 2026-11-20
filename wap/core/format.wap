@@ -119,7 +119,7 @@ group_written(language: Language, n: Node) as text := match n {
 fixity_of(language: Language, spelling: text, count: int) as Fixity :=
 	if count == 2 then Fixity.Infix else if group_of(language, spelling, Fixity.Prefix) != "" then Fixity.Prefix else Fixity.Postfix
 
-is_word(spelling: text) as bool := is_letter(spelling#1)
+is_word(spelling: text) as bool := is_alpha(spelling#1)
 
 # Items of a space list: one after the first that spacing alone made prefix (`[a -1]`, `print -x`) is spelled out,
 # with commas inside brackets, in brackets of its own in a phrase.
