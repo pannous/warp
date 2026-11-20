@@ -50,13 +50,14 @@ lead first, as a change of this table.
 | stage | file | owner | reads | writes |
 |---|---|---|---|---|
 | read | core/parse/reader.wap | wap-reader | text | notation |
-| operators | core/parse/operators.wap, table in the preload | wap-operators | notation | operated |
-| shape rules (stage 1) | core/rules/, preload/sugar/ | lead, until the rule engine has an owner | operated | surface |
+| operators | core/parse/operators.wap, table in the preload | wap-reader | notation | operated |
+| shape rules (stage 1) | core/rules/, preload/sugar/ | wap-reader | operated | surface |
 | declare | core/analyze/declarations.wap | wap-binding | surface | declared |
-| lower | core/rules/lowering.wap | as stage 1 | declared | kernel |
+| lower | core/rules/lowering.wap | wap-reader | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
-| type | core/analyze/types.wap | wap-reader | bound kernel | typed kernel |
-| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader (engine: wap-operators) | typed kernel | typed kernel |
+| type | core/analyze/types.wap | wap-binding | bound kernel | typed kernel |
+| elaborate | core/analyze/types.wap, calls.wap | wap-binding | typed kernel | typed kernel, one instance per tuple |
+| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -117,7 +118,8 @@ The languages, each a set of Node shapes:
 binding, a type, the overload, a tail call, `@gpu`: each is a named fact in the node's metadata, read and written
 through core/stage.wap (`with_fact(n, name, value)`, `fact_of(n, name)`), so a kernel form keeps the same holes from
 stage 2 to the emitter and a pattern written for one stage matches in the next. A stage that only learns facts
-(declare, bind, type) never rewrites; a stage that rewrites gets positions and provenance from the walker. A
+(declare, bind, type) never rewrites; elaborate, in the same walk as type, is the one analysis step that writes: one
+Define per tuple of argument types, dispatchers and lambdas, `prim box`, `prim cast` and `!`, the unknowns settled; a stage that rewrites gets positions and provenance from the walker. A
 rewrite's result stands for what it replaced: it takes that node's position and facts (a definition's declaration
 survives its lowering), while the new parts inside it take only the position.
 
@@ -196,16 +198,60 @@ checked) and a line here when its language changed. The lead reviews it against 
    1. the gauge, `warp scripts/wap-census.warp`, says every function of every wap file typed and emitted
       ("typed n of n functions" on each line, the total likewise); test/wap/test_census.sh holds that count and
       only lets it rise;
-   2. test/wap/test_self.sh has one line per wap file outside preload/, "wap compiles <file> and the result loads",
+   2. **met 2026-11-20** (self-loads-27): test/wap/test_self.sh has one line per wap file outside preload/, "wap compiles <file> and the result loads",
       all green; the preload is no program of its own but part of every program, so every test compiles it, and
       the gauge types its functions with the preload as their library;
-   3. wap, run by the old compiler, compiles wap/compiler.wap to wap1.wasm; wap1 compiles it to wap2.wasm, wap2 to
-      wap3.wasm, and wap2 and wap3 are the same bytes;
+   3. wap, run by the old compiler, compiles wap/compiler.wap to wap1.wasm; wap1 compiles it to wap2.wasm, and wap2
+      compiles a hello that runs; the stages need not be the same bytes (user 2026-11-20);
    4. test/wap/run.sh passes with wap2 as the compiler;
    5. wap1 compiling wap/compiler.wap takes under a minute on the Mac;
    6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds;
+      **met 2026-11-20:** wap resolves names only against wap/preload and the files a program uses, no `use` leaves
+      wap/, and test_self.sh's "the compiler wap makes of itself compiles a program that runs" runs it from a folder
+      holding only preload/ and kernel/;
    7. no boxed `any` is left in wap's own source: the boxed-any allowlist of test/wap/test_guardrails.sh is empty.
+      **met 2026-11-20:** test/wap/guardrails_allowed.txt has no boxed-any line.
    Until then nothing lands that turns no function of wap green, unless it fixes a wrong value.
+
+## Architecture changes, in order (user 2026-11-20)
+
+From data/review/architecture-review.md, adopted whole. They replace the census-only rule: wap work comes from these
+steps and the open milestone-2 points. A step starts when the one before it has landed; work in files the steps before
+don't touch may run beside them. One owner per file, as below; a part in another owner's file passes that owner's
+review.
+
+1. **wap2 is wap's seed, and the compiler under test is a parameter** (milestone 2 points 3, 4, 5). Owner
+   wap-operators: compile.sh `--compiler <module>`, run.sh `--stage <n>`, test_self.sh's wap2-runs-hello
+   and timed lines, the census on wap2, wap2 published through refresh-seed's A B C stages. Old warp stays a frozen
+   fallback and still builds the native warp and the playground. Done when test/wap and the census run on wap2.
+2. **The old-warp Debts paid as one batch, facts that replace first**, test/wap on wap2 before and after:
+   - lead: `with_fact` replaces a fact of its name and `with_facts_of` merges by name (stage.wap; nodes.wap with the
+     reader); `compact` into preload/lists.wap; `staged` and `replaced` one name; EmptyMap no kernel form (with the
+     emitter);
+   - wap-reader: `NOTHING_WRITTEN`, nodes.wap's copy of core/node.warp, Op spellings and format's brackets written
+     once, the reader writing Error, `EMPTY_BRACES`;
+   - wap-binding: the binder's Empty marker (`without_fact`), a default of ø, helpers named apart;
+   - wap-emitter: `===` as identity, so stage 1 and stage 3 agree on enum tags.
+3. **Stage 2 on the rule engine:** a hole test that reads declarations (`$f: function`, `$p: predicate`).
+   - wap-reader: the hole test (rules/stages.wap); `is pred` and `is not` as preload/sugar/ rules (nothing rewrites by arity
+     today, so no arity rule);
+     the parser's defined_words, local_words and double read gone (operator-spelling aliases stay there).
+   - wap-binding: a word alias as binding's fallback for a name nothing in scope defines; the `is`/`not` rewrites gone
+     from scope.wap; typing's `print`/`show`/`set`/`#` found by a role the preload marks, not by spelling (the role
+     words are a question for the user).
+4. **One Signature record from declare**, read by every stage and printed as the wap section: wap-binding (analyze/),
+   wap-emitter (Placed by definer id), text keys become definer ids. Then wasm-module-import resumes.
+5. **Primitives as opcode mnemonics; the kernel the emitter's input only:**
+   - wap-emitter: a Prim names a mnemonic of opcodes.wap, one host table with its WASI types, the special names one
+     kernel/primitives.wap table;
+   - wap-reader: the preload's prim spellings (`prim i64.add`), helpers that are plain warp moved into the preload,
+     `@global`/`@local` rules in place of Variable, Item into core/rules/;
+   - wap-binding: typing writes Call for a function-key Get, and the emitter's branch for it goes;
+   - lead: kernel/forms.wap exactly what the emitter takes; its reading helpers into core/stage.wap or
+     core/statements.wap.
+
+Paused work comes back with its step: the rest of stage 2 with step 3, EmptyMap with step 2, wasm-module-import after
+step 4. Overload specificity and `"x" * yes` stay Debts.
 
 After that, the test pass rate is a ballpark of how well the engine works, nothing more. Then the user and the
 interviewer go through the ugly forms the tests show: each is either standardised, because it arises from the
