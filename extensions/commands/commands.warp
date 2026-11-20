@@ -180,7 +180,6 @@ repl_step(folder: text, line: text, wasm_file: text) := {
 	kept = lines_kept(folder)
 	for earlier in kept { own_module(earlier, line_text_file(folder, earlier), path_in(folder, earlier + ".wasm")) }
 	name = wasm_file.split("/").last().remove_suffix(".wasm")
-	for earlier in kept { for word in defined_words(line) { if word in defined_words(read(line_text_file(folder, earlier))) { raise word + " is defined already (line " + earlier.remove_prefix(LINE_PREFIX) + "): the console keeps that one" } } }
 	# (the uses behind the line, so what the compiler says of it names the line's own place, 1:5)
 	uses = kept.map(earlier => "use " + earlier)
 	refusal = line_module_refusal(folder, name, [line] + uses, wasm_file)
@@ -197,8 +196,6 @@ line_module_refusal(folder: text, name: text, lines: list, wasm_file: text) as t
 	try { module_compiled_behind(name, source, read_bytes(runtime_path()), wasm_file) } catch refused { refusal = refusal_said(refused) }
 	refusal
 }
-# the functions and classes a text defines, by name: no variable, which a later line may set
-defined_words(source: text) as list := definition_slices(source).filter(slice => not statements_in(plain_node(parsed(slice#2))).any(is_value_definition)).map(slice => slice#1)
 # where a line's text is kept: never as <name>.warp, which would take a later line's `use <name>` as a file to compile
 # in, not the module to link (prelude_words.warp taken_as_file), its instance's state then not the one read
 line_text_file(folder: text, name: text) as text := path_in(folder, name + ".line" + module_extension)
