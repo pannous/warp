@@ -13,8 +13,10 @@ Time Machine excluded:
 
 Setup, check and wipe: `~/dev/bin/churn-volume setup|check|wipe <volume>` (guide: ~/dev/bin/notes/apfs-churn-volumes.md).
 
-- cowtree needs a registered donor worktree on the Worktrees volume, one per project named after it:
-  /Volumes/Worktrees/warp, detached at origin/main, never removed (scripts/prune-worktrees.sh keeps it on origin/main).
+- cowtree needs a registered donor worktree on the Worktrees volume, one per project named after its checkout's
+  folder: /Volumes/Worktrees/warp, /Volumes/Worktrees/wap, detached at origin/main, never removed
+  (scripts/prune-worktrees.sh PROJECTS makes a missing one and keeps each on origin/main). Without one, `cowtree add`
+  fails with "no verified, checkout-compatible source files on the destination APFS volume".
 - All worktrees live on the Worktrees volume, the infra trees too (integrate, integrate2).
 - APFS clones (clonefile, `cp -c`, cowtree) work only inside one volume: a copy from Build to Worktrees, Junk or Data
   is a real copy.
