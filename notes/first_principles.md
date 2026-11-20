@@ -112,7 +112,7 @@ A rule writes its output with the same names: `rule unless $c $body => If(not $c
    `warp format` (`[a -1]` → `[a, -1]`), so the reader sees which one was taken.
 2. **One general rule over special cases.**
    - A form that needs its own rule for one phrase is bloat.
-   - A form that falls out of the general rules is welcome, however esoteric (`"x" * yes`).
+   - A form that falls out of the general rules is welcome, however esoteric.
    - A fix is the general rule: it also holds for the cases next to the example that showed the problem (other
      types, other operators).
 3. **Refuse, never guess.** Where code reads two ways, or a form is unknown, the compiler refuses with a fix-it that
