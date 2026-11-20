@@ -11,6 +11,7 @@ use "rules/lowering.wap"
 use "analyze/scope.wap"
 use "analyze/types.wap"
 use "rules/typed.wap"
+use "rules/declared.wap"
 use "language.wap"
 use "paths.wap"
 
