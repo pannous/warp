@@ -1533,6 +1533,8 @@ presented(encoder: int, drawing: Drawing, viewport: list) as bool := {
 	}
 	submitted(encoder)
 	wgpuSurfacePresent(surface)
+	// wgpu frees what a frame released (its image, staging buffers) only when the device is polled: once a frame, not waiting
+	wgpuDevicePoll(device, 0, 0)
 	wgpuTextureViewRelease(texture_view)
 	wgpuTextureRelease(texture)
 	free(current)
