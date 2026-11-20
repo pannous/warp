@@ -248,3 +248,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - set-of-to (user, 2026-11-20): wap's map setter is `set(key, of: m, to: v)`, read `set k of: m to: v`; `m#k = v` rewrites to it. Named arguments already exist (wiki/function.md:152).
 - wap-self-build-check (user, 2026-11-20): wap's self-build passes when the self-built compiler compiles and runs hello world; byte-identical stages (a fixed point) are only reported, never required.
 - drop-text-times-bool (user, 2026-11-20): the `"x" * yes` edge case is dropped everywhere: no example, no test, no support needed.
+- edge-cases-dont-count (user, 2026-11-20): code or a test that exists only for an edge case (e.g. `"x" * yes`) is removed by whoever meets it (unsure: ask the Interviewer); whatever the general rules make of the form is accepted, even an error; one that may matter someday becomes an Edge-column card.
