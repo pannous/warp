@@ -140,6 +140,8 @@ set(key: K, of: map<K, V>, to: V) := {
 }
 # a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
 keys(m: map<K, V>): list<K> := copy(held_keys(m))
+# a map's values, a new list in the order their keys were set: `{a: 1, b: 2}.values()` is [1, 2]
+values(m: map<K, V>): list<V> := copy(held_values(m))
 # whether a map holds a key
 has(m: map<K, V>, key: K): bool := key_place(m, key) > 0
 # a key taken out of a map with its value, the others kept in their order; a missing key leaves the map as it was

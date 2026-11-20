@@ -1,4 +1,4 @@
-# fad94ef3a5 2026-11-20 10:40 295/299 98.7%
+# c8f41215ae 2026-11-20 14:37 295/299 98.7%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp

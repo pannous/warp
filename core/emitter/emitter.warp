@@ -482,6 +482,10 @@ shared_names(statements: list) := {
 				if name not in read_free and not assigns(f.body, name) and name not in taken_names(f.signature) { read_free[name] = yes }
 			}
 		}
+		# a field's default is read where an instance is made, outside main: `stage: int = FIRST`
+		defaults_read = Mentions(assigned, {})
+		for class_name in module.class_defaults.keys { for field in module.class_defaults[class_name].keys { gather_view_mentions(module.class_defaults[class_name][field], defaults_read) } }
+		for name in defaults_read.found.keys { read_free[name] = yes }
 	}
 	shared = {}
 	for name in assigned.keys { if name in read_free { shared[name] = yes } }
