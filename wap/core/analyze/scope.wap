@@ -238,6 +238,9 @@ resolved(name: Node, scope: Scope, depth: int) as Node := resolved_taking(name, 
 # a called name resolved by how many values the call gives, which picks among cases of one name
 called_bound(called: Node, given: int, scope: Scope, depth: int) as Node := if called is symbol then resolved_taking(called, given, scope, depth) else bound(called, scope, depth)
 resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
+	# a variable bound before keeps its binding: typed code bound again after a typed rule (core/rules/typed.wap), whose
+	# lifted function values read their captures at the top; a function's name is chosen anew among its overloads
+	if fact_of(name, BINDING) != ø and not is_bound(name, DefinitionKind.Function) and not is_bound(name, DefinitionKind.Library) { return name }
 	meant = definitions_meant(text(name), scope)
 	if meant is empty {
 		# a name nothing defines is read as the word its alias gives, `length` count (preload/operators.wap aliases)
