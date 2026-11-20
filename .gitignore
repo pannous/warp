@@ -57,9 +57,19 @@ data/
 # warp's samples, their own repository github.com/pannous/samples: a link to its checkout (scripts/lib/platform.sh
 # checkouts_linked), in CI a clone (.github/actions/samples)
 /samples
-# wap, the new compiler, its own repository github.com/pannous/wap since 2026-11-20: links to its checkout
+# wap, the new compiler, its own repository github.com/pannous/wap since 2026-11-20: links to its checkout (scripts/lib/platform.sh WAP_LINKED)
 /wap
 /test/wap
+/notes/backbone.md
+/notes/wap.md
+/notes/wap_review.md
+/notes/kernel.md
+/notes/rules.md
+/notes/reader.md
+/notes/operators.md
+/notes/rewrites.md
+/notes/agents/wap-owner.md
+/notes/agents/simplifier.md
 # the Spin manifest warp build --wagi writes beside app.wagi.wasm (src/cli/outputs.rs SPIN_MANIFEST_EXTENSION, card wagi-manifest)
 *.spin.toml
 /tune.mid
