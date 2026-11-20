@@ -85,4 +85,8 @@ shout 1
 print(text(never))')" "HI
 phrase
 no"
+# notes/kernel.md "How a program reaches the kernel", stage 2: a hole typed function takes a name declared as one
+check "a rule's function hole takes a name the program declares as a function" "$(ran function_hole 'rule twice $f: function $x => $f($f($x))
+inc(n: int): int := n + 1
+print text(twice inc 3)')" "5"
 exit $((failures > 0))
