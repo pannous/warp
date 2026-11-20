@@ -22,7 +22,7 @@ written(language: Language, n: Node) as text := match n {
 	Call(called, arguments) => call_text(language, n, called, arguments)
 	List(items, bracket, separator) => list_text(language, items, bracket, separator)
 	Key(left, Op.Colon, right) => key_text(language, left) + ": " + formatted(language, right)
-	Key(head, Op.None, group) => formatted(language, head) + (if group == ø then "()" else formatted(language, group))
+	Key(head, Op.None, group) => formatted(language, head) + (if group is Empty then "()" else formatted(language, group))
 	Number(value) => if value is float and not "${value}".contains(".") and not "${value}".contains("e") then "${value}.0" else "${value}"
 	Text(value) => "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 	Symbol(name) => name

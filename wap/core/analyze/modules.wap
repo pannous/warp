@@ -37,7 +37,7 @@ declaration_name(declaration: Node) as Node := match declaration {
 }
 # a declaration as two modules may not both write it: `twice(int)`, a type's or a variable's bare name
 declared_alike(declaration: Node) as text := match declaration {
-	Key(name, Op.Colon, signature) => if signature == ø then text(name) else "${name}(${items_of(signature).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
+	Key(name, Op.Colon, signature) => if signature is Empty then text(name) else "${name}(${items_of(signature).map(parameter => text(declared_type(parameter) ?? "")).join(", ")})"
 	_ => text(declaration_name(declaration))
 }
 # A used module's word named by the module, `a.twice(3)`, read as twice(a, 3) is: the definitions of
@@ -50,7 +50,7 @@ module_word(n: Node, subject: Node, key: text, scope: Scope) as Node? := {
 			named = module_names(definition.definer).filter(name => text(name) == key)
 			if named is empty { refused(n, "${subject}.wap defines no ${key}") }
 			found = with_binding(placed_like(symbol(key), n), DefinitionKind.Library)
-			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(with_fact(found, DEFINED_AT, Empty), CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
+			return if #named == 1 then with_fact(found, DEFINED_AT, named#1) else with_fact(found, CANDIDATES, List([List(named, Bracket.Square, Separator.Comma)], Bracket.Square, Separator.Comma))
 		}
 	}
 	ø

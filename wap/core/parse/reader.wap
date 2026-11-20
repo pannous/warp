@@ -35,7 +35,7 @@ notation(source: text, file: text) as Node := {
 }
 # n and each part of it that has a position, marked with the file it was read from
 filed(n: Node, file: text) as Node := {
-	if n == ø { return n }
+	if n is Empty { return n }
 	whole = refitted(with_parts(n, part => filed(part, file)), n)
 	if line_of(n) == ø then whole else with_fact(whole, SOURCE_FILE, Text(file))
 }
