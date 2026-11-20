@@ -66,7 +66,8 @@ CODE_MEMBER_WORDS = function_keywords + ["get", "set", "mutating", "override", "
 // A class body's fields with their types, `x: int` holding the type int; a method keeps its code
 typed_fields(node: Node) as Node := match node {
 	Key(name, Op.Define, value): node
-	Key(name, op, value): { if is_pair_key(node) then Key(name, op, if value is symbol then type_node(value, ø) else value) else node }
+	# (a default `stage = FIRST` names a value, not a type)
+	Key(name, Op.Colon, value): { if is_pair_key(node) and value is symbol then Key(name, Op.Colon, type_node(value, ø)) else node }
 	List(members, bracket, separator): { if starts_code(members#1) then node else typed_members(bracket as text, separator as text, with_type_phrases(items_of(node)).map(typed_fields)) }
 	_: node
 }
