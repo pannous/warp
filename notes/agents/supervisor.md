@@ -49,6 +49,9 @@ the team, crash resume), notes/roles.md (what the other roles do).
 - A session is named for what it does now (`warp-<card key>` until the area shows). Rename: `tmux rename-session -t
   warp-<old> warp-<new>` plus `~/dev/bin/rename-when-idle warp-<new>`; tell the Integrator and Interviewer.
 - Idle worker: give it its area's cards from `todo pick` (the user's "(user)" drafts first, easy before big).
+- Red tests are the work list (user 2026-11-20): every red test line is already its own to-do and needs no card. Instead
+  of picking cards, pick red tests and hand them out to workers. Agents add no cards until the board is cleaned up
+  (`todo add` refuses them). Not yet: the user's own priorities (now: wap's native binary) come before red tests.
 - Talk to workers by SendMessage with `notify_when_idle: true`; tmux only to look at a screen.
 - Stale session without a handover: don't message it; build the handover from its worktree's git state and
   transcript (peek-session skill), kill its tmux by exact name, respawn.
