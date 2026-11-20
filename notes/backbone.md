@@ -533,3 +533,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **analyze/types.wap reaches rules/ (typed.wap) through a use**, because wap cannot call a function value read from
   a field (`this holds a function, no function to call`). Paid off when a field's function value can be called; then
   it is a function value on TypingState.
+
+- **stage.wap without_fact rebuilds the Meta itself**, a copy of nodes.wap with_attribute's layout, because the
+  compiler may use only the seed's preload words. Paid off at the next seed refresh: nodes.wap gets one
+  without_attribute that with_attribute uses too, and without_fact calls it.
