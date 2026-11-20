@@ -53,11 +53,11 @@ raised_with(message: text, ending: list<int>, p: Program) as list<int> := text_l
 placing_function(p: Program) as int := {
 	text_type_index = text_type(p.m)
 	the_text = local_get(0)
-	measure = local_get(1)
+	length = local_get(1)
 	count = local_get(2)
 	measured = the_text + ARRAY_LEN + local_set(1)
-	copied = counted(2, measure, i32_const(BYTES_ADDRESS) + count + I32_ADD + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
-	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + memory_grown(measure, 2) + copied)
+	copied = counted(2, length, i32_const(BYTES_ADDRESS) + count + I32_ADD + the_text + count + instruction(ARRAY_GET_U, [text_type_index]) + instruction(I32_STORE8, [0, 0]))
+	added_function(p.m, [nullable(text_type_index)], [], [I32, I32], measured + memory_grown(length, 2) + copied)
 }
 # The helper of text_written, what print, eprint, an uncaught raise and the file words write with: a text placed, a
 # line end after it when asked, written to a file through fd_write's one iovec, again from where it stopped until every
