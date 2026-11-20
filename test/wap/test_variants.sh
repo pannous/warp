@@ -83,4 +83,8 @@ enum Kind { Box, Other }
 b = Box(3)
 k: Kind = Box
 print text(b.n) + " " + text(k == Kind.Box) + " " + text(Other == Kind.Other)')" "3 yes yes"
+check "an enum's value as text is its case's name" "$(ran case_text 'enum Coin { Penny, Dime }
+print text(Coin.Dime)
+print "${Bracket.Round} ${Coin.Penny}"')" "Dime
+Round Penny"
 exit $((failures > 0))
