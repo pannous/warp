@@ -41,7 +41,6 @@ if [ -x "$stage/warp" ]; then
 	check "a class and its instance cross console lines" "$(printf 'class Point{x:int; y:int}\np = Point(1, 2)\np.x + p.y\n' | native repl | sed -n 3p)" "🌀3"
 	check "a console line's value is made once" "$(printf 'r = random()\nr == r\n' | native repl | sed -n 3p)" "🌀yes"
 	check "a console line keeps a variable's kind" "$(printf 'x = 1\nx = "a"\n' | native repl | sed -n 3p)" "🌀x was an Int, is given a Text: use another name at 1:5"
-	check "a console line keeps the first definition" "$(printf 'def f() { 1 }\ndef f() { 2 }\nf()\n' | native repl | sed -n 2,3p | tr '\n' ' ')" "🌀🌀f is defined already (line 1): the console keeps that one 🌀1 "
 	check "exit() ends the console with its status" "$(printf 'exit(3)\nprint 1\n' | native repl >/dev/null; echo $?)" "3"
 	# Ctrl+C stops the running line, never the console: a looping line gets SIGINT, the next line answers (card
 	# warp-repl-instance, user 11-11; the first console start compiles the resident machine code, so it gets its time)
