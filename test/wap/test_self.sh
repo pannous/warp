@@ -39,6 +39,20 @@ files=(
 	wap/core/parse/cascade.wap
 	wap/core/parse/layout.wap
 	wap/core/parse/reader.wap
+	wap/core/analyze/names.wap
+	wap/preload/lists.wap
+	wap/preload/numbers.wap
+	wap/preload/rules.wap
+	wap/preload/sugar/calls.wap
+	wap/preload/sugar/conditions.wap
+	wap/preload/sugar/data.wap
+	wap/preload/sugar/definitions.wap
+	wap/preload/sugar/literals.wap
+	wap/preload/sugar/loops.wap
+	wap/preload/sugar/matching.wap
+	wap/preload/sugar/ranges.wap
+	wap/preload/sugar/records.wap
+	wap/preload/sugar/types.wap
 )
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
