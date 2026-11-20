@@ -82,7 +82,6 @@ notes/kernel.md
 notes/rules.md
 notes/reader.md
 notes/operators.md
-notes/rewrites.md
 notes/agents/wap-owner.md
 notes/agents/simplifier.md"
 LINKED_CHECKOUTS="
