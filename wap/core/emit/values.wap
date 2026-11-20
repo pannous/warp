@@ -130,10 +130,13 @@ LIST_ITEMS_AT = 1
 items_index(type: Node, m: WasmModule, records: Records) as int? := item_array(item_type(type) ?? return ø, m, records)
 item_array(item: Node, m: WasmModule, records: Records) as int? := added_type(m, array_type(field_type(layout_of(item, m, records) ?? return ø, MUTABLE)))
 # The GC type of a record: a struct of its fields' layouts, in the order the class writes them. An enum's is open to
-# its cases, its tag first; a case with fields extends it with them.
+# its cases, its tag first; a case with fields extends it with them. Records that refer to each other are one
+# recursion group.
 struct_of(record: Node, m: WasmModule, records: Records) as int := {
+	built = named_index(m, record_name(record))
+	if built != ø { return built }
 	fields = field_layouts(fields_of(record), m, records)
-	if cases_of(record) is empty then added_type(m, struct_type(fields)) else added_type(m, open_type([enum_base(m)], struct_type([TAG_FIELD] + fields)))
+	named_added(m, record_name(record), if cases_of(record) is empty then struct_type(fields) else open_type([enum_base(m)], struct_type([TAG_FIELD] + fields)))
 }
 # the GC type every enum's extends: its case's tag, which the instructions of `tagged` read
 enum_base(m: WasmModule) as int := added_type(m, open_type([], struct_type([TAG_FIELD])))

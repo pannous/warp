@@ -25,6 +25,11 @@ class WasmModule {
 	tags: list<list<int>> = []
 	# the functions `ref.func` refers to, declared once each
 	referenced: list<int> = []
+	# types known by a name, each its index; the names whose type is being built; the indices reserved for names
+	# that referred back to themselves while the recursion group holding them is still open
+	named: map<text, int> = {}
+	naming: list<text> = []
+	reserved: list<int> = []
 }
 # a recursion group: the index of its first type, and how many it holds
 class RecursionGroup { first: int, count: int }
@@ -116,6 +121,35 @@ added_group(m: WasmModule, types: list<list<int>>) as int := {
 	m.groups += [RecursionGroup(#m.types, #types)]
 	m.types += types
 	m.groups.last.first
+}
+# A type known by its name, a record's: its index, or ø while it is not built yet, which starts building it. A name
+# asked for again while its type is being built refers back to itself: its index is reserved at once.
+named_index(m: WasmModule, name: text) as int? := {
+	if m.named.has(name) { return m.named[name] }
+	if not m.naming.contains(name) {
+		m.naming += [name]
+		return ø
+	}
+	m.named[name] = #m.types
+	m.reserved += [#m.types]
+	m.types += [[]]
+	m.named[name]
+}
+# The index of a named type built at last. One whose index was reserved takes its place; once every reserved one is
+# built, the types made since the first are one recursion group, so they may refer to each other.
+named_added(m: WasmModule, name: text, type: list<int>) as int := {
+	m.naming = m.naming[0 .. #m.naming - 1]
+	if not m.named.has(name) {
+		m.named[name] = added_type(m, type)
+		return m.named[name]
+	}
+	at = m.named[name]
+	m.types = m.types[0 .. at] + [type] + m.types[at + 1 ..]
+	if m.reserved.all(slot => m.types#(slot + 1) != []) {
+		m.groups += [RecursionGroup(m.reserved.first, #m.types - m.reserved.first)]
+		m.reserved = []
+	}
+	at
 }
 # the group a type's index lies in; a type declared alone is a group of one, as the format reads it
 grouped(m: WasmModule, index: int) as RecursionGroup := {
