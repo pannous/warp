@@ -10,7 +10,7 @@ rebuild=
 worktree=${${1:-$(git rev-parse --show-toplevel)}:a}  # absolute: the check cds into it, then reads $worktree/lib
 # the native warp checked with: WARP_BINARY (a branch changing the driver brings its own build), else the shared one
 source ${0:A:h}/lib/platform.sh
-samples_linked $worktree || exit 2
+checkouts_linked $worktree || exit 2
 main_warp=$warp_binary
 main_checkout=$warp_main_checkout
 store=$warp_store  # scripts/rebuild.sh's, where stage 2's outcome is kept too

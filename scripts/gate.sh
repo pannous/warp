@@ -30,7 +30,7 @@ while (($#)); do
 done
 tree=$(cd "${args[0]:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 source "$(dirname "$0")/lib/platform.sh"
-samples_linked "$tree" || exit 2
+checkouts_linked "$tree" || exit 2
 source "$(dirname "$0")/lib/compile-cost.sh"
 binary=${args[1]:-${WARP_GATE_BINARY:-$warp_binary}}
 # main's installed native warp's folder: its lib/, whose compiler is main's, whatever binary runs the tree

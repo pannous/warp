@@ -55,7 +55,7 @@ data/
 # `stored x = v` keeps its values beside the program (src/lowering/stored_values.rs)
 *.stored.json
 # warp's samples, their own repository github.com/pannous/samples: a link to its checkout (scripts/lib/platform.sh
-# samples_linked), in CI a clone (.github/actions/samples)
+# checkouts_linked), in CI a clone (.github/actions/samples)
 /samples
 # the Spin manifest warp build --wagi writes beside app.wagi.wasm (src/cli/outputs.rs SPIN_MANIFEST_EXTENSION, card wagi-manifest)
 *.spin.toml

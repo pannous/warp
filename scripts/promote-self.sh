@@ -12,7 +12,7 @@ set -uo pipefail
 background=
 [ "${1-}" = --background ] && { background=1; shift; }
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 0
-source "$(dirname "$0")/lib/platform.sh"; samples_linked "$tree" || exit 0
+source "$(dirname "$0")/lib/platform.sh"; checkouts_linked "$tree" || exit 0
 scripts=$(cd "$(dirname "$0")" && pwd)
 data=$tree/data compilers=$tree/lib
 mkdir -p "$data" || exit 0

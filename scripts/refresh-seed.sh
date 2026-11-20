@@ -25,7 +25,7 @@ check=
 wap=
 while case ${1-} in --check) check=1 ;; --wap) wap=1 ;; *) false ;; esac; do shift; done
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
-source "$(dirname "$0")/lib/platform.sh"; samples_linked "$tree" || exit 2
+source "$(dirname "$0")/lib/platform.sh"; checkouts_linked "$tree" || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
 warp=${WARP_BINARY:-warp}
 if [ -n "$wap" ]; then seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/wap-seed/wap.wasm}; else seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}; fi

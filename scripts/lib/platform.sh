@@ -69,20 +69,28 @@ libraries_beside() { eval "export $warp_library_path_variable=\"$1\${$warp_libra
 without_runtime_noise() { grep -v '^wasm-rt warning'; }
 # the SHA-256 of a file, 64 hex digits (sha256sum on Linux, shasum on the Mac)
 sha256_of() { { sha256sum "$1" 2>/dev/null || shasum -a 256 "$1"; } | cut -c1-64; }
-# warp's sample programs live in their own repository, github.com/pannous/samples (user 2026-11-20), checked out once
-# beside warp; each tree reaches them at <tree>/samples, a git-ignored link to that checkout (CI clones it there)
-samples_checkout=$HOME/dev/angles/samples
-# samples_linked <tree>: <tree>/samples is the samples (the link, a CI clone, or an older commit's own folder), linked
-# to the checkout where missing; no checkout, or a folder of a run's leftovers in its place, it refuses
-samples_linked() {
-	local link=$1/samples
-	{ [ -L "$link" ] && [ -d "$link" ]; } || [ -d "$link/.git" ] && return
-	[ -d "$link" ] && [ ! -L "$link" ] && {
-		[ -n "$(git -C "$1" ls-files -- samples | head -1)" ] && return
-		echo "samples: $link holds only what runs left there, not the samples: move it away, then it becomes the link" >&2
-		return 1
-	}
-	[ -d "$samples_checkout" ] && [ ! -L "$link" ] && { ln -s "$samples_checkout" "$link"; return; }
-	echo "samples: no checkout at $samples_checkout for $link: git clone https://github.com/pannous/samples $samples_checkout" >&2
-	return 1
+# folders that live in their own repositories, checked out once beside warp: each tree reaches them at the same path,
+# a git-ignored link to the checkout (CI clones them there); one line each, <path in the tree> <checkout>
+LINKED_CHECKOUTS="
+samples $HOME/dev/angles/samples
+"
+# checkouts_linked <tree>: each of LINKED_CHECKOUTS is there in <tree> (the link, a CI clone, or an older commit's own
+# folder), linked to its checkout where missing; a folder of what runs left there before it moved goes to
+# <tree>/data/<name>-leftovers.<time>, said so; a checkout missing, it refuses
+checkouts_linked() {
+	local tree=$1 name checkout link leftovers failed=0
+	while read -r name checkout; do
+		[ -n "$name" ] || continue
+		link=$tree/$name leftovers=$tree/data/$(echo "$name" | tr / -)-leftovers
+		{ [ -L "$link" ] && [ -d "$link" ]; } || [ -d "$link/.git" ] && continue
+		if [ -d "$link" ] && [ ! -L "$link" ]; then
+			[ -n "$(git -C "$tree" ls-files -- "$name" | head -1)" ] && continue
+			mkdir -p "$tree/data" && mv "$link" "$leftovers.$(date +%s)" || { failed=1; continue; }
+			echo "$name: what runs had left in $link moved to $leftovers.*; $link is now the link to $checkout" >&2
+		fi
+		if [ -d "$checkout" ] && [ ! -L "$link" ]; then mkdir -p "$(dirname "$link")" && ln -s "$checkout" "$link"; continue; fi
+		echo "$name: no checkout at $checkout for $link: clone its repository there" >&2
+		failed=1
+	done <<<"$LINKED_CHECKOUTS"
+	return $failed
 }
