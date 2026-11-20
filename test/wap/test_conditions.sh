@@ -185,4 +185,8 @@ print f(ø)')" "a
 other"
 check "a condition finds an item at a written place present, on the right of an or too" "$(ran item_present 'first_or(xs: list<int?>) as int := if xs#1 == ø or xs#1 < 0 then 0 else xs#1 + 1
 print(text(first_or([4, ø])) + " " + text(first_or([ø, 2])) + " " + text(first_or([-3])))')" "5 0 0"
+# wiki/ambiguity.md "is not": `a is not b` reads `not (a is b)`, of a predicate and of a type alike
+check "a is not b is not (a is b)" "$(ran is_not 'ys = [5]
+zs: list<int> = []
+print(text(ys is not empty) + " " + text(zs is not empty) + " " + text(3 is not text))')" "yes no yes"
 exit $((failures > 0))
