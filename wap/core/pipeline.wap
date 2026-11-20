@@ -28,8 +28,9 @@ SCRIPT = "script"
 language_loaded(language: Language, wap_folder: text) as Node := {
 	# each file read with the rules of the files before it loaded
 	for file in files_named(operated_file(language, in_folder(wap_folder, RULES_FILE)), USE_WORD) { rules_loaded(language, operated_file(language, file)) }
-	program_words_defined(language, in_folder(wap_folder, PRELOAD_FILE))
-	declared_operated(language, operated_file(language, in_folder(wap_folder, PRELOAD_FILE)))
+	preload_file = in_folder(wap_folder, PRELOAD_FILE)
+	program_words_defined(language, preload_file)
+	declared_operated(language, operated_file(language, preload_file))
 }
 # the names a program's files define at their top, the files it uses and includes too, known before any is read, so
 # no alias reads them (core/parse/operator_table.wap words_defined)

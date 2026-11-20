@@ -142,7 +142,10 @@ node_case(node: Record, word: text) as Node := {
 	if named is empty then refused(Text(word), "the Node enum has no case of this name") else named#1
 }
 # A bound case's tag: its place among the cases of every enum the program declares, found by the case that defined
-# it, so cases of two enums never share a tag, not even two of one name
+# it by its declaration's place, so cases of two enums never share a tag, not even two of one name and shape
 tag_of(case: Node, p: Program) as int := declared_tag(case_declaring(p.records, case), p)
-declared_tag(declared: Node, p: Program) as int := index_where(p.records.items.flat_map(cases_of), each => each === declared) - 1
+declared_tag(declared: Node, p: Program) as int := {
+	key = place_key(case_name(declared))
+	index_where(p.records.items.flat_map(cases_of), each => place_key(case_name(each)) == key) - 1
+}
 is_case(name: Node) as bool := is_bound(name, DefinitionKind.Case)

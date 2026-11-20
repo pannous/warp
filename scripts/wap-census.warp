@@ -15,8 +15,9 @@ preload = language_loaded(language, program.folder + "/../wap")
 library_scope = scope_of(preload_scope(declarations_of(preload)))
 library_code = library_code_of(language, preload)
 library = statements_in(library_code)
-# the names every file given defines, known before any is read, as the compiler knows a program's (core/pipeline.wap)
-for file in args { file_words_defined(language, read_notation(file)) }
+# the names every file given and the modules it uses define, known before any is read, as the compiler does
+# (core/pipeline.wap program_words_defined)
+for file in args { program_words_defined(language, file) }
 
 # Each module read, declared and prepared once a run, shared by every file and function probe that uses it: a file's
 # modules are the same values whichever file reaches them, as the compiler makes them (core/pipeline.wap
@@ -312,6 +313,7 @@ copied(base: TypingState) as TypingState := {
 	s.definition_keys = base.definition_keys
 	s.records = base.records
 	s.functions = base.functions + []
+	for key in base.instances.keys { s.instances[key] = base.instances[key] + [] }
 	s.globals = base.globals + []
 	s.lambdas = base.lambdas + []
 	s.captured = base.captured + []

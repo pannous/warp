@@ -176,11 +176,8 @@ source uses, and every landing names the functions of wap it turned green (scrip
 (test/wap/) and notes/backbone.md "Debts" are append-only, open to all. A bug of the old compiler that blocks wap
 goes to warp-host-fixer as a repro; work around it or go on meanwhile. A new file belongs to the stage of its folder.
 
-Census only (user 2026-11-19): until wap compiles itself, all wap work comes from the self-build census's list of
-blocked functions, ranked by how many functions each item unblocks. Anything off the census (a difference from old
-warp, a wiki form, a red old test, an audit finding, a TODO the census does not need) is one line in
-notes/backbone.md "Debts", not work and not a question; warp-interviewer is asked only when a census item needs a
-language meaning.
+Since wap compiles itself (2026-11-20), wap work comes from notes/backbone.md "Architecture changes, in order" and the
+open milestone-2 points (user 2026-11-20); anything else is one line in that file's "Debts".
 
 Trim before handoff (user 2026-11-18): before handing a branch off, try deleting each of its edits, one at a time, after
 the change is done; every edit whose removal keeps test/wap/run.sh and test/wap/test_guardrails.sh green goes. Only
