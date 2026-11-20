@@ -106,7 +106,7 @@ scripts/promote-self.sh                   # warp.wasm -> warp-self.wasm once it 
 
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
-every issue you encounter goes in with `todo add "…"` (~/dev/bin/todo, column Next), todo.md as fallback; how cards
+agents add no cards until the board is clean (`todo add` refuses); a red test is its own to-do and never gets a card; an issue goes as `todo note` on an existing card; how cards
 are taken, branched and closed: "Cards" below.
 
 ### Test commands
@@ -321,7 +321,7 @@ before asking a question). After a context swap, this file and your role file be
   shared root cause); features come only from the user.
 - A new card's title is one plain sentence the user understands without context (what goes wrong or is wanted);
   keys, names and paths go in the body.
-- Unrelated problems: `todo add "…"`. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
+- Unrelated problems: a `todo note` on the nearest card, or a test line that shows them. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
 - We do not care about edge cases! Whenever you encounter an edge case code or test, remove it yourself or ask the interviewer if you're unsure. e.g. `"x" * yes` Whatever the compiler makes out of that from first principles is what we accept, even if it's an error. 
 - If you think the edge case might be important someday, put it into a todo card in the Edge column 
 <!-- - No focus on edge cases unless a program, sample or wiki example needs them (user, 2026-11-18). They never halt
