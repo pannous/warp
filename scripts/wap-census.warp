@@ -4,9 +4,27 @@
 # typing state shared by the whole run, each module's forms typed once, a refusal rolled back; "typed whole" from the
 # compiler's own typed_file path, once for each closure; a closure holding a smaller one that refuses is refused with it.
 #   warp --no-window scripts/wap-census.warp $(git ls-files "wap/*.wap")
-use "../wap/core/pipeline.wap"
-use "../wap/core/emit/emitter.wap"
+# every module whose names the census reads, each used by name: a module sees the names of the modules it uses
+use "../wap/kernel/forms.wap"
+use "../wap/core/stage.wap"
+use "../wap/core/type_notation.wap"
 use "../wap/core/language.wap"
+use "../wap/core/pipeline.wap"
+use "../wap/core/parse/lexemes.wap"
+use "../wap/core/parse/operators.wap"
+use "../wap/core/rules/lines.wap"
+use "../wap/core/rules/lowering.wap"
+use "../wap/core/rules/stages.wap"
+use "../wap/core/rules/typed.wap"
+use "../wap/core/analyze/calls.wap"
+use "../wap/core/analyze/declarations.wap"
+use "../wap/core/analyze/letters.wap"
+use "../wap/core/analyze/modules.wap"
+use "../wap/core/analyze/names.wap"
+use "../wap/core/analyze/scope.wap"
+use "../wap/core/analyze/types.wap"
+use "../wap/core/analyze/variables.wap"
+use "../wap/core/emit/emitter.wap"
 
 # the folder of the preload, as the census is given its files and as their places spell them
 PRELOAD_FOLDER = "wap/preload/"
@@ -21,7 +39,7 @@ for file in args { file_words_defined(language, read_notation(file)) }
 # Each module read, declared and prepared once a run, shared by every file and function probe that uses it: a file's
 # modules are the same values whichever file reaches them, as the compiler makes them (core/pipeline.wap
 # declared_modules, prepared, typed_file)
-class Shared { operated: map = {}, declared: map = {}, prepared: map = {} }
+class Shared { operated: map<text, Node> = {}, declared: map<text, Node> = {}, prepared: map<text, list<Node>> = {} }
 shared = Shared()
 operated_once(file: text) as Node := {
 	global shared
@@ -56,7 +74,7 @@ prepared_once(module: Module, modules: list<Module>) as list := {
 # so it changes how no other form types; a top-level statement's refusal is kept with its module. A module that cannot
 # be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
 # with the file).
-class Run { state: TypingState, frame: TypeFrame, joined: map = {}, refusals: map = {}, probed: map = {} }
+class Run { state: TypingState, frame: TypeFrame, joined: map<text, list> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list<Module>) := {
 	global run
@@ -114,7 +132,9 @@ whole_typed(file: text) as Outcome := {
 # one program, typed once a run. A smaller closure inside it that refuses refuses it too, its refused form being
 # part of it (assumed: the bigger program's other definitions could add an overload that the refused call takes), so
 # the big closures are not typed again once a closure they hold refuses.
-closures: map = {}
+closures: map<text, Outcome> = {}
+# each refused function's name, taken before a rollback drops the function value it may name
+refused_names: map<text, text> = {}
 whole_once(file: text) as Outcome := {
 	global closures
 	keys = files_of(modules_of(file))
@@ -286,8 +306,6 @@ named_in(refusal: Refusal, s: TypingState) as text := {
 	definition = definition_keyed(refusal.key, s) ?? (if lambda is empty then ø else function_of(lambda#1))
 	if definition == ø then refusal.key else called_name(definition)
 }
-# each refused function's name, taken before a rollback drops the function value it may name
-refused_names: map = {}
 rolled_back(before: TypingState) as TypingState := {
 	global refused_names
 	# what was refused stays known: a function refused once is refused to every caller after it, as the typing says
@@ -360,7 +378,8 @@ owned_in(row: text) as list<Owned> := {
 	if #cells != 3 { return [] }
 	cells#3.split("; ")#1.replace(" |", "").split(", ").map(path => Owned("wap/" + path, cells#2))
 }
-owned = read(program.folder + OWNERS_TABLE).split("\n").filter(line => line.starts_with("| ")).flat_map(owned_in)
+owners_table: text = read(program.folder + OWNERS_TABLE)
+owned = owners_table.split("\n").filter(line => line.starts_with("| ")).flat_map(owned_in)
 owner_of(file: text) as text := {
 	rows = owned.filter(each => file.starts_with(each.path)).sorted(by: each => -#each.path)
 	if rows is empty then NO_OWNER else rows#1.owner
