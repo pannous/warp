@@ -201,8 +201,8 @@ checked) and a line here when its language changed. The lead reviews it against 
    2. **met 2026-11-20** (self-loads-27): test/wap/test_self.sh has one line per wap file outside preload/, "wap compiles <file> and the result loads",
       all green; the preload is no program of its own but part of every program, so every test compiles it, and
       the gauge types its functions with the preload as their library;
-   3. wap, run by the old compiler, compiles wap/compiler.wap to wap1.wasm; wap1 compiles it to wap2.wasm, wap2 to
-      wap3.wasm, and wap2 and wap3 are the same bytes;
+   3. wap, run by the old compiler, compiles wap/compiler.wap to wap1.wasm; wap1 compiles it to wap2.wasm, and wap2
+      compiles a hello that runs; the stages need not be the same bytes (user 2026-11-20);
    4. test/wap/run.sh passes with wap2 as the compiler;
    5. wap1 compiling wap/compiler.wap takes under a minute on the Mac;
    6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds;
@@ -233,7 +233,8 @@ review.
    - wap-binding: the binder's Empty marker (`without_fact`), a default of ø, helpers named apart;
    - wap-emitter: `===` as identity, so stage 1 and stage 3 agree on enum tags.
 3. **Stage 2 on the rule engine:** a hole test that reads declarations (`$f: function`, `$p: predicate`).
-   - wap-reader: the hole test (rules/stages.wap); `is pred`, `is not` and arity overloads as preload/sugar/ rules;
+   - wap-reader: the hole test (rules/stages.wap); `is pred` and `is not` as preload/sugar/ rules (nothing rewrites by arity
+     today, so no arity rule);
      the parser's defined_words, local_words and double read gone (operator-spelling aliases stay there).
    - wap-binding: a word alias as binding's fallback for a name nothing in scope defines; the `is`/`not` rewrites gone
      from scope.wap; typing's `print`/`show`/`set`/`#` found by a role the preload marks, not by spelling (the role
