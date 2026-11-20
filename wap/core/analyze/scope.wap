@@ -222,7 +222,7 @@ parameter_definitions(parameters: List, depth: int) as list<Definition> := match
 # reads included (the function passes them on), each defining name once in the order first read; [] when it captures
 # nothing. A closure is built from them (core/emit/closures.wap).
 with_captures(function: Node, scope: Scope, depth: int) as Node := {
-	captured = []
+	captured: list<Node> = []
 	for definer in captured_definers(function) {
 		if from_enclosing_function(definer, scope, depth) and not captured.any(other => same_definer(other, definer)) { captured = captured + [definer] }
 	}
