@@ -5,6 +5,8 @@
 # 2026-11-18. Run it with bash test/wap/test_self.sh; the warp under test is WARP (default the warp on PATH)
 source "$(dirname "$0")/compile.sh"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
+# how many CPU seconds wap1 may take to compile wap's compiler (milestone 2, notes/backbone.md)
+SELF_COMPILE_SECONDS=60
 
 # what loading the module wap makes of a file of wap's own says: "loads", or the compiler's or the run's error
 loaded() {
@@ -84,17 +86,29 @@ files=(
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
 done
-# Stage 2: the module wap makes of its own compiler compiles programs, and they run. The module finds the preload
-# beside itself, so the stage folder holds a copy (the host reads no link out of a folder); it is built once.
-cp -R "$root/wap/preload" "$root/wap/kernel" "$stage/"
-built_self=$($warp "$compiler" "$compiler" "$stage/wap.wasm" 2>&1)
-# what a program compiled by the self-built compiler prints, or the error of either
+# Stage 2: the module wap makes of its own compiler, wap1, compiles programs, and they run; it is built once, its
+# preload beside it (compile.sh compiler_built)
+wap1=$(compiler_built "$stage/self" 1)
+# wap1 built, or why not
+wap1_built() { [ -f "$wap1" ] || { echo "$wap1"; return 1; }; }
+# what a program compiled by wap1 prints, or the error of either
 self_built_ran() {
+	wap1_built || return
 	printf '%s\n' "$2" >"$stage/$1.wap"
-	echo "$built_self" | grep . || { $warp "$stage/wap.wasm" "$stage/$1.wap" "$stage/$1.wasm" 2>&1 && $warp "$stage/$1.wasm" 2>&1; }
+	$warp "$wap1" "$stage/$1.wap" "$stage/$1.wasm" 2>&1 && $warp "$stage/$1.wasm" 2>&1
 }
 check "the compiler wap makes of itself compiles a program that runs" "$(self_built_ran hello 'print "hello from wap"')" "hello from wap"
 check "the self-built compiler keeps two enums' cases of one name apart" "$(self_built_ran tags 'enum A { X, Y }
 enum B { Y, X }
 print text(B.X == A.X)')" "no"
+# and compiles wap's compiler in under a minute (milestone 2, notes/backbone.md), its CPU seconds (user and system),
+# so the machine's load leaves the measure alone
+self_compile_time() {
+	wap1_built || return
+	local cpu seconds TIMEFORMAT="%U %S"
+	cpu=$( { time $warp "$wap1" "$source_compiler" "$stage/self/wap2.wasm" >"$stage/self/compiled.txt" 2>&1; } 2>&1 ) || { cat "$stage/self/compiled.txt"; return; }
+	seconds=$(echo "$cpu" | awk '{ printf "%d", $1 + $2 }')
+	[ $seconds -lt $SELF_COMPILE_SECONDS ] && echo "under a minute" || echo "$seconds s CPU"
+}
+check "wap1 compiles wap's compiler in under a minute" "$(self_compile_time)" "under a minute"
 exit $((failures > 0))

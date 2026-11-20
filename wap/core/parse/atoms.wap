@@ -42,20 +42,23 @@ URL_ENDS = " \t\n\r()[]{},;\"'`"
 name_read(r: Reader) := {
 	end = r.at
 	while end < r.n and is_name_char(r.code[end]) { end += 1 }
-	if slice_of(r, end, min(end + 3, r.n)) == "://" { return url_read(r, end + 3) }
-	if r.code[r.at] == '$' and slice_of(r, end, min(end + 3, r.n)) == REST_MARK { end += 3 }
+	after = slice_of(r, end, min(end + 3, r.n))
+	if after == "://" { return url_read(r, end + 3) }
+	if r.code[r.at] == '$' and after == REST_MARK { end += 3 }
 	symbol_token(r, end)
 }
 
 # the symbol from the reader's place up to `end`, as one token
-symbol_token(r: Reader, end: int) := token(r, LexemeKind.Atom, Symbol(slice_of(r, r.at, end)), end - r.at)
+symbol_token(r: Reader, end: int) := atom_token(r, Symbol(slice_of(r, r.at, end)), end)
+# an atom read from the reader's place up to `end`, as one token; one ending at the reader's place takes no characters
+atom_token(r: Reader, atom: Node, end: int) := token(r, LexemeKind.Atom, atom, end - r.at)
 
 # A word glued to `://` begins a URL, `http://x.com/a?b=1`, any scheme alike: one Text up to the next blank,
 # bracket or separator, as today's warp reads it (reader.md §6, URLs)
 url_read(r: Reader, from: int) := {
 	end = from
 	while end < r.n and not URL_ENDS.contains(r.code[end]) { end += 1 }
-	token(r, LexemeKind.Atom, Text(slice_of(r, r.at, end)), end - r.at)
+	atom_token(r, Text(slice_of(r, r.at, end)), end)
 }
 
 # operator glyphs: one glyph, joined with its repeats and the `=`s after them (`==` `<=` `...` `**=` `!==`), Q5
@@ -97,7 +100,7 @@ number_read(r: Reader) := {
 		}
 	}
 	written = (if sign == '-' then "-" else "") + written.replace("_", "")
-	token(r, LexemeKind.Atom, Number(if is_float then float(written) else whole(written)), end - r.at)
+	atom_token(r, Number(if is_float then float(written) else whole(written)), end)
 }
 
 # after the digits from `at` on, `_` between two digits included
@@ -110,7 +113,7 @@ hex_read(r: Reader, sign: text, from: int) := {
 	end = from
 	while end < r.n and (is_hex_digit(r.code[end]) or r.code[end] == '_') { end += 1 }
 	value = hex_number(slice_of(r, from, end).replace("_", ""))
-	token(r, LexemeKind.Atom, Number(if sign == '-' then 0 - value else value), end - r.at)
+	atom_token(r, Number(if sign == '-' then 0 - value else value), end)
 }
 
 # an int as written, a float beyond the range of an int: past the largest int's digits, compared as texts of one length
@@ -172,21 +175,21 @@ hole_closer_at(r: Reader, at: int) as text? := {
 }
 # a piece of a text with holes begun: joined by `+` to the pieces before it, if any
 piece_begun(r: Reader, pieces: int) := {
-	if pieces > 0 { r.blank = yes; token(r, LexemeKind.Atom, Symbol("+"), 0) }
+	if pieces > 0 { r.blank = yes; atom_token(r, Symbol("+"), r.at) }
 	r.blank = yes
 }
 # a piece of a text with holes, joined by `+` to those before it; an empty text is no piece. The pieces so far after it
 piece_added(r: Reader, piece: Node, pieces: int) as int := {
 	if piece == Text("") { return pieces }
 	piece_begun(r, pieces)
-	token(r, LexemeKind.Atom, piece, 0)
+	atom_token(r, piece, r.at)
 	pieces + 1
 }
 # the hole at the reader's place read as `text(…)`, its code as any code is read, up to its closer; where the text
 # goes on after it
 hole_read(r: Reader, hole_closer: text, pieces: int) as int := {
 	piece_begun(r, pieces)
-	token(r, LexemeKind.Atom, Symbol(TEXT_WORD), 0)
+	atom_token(r, Symbol(TEXT_WORD), r.at)
 	bracket_opened(r, "(", 2)
 	depth = r.opened.length
 	while r.at < r.n and r.error == "" and not (r.code[r.at] == hole_closer and r.opened.length == depth) { read_token(r) }
