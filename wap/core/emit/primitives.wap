@@ -36,7 +36,7 @@ INSTRUCTIONS: map<text, list<int>> = {
 NO_UNLESS_YES = I32_EQZ + IF + VOID_BLOCK + i32_const(0) + RETURN + END
 
 # The operations a helper function of the module performs: operation → the function that builds the helper
-HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "array_slice": slicing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function}
+HELPERS = {"text_written": writing_function, "text_placed": placing_function, "memory_held": memory_holding_function, "array_slice": slicing_function, "raise_text": raising_function, "text_equal": text_equality_function, "text_joined": joining_function, "case_name": case_naming_function}
 # the lists a map holds, not copied: its keys and its values, an entry the same place in both
 MAP_FIELDS = {"map_keys_held": MAP_KEYS, "map_values_held": MAP_VALUES}
 
@@ -131,4 +131,10 @@ slicing_function(p: Program) as int := {
 slice_copied(array: int, source: list<int>) as list<int> := int_local(2) + instruction(ARRAY_NEW_DEFAULT, [array]) + local_set(3) + local_get(3) + i32_const(0) + source + int_local(1) + int_local(2) + instruction(ARRAY_COPY, [array, array])
 # an int local as an i32
 int_local(slot: int) as list<int> := local_get(slot) + I32_WRAP_I64
-
+# The helper giving a case's name by its tag, among the cases of every enum the program declares (patterns.wap
+# tag_of). Its local: 0 the case.
+case_naming_function(p: Program) as int := {
+	cases = p.records.items.flat_map(cases_of)
+	named = (1 to #cases).flat_map(at => local_get(0) + tagged(p.m) + i32_const(at - 1) + I32_EQ + IF + VOID_BLOCK + text_literal(text(case_name(cases#at)), p.m).instructions + RETURN + END)
+	added_function(p.m, [nullable(enum_base(p.m))], [text_layout(p.m)], [], named + UNREACHABLE)
+}
