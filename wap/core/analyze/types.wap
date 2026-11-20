@@ -220,7 +220,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 }
 with_type(n: Node, type: text) as Node := with_fact(n, TYPE, symbol(type))
 # the type of a typed form's value, ø when it gives none
-value_type(n: Node) as Node? := if n == ø then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
+value_type(n: Node) as Node? := if n is Empty then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
 with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fact(n, TYPE, type)
 
 # Statements typed in order, the last one expected the block's type. A function it defines stays as written until the
