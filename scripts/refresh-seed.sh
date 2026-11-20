@@ -5,7 +5,10 @@
 # ends the stages early. A feature the compiler uses on itself (a runtime word, a bundled lib/) arrives a stage after
 # the stage that brings it, so such a change asks for more stages. The seed is what `warp rebuild` builds warp.wasm
 # with; no Rust-compiled stage takes part. (scripts/promote-self.sh is the light check of warp.wasm alone.)
-# usage: scripts/refresh-seed.sh [--check] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
+# usage: scripts/refresh-seed.sh [--check] [--wap] [<tree>, default this checkout]   (--check: run the stages, replace nothing)
+# --wap: wap's seed instead (notes/backbone.md "Architecture changes", step 1): wap-seed/wap.wasm beside the binary,
+# with the preload and kernel it reads beside it, compiles wap/compiler.wap; the stages must reach a fixpoint (C the
+# same bytes as B), and the release is wap-seed-<date>-<sha8> with wap-seed.lock. Old warp's seed is untouched by it.
 # A new seed replaces warp-seed.wasm beside the binary (WARP_SEED names another) and is published as the asset of a
 # GitHub pre-release seed-<date>-<sha8>, where the release workflow and fresh installs fetch it.
 # WARP_BINARY: the warp host to run with (default `warp` on PATH). A stage takes ~1.5-2.5 min on the Mac: run it in
@@ -18,11 +21,14 @@ STAGES=${WARP_SEED_STAGES:-A B C}
 SLOWER_PERCENT=${WARP_SEED_SLOWER_PERCENT:-150}
 TIMEFORMAT="%U %S"
 check=
-[ "${1-}" = --check ] && { check=1; shift; }
+wap=
+while case ${1-} in --check) check=1 ;; --wap) wap=1 ;; *) false ;; esac; do shift; done
 tree=$(cd "${1:-$(git rev-parse --show-toplevel)}" && pwd) || exit 2
 scripts=$(cd "$(dirname "$0")" && pwd)
 warp=${WARP_BINARY:-warp}
-seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}
+if [ -n "$wap" ]; then seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/wap-seed/wap.wasm}; else seed=${WARP_SEED:-$(dirname "$(command -v "$warp")")/warp-seed.wasm}; fi
+# the preload and kernel a wap compiler module reads beside itself
+wap_beside=("$tree/wap/preload" "$tree/wap/kernel")
 compilers=$tree/lib
 built=$compilers/warp.wasm  # where `warp --lib <tree>/lib rebuild pure` writes
 [ -f "$seed" ] || { echo "refresh-seed: no seed at $seed" >&2; exit 2; }
@@ -53,8 +59,15 @@ in_slot() {
   return $status
 }
 stage() {
-  in_slot "$scratch/warm.log" 2 "$warp" "${tree_options[@]}" --seed "$1" rebuild seed  # its machine code, outside the time
-  rm -f "$built"
+  # what the stage runs and where its compiler lands: wap's compiler module compiling wap's source, or a rebuild
+  local made=$built command
+  if [ -n "$wap" ]; then
+    made=$2 command=("$warp" --no-window "$1" "$tree/wap/compiler.wap" "$2")
+  else
+    in_slot "$scratch/warm.log" 2 "$warp" "${tree_options[@]}" --seed "$1" rebuild seed  # its machine code, outside the time
+    command=("$warp" "${tree_options[@]}" --seed "$1" rebuild pure)
+  fi
+  rm -f "$made"
   local start=$SECONDS record=$scratch/$(basename "$2" .wasm).record
   # the speed guard's measure is the instructions the rebuild retired (build-slot.sh's record, /usr/bin/time -l): the
   # same work retires the same count whatever the load and the cores it ran on, where the CPU seconds don't (
@@ -62,17 +75,19 @@ stage() {
   # seconds (user + system) only where no record counts instructions (no lockf, no time -l)
   # a failed rebuild fails the stage even when it wrote warp.wasm (a runtime.wasm or the warming that failed)
   # the line's messages (stderr) go with the output: the cpu file holds only time's line
-  { time (WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "$warp" "${tree_options[@]}" --seed "$1" rebuild pure 2>&1); } 2>"$scratch/cpu" &&
-    [ -f "$built" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed, its log kept in $(kept_log "$scratch/rebuild.log")" >&2; exit 1; }
-  cp "$built" "$2"
+  { time (WARP_BUILD_RECORD=$record in_slot "$scratch/rebuild.log" 5 "${command[@]}" 2>&1); } 2>"$scratch/cpu" &&
+    [ -f "$made" ] || { echo "refresh-seed: $(basename "$2" .wasm) FAILED: the rebuild by $(basename "$1") failed, its log kept in $(kept_log "$scratch/rebuild.log")" >&2; exit 1; }
+  [ "$made" = "$2" ] || cp "$made" "$2"
   local seconds instructions
   seconds=$(awk '{ printf "%d", $1 + $2 }' "$scratch/cpu")
   instructions=$(awk '/instructions retired/ { print $1 }' "$record/time" 2>/dev/null)
   if [ -n "$instructions" ]; then stage_cost=$instructions stage_unit=instructions; else stage_cost=$seconds stage_unit="s CPU"; fi
   echo "refresh-seed: $(basename "$2" .wasm) $(wc -c <"$2" | tr -d ' ') B in $((SECONDS - start)) s, $seconds s CPU, ${instructions:-?} instructions, sha256 $(shasum -a 256 "$2" | cut -c1-16)"
 }
+[ -z "$wap" ] || cp -R "${wap_beside[@]}" "$scratch/" || exit 2
 previous=$seed
 chosen=
+fixpoint=
 old_cost=
 new_cost=
 for name in $STAGES; do
@@ -81,13 +96,21 @@ for name in $STAGES; do
   [ "$previous" != "$seed" ] && chosen=$previous
   if [ "$previous" != "$seed" ] && cmp -s "$previous" "$scratch/$name.wasm"; then
     echo "refresh-seed: $name is the same bytes as the stage before: a fixpoint"
+    fixpoint=1
     break
   fi
   previous=$scratch/$name.wasm
 done
 [ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
-# and the chosen stage runs a program (decision no-fixpoint): the last rebuild, by the chosen stage, runs hello
-hello=$(cd "$tree" && "$warp" samples/hello/hello.warp 2>&1)
+[ -z "$wap" ] || [ -n "$fixpoint" ] || { echo "refresh-seed: wap's stages reached no fixpoint (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
+# and the chosen stage runs a program (decision no-fixpoint): the last rebuild, by the chosen stage, runs hello; wap's
+# chosen stage compiles hello itself
+if [ -n "$wap" ]; then
+  echo 'print "Hello"' >"$scratch/hello.wap"
+  hello=$("$warp" --no-window "$chosen" "$scratch/hello.wap" "$scratch/hello.wasm" 2>&1 && "$warp" --no-window "$scratch/hello.wasm" 2>&1)
+else
+  hello=$(cd "$tree" && "$warp" samples/hello/hello.warp 2>&1)
+fi
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 # a seed is what every `warp rebuild` runs: one that builds warp.wasm clearly slower than the seed it replaces is no
@@ -104,25 +127,34 @@ if [ -n "$check" ]; then
   cmp -s "$chosen" "$seed" && echo "refresh-seed: the seed is that stage" || echo "refresh-seed: the seed differs from that stage (--check: kept)"
   exit 0
 fi
-cp "$chosen" "$seed" && rm -rf "$seed.library" && echo "refresh-seed: replaced $seed"
-# the old seed's machine code goes with it, and a warp-seed.runtime.wasm an older native warp kept (it wrote one only
-# when missing, so a stale one kept the old runtime words: no field built_spelled_list, 2026-10-29; now each rebuild
-# compiles the seed's runtime anew, card seed-compiles)
-rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key" "$seed.driver.build.cwasm" "$seed.driver.build.cwasm.key"
-release=seed-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
-# the release's tag on the very commit the seed was built from, and seed.lock committed beside it, so every later commit
+# what the release holds: the seed and what it needs beside it, wap's preload and kernel or the runtime pair
+if [ -n "$wap" ]; then
+  cp "$chosen" "$seed" && cp -R "${wap_beside[@]}" "$(dirname "$seed")/" && echo "refresh-seed: replaced $seed"
+  prefix=wap-seed lock=wap-seed.lock compiled="wap's seed compiler: wap/compiler.wap"
+  assets=("$seed" "$scratch/wap-seed-beside.tar.gz")
+  tar -czf "${assets[1]}" -C "$tree/wap" preload kernel || { echo "refresh-seed: the preload and kernel were not packed" >&2; exit 1; }
+else
+  cp "$chosen" "$seed" && rm -rf "$seed.library" && echo "refresh-seed: replaced $seed"
+  # the old seed's machine code goes with it, and a warp-seed.runtime.wasm an older native warp kept (it wrote one only
+  # when missing, so a stale one kept the old runtime words: no field built_spelled_list, 2026-10-29; now each rebuild
+  # compiles the seed's runtime anew, card seed-compiles)
+  rm -f "${seed%.wasm}.runtime.wasm" "${seed%.wasm}.runtime.wasm.cwasm" "$seed.cwasm" "$seed.driver.cwasm" "$seed.driver.cwasm.key" "$seed.driver.build.cwasm" "$seed.driver.build.cwasm.key"
+  prefix=seed lock=seed.lock compiled="The seed compiler: core/compiler.warp"
+  # the pair the seed builds of its own source goes with it: the seed compares texts by NFC, so where no installed lib/
+  # lies (a CI runner, scripts/ci-compilers.sh) it links these until its rebuild writes the tree's own
+  assets=("$seed" "$scratch/warp-seed-runtime.wasm" "$scratch/warp-seed-unicode.wasm")
+  "$warp" "$seed" runtime "${assets[1]}" && "$warp" "$seed" module unicode "${assets[1]}" "${assets[2]}" ||
+    { echo "refresh-seed: the new seed built no runtime.wasm and unicode.wasm to publish beside it" >&2; exit 1; }
+fi
+release=$prefix-$(date +%Y-%m-%d)-$(shasum -a 256 "$seed" | cut -c1-8)
+# the release's tag on the very commit the seed was built from, and the lock committed beside it, so every later commit
 # names its seed and any commit's compiler can be built again (scripts/seed.sh)
 source_commit=$(git -C "$tree" rev-parse HEAD)
-# the pair the seed builds of its own source goes with it: the seed compares texts by NFC, so where no installed lib/
-# lies (a CI runner, scripts/ci-compilers.sh) it links these until its rebuild writes the tree's own
-pair=("$scratch/warp-seed-runtime.wasm" "$scratch/warp-seed-unicode.wasm")
-"$warp" "$seed" runtime "${pair[0]}" && "$warp" "$seed" module unicode "${pair[0]}" "${pair[1]}" ||
-  { echo "refresh-seed: the new seed built no runtime.wasm and unicode.wasm to publish beside it" >&2; exit 1; }
-gh release create "$release" "$seed" "${pair[@]}" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
-  --notes "The seed compiler: core/compiler.warp of ${source_commit:0:10} compiled by a stage that compiles itself once more." &&
+gh release create "$release" "${assets[@]}" --repo pannous/warp --prerelease --title "$release" --target "$source_commit" \
+  --notes "$compiled of ${source_commit:0:10} compiled by a stage that compiles itself once more." &&
   echo "refresh-seed: published $release"
-echo "$release $(shasum -a 256 "$seed" | cut -d' ' -f1)" >"$tree/seed.lock"
-git -C "$tree" add seed.lock && git -C "$tree" commit -q -m "chore: seed.lock names $release, built from ${source_commit:0:10}" -- seed.lock &&
-  echo "refresh-seed: seed.lock committed in $tree: push it with the tree"
+echo "$release $(shasum -a 256 "$seed" | cut -d' ' -f1)" >"$tree/$lock"
+git -C "$tree" add "$lock" && git -C "$tree" commit -q -m "chore: $lock names $release, built from ${source_commit:0:10}" -- "$lock" &&
+  echo "refresh-seed: $lock committed in $tree: push it with the tree"
 # its machine code beside it, for the engine runs use (card precompiled-compilers): no build JIT-compiles the seed
-(cd "$tree" && "$warp" rebuild seed)
+[ -n "$wap" ] || (cd "$tree" && "$warp" rebuild seed)
