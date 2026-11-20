@@ -68,7 +68,11 @@ WAP_OTHER = "other"  # compiler.wap and wap/core/*.wap
 WAP_LINE_LIMIT = 300  # a wap file past it is split (notes/wap.md)
 WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
-WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap/ and the census script of main's tip, extracted to run them: one folder per job
+# wap's own repository (pannous/wap) since it left warp at WAP_CUT, warp's last commit holding wap/: wap's history is
+# warp's up to the cut, the checkout's after it
+WAP_CHECKOUT = "/Users/me/dev/angles/wap"
+WAP_CUT = "ffcad762e0"
+WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap/ and the census script of wap's tip, extracted to run them: one folder per job
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 # what measures wap: wap1, main's wap/ compiled by wap's seed (test/wap/compile.sh, which builds it once per state of
 # wap/ into the folder's data/ and names it), with what compile.sh reads and the census's owners table beside it
@@ -103,19 +107,20 @@ def component(path):
     return parts[0] if parts[0] in ("test", "samples") else None
 
 
-def git(*args):
+def git(*args, repository=REPO):
     # errors="replace": a results file may hold a test's raw bytes (bd625bdbdb's has a lone 0x83)
-    return subprocess.run(["git", "-C", REPO, *args], capture_output=True, text=True, errors="replace", check=True).stdout
+    return subprocess.run(["git", "-C", repository, *args], capture_output=True, text=True, errors="replace", check=True).stdout
 
 
 # main read once: a fetch during the run must not mix two tips (KeyError in PARENTS)
 TIP = git("rev-parse", "origin/main").strip()
+WAP_TIP = git("rev-parse", "origin/main", repository=WAP_CHECKOUT).strip()
 
 
-def file_lines(commit, classify=component):
+def file_lines(commit, classify=component, repository=REPO):
     """(path, lines) of each file of <commit> that <classify> names a component of"""
-    wanted = [f for f in git("ls-tree", "-r", "--name-only", commit).splitlines() if classify(f)]
-    blob = subprocess.run(["git", "-C", REPO, "cat-file", "--batch"], capture_output=True, check=True,
+    wanted = [f for f in git("ls-tree", "-r", "--name-only", commit, repository=repository).splitlines() if classify(f)]
+    blob = subprocess.run(["git", "-C", repository, "cat-file", "--batch"], capture_output=True, check=True,
                           input="".join(f"{commit}:{f}\n" for f in wanted).encode()).stdout
     position = 0
     for f in wanted:
@@ -147,19 +152,30 @@ def append_snapshot(path, snapshot):
         kept.write(json.dumps(snapshot) + "\n")
 
 
-def commit_date(revision):
-    return git("log", "-1", "--format=%cd", "--date=iso-strict", revision).strip()[:16].replace("T", " ")
+def commit_date(revision, repository=REPO):
+    return git("log", "-1", "--format=%cd", "--date=iso-strict", revision, repository=repository).strip()[:16].replace("T", " ")
+
+
+# wap/'s tree at wap's tip: a census or hello is due when it changed
+def wap_tree():
+    return git("rev-parse", f"{WAP_TIP}:wap", repository=WAP_CHECKOUT).strip()[:12]
+
+
+# each commit of main that changed wap/, oldest first, [repository, sha, date]: warp's up to the cut, then wap's own
+def wap_commits():
+    return [[repository, *line.split()] for repository, tip in ((REPO, WAP_CUT), (WAP_CHECKOUT, WAP_TIP))
+            for line in git("log", "--first-parent", "--reverse", "--format=%H %ad", "--date=iso-strict", tip, "--", "wap",
+                            repository=repository).splitlines()]
 
 
 def wap_sizes():
-    """wap's lines at each commit of main that changed wap/: [date, commit, total, lines per stage, core lines then, files
-    over WAP_LINE_LIMIT then] and the files over the limit at the tip, [path, lines]"""
+    """wap's lines at each commit of main that changed wap/ (warp's, then wap's own repository's): [date, commit, total,
+    lines per stage, core lines then, files over WAP_LINE_LIMIT then] and the files over the limit at the tip, [path, lines]"""
     classify = lambda path: path.endswith(".wap") and path.startswith("wap/") and next(
         (stage for stage, prefix in WAP_STAGES if path.startswith(prefix)), WAP_OTHER)
     series, over = [], []
-    for line in git("log", "--first-parent", "--reverse", "--format=%H %ad", "--date=iso-strict", TIP, "--", "wap").splitlines():
-        sha, date = line.split()
-        stages, files = collections.Counter(), list(file_lines(sha, classify))
+    for repository, sha, date in wap_commits():
+        stages, files = collections.Counter(), list(file_lines(sha, classify, repository))
         for path, lines in files:
             stages[classify(path)] += lines
         over = sorted(([path, lines] for path, lines in files if lines > WAP_LINE_LIMIT), key=lambda file: -file[1])
@@ -170,20 +186,15 @@ def wap_sizes():
 
 
 def wap_extracted(kind):
-    """wap/ and the census script of main's tip, extracted fresh into the folder of <kind> (the census job and the hello
-    measure run apart, each in its own); its data/ is kept, where compile.sh caches wap1. A wap/ that is a link (into
-    wap's own repository) is read through the tree's own wap/"""
+    """wap/ and the census script of wap's tip (its own repository), extracted fresh into the folder of <kind> (the census
+    job and the hello measure run apart, each in its own); its data/ is kept, where compile.sh caches wap1"""
     folder = WAP_TREE % kind
     os.makedirs(folder, exist_ok=True)
     for name in os.listdir(folder):
         if name != "data":
             path = os.path.join(folder, name)
             shutil.rmtree(path) if os.path.isdir(path) and not os.path.islink(path) else os.remove(path)
-    subprocess.run(f"git -C {REPO} archive {TIP} {' '.join(WAP_EXTRACTED)} | tar -x -C {folder}", shell=True, check=True)
-    wap = os.path.join(folder, "wap")
-    if os.path.islink(wap):
-        os.remove(wap)
-        os.symlink(os.path.realpath(os.path.join(REPO, "wap")), wap)
+    subprocess.run(f"git -C {WAP_CHECKOUT} archive {WAP_TIP} {' '.join(WAP_EXTRACTED)} | tar -x -C {folder}", shell=True, check=True)
     return folder
 
 
@@ -251,10 +262,10 @@ def wap_census_job():
     """`vitals.py --census`, started detached by the hourly run: the census of main's tip, its snapshot appended when it ends"""
     try:
         folder = wap_extracted("census")
-        files = sorted(f for f in git("ls-tree", "-r", "--name-only", TIP, "wap").splitlines() if f.endswith(".wap"))
+        files = sorted(f for f in git("ls-tree", "-r", "--name-only", WAP_TIP, "wap", repository=WAP_CHECKOUT).splitlines() if f.endswith(".wap"))
         census = wap_census(folder, files)
         append_snapshot(WAP_SNAPSHOTS, {"kind": "census", "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
-                                         "commit": TIP[:10], "tree": git("rev-parse", f"{TIP}:wap").strip()[:12], **census})
+                                         "commit": WAP_TIP[:10], "tree": wap_tree(), **census})
     finally:
         os.remove(WAP_CENSUS_PID)
 
@@ -285,7 +296,7 @@ def wap_hello():
 def wap_road():
     """wap's snapshots: the newest census (taken by the detached census job, started here when due), hello by wap measured here
     when wap/ changed since its last snapshot, and wap's tests' summary whenever test/wap/run.sh wrote a new one."""
-    snapshots, tree = read_snapshots(WAP_SNAPSHOTS), git("rev-parse", f"{TIP}:wap").strip()[:12]
+    snapshots, tree = read_snapshots(WAP_SNAPSHOTS), wap_tree()
     if census_due([s for s in snapshots if s["kind"] == "census"], tree):
         with open(WAP_CENSUS_LOG, "w") as log:
             job = subprocess.Popen(["nice", "-n", "19", sys.executable, os.path.abspath(__file__), "--census"], stdout=log,
@@ -293,7 +304,7 @@ def wap_road():
         with open(WAP_CENSUS_PID, "w") as pid:
             pid.write(str(job.pid))
     if not any(s["kind"] == "hello" and s["tree"] == tree for s in snapshots) and (measured := wap_hello()):
-        snapshots.append({"kind": "hello", "time": commit_date(TIP), "commit": TIP[:10], "tree": tree, **measured})
+        snapshots.append({"kind": "hello", "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
         append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
     summary = max((path for path in WAP_TESTS_SUMMARIES if os.path.exists(path)), key=os.path.getmtime, default=None)
     if summary and (match := WAP_TESTS_LINE.search(open(summary).read())):
@@ -307,7 +318,7 @@ def wap_road():
 def wap_track():
     sizes, over = wap_sizes()
     return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": [name for name, _ in WAP_STAGES] + [WAP_OTHER],
-            "snapshots": wap_road()}
+            "snapshots": wap_road(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
 
 
 if CENSUS_JOB:
