@@ -448,3 +448,8 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   program's definitions dispatch across all its modules, and a Node parameter dispatches as any, so analyze's
   `valued(type: Node?)` beside emit's `valued(type: list<int>)` is refused though each call site's types tell them
   apart. Paid off when a call is resolved statically wherever its argument types decide it.
+- **A preload file compiled as the program brings its definitions twice** (wap/core/pipeline.wap typed_file): the
+  file is the program and also part of the library around it, so calls.wap refuses "two definitions share the key"
+  (preload/floats.wap, host, texts, preload.wap, prelude.wap) and nodes.wap lists `text(n: Node)` twice. Off the
+  census: a preload file is library, typed function by function, never a program of its own. Paid off when a program
+  that is a preload file is bound inside the rest of the preload only.
