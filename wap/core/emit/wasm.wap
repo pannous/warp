@@ -31,8 +31,9 @@ class WasmModule {
 	naming: list<text> = []
 	reserved: list<int> = []
 }
-# a recursion group: the index of its first type, and how many it holds
-class RecursionGroup { first: int, count: int }
+# a recursion group: the index of its first type, how many it holds, and whether its types are distinct from the
+# same shapes elsewhere; those of records that refer to each other are not, so they are found again by shape
+class RecursionGroup { first: int, count: int, distinct: bool }
 # a function of the module: its type's index, and its code, empty while only its place is reserved
 class DefinedFunction { type_index: int, code: list<int> }
 
@@ -110,7 +111,7 @@ open_type(supertypes: list<int>, type: list<int>) as list<int> := [SUBTYPE] + un
 
 # The index of a type, added once. Each type is its own recursion group, so a struct may hold references to itself.
 added_type(m: WasmModule, type: list<int>) as int := {
-	for at in 1 to #m.types { if m.types#at == type and grouped(m, at - 1).count == 1 { return at - 1 } }
+	for at in 1 to #m.types { if m.types#at == type and not grouped(m, at - 1).distinct { return at - 1 } }
 	m.types += [type]
 	#m.types - 1
 }
@@ -118,7 +119,7 @@ added_type(m: WasmModule, type: list<int>) as int := {
 # their shapes match, so a reference tells at run time which of them it is. The index of the first.
 added_group(m: WasmModule, types: list<list<int>>) as int := {
 	for group in m.groups { if m.types[group.first .. group.first + group.count] == types { return group.first } }
-	m.groups += [RecursionGroup(#m.types, #types)]
+	m.groups += [RecursionGroup(#m.types, #types, yes)]
 	m.types += types
 	m.groups.last.first
 }
@@ -146,7 +147,7 @@ named_added(m: WasmModule, name: text, type: list<int>) as int := {
 	at = m.named[name]
 	m.types = m.types[0 .. at] + [type] + m.types[at + 1 ..]
 	if m.reserved.all(slot => m.types#(slot + 1) != []) {
-		m.groups += [RecursionGroup(m.reserved#1, #m.types - m.reserved#1)]
+		m.groups += [RecursionGroup(m.reserved#1, #m.types - m.reserved#1, no)]
 		m.reserved = []
 	}
 	at
@@ -154,7 +155,7 @@ named_added(m: WasmModule, name: text, type: list<int>) as int := {
 # the group a type's index lies in; a type declared alone is a group of one, as the format reads it
 grouped(m: WasmModule, index: int) as RecursionGroup := {
 	for group in m.groups { if index >= group.first and index < group.first + group.count { return group } }
-	RecursionGroup(index, 1)
+	RecursionGroup(index, 1, no)
 }
 # the type section's entries: a group of one as its type, a larger group as one entry of its types
 type_entries(m: WasmModule) as list<list<int>> := {
