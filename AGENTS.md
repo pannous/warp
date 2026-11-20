@@ -316,9 +316,7 @@ before asking a question). After a context swap, this file and your role file be
 - Explore before the first edit of a card, a bug or a "why" question: spec, history, live work and evidence.
 - Quick cards first: those that never touch core/ or extensions/ (website, samples, lib/). core/ or extensions/ needs a
   compiler build: never quick.
-- A TODO in the code without a card gets one: `# TODO (card <name>) <text>`, card name right after the word TODO.
-- Sprint (user, from 2026-11-16): a new card only when it reduces existing ones (a split that closes others, a
-  shared root cause); features come only from the user.
+- A TODO in the code names an existing card: `# TODO (card <name>) <text>`; without one it stays a plain TODO.
 - A new card's title is one plain sentence the user understands without context (what goes wrong or is wanted);
   keys, names and paths go in the body.
 - Unrelated problems: a `todo note` on the nearest card, or a test line that shows them. Tiny no-choice fixes (typo, stale comment, wrong path) on the spot, own commit.
