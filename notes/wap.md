@@ -95,6 +95,7 @@ wap/
       definers.wap            the ids of the names that define something, given by the prescan and binding
       modules.wap             the modules a program uses, by file name, as binding sees them
       scope.wap               the one binding analysis: what each name refers to
+      library.wap             the preload bound but for its functions, each bound once typing reaches it
       names.wap               what a name may mean: the scope's layers, each finding its definitions by name
       variables.wap           which variable each assignment gives a value to, in written order; late reads
       types.wap               bidirectional typing of kernel code; the dispatch over forms

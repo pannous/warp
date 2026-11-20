@@ -1,0 +1,33 @@
+# The library a program is bound in (core/pipeline.wap library_code_of): the preload bound but for its functions,
+# each bound when typing first reaches one, so a program binds only the library functions it calls. Input: the
+# preload lowered; output: its statements, the functions unbound (UNBOUND), and the scope they bind in.
+use "scope.wap"
+use "definers.wap"
+use "types.wap"
+use "names.wap"
+use "variables.wap"
+use "declarations.wap"
+use "modules.wap"
+use "../stage.wap"
+use "../bindings.wap"
+use "../../kernel/forms.wap"
+
+class Library { code: Node; scope: Scope }
+library_bound(library: Block, modules: list<Module>) as Library := {
+	known = identified_program(library, [], modules)
+	Library(finished(known, known.statements.map(statement => if statement is Define then with_fact(statement, UNBOUND, True) else bound(statement, known.scope, PROGRAM_DEPTH))), known.scope)
+}
+# a program's statements, their defining names identified, and the scope they bind in
+class Identified { code: Node; statements: list<Node>; scope: Scope; ids: Definers }
+identified_program(program: Block, preload: list<Node>, modules: list<Module>) as Identified := {
+	codes = codes_of(modules)
+	clashes_refused(codes)
+	ids = definers_of(program)
+	identified = definers_identified(program, ids)
+	statements = statements_in(identified)
+	Identified(identified, statements, block_scope(identified, statements, scope_around(preload, codes), PROGRAM_DEPTH), ids)
+}
+# the program of these statements, its late reads checked, its definers counted
+finished(known: Identified, statements: list<Node>) as Node := with_definers(late_reads_checked(refitted(Block(statements), known.code)), known.ids)
+# a library function bound once typing reaches it, in the library's scope; any other definition as it is
+reached_bound(define: Node, scope: Scope) as Node := if fact_of(define, UNBOUND) == True then bound(with_fact(define, UNBOUND, False), scope, PROGRAM_DEPTH) else define

@@ -34,6 +34,7 @@ use "../../kernel/forms.wap"
 use "letters.wap"
 use "shapes.wap"
 use "../rules/typed.wap"
+use "names.wap"
 
 # the types of the literals, as a program writes them
 INT_TYPE = "int"
@@ -94,6 +95,8 @@ class TypingState {
 	ids: Definers = Definers(".")
 	# the typed rules, which fire on each node as typing writes it (core/rules/typed.wap), and how deep they refire
 	kind_rules: KindRules? = ø
+	# the scope the library's functions bind in, each once typing reaches it (core/analyze/scope.wap library_bound)
+	library_scope: Scope = Scope()
 	refirings: int = 0
 }
 # a function's typed instances so far, and one more
@@ -149,16 +152,17 @@ class TypeFrame {
 }
 
 # the program typed, after the preload's functions it calls, the typed rules firing as it is typed
-typed_program(program: Block, preload: Block, rules: KindRules) as Block := typed_among(program, statements_in(preload), rules)
-# the program typed, after the library's records and those of its definitions it calls
-typed_among(program: Block, library: list, rules: KindRules) as Block := {
+typed_program(program: Block, library: Library, rules: KindRules) as Block := typed_among(program, statements_in(library.code), rules, library.scope)
+# the program typed, after the library's records and those of its definitions it calls, each definition shaped and
+# bound when typing first reaches it (core/analyze/calls.wap reached)
+typed_among(program: Block, library: list, rules: KindRules, library_scope: Scope) as Block := {
 	s = TypingState()
 	s.kind_rules = rules
+	s.library_scope = library_scope
 	s.ids = definers_of(program)
 	defines = library.filter(statement => statement is Define)
 	s.definitions = defines.map(function_of)
 	s.records = added_records(Records(), library)
-	s.definitions = shaped_definitions(s.definitions, s)
 	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
 	if s.refusals { refused_all(s, []) }
 	statements = statements_in(typed)
@@ -238,9 +242,8 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 	s.records = added_records(s.records, written)
 	# a block typed again, a typed rule's code around it, adds only the definitions typing does not hold yet
 	s.definitions = s.definitions + written.filter(statement => statement is Define and definition_keyed(function_key_of(statement), s) == ø).map(function_of)
-	# shaped once all are known: a pattern's builder may come after a definition naming its type
-	s.definitions = shaped_definitions(s.definitions, s)
-	# each definition as the typing stage keeps it, its written types' shapes known
+	# each definition as the typing stage keeps it, its written types' shapes known once all are: a pattern's builder
+	# may come after a definition naming its type
 	statements = written.map(statement => if statement is Define then held_function(statement, s).definer else statement)
 	# a statement wap refuses still lets the definitions beside it be typed, so their refusals are said with its own
 	typed = try (1 to #statements).map(at => typed_form(statements#at, s, f, if at == #statements then expected else ø)) catch e {
