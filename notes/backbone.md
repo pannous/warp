@@ -267,7 +267,9 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A name a program defines is read as its alias's canonical word** (wap/core/parse/operators.wap word_read: `length`
   and `size` read as `count`), so two variables `length` and `count` in one scope are one variable. Reason: found in
   the stage-2 self-build; host.wap placing_function names its local `measure` instead. Paid off when an alias applies
-  only to a word nothing in the program defines.
+  only to a word nothing in the program defines. Paid off: an alias reads only a word nothing in scope defines
+  (core/parse/operator_table.wap words_defined, test_lists "a program's own length and count are two names"); the
+  local is `length` again.
 
 - **A function value read from a map, called twice through a parameter, traps** (wap/core/emit/function_values.wap;
   reported by warp-wap-reader 2026-11-19): `m: map<text, (int) -> int>`, then `f(f(x))` inside a function taking
