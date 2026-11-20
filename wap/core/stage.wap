@@ -53,11 +53,12 @@ refitted(built: Node, original: Node) as Node := {
 	with_facts_of(positioned_like(built, original), original)
 }
 
-# n with each fact of the original it does not hold yet; Empty carries none
+# n with each fact of the original whose name it holds no fact of: what n learned itself wins; Empty carries none
 with_facts_of(n: Node, original: Node) as Node := {
 	if n is Empty { return n }
 	held = attributes_of(n)
-	for fact in attributes_of(original) { if not held.contains(fact) { n = with_attribute(n, fact) } }
+	names = held.map(fact_name)
+	for fact in attributes_of(original) { if not held.contains(fact) and (fact_name(fact) == "" or not names.contains(fact_name(fact))) { n = with_attribute(n, fact) } }
 	n
 }
 
@@ -85,7 +86,9 @@ SCRIPT = "script"
 with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
 # whether a stage has learned the fact of that name; one that holds ø is learned too, `o: text? = ø` a default
 has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => is_fact_named(fact, name))
-is_fact_named(fact: Node, name: text) as bool := match fact { Key(Symbol(fact_name), Op.Colon, value) => fact_name == name; _ => no }
+is_fact_named(fact: Node, name: text) as bool := fact_name(fact) == name
+# a fact's name, "" of an attribute that is no fact
+fact_name(fact: Node) as text := match fact { Key(Symbol(name), Op.Colon, value) => name; _ => "" }
 # the fact of that name, ø when no stage has learned it
 fact_of(n: Node, name: text) as Node? := {
 	found: Node? = ø

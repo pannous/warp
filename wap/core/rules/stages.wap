@@ -152,7 +152,8 @@ refusal_of(template: Node) as text? := phrase_text(template, REFUSE_WORD)
 # ---- termination, checked once all rules are loaded
 
 # Every rule's template names heads that may fire again where it built. Following those from head to head must
-# never come back, unless each rule on the way writes less code than it matched (each hole counted once).
+# never come back, unless each rule on the way writes less code than it matched (each hole counted once), or takes a
+# fact: no template writes one, so such a rule fires once where a stage wrote it.
 terminating(language: Language, rules: Rules) := {
 	for head in rules.by_head.keys { cycle_refused(language, rules, head, []) }
 }
@@ -160,7 +161,7 @@ terminating(language: Language, rules: Rules) := {
 cycle_refused(language: Language, rules: Rules, head: text, path: list) := {
 	if path.contains(head) {
 		closing = path[path.index_of(head) ..] + [head]
-		growing = rules_on(rules, closing).filter(rule => not shrinking(rule))
+		growing = rules_on(rules, closing).filter(rule => not shrinking(rule) and rule.fact == "")
 		if growing is not empty { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
 		return
 	}
@@ -287,7 +288,7 @@ rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 		if rules.by_head.has(head) {
 			for rule in rules.by_head[head] {
 				bindings = {}
-				if (rule.fact == "" or fact_of(n, rule.fact) != ø) and matches(rule.matcher, n, bindings) {
+				if (rule.fact == "" or fact_of(n, rule.fact) == True) and matches(rule.matcher, n, bindings) {
 					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: ${best.written} and ${rule.written}") }
 					if best == ø or rule.specificity > best.specificity { best = rule; best_bindings = bindings }
 				}
@@ -298,5 +299,7 @@ rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 	refusal = refusal_of(best.template)
 	if refusal != ø { refused(n, refusal) }
 	result = built(language, best.template, with_fresh_names(best_bindings, best.fresh))
-	[if result is Empty then result else with_fact(result, RULE, best.written)]
+	# a rule that asks a fact takes it: what it writes holds it no more, so it fires once where a stage wrote the fact
+	taken = if best.fact == "" or result is Empty then result else with_fact(result, best.fact, False)
+	[if taken is Empty then taken else with_fact(taken, RULE, best.written)]
 }
