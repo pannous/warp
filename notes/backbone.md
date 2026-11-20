@@ -56,8 +56,8 @@ lead first, as a change of this table.
 | lower | core/rules/lowering.wap | wap-reader | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-binding | bound kernel | typed kernel |
+| kind rules (stage 3): in the type walk, on each node as typing writes it, before elaborate | core/rules/typed.wap, engine core/rules/ | wap-reader | a node as typed | its rewrite, typed in place |
 | elaborate | core/analyze/types.wap, calls.wap | wap-binding | typed kernel | typed kernel, one instance per tuple |
-| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -352,7 +352,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
-  versions typing made before, not a new one.
+  versions typing made before, not a new one. Paid (typed-rules-ordering): rules fire in the type walk.
 - **The class rule's helper words are ordinary words** (wap/preload/sugar/records.wap `member_as "field"`,
   `member_of`, `shown_case`): a program writing them is rewritten too. Words only rule files may write need a private
   word in the reader; paid off when a program meets one.
@@ -361,12 +361,14 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A list's brackets and separator are spelled twice**, in wap/preload/nodes.wap (opening, closing, separator_text) and
   wap/core/format.wap: warp, which compiles the compiler, refuses the preload's own Node enum, so format.wap cannot use
   nodes.wap. Paid off when wap compiles itself and the compiler sees the preload: format.wap's three go.
+  Paid off: format.wap uses the preload's opening, closing and separator_text (wap-debts-front).
 - **Stage 3 serves only the rules programs write** (decision hole-types): no rewrite of wap's own moves into it. The
   char read as a text depends on the type its place wants (binding's conversion), `x is w` on what w means (scope);
   a typed rule sees only its hole's type.
 - **wap's reader refuses instead of returning an `Error` node** (wap/core/parse/reader.wap). Bends notes/reader.md
   §1, which promises `Error` in the notation. Reason: in warp (which runs wap) an `Error` node cannot be told apart:
   `match` takes a Key or a List for `Error(…)`, and `is Error` says no. Paid off when the reader runs on wap.
+  Paid off: the reader writes `Error(why: where)` and the compiler refuses it where it reads a file (wap-debts-front).
 - **Ints longer than 18 digits read as floats** (wap/core/parse/reader.wap `whole`). Reason: warp's `int(text)`
   wraps beyond 64 bits. Paid off by an unbounded int reading.
 - **Glued names read as operators** (`a-b` is `(Call - a b)`). Kebab names are stage 2 by notes/reader.md, but the
@@ -437,6 +439,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   core/node.warp whole, but its `List(items: list, …)` gives an untyped list whose items wap can't read (`data#1` is
   refused: no # takes (list, int)). Reading it needs a bare `list` to mean list<any> and an `any` read back as a Node by
   a match. Until then nodes.wap types the items list<Node>, and the two copies must change together.
+  Paid off: wap compiles its own source, so nodes.wap's Node is wap's own; core/node.warp is old warp's (wap-debts-front).
 - **A rewrite that loops forever hangs the compiler instead of being refused** (wap/core/rules/stages.wap): letting
   any rule read a square list as one phrase made `xs = [1 2 3]` hang, some rule rewriting the phrase `1 2 3` again and
   again (the loop was not traced). A list is now one phrase only when its first word leads a rule. A rewrite whose
@@ -450,17 +453,20 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   reads wap's source the same; the table can't build it, and naming each Op in its row would save about 15 nodes for a
   second mechanism (warp-simplifier measured it, 2026-11-19). Paid off when old warp no longer reads wap's source: Op
   then comes from the table.
+  Found (wap-debts-front): 48 of 63 cases have no row of their name (sub/subtract, lt/less, the derived compound
+  assignments, Div / vs ÷); paid off by renaming the cases after the rows, plus a rule for the derived ones.
 
 - **The literals a template writes are named twice** (wap/kernel/forms.wap literal_named): `True()`, `False()` and
   `Empty()` are spelled out beside preload/nodes.wap's declaration of Node's fieldless cases. The general rule is that
   a template's glued call of an enum's fieldless case builds that case. Reason: templates are built before the
   preload's Records are declared, so they can't look the cases up. Paid off when templates see the declared Records:
   the table goes for that lookup.
-
 - **A rule that writes nothing writes the mark `()`** (wap/core/rules/stages.wap NOTHING_WRITTEN): a symbol its list
   drops, where an empty statement sequence would say it. Reason: old warp, which runs wap's source, reads an empty
   List node as ø, which a rule may also write as a value, `rule ø => Empty()`. Paid off when old warp retires: the
   mark becomes the empty sequence.
+  Paid off: NOTHING_WRITTEN is the empty statement sequence, and spread needs no mark (wap-debts-front).
+
 - **Overloads rank by weights, not by subsumption** (wap/core/analyze/calls.wap most_specific, ranked: typing weight,
   written structure, derived), and `text(1 to 3)` is refused as reading two ways. Reason: paused for the self-build
   census (user 2026-11-19). The subsumption ranking under the one conversion is built and parked on branch
@@ -486,13 +492,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   taken. Paid off when a function's value fits a written function type wherever it is given.
 - **stage.wap's `replaced` is `staged`'s Node form, named apart** (wap/core/stage.wap): old warp cannot tell a Node
   parameter from a function-typed one, so `staged(n, built: Node)` beside `staged(n, rewrite: (Node) -> Node)` is
-  refused. Paid off when old warp retires: one overloaded `staged`.
+  refused. Paid off when old warp retires: one overloaded `staged`. Paid (wap-facts-replace): one function,
+  `replaced(n, built)`; a stage that rewrites n passes what it built from n.
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
   defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
 - **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
   can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
-  preload/lists.wap with a test_lists line.
+  preload/lists.wap with a test_lists line. Old warp no longer builds wap's tests (wap-facts-replace): the tests'
+  compiler starts from the seed beside the seed's own preload, which lacks `compact` too, so the move waits for a seed
+  whose preload holds it.
 - **A shape's value is named a Node before it joins a list of Nodes** (wap/core/analyze/matching.wap shape_missing,
   list_missing): `[Call(…)] + inner` binds `+`'s T to Call and to Node, which bound_as refuses, so the witness is
   written `shape: Node = Call(…)` first. Paid off when a letter bound to a shape and to the type it narrows binds that type.
@@ -519,3 +528,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   no `<` for a number and an int; reported to warp-wap-binding). Paid off when that compares: led_by_sign's arm is
   `Number(value) => value < 0` again and below_zero goes. Paid off: binding's number-compare (445d612b1c) widens the
   int, and led_by_sign reads `value < 0` again.
+
+- **The source avoids comparing an optional record with ø** (core/rules/patterns.wap names_pattern, matcher.wap
+  of_shape, stages.wap rule_applied's best as a list), because the seed's emitter compares records field by field.
+  Paid off at the next seed refresh, once the seed compares an optional with ø: `!= ø` and `best: Rule? = ø` again.
+
+- **analyze/types.wap reaches rules/ (typed.wap) through a use**, because wap cannot call a function value read from
+  a field (`this holds a function, no function to call`). Paid off when a field's function value can be called; then
+  it is a function value on TypingState.

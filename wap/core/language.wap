@@ -1,25 +1,32 @@
 # The language a program is read in (notes/wap_review.md "Fix 7"): the operator table with the program's own
-# operators joined, the words of the rules' phrases, the rules of stages 1 and 3 and the declared patterns. One value,
-# which every front stage takes as a parameter: no stage reads a table another stage fills behind it, and two programs
-# read in one process share nothing they declare.
+# operators joined, the words of the rules' phrases, the rules of stages 1 to 3, the declarations stage 2 reads and
+# the declared patterns. One value, which every front stage takes as a parameter: no stage reads a table another stage
+# fills behind it, and two programs read in one process share nothing they declare.
 use "../preload/operators.wap"
 use "rules/patterns.wap"
 use "parse/operator_table.wap"
 use "stage.wap"
+use "analyze/declarations.wap"
 
 # The words of rules' phrases: those they start with, `return` of `rule return $value... => …`, each with whether one of
 # its rules takes a block, and those inside, `then`, `else`. The rule stage tells them as it loads rules, the operator
 # stage reads them.
 class PhraseWords { leading: map<text, bool>, inner: map<text, bool> }
 
-class Rule { head: text, matcher: Matcher, template: Node, fresh: list<text>, written: Node, specificity: int }
-# the rules of one stage, by head: stage 1 asks only shapes, stage 3 the types of typed code (a hole of a value type)
+# fact: a fact the matched code must carry, `rule … where script`, none when ""
+class Rule { head: text, matcher: Matcher, template: Node, fresh: list<text>, written: Node, specificity: int, fact: text = "" }
+# the rules of one stage, by head: stage 1 asks only shapes, stage 2 the declarations, stage 3 the types of typed code
+# (a hole of a value type)
 class Rules { by_head: map<text, list<Rule>> }
 
 # group_names and operator_names index groups and operators by name, so a spelling is looked up, not searched for;
 # looser_than: group name → every group it binds tighter than, the order of the groups' relations, derived from
-# `groups` whenever they change (core/parse/operator_table.wap related_groups)
-class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex(), defined_words: map<text, bool> = {}, local_words: list<text> = [] }
+# `groups` whenever they change (core/parse/operator_table.wap related_groups); modules: each used file declared once
+# per compile, by its normalized path, though the preload and the program both use it
+class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, declared_rules: Rules = Rules({}), declarations: Declarations = Declarations({}), looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex(), defined_words: map<text, bool> = {}, local_words: list<text> = [], modules: map<text, Module> = {} }
+
+# the rules of a stage: 1 shapes, 2 declarations, 3 types
+rules_of_stage(language: Language, stage: int) as Rules := if stage == SHAPE_STAGE then language.shape_rules else if stage == DECLARED_STAGE then language.declared_rules else language.typed_rules
 
 # the language every program starts from: the preload's operator table, copied row by row so that what a program
 # declares joins its own copy, no rules or patterns yet

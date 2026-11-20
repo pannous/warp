@@ -21,4 +21,14 @@ check "a hole of a bare generic type takes any of its instances" "$(ran bare_gen
 rule size_of $m: map => 7
 rule size_of $xs: list => 3
 print(text(size_of {"a": 1}) + " " + text(size_of [1, 2]) + " " + text(size_of 5))')" "7 3 0"
+# a typed rule fires as typing writes the code, so the code around it reads the type the rule gives, and the function
+# values typing lifted are never typed again (warp-lead, 2026-11-20, typed-rules-ordering)
+check "a typed rule's code is typed where it stands, beside a function value" "$(ran typed_in_place 'g(t: text) as text := t
+rule g $x: text => 4
+x = g "a b"
+add(n: int) := {
+	f = y => y + n
+	f(5)
+}
+print(text(x + 1) + " " + text(add(2)))')" "5 7"
 exit $((failures > 0))

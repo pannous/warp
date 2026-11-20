@@ -17,7 +17,7 @@ lines_of(language: Language, items: list, separator: Separator) as list := if ST
 lines_continued(language: Language, statements: list) as list := {
 	joined = []
 	for statement in statements {
-		if joined is not empty and continues(language, statement) { joined[#joined - 1] = staged(joined.last, line => List(phrase_items(line) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
+		if joined is not empty and continues(language, statement) { joined[#joined - 1] = replaced(joined.last, List(phrase_items(joined.last) + phrase_items(statement), Bracket.None, Separator.Space)) } else { joined.add(statement) }
 	}
 	joined
 }
@@ -30,7 +30,7 @@ unglued(language: Language, n: Node) as Node := match n {
 		split = block_split(items.last)
 		if split == ø { return n }
 		taken = block_taken(language, split#2)
-		if taken == ø then n else staged(n, phrase => List(items[.. #items - 1] + [split#1] + taken, Bracket.None, Separator.Space))
+		if taken == ø then n else replaced(n, List(items[.. #items - 1] + [split#1] + taken, Bracket.None, Separator.Space))
 	}
 	_ => n
 }
@@ -40,7 +40,7 @@ block_split(n: Node) as list<Node>? := match n {
 	Key(word, Op.None, block) => if is_block(block) then [word, block] else ø
 	Call(called, arguments) => {
 		inner = if arguments is empty then ø else block_split(arguments.last)
-		if inner == ø then ø else [staged(n, call => Call(called, arguments[.. #arguments - 1] + [inner#1])), inner#2]
+		if inner == ø then ø else [replaced(n, Call(called, arguments[.. #arguments - 1] + [inner#1])), inner#2]
 	}
 	_ => ø
 }

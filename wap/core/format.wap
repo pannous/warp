@@ -150,8 +150,3 @@ led_by_sign(language: Language, n: Node) as bool := match n {
 	_ => no
 }
 
-opening(bracket: Bracket) as text := match bracket { Bracket.Curly => "{"; Bracket.Square => "["; Bracket.Round => "("; Bracket.Less => "<"; _ => "" }
-closing(bracket: Bracket) as text := match bracket { Bracket.Curly => "}"; Bracket.Square => "]"; Bracket.Round => ")"; Bracket.Less => ">"; _ => "" }
-separator_text(separator: Separator) as text := match separator {
-	Separator.Space => " "; Separator.Comma => ", "; Separator.Semicolon => "; "; Separator.Newline => "\n"; Separator.Tab => "\t"; _ => ""
-}

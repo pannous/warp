@@ -13,6 +13,8 @@ use "../type_notation.wap"
 use "../errors.wap"
 use "../../kernel/forms.wap"
 use "matching.wap"
+use "scope.wap"
+use "library.wap"
 
 # a hole in a declared pattern's taken shape is its builder's parameter after this sign (core/rules/patterns.wap)
 HOLE_MARK = "$"
@@ -33,10 +35,9 @@ shaped(type: Node, s: TypingState) as Node := {
 	if #holders == 1 then with_fact(type, NARROWS, record_type(holders#1)) else type
 }
 # definitions with the shapes their written types name, each shaped once
-shaped_definitions(definitions: list<Function>, s: TypingState) as list<Function> := definitions.map(definition => shaped_once(definition, s))
 shaped_once(definition: Function, s: TypingState) as Function := {
 	if definition.shaped { return definition }
-	known = function_of(shaped_definition(definition.definer, s))
+	known = function_of(shaped_definition(reached_bound(definition.definer, s.library_scope), s))
 	known.shaped = yes
 	known
 }

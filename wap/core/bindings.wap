@@ -4,6 +4,16 @@
 
 use "stage.wap"
 
+# READ_WITH on a name a declaration rule read (stage 2, core/rules/matcher.wap): the name of the declaration it was read
+# as, the definition the name must bind to
+READ_WITH = "read with"
+# TYPED_HOLE on the code a typed rule's hole took (stage 3, core/rules/typed.wap): bound and typed already, so binding
+# and typing keep it as it is
+TYPED_HOLE = "typed hole"
+# UNBOUND on a library function not bound yet: binding waits until typing reaches it (core/analyze/scope.wap
+# library_bound)
+UNBOUND = "unbound"
+
 # BINDING on a bound name: what it refers to, the word of its DefinitionKind as a Symbol (DEFINED_AT, the name that
 # defined it, is in core/stage.wap, which records read too)
 BINDING = "binding"
