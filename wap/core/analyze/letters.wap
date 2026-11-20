@@ -61,9 +61,10 @@ all_settled(s: TypingState) := {
 # instances of a function its unknowns settled alike are one, the first kept: `empty` typed for a list<α7> and then
 # for the list<Definition> α7 settles to
 distinct_instances(functions: list<TypedFunction>, s: TypingState) as list<TypedFunction> := {
-	kept: list<TypedFunction> = []
-	for typed in functions { if not kept.any(other => same_instance(other, typed.function.key, settled_arguments(typed, s), s)) { kept += [typed] } }
-	kept
+	s.functions = []
+	s.instances = {}
+	for typed in functions { if not instances_of(typed.function.key, s).any(other => same_instance(other, typed.function.key, settled_arguments(typed, s), s)) { instance_added(typed, s) } }
+	s.functions
 }
 # whether a typed function is the instance of this key for these settled argument types
 same_instance(typed: TypedFunction, key: text, types: list<Node>, s: TypingState) as bool := typed.function.key == key and same_types(settled_arguments(typed, s), types)

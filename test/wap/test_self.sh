@@ -84,12 +84,17 @@ files=(
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
 done
-# Stage 2: the module wap makes of its own compiler compiles a program, and that program runs. The module finds the
-# preload beside itself, so the stage folder holds a copy (the host reads no link out of a folder).
-self_built_hello() {
-	cp -R "$root/wap/preload" "$root/wap/kernel" "$stage/"
-	printf 'print "hello from wap"\n' >"$stage/hello.wap"
-	$warp "$compiler" "$compiler" "$stage/wap.wasm" 2>&1 && $warp "$stage/wap.wasm" "$stage/hello.wap" "$stage/hello.wasm" 2>&1 && $warp "$stage/hello.wasm" 2>&1
+# Stage 2: the module wap makes of its own compiler compiles programs, and they run. The module finds the preload
+# beside itself, so the stage folder holds a copy (the host reads no link out of a folder); it is built once.
+cp -R "$root/wap/preload" "$root/wap/kernel" "$stage/"
+built_self=$($warp "$compiler" "$compiler" "$stage/wap.wasm" 2>&1)
+# what a program compiled by the self-built compiler prints, or the error of either
+self_built_ran() {
+	printf '%s\n' "$2" >"$stage/$1.wap"
+	echo "$built_self" | grep . || { $warp "$stage/wap.wasm" "$stage/$1.wap" "$stage/$1.wasm" 2>&1 && $warp "$stage/$1.wasm" 2>&1; }
 }
-check "the compiler wap makes of itself compiles a program that runs" "$(self_built_hello)" "hello from wap"
+check "the compiler wap makes of itself compiles a program that runs" "$(self_built_ran hello 'print "hello from wap"')" "hello from wap"
+check "the self-built compiler keeps two enums' cases of one name apart" "$(self_built_ran tags 'enum A { X, Y }
+enum B { Y, X }
+print text(B.X == A.X)')" "no"
 exit $((failures > 0))
