@@ -1731,17 +1731,16 @@ sh_quoted(t: text) as text := {
 # net.get(url, as, header lines), lib/net.warp's fetch: the answer's text by curl, run by its argument vector (no
 # shell sees the URL), a URL without its scheme (`fetch "://host/x"`) over https, each "Name: value" line a header;
 # an answer of status 400 or more, or no curl, is the Error with curl's complaint
-url_got(caller: handle, context: handle, listed: pointer, result: pointer) as nothing := {
-	words = curl_asked(caller, context, listed, 3)
-	words_run(caller, context, "curl", url_added(caller, context, listed, words), result)
-}
+url_got(caller: handle, context: handle, listed: pointer, result: pointer) as nothing := curl_answered(caller, context, listed, curl_asked(caller, context, listed, 3), result)
 # net.post(url, body, header lines), lib/net.warp's post: the body's text sent as it is, answered as net.get is
 url_posted(caller: handle, context: handle, listed: pointer, result: pointer) as nothing := {
 	words = curl_asked(caller, context, listed, 3)
 	added(words, "--data-binary")
 	added(words, shown(caller, context, item_of(caller, context, listed, 2)))
-	words_run(caller, context, "curl", url_added(caller, context, listed, words), result)
+	curl_answered(caller, context, listed, words, result)
 }
+# what curl, given these words and the request's URL last, answers
+curl_answered(caller: handle, context: handle, listed: pointer, words: Arguments, result: pointer) as nothing := words_run(caller, context, "curl", url_added(caller, context, listed, words), result)
 # curl's words for a request, each "Name: value" line of the listed item `at`, if there is one, a header
 curl_asked(caller: handle, context: handle, listed: pointer, at: i64) as Arguments := {
 	words = arguments()
