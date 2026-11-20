@@ -124,7 +124,7 @@ value_named(place: Node) as Node? := match place {
 	_ => ø
 }
 
-# the program put back from its statements (core/stage.wap top_level_statements)
+# the program put back from its statements (kernel/forms.wap top_level_statements)
 rebuilt_statements(program: Node, statements: list) as Node := match program {
 	List(items, Bracket.None, separator) => if is_run(separator) then List(statements, Bracket.None, separator) else statements#1
 	_ => statements#1

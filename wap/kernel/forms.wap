@@ -93,3 +93,12 @@ literal_named(name: text) as list<Node> := match name {
 	"Empty" => [Empty]
 	_ => []
 }
+
+# the program's statements: lines, `;` statements, or the one statement; a run
+# within the run (`a; b` on a line of many, or the two statements a rule wrote) gives its own
+top_level_statements(program: Node) as list<Node> := match program {
+	List(items, Bracket.None, separator) => if is_run(separator) then items.flat_map(top_level_statements) else [program]
+	_ => [program]
+}
+# the separators of statements: lines and `;`
+is_run(separator: Separator) as bool := separator == Separator.Newline or separator == Separator.Semicolon
