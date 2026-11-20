@@ -79,7 +79,7 @@ wants_at(definition: Function, at: int, type: Node?) as bool := {
 }
 # the results a call's definitions write, of those taking as many arguments
 results_written(argument: Node, s: TypingState) as list := match argument {
-	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).compact()
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and one_definer(called) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).compact()
 	_ => []
 }
 parameter_type_at(definition: Function, at: int) as Node? := if #definition.parameters < at then ø else definition.parameters#at
@@ -181,7 +181,7 @@ own_words(called: Node, given: list, s: TypingState) as list := {
 takes_record(type: Node?, record: Node) as bool := type != ø and text(base_or_self(type)) == record_name(record)
 # the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
 # its candidates
-candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
+candidate_scopes(called: Node) as list := if one_definer(called) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
 	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items; _ => refused(scope, "a name's candidates are a list of definitions") })
 	_ => [[defined_at(called)]]
 }

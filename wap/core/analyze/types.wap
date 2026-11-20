@@ -220,7 +220,7 @@ typed_form(n: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := ma
 }
 with_type(n: Node, type: text) as Node := with_fact(n, TYPE, symbol(type))
 # the type of a typed form's value, ø when it gives none
-value_type(n: Node) as Node? := if n == ø then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
+value_type(n: Node) as Node? := if n is Empty then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
 with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fact(n, TYPE, type)
 
 # Statements typed in order, the last one expected the block's type. A function it defines stays as written until the
@@ -234,7 +234,7 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 	# each definition as the typing stage keeps it, its written types' shapes known
 	statements = written.map(statement => if statement is Define then held_function(statement, s).definer else statement)
 	# a statement wap refuses still lets the definitions beside it be typed, so their refusals are said with its own
-	typed = try statements.map(statement => typed_form(statement, s, f, if statement === statements.last then expected else ø)) catch e {
+	typed = try (1 to #statements).map(at => typed_form(statements#at, s, f, if at == #statements then expected else ø)) catch e {
 		typed_alone(statements, s)
 		raise e.message
 	}
@@ -414,6 +414,12 @@ type_keyed(key: text, bindings: list<Binding>) as Node? := {
 # the type a condition around finds a variable of, ø where none finds it
 found_type(key: text, present: list<Finding>) as Node? := type_keyed(key, present.map(finding => Binding(finding.key, finding.type)))
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
+# the one definition a name means, ø for a name among several, whose DEFINED_AT the binding analysis sets to Empty to
+# forget the one it meant before (core/analyze/scope.wap resolved_taking): the core has no word that drops a fact
+one_definer(name: Node) as Node? := {
+	definer = fact_of(name, DEFINED_AT) ?? return ø
+	if definer is Empty then ø else definer
+}
 # whether a name is the one that defines its variable, its first value rather than a change
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 
