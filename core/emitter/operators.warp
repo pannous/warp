@@ -77,8 +77,6 @@ def unmarked_operation(body: Body, symbol: text, a: TypedCode, b: TypedCode) as 
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in equalities { return equality(body, symbol, TypedCode(ValueKind.Node, a.code), TypedCode(ValueKind.Node, b.code)) }
 	if a.kind == ValueKind.Time and b.kind == ValueKind.Time and symbol in time_relations { return runtime_call("time_holds", [a, b, number_value(time_relations[symbol])]) }
 	if kind == ValueKind.Bool and symbol in bool_ops { return TypedCode(ValueKind.Bool, a.code + b.code + [bool_ops[symbol]]) }
-	# a yes/no no implementation above takes is the int 1 or 0 (wiki/bool.md): `"Fizz" * (i % 3 == 0)` is "Fizz" * 1
-	if a.kind == ValueKind.Bool or b.kind == ValueKind.Bool { return unmarked_operation(body, symbol, as_int(a), as_int(b)) }
 	if kind != ValueKind.Int and kind != ValueKind.Float { return refuse("the operator " + symbol + " on " + kind_spelling(a.kind) + " and " + kind_spelling(b.kind)) }
 	if symbol == "%" and kind == ValueKind.Int { return euclidean_remainder(body, a, b) }
 	if symbol == "%" { return runtime_call("float_mod", [TypedCode(ValueKind.Float, converted(a, kind)), TypedCode(ValueKind.Float, converted(b, kind))]) }
