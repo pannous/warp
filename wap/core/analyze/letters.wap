@@ -55,7 +55,7 @@ all_settled(s: TypingState) := {
 		for at in 1 to s.unknowns { settled_by([Binding(UNKNOWN_MARK + text(at), symbol(ANY_TYPE))], s) }
 		waiting = s.deferred
 		s.deferred = []
-		for call in waiting { function_typed(call.definition, call.types.map(type => type_substituted(type, s.settled)), s, call.at) }
+		for call in waiting { function_typed(call.definition, call.types.map(type => settled_type(type, s)), s, call.at) }
 	}
 }
 # instances of a function its unknowns settled alike are one, the first kept: `empty` typed for a list<α7> and then
@@ -63,12 +63,22 @@ all_settled(s: TypingState) := {
 distinct_instances(functions: list<TypedFunction>, s: TypingState) as list<TypedFunction> := {
 	s.functions = []
 	s.instances = {}
-	for typed in functions { if not instances_of(typed.function.key, s).any(other => same_instance(other, typed.function.key, settled_arguments(typed, s), s)) { instance_added(typed, s) } }
+	# each instance's settled argument types, found once per instance, by its function's key
+	kept: map<text, list<list<Node>>> = {}
+	for typed in functions {
+		key = typed.function.key
+		types = settled_arguments(typed, s)
+		alike = if kept.has(key) then kept[key] else []
+		if not alike.any(other => same_types(other, types)) {
+			kept[key] = alike + [types]
+			instance_added(typed, s)
+		}
+	}
 	s.functions
 }
 # whether a typed function is the instance of this key for these settled argument types
 same_instance(typed: TypedFunction, key: text, types: list<Node>, s: TypingState) as bool := typed.function.key == key and same_types(settled_arguments(typed, s), types)
-settled_arguments(typed: TypedFunction, s: TypingState) as list<Node> := typed.arguments.map(type => type_substituted(type, s.settled))
+settled_arguments(typed: TypedFunction, s: TypingState) as list<Node> := typed.arguments.map(type => settled_type(type, s))
 # typed code with every unknown settled, the names its calls name too
 settled_everywhere(n: Node, s: TypingState) as Node := {
 	whole = facts_settled(refitted(with_parts(n, part => settled_everywhere(part, s)), n), s)
@@ -79,7 +89,7 @@ settled_everywhere(n: Node, s: TypingState) as Node := {
 facts_settled(n: Node, s: TypingState) as Node := {
 	for fact in [TYPE, SIGNATURE] {
 		type = fact_of(n, fact)
-		if type != ø and has_unknowns(type) { n = with_fact(n, fact, type_substituted(type, s.settled)) }
+		if type != ø and has_unknowns(type) { n = with_fact(n, fact, settled_type(type, s)) }
 	}
 	n
 }
@@ -174,6 +184,9 @@ value_function_typed(parameters: list<Node>, type: Node?, s: TypingState) as Typ
 is_lambda_key(key: text, s: TypingState) as bool := s.lambdas.any(lambda => function_key_of(lambda) == key)
 # a type with its letters replaced by the types they are bound to, none where none is given
 substituted(type: Node?, bound: list<Binding>) as Node? := if type == ø then ø else type_substituted(type, bound)
+# a type with the unknowns it holds settled: only a type holding one looks them up
+settled_type(type: Node, s: TypingState) as Node := if has_unknowns(type) then type_substituted(type, s.settled) else type
+settled_optional(type: Node?, s: TypingState) as Node? := if type == ø then ø else settled_type(type, s)
 type_substituted(type: Node, bound: list<Binding>) as Node := {
 	if bound is empty { return type }
 	if type is symbol {

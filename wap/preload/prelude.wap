@@ -32,6 +32,11 @@ arguments(): list<text> := {
 	args_get(BYTES_AT, BYTES_AT + 4 * count)
 	(0 upto count).map(at => zero_ended(memory_word(BYTES_AT + 4 * at)))
 }
+# milliseconds since 1970 by the wall clock: WASI's clock_time_get puts the nanoseconds at 0, as two words
+wall_clock_ms(): int := {
+	clock_time_get(WALL_CLOCK, NANOS_PER_MILLI, 0)
+	(memory_word(0) + memory_word(4) * WORD_RANGE) ÷ NANOS_PER_MILLI
+}
 # the arguments after the program's file: `warp prog.wasm a b` gives ["a", "b"]
 args := arguments().drop(1)
 # the running program: its file, as the command line names it, and that file's folder

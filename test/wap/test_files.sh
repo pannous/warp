@@ -22,4 +22,6 @@ b c
 $stage"
 check "write_bytes writes a file's bytes, read gives them back" "$(ran bytes_file "write_bytes(\"$stage/out.bin\", [104, 105])
 print read(\"$stage/out.bin\")")" "hi"
+check "wall_clock_ms is the wall clock's milliseconds since 1970" "$(ran clock 'start = wall_clock_ms()
+print text(start > 1700000000000 and wall_clock_ms() - start < 60000)')" "yes"
 exit $((failures > 0))
