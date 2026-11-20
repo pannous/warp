@@ -48,3 +48,6 @@ inline_html($tag)	"inline HTML <{tag}> reads as warp markup; `warp format` write
 replaces_module_word($name, $module, $signature)	"`{name}` replaces {module}'s {signature}"	"rename yours to keep both"
 # an element written as a statement outside html{…} (extensions/markup_values.warp): data, though surely meant as markup
 bare_markup($tag)	"`{tag}` outside html is data, not markup"	"wrap it in html, or give its place the type html: `x: html = …`"
+# a match arm of a case no node is here, `Meta(node, data)`: a position rides with its node unseen
+# (core/passes/node_matches.warp unseen_cases, card match-arm-skipped)
+unseen_case_arm($case)	"a {case} arm matches no node: a position rides with its node unseen"	"match the node itself"
