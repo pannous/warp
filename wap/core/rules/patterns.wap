@@ -60,9 +60,8 @@ enum Test { Hole, Literal, Sequence, Pair, Repeat }
 # the declarations stage 2 reads, by name: those of the module it rewrites, of the modules it uses and of the preload
 class Declarations { by_name: map<text, list<Node>> }
 # a hole's matcher knows, from when it was compiled, the stage its type asks for, which declared pattern it names and
-# the declarations it reads; a literal's, how the literal is spelled. Its stage defaults to 1, SHAPE_STAGE, as a number:
-# old warp misreads a constant as a field's default (reported to warp-host-fixer, 2026-11-20)
-class Matcher { test: Test, name: text = "", type: Node = Empty, stage: int = 1, pattern: Declared? = ø, declarations: Declarations = Declarations({}), rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list<Matcher> = [], spelled: text = "" }
+# the declarations it reads; a literal's, how the literal is spelled
+class Matcher { test: Test, name: text = "", type: Node = Empty, stage: int = SHAPE_STAGE, pattern: Declared? = ø, declarations: Declarations = Declarations({}), rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list<Matcher> = [], spelled: text = "" }
 
 # ---- holes
 
