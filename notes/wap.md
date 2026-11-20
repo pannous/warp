@@ -25,14 +25,14 @@ surface (any warp)
  │ declare                    core/analyze/declarations.wap
  ▼
 surface + declarations
+ │ declaration rules          core/rules/declared.wap  stage 2: rules that ask the declarations in force
+ ▼
+surface + declarations
  │ lower                      core/rules/lowering.wap   writes the kernel forms: glued, operator and phrase calls,
  │                                              := = =>, data and blocks; a phrase stays a call, typing decides it
  ▼
 kernel (kernel/forms.wap)
- │ scope, typing              core/analyze/
- ▼
-typed kernel
- │ kind rules                 core/rules/        stage 3: rules that ask inferred types, output re-checked
+ │ scope, typing, kind rules   core/analyze/, core/rules/typed.wap   stage 3 fires on each node as typed
  ▼
 typed kernel
  │ emit                       core/emit/
@@ -84,8 +84,10 @@ wap/
       matcher.wap             running a compiled Matcher against code, its holes bound; and specificity
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              shape rules (stage 1): rules indexed by head, run over operated code
+      termination.wap         the rules checked to end: no chain of them rewrites forever
       lines.wap               a program's lines as the rules read them: a line led by a rule word
-      typed.wap               typed rules (stage 3): holes of value types, typed again after each round
+      declared.wap            declaration rules (stage 2): holes that ask the declarations, after declare
+      typed.wap               typed rules (stage 3): holes of value types, fired in the type walk, typed in place
       lowering.wap            declared → kernel by hand: phrases, statements, the forms no rule writes yet
 
     analyze/                  facts about the program, no rewriting
@@ -93,6 +95,7 @@ wap/
       definers.wap            the ids of the names that define something, given by the prescan and binding
       modules.wap             the modules a program uses, by file name, as binding sees them
       scope.wap               the one binding analysis: what each name refers to
+      library.wap             the preload bound but for its functions, each bound once typing reaches it
       names.wap               what a name may mean: the scope's layers, each finding its definitions by name
       variables.wap           which variable each assignment gives a value to, in written order; late reads
       types.wap               bidirectional typing of kernel code; the dispatch over forms

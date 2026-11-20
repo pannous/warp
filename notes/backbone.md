@@ -56,8 +56,8 @@ lead first, as a change of this table.
 | lower | core/rules/lowering.wap | wap-reader | declared | kernel |
 | bind | core/analyze/scope.wap | wap-binding | kernel | bound kernel |
 | type | core/analyze/types.wap | wap-binding | bound kernel | typed kernel |
+| kind rules (stage 3): in the type walk, on each node as typing writes it, before elaborate | core/rules/typed.wap, engine core/rules/ | wap-reader | a node as typed | its rewrite, typed in place |
 | elaborate | core/analyze/types.wap, calls.wap | wap-binding | typed kernel | typed kernel, one instance per tuple |
-| kind rules (stage 3) | core/rules/typed.wap, engine core/rules/ | wap-reader | typed kernel | typed kernel |
 | emit | core/emit/ | wap-emitter | typed kernel (milestone 1: kernel) | Module (core/emit/wasm.wap) |
 
 The languages, each a set of Node shapes:
@@ -352,7 +352,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **Stage 3 retypes the whole program after each round** (wap/core/rules/typed.wap): a typed rule's output is bound
   and typed again from scratch, under a limit of rounds. Simple, and the output is checked like any code; paid off by
   a per-subtree re-entry if the cost shows. A rule's new call of a function without parameter types finds only the
-  versions typing made before, not a new one.
+  versions typing made before, not a new one. Paid (typed-rules-ordering): rules fire in the type walk.
 - **The class rule's helper words are ordinary words** (wap/preload/sugar/records.wap `member_as "field"`,
   `member_of`, `shown_case`): a program writing them is rewritten too. Words only rule files may write need a private
   word in the reader; paid off when a program meets one.
@@ -486,13 +486,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   taken. Paid off when a function's value fits a written function type wherever it is given.
 - **stage.wap's `replaced` is `staged`'s Node form, named apart** (wap/core/stage.wap): old warp cannot tell a Node
   parameter from a function-typed one, so `staged(n, built: Node)` beside `staged(n, rewrite: (Node) -> Node)` is
-  refused. Paid off when old warp retires: one overloaded `staged`.
+  refused. Paid off when old warp retires: one overloaded `staged`. Paid (wap-facts-replace): one function,
+  `replaced(n, built)`; a stage that rewrites n passes what it built from n.
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
   defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
 - **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
   can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
-  preload/lists.wap with a test_lists line.
+  preload/lists.wap with a test_lists line. Old warp no longer builds wap's tests (wap-facts-replace): the tests'
+  compiler starts from the seed beside the seed's own preload, which lacks `compact` too, so the move waits for a seed
+  whose preload holds it.
 - **A shape's value is named a Node before it joins a list of Nodes** (wap/core/analyze/matching.wap shape_missing,
   list_missing): `[Call(…)] + inner` binds `+`'s T to Call and to Node, which bound_as refuses, so the witness is
   written `shape: Node = Call(…)` first. Paid off when a letter bound to a shape and to the type it narrows binds that type.
@@ -519,3 +522,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   no `<` for a number and an int; reported to warp-wap-binding). Paid off when that compares: led_by_sign's arm is
   `Number(value) => value < 0` again and below_zero goes. Paid off: binding's number-compare (445d612b1c) widens the
   int, and led_by_sign reads `value < 0` again.
+
+- **The source avoids comparing an optional record with ø** (core/rules/patterns.wap names_pattern, matcher.wap
+  of_shape, stages.wap rule_applied's best as a list), because the seed's emitter compares records field by field.
+  Paid off at the next seed refresh, once the seed compares an optional with ø: `!= ø` and `best: Rule? = ø` again.
+
+- **analyze/types.wap reaches rules/ (typed.wap) through a use**, because wap cannot call a function value read from
+  a field (`this holds a function, no function to call`). Paid off when a field's function value can be called; then
+  it is a function value on TypingState.

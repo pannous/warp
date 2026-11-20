@@ -20,6 +20,9 @@ use "../errors.wap"
 use "../stage.wap"
 use "definers.wap"
 use "../bindings.wap"
+use "library.wap"
+use "../parse/operator_table.wap"
+use "../../preload/operators.wap"
 use "types.wap"
 use "variables.wap"
 use "../../kernel/forms.wap"
@@ -38,10 +41,8 @@ PRELOAD_DEPTH = -2
 # the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
 # two modules defining one name are refused, used or not
 bound_program(program: Block, preload: list, modules: list<Module>) as Block := {
-	codes = codes_of(modules)
-	clashes_refused(codes)
-	ids = definers_of(program)
-	with_definers(late_reads_checked(bound(definers_identified(program, ids), scope_around(preload, codes), PROGRAM_DEPTH)), ids)
+	known = identified_program(program, preload, modules)
+	finished(known, known.statements.map(statement => bound(statement, known.scope, PROGRAM_DEPTH)))
 }
 # the words around a program: the modules it uses, then the preload's, outermost
 scope_around(preload: list, modules: list<Node>) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
@@ -56,9 +57,11 @@ library_words(declaration: Node, depth: int) as list<Definition> := match declar
 }
 
 # n with the facts on every name it holds; scope lists the definitions visible, the innermost first
-bound(n: Node, scope: Scope, depth: int) as Node := match n {
+# code bound inside a scope; a typed rule's hole holds code bound and typed already, which stays as it is
+bound(n: Node, scope: Scope, depth: int) as Node := if fact_of(n, TYPED_HOLE) != ø then n else form_bound(n, scope, depth)
+form_bound(n: Node, scope: Scope, depth: int) as Node := match n {
 	Symbol(name) => resolved(n, scope, depth)
-	Block(statements) => block_bound(n, statements, within(scope, named_variables(n, scope, depth)), depth)
+	Block(statements) => refitted(Block(all_bound(statements, block_scope(n, statements, scope, depth), depth)), n)
 	Define(name, parameters, body) => with_captures(refitted(Define(bound(name, scope, depth), parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Fn(parameters, body) => with_captures(refitted(Fn(parameters_bound(parameters, scope, depth), body_bound(parameters, body, scope, depth)), n), scope, depth)
 	Set(place, value) => refitted(Set(bound(place, if is_kind_word(fact_of(n, ASSIGNS), DefinitionKind.Global) then program_scope(scope) else scope, depth), bound(value, scope, depth)), n)
@@ -134,14 +137,6 @@ names_case(name: Node, scope: Scope) as bool := {
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant#1.kind == DefinitionKind.Case
 }
-# whether a name means functions and no type: a type's word is a type test even beside a function of that name,
-# `3 is int` beside int(t: text)
-names_predicate(name: Node, scope: Scope) as bool := {
-	# a type's or a declared pattern's name after `is` is its test, never a call of its builder: `n is Record`
-	if TYPE_WORDS.contains(text(name)) or shape_called(name, scope) { return no }
-	meant = definitions_meant(text(name), scope)
-	not meant is empty and meant.all(definition => definition.kind == DefinitionKind.Function or definition.kind == DefinitionKind.Library)
-}
 arm_result(arm: Arm) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
@@ -158,27 +153,24 @@ pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> :
 }
 
 # A type test, `x is T`: its value bound, its type a case, which binds as one, or a type's name, which stays a name as
-# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap). A word naming a function and
-# no type is a test of its own, the call of that predicate: `xs is empty` is empty(xs)
+# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap). A predicate's word, `xs is
+# empty`, and `a is not b` are rules of their own (preload/sugar/types.wap)
 is_type_test(called: Node, scope: Scope) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
 type_test_bound(n: Node, called: Node, arguments: list, scope: Scope, depth: int) as Node := {
 	tested = arguments#2
-	# `a is not b` reads `not (a is b)` (wiki/ambiguity.md "is not"), never a test of `not b`
-	negated = negated_test(tested)
-	if negated != ø { return bound(refitted(Call(symbol(NOT_WORD), [refitted(Call(called, [arguments#1, negated]), n)]), n), scope, depth) }
-	if tested is symbol and names_predicate(tested, scope) { return with_fact(bound(refitted(Call(tested, [arguments#1]), n), scope, depth), PREDICATE, True) }
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }
-NOT_WORD = "not"
-# what a tested `not b` negates, ø for any other tested form
-negated_test(tested: Node) as Node? := match tested { Call(called, parts) => if text(called) == NOT_WORD and #parts == 1 then parts#1 else ø; _ => ø }
 # a call's argument: a named one, `by: f`, its value bound and its name the parameter's word
 argument_bound(argument: Node, scope: Scope, depth: int) as Node := if is_named(argument) then field_bound(argument, scope, depth) else bound(argument, scope, depth)
 is_named(argument: Node) as bool := match argument { Key(name, Op.Colon, value) => name is symbol; _ => no }
 # an instance's field or a map's entry, `x: 1`: its value bound, its name a word, no variable
 field_bound(field: Node, scope: Scope, depth: int) as Node := match field { Key(name, Op.Colon, value) => refitted(Key(name, Op.Colon, bound(value, scope, depth)), field); _ => refused(field, NOT_A_FIELD) }
-block_bound(block: Node, statements: list, scope: Scope, depth: int) as Node := refitted(Block(all_bound(statements, within(scope, defined_in(statements, scope, depth)), depth)), block)
+# the scope inside a block: its variables, then what its statements define, innermost
+block_scope(block: Node, statements: list, scope: Scope, depth: int) as Scope := {
+	variables = within(scope, named_variables(block, scope, depth))
+	within(variables, defined_in(statements, variables, depth))
+}
 all_bound(forms: list, scope: Scope, depth: int) as list := forms.map(form => bound(form, scope, depth))
 
 
@@ -253,8 +245,15 @@ resolved(name: Node, scope: Scope, depth: int) as Node := resolved_taking(name, 
 called_bound(called: Node, given: int, scope: Scope, depth: int) as Node := if called is symbol then resolved_taking(called, given, scope, depth) else bound(called, scope, depth)
 resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
 	meant = definitions_meant(text(name), scope)
-	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
+	if meant is empty {
+		# a name nothing defines is read as the word its alias gives, `length` count (preload/operators.wap aliases)
+		alias = aliased(text(name), Fixity.Anywhere)
+		if alias != text(name) and not definitions_meant(alias, scope) is empty { return resolved_taking(refitted(symbol(alias), name), given, scope, depth) }
+		refused(name, "nothing defines this name, neither the program nor the library")
+	}
 	innermost = if meant#1.kind == DefinitionKind.Case then unambiguous_case(name, meant#1, given, scope) else meant#1
+	# a name a rule read as a function binds to a function, never to a variable of that name in its way
+	if fact_of(name, READ_WITH) != ø and not innermost.kind in [DefinitionKind.Function, DefinitionKind.Library] { refused(name, "a rule reads ${name} as the function ${fact_of(name, READ_WITH)}, but a variable of that name hides it: rename the variable") }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH or innermost.kind == DefinitionKind.Global then innermost.kind else DefinitionKind.Capture
 	bound = with_binding(name, kind)
 	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))

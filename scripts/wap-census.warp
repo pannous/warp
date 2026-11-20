@@ -34,7 +34,7 @@ language = base_language()
 preload = language_loaded(language, WAP_FOLDER)
 library_scope = scope_of(preload_scope(declarations_of(preload)))
 library_code = library_code_of(language, preload)
-library = statements_in(library_code)
+library = statements_in(library_code.code)
 # the names every file given and the modules it uses define, known before any is read, as the compiler does
 # (core/pipeline.wap program_words_defined)
 for file in args { program_words_defined(language, read_notation(file)) }
@@ -78,7 +78,7 @@ prepared_once(module: Module, modules: list<Module>) as list := {
 # be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
 # with the file).
 class Run { state: TypingState, frame: TypeFrame, joined: map<text, list<Node>> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
-run = Run(typing_state(library), TypeFrame())
+run = Run(typing_state(library_code), TypeFrame())
 typing_joined(modules: list<Module>) := {
 	global run
 	keys = files_of(modules)
@@ -164,7 +164,7 @@ whole_once(file: text) as Outcome := {
 typed_whole(file: text) as Block := {
 	modules = modules_of(file)
 	whole = Block(modules.flat_map(module => prepared_once(module, modules)))
-	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
+	typed_by_rules(language, whole, declarations_of(preload), library_code)
 }
 
 report(stage: text, message: text) := {
@@ -294,10 +294,11 @@ functions_probe(file: text) as Probed := {
 	run.probed[modules.last.file]
 }
 # a typing state that knows the library's definitions and records
-typing_state(library: list) as TypingState := {
+typing_state(library: Library) as TypingState := {
 	s = TypingState()
-	s.definitions = functions_in(library)
-	s.records = added_records(Records(), library)
+	s.definitions = functions_in(statements_in(library.code))
+	s.records = added_records(Records(), statements_in(library.code))
+	s.library_scope = library.scope
 	s
 }
 # The state rolled back to one taken before a refused form: its lists are the prefixes they were, so their indexes,
@@ -343,6 +344,7 @@ copied(base: TypingState) as TypingState := {
 	s.unset = base.unset + []
 	s.dispatchers = base.dispatchers + []
 	s.refusals = base.refusals + []
+	s.library_scope = base.library_scope
 	s
 }
 

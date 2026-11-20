@@ -9,8 +9,10 @@ use "analyze/declarations.wap"
 use "rules/stages.wap"
 use "rules/lowering.wap"
 use "analyze/scope.wap"
+use "analyze/library.wap"
 use "analyze/types.wap"
 use "rules/typed.wap"
+use "rules/declared.wap"
 use "language.wap"
 use "paths.wap"
 
@@ -19,6 +21,8 @@ RULES_FILE = "preload/rules.wap"
 # the standard language every program gets, as definitions
 PRELOAD_FILE = "preload/preload.wap"
 INCLUDE_WORD = "include"
+# SCRIPT on the block of a program run as a script, whose last value it shows: a rule may ask it, `where script`
+SCRIPT = "script"
 
 # the rules loaded from the wap folder, then the preload declared once: what it declares is the library every program
 # is bound in
@@ -75,23 +79,45 @@ declared_modules(language: Language, file: text) as list<Module> := {
 	used_modules(language, code) + [declared_module(language, code)]
 }
 # the modules operated code uses, theirs first, each declared
-used_modules(language: Language, code: Node) as list<Module> := modules_used(code, file => operated_file(language, file)).map(module => declared_module(language, module))
+used_modules(language: Language, code: Node) as list<Module> := modules_used(code, file => if language.modules.has(module_key(file)) then language.modules[module_key(file)].code else operated_file(language, file)).map(module => used_module(language, module))
+# a used module declared, or the one this compile declared already from its file; code of no file is declared anew
+used_module(language: Language, code: Node) as Module := {
+	key = module_key(file_of(code) ?? return declared_module(language, code))
+	if language.modules.has(key) { return language.modules[key] }
+	module = declared_module(language, code)
+	language.modules[key] = module
+	module
+}
+# the key a module's file is cached under, one spelling of its path
+module_key(file: text) as text := normalized_path(file)
 declared_module(language: Language, code: Node) as Module := module_declared(declared_operated(language, code))
 # a declared module lowered and bound inside the modules it uses and the preload's declarations
-prepared(language: Language, module: Module, modules: list<Module>, preload: Node) as Block := bound_program(lowered_program(language, module.code), library_around(module.code, preload), modules_of_uses(module, modules))
+prepared(language: Language, module: Module, modules: list<Module>, preload: Node) as Block := bound_program(lowered_module(language, module, modules, preload), library_around(module.code, preload), modules_of_uses(module, modules))
+# a declared module lowered, the declaration rules first (stage 2), reading what the module, the modules it uses and
+# the preload declare
+lowered_module(language: Language, module: Module, modules: list<Module>, preload: Node) as Block := {
+	uses = modules_of_uses(module, modules)
+	lowered_program(language, declared_rewritten(language, module.code, library_around(module.code, preload) + uses.flat_map(used => declarations_of(used.code))))
+}
 # the modules a declared module uses
 modules_of_uses(module: Module, modules: list<Module>) as list<Module> := module.uses.map(file => module_of(file, modules))
 # the library a module is bound inside: the preload's declarations, except in the preload, which declares them itself
 library_around(code: Node, preload: Node) as list := if code == preload then [] else declarations_of(preload)
 # the modules prepared in order, their statements as one block
 modules_prepared(language: Language, modules: list<Module>, preload: Node) as Block := Block(modules.flat_map(module => statements_in(prepared(language, module, modules, preload))))
-# the preload's code with the modules it uses, whose words only the preload sees
-library_code_of(language: Language, preload: Node) as Block := modules_prepared(language, used_modules(language, preload) + [module_declared(preload)], preload)
+# the preload's code after the modules it uses, whose words only the preload sees: its functions bound once typing
+# reaches them (core/analyze/scope.wap library_bound)
+library_code_of(language: Language, preload: Node) as Library := {
+	uses = used_modules(language, preload)
+	own = module_declared(preload)
+	library = library_bound(lowered_module(language, own, uses, preload), modules_of_uses(own, uses))
+	Library(Block(statements_in(modules_prepared(language, uses, preload)) + statements_in(library.code)), library.scope)
+}
 # the program with the modules it uses, theirs first: a module's statements run before the code that uses it, its
 # functions are there for any caller; typed, then rewritten by the typed rules
 typed_file(language: Language, file: text, preload: Node) as Block := {
 	modules = declared_modules(language, file)
-	whole = modules_prepared(language, modules, preload)
+	whole = with_fact(modules_prepared(language, modules, preload), SCRIPT, True)
 	library_code = library_code_of(language, preload)
-	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
+	typed_by_rules(language, whole, declarations_of(preload), library_code)
 }

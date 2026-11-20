@@ -124,7 +124,13 @@ pattern asks:
 |---|---|---|---|
 | 1 shape | right after reading | the shape only | `for` → `While`, `unless` → `If`, `try x else y`, `a ?: b`, `Color::Red`, comprehensions, ranges |
 | 2 signature | after the declarations are collected | declared signatures and types (`takes value`, `is function`, `$x: Meters` of a declared parameter) | `print -1`, `x is T`, overloads by arity |
-| 3 kind | after typing, on kernel code | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
+| 3 kind | in the type walk, on each kernel node as typed | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
+
+The holes that pick stage 2 and 3 by name: `$f: function` takes a name the declarations in force declare as a
+function, `$p: predicate` one declared as a test of one value with result bool (`rule $x is $p: predicate => $p($x)`),
+and `$x: value` code typing gave a value of any type, none excepted. A rule may also ask a fact of the code it
+matches, `rule … where script => …` (SCRIPT: the block of a program run as a script); it takes the fact, so it fires
+once where a stage wrote it (core/rules/patterns.wap, stages.wap, declared.wap).
 
 A rule's output is warp code and must type-check; a type error in it is the rule's bug, reported at the user's line
 with the rule named. A phrase no rule claims is a call of its head, and typing refuses it when the head holds no function

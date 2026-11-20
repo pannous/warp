@@ -128,15 +128,15 @@ key_place(m: map<K, V>, key: K): int := {
 	if at == 0 { raise "this map has no such key" }
 	held_values(m)#at
 }
-# a key given its value: `m["a"] = 1` changes the value of a key the map holds, and adds the key and the value at the
-# end otherwise
-set(m: map<K, V>, key: K, value: V) := {
-	at = key_place(m, key)
-	values = held_values(m)
+# a key given its value, `set k of: m to: v`, as `m#k = v` and `m["a"] = 1` write it: the value of a key the map holds
+# changed, the key and the value added at the end otherwise
+set(key: K, of: map<K, V>, to: V) := {
+	at = key_place(of, key)
+	values = held_values(of)
 	if at == 0 {
-		held_keys(m).add(key)
-		values.add(value)
-	} else { values[at - 1] = value }
+		held_keys(of).add(key)
+		values.add(to)
+	} else { values[at - 1] = to }
 }
 # a map's keys, a new list in the order they were set: `{a: 1, b: 2}.keys()` is ["a", "b"]
 keys(m: map<K, V>): list<K> := copy(held_keys(m))
