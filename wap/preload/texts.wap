@@ -179,19 +179,7 @@ split(t: text, separator: text): list<text> := {
 	parts
 }
 # t with each place of a part given another text: `"a-b-c".replace("-", "+")` is "a+b+c"
-replace(t: text, part: text, other: text): text := {
-	out = ""
-	start = 0
-	at = 0
-	while at <= byte_count(t) - byte_count(part) {
-		if byte_count(part) > 0 and bytes_match_at(t, part, at) {
-			out = out + bytes_between(t, start, at) + other
-			at += byte_count(part)
-			start = at
-		} else { at += 1 }
-	}
-	out + bytes_between(t, start, byte_count(t))
-}
+replace(t: text, part: text, other: text): text := split(t, part).join(other)
 
 # texts in byte order, which is code point order: `"a" < "b"`
 <(a: text, b: text): bool := compared(a, b) < 0
@@ -218,18 +206,4 @@ is_hex_digit(c: text): bool := is_digit(c) or HEX_LETTERS.contains(c)
 show(t: text): text := "\"" + escaped(t) + "\""
 show(c: char): text := "'" + text(c) + "'"
 # t with a backslash before each quote and backslash
-escaped(t: text): text := {
-	out = ""
-	start = 0
-	at = 0
-	while at < byte_count(t) {
-		if needs_escape(byte_at(t, at)) {
-			out = out + bytes_between(t, start, at) + "\\"
-			start = at
-		}
-		at += 1
-	}
-	out + bytes_between(t, start, at)
-}
-# the bytes of `"` and `\`
-needs_escape(b: int): bool := b == 34 or b == 92
+escaped(t: text): text := t.replace("\\", "\\\\").replace("\"", "\\\"")

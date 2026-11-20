@@ -43,3 +43,5 @@
 'class animal { name; speak := name + " makes a sound" }; class dog < animal { speak := super.speak + ": woof" }; dog("Rex").speak'	'Rex makes a sound: woof'
 'class V{x:int; ==(o) := x == o.x}; enum Fix { In, Pre }; xs = [Fix.In, "a", V(1)]; [xs#1 == Fix.In, xs#1 == Fix.Pre, xs#2 == "a", xs#3 == V(1), xs#3 is V, xs#1 is V]'	[yes, no, yes, yes, yes, no]
 'class B { key: text }; class V{x:int; ==(o) := x == o.x}; b = B("k"); [b.key == "k", b.key == "j", ø is V, V(2) == V(2)]'	[yes, no, no, yes]
+# a field's default may name the program's constant (card class-field-whose)
+'FIRST = 1; class Box { label: text = "", stage: int = FIRST, tags = [FIRST] }; b = Box(label: "x"); [b.stage, b.tags]'	[1, [1]]
