@@ -28,14 +28,11 @@ SCRIPT = "script"
 language_loaded(language: Language, wap_folder: text) as Node := {
 	# each file read with the rules of the files before it loaded
 	for file in files_named(operated_file(language, in_folder(wap_folder, RULES_FILE)), USE_WORD) { rules_loaded(language, operated_file(language, file)) }
-	preload_file = in_folder(wap_folder, PRELOAD_FILE)
-	program_words_defined(language, preload_file)
-	declared_operated(language, operated_file(language, preload_file))
+	declared_operated(language, program_operated(language, in_folder(wap_folder, PRELOAD_FILE)))
 }
 # the names a program's files define at their top, the files it uses and includes too, known before any is read, so
 # no alias reads them (core/parse/operator_table.wap words_defined)
-program_words_defined(language: Language, file: text) := {
-	program = read_notation(file)
+program_words_defined(language: Language, program: Node) := {
 	for module in [program] + modules_used(program, read_notation) { file_words_defined(language, module) }
 }
 # the names a file defines at its top and those of the files it includes
@@ -52,8 +49,16 @@ declared_code(language: Language, code: Node) as Node := declared_operated(langu
 declared_operated(language: Language, code: Node) as Node := declared_program(shaped_program(language, code))
 # a file's code with its operators read, each `include "file"` in it replaced by that file's statements, as they are
 # (wiki/use.md)
-operated_file(language: Language, file: text) as Node := {
-	code = operated_program(language, read_notation(file))
+operated_file(language: Language, file: text) as Node := operated_notation(language, file, read_notation(file))
+# a program's file read once, the names it defines known before its operators are read
+program_operated(language: Language, file: text) as Node := {
+	program = read_notation(file)
+	program_words_defined(language, program)
+	operated_notation(language, file, program)
+}
+# a file's notation with its operators read and its includes in
+operated_notation(language: Language, file: text, notation: Node) as Node := {
+	code = operated_program(language, notation)
 	match code {
 		List(lines, Bracket.None, Separator.Newline) => refitted(List(lines.flat_map(line => included(language, file, line)), Bracket.None, Separator.Newline), code)
 		_ => code
@@ -69,8 +74,7 @@ included(language: Language, file: text, line: Node) as list<Node> := {
 }
 # a file with the modules it uses, theirs first, each declared after the modules it uses, so their rules shape it
 declared_modules(language: Language, file: text) as list<Module> := {
-	program_words_defined(language, file)
-	code = operated_file(language, file)
+	code = program_operated(language, file)
 	used_modules(language, code) + [declared_module(language, code)]
 }
 # the modules operated code uses, theirs first, each declared

@@ -21,6 +21,7 @@ COMPILERS=(warp.wasm warp.wasm.inputs warp.wasm.cwasm warp.wasm.driver.cwasm war
 EXPECTED=Hello
 
 tree=$(cd "${1:?usage: smoke.sh <worktree>}" && pwd) || exit 2
+checkouts_linked "$tree" || exit 2
 packages_linked "$tree"
 scripts=$(cd "$(dirname "$0")" && pwd)
 CODE_PATHS="^(core/|extensions/$(printf '|lib/%s$' $("$scripts/compiler-inputs.sh" --code-files | sed 's/\./\\./g')))"

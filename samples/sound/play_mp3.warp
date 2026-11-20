@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-# plays the mp3 file beside this program
-use sound
-use file
-# beside this program: program.folder is the folder of this file, the same one $dir names
-play(program.folder + "/tune.mp3")

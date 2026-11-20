@@ -1,6 +1,0 @@
-#!/usr/bin/env warp
-// Python's modules from warp: use one, call its functions, get its values back as warp values
-use python math
-print math.sqrt(16)
-use python json
-print json.dumps({name: "Alice", age: 30})

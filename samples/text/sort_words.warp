@@ -1,3 +1,0 @@
-#!/usr/bin/env warp
-# put words in alphabetical order
-sort split "the quick brown fox"
