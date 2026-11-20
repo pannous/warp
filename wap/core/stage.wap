@@ -79,7 +79,7 @@ RULE = "rule"
 # Facts a stage learns about a node (notes/backbone.md "Stage languages"): a name's binding, a type, the overload a
 # call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
 # from stage to stage. A later fact of the same name replaces the earlier.
-with_fact(n: Node, name: text, value: Node) as Node := with_attributes(n, attributes_of(n).filter(fact => fact_name(fact) != name) + [Key(symbol(name), Op.Colon, value)])
+with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
 # whether a stage has learned the fact of that name; one that holds ø is learned too, `o: text? = ø` a default
 has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => fact_name(fact) == name)
 # a fact's name, "" of an attribute that is no fact
@@ -224,6 +224,13 @@ TYPE = "type"
 SIGNATURE = "signature"
 # A list's places by name, for a list that only grows or is changed in place, as the typing state's definitions and a
 # program's records are: indexed up to `count`, extended for the items added since
+# the items of a list of optionals that hold a value: `[1, ø, 3]` gives [1, 3] (here until old warp, which compiles
+# the compiler, retires: then the preload's)
+compact(xs: list<T?>) as list<T> := {
+	out: list<T> = []
+	for x in xs { if x != ø { out += [x] } }
+	out
+}
 class NameIndex { places: map<text, list<int>> = {}, count: int = 0 }
 # the items of a name in the order written; a place past the list's end, or an item at an indexed place that bears
 # another name now, is refused: the list changed other than by growing or in place

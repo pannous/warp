@@ -76,17 +76,21 @@ int_in(n: Node) := match n {
 # n where it was written, its facts kept
 positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
 
-# the facts a stage marked n with; n with one more; n with exactly these, where it was written kept
+# the facts a stage marked n with, and n with one more in place of one of its name: `type: int` replaces `type: text`
 attributes_of(n: Node): list<Node> := match n {
 	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
 }
 # a Meta's data past its line and column
 facts_in(data: list<Node>): list<Node> := data[META_FACTS - 1 ..]
-with_attribute(n: Node, fact: Node): Node := with_attributes(n, attributes_of(n) + [fact])
-with_attributes(n: Node, facts: list<Node>): Node := match n {
-	Meta(node, List(data, bracket, separator)) => Meta(node, List(data.take(META_FACTS - 1) + facts, bracket, separator))
-	_ => Meta(n, meta_data(NO_LINE, NO_LINE, facts))
+with_attribute(n: Node, fact: Node): Node := match n {
+	Meta(node, List(data, bracket, separator)) => Meta(node, List(data.take(META_FACTS - 1) + facts_in(data).filter(held => not same_name(held, fact)) + [fact], bracket, separator))
+	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
+}
+# whether two facts have one name, `type: int` and `type: text`
+same_name(fact: Node, other: Node): bool := match fact {
+	Key(name, Op.Colon, value) => match other { Key(other_name, Op.Colon, other_value) => name == other_name; _ => no }
+	_ => no
 }
 
 # the node a Meta wraps, any other node itself
