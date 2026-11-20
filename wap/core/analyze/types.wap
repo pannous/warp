@@ -328,7 +328,7 @@ item_set_typed(n: Node, place: Node, value: Node, s: TypingState, f: TypeFrame) 
 	given = converted(typed_form(value, s, f, wanted), wanted, s, n, "the place holds a")
 	# a place read by a call of `#`, a map's entry, is given its value by a call of `set` with the same parts
 	match place {
-		Call(called, parts) => if text(called) == PLACE_WORD then word_called(n, SET_WORD, parts + [given], ø, s) else refitted(Set(place, given), n)
+		Call(called, parts) => if text(called) == PLACE_WORD then word_called(n, SET_WORD, [parts#2, parts#1, given], ø, s) else refitted(Set(place, given), n)
 		_ => refitted(Set(place, given), n)
 	}
 }

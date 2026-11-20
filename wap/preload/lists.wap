@@ -40,6 +40,8 @@ copy(xs: list<T>): list<T> := xs[0 ..]
 add(xs: list<T>, item: T) := prim list_add(xs, item)
 # the last item taken off a list; an empty one raises
 pop(xs: list<T>): T := prim list_pop(xs)
+# a list's item at a place, counting from 1, given a value, `xs#2 = 5`
+set(at: int, of: list<T>, to: T) := prim list_set(of, at - 1, to)
 # the item at a place counting from 0 taken out, the items after it moved down one, in their order
 remove_at(xs: list<T>, at: int): T := {
 	if at < 0 or at >= #xs { raise "this list has no item at this place" }
