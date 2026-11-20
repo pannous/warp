@@ -264,6 +264,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 
 (Each compromise against a principle, with its reason. Empty at the start.)
 
+- **A name a program defines is read as its alias's canonical word** (wap/core/parse/operators.wap word_read: `length`
+  and `size` read as `count`), so two variables `length` and `count` in one scope are one variable. Reason: found in
+  the stage-2 self-build; host.wap placing_function names its local `measure` instead. Paid off when an alias applies
+  only to a word nothing in the program defines.
+
 - **`use "m.wasm"` is not read yet** (card wasm-module-import, wiki/wasm-representation.md): a compiled module can't
   be used as its source is. Reason: paused for the self-build census (user 2026-11-19). Branch wasm-module-import has
   the exports and the `wap` section of header lines; the reader, the body-less `export` declaration and the import

@@ -104,6 +104,8 @@ rem(a: int, b: int): int := truncated_remainder(a, b)
 # cases of any two enums, of one enum or not: `Side.Left == Grouping.Left` is no
 ==(a: enum, b: enum): bool := prim tag_equal(a, b)
 !=(a: enum, b: enum): bool := not(a == b)
+# a case's name, `Bracket.Round` is "Round"
+text(e: enum): text := prim case_name(e)
 +(a: text, b: text): text := prim text_joined(a, b)
 
 # a map's keys and its values as it holds them, an entry the same place in both, not copied
