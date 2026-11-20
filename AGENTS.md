@@ -178,7 +178,7 @@ before asking a question). After a context swap, this file and your role file be
   the other way round. A spec form that would need special-case code in core is cut or parked, unless leaving it out
   is nonsensical; what the general rules give is the spec (the wiki follows the compiler then). Every question to the
   user names the core cost of each option.
-  A form that falls out of the general rules, however esoteric (`"x" * yes` is "x" by bool-as-int), is welcome and
+  A form that falls out of the general rules, however esoteric, is welcome and
   never suppressed; a form that needs its own rule or core code for one phrase (`x is a 100 element array`) is bloat:
   ask the Interviewer before building it. Old commented-out Rust tests (`gap-*` cards) are not spec.
 - Smaller, faster compiler ("that's the kind of change I want to see"): look out for little changes
