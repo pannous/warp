@@ -232,9 +232,11 @@ descends(name: text, ancestor: text) as bool := name == ancestor or (name in mod
 # the runtime word's test of the value against the class and those extending it
 # the classes a test of spec takes, a list made once and kept: made anew it cost each `==` of a class dispatcher more than the compare
 def class_test_code(body: Body, value: TypedCode, spec: text, word: text) as TypedCode {
-	kept = "classes·" + spec
-	index = relocatable(relocated.globals, declared_global(kept, ValueKind.Node)#1)
 	names = module.classes.keys.filter(name => descends(name, spec))
+	# named by the classes it holds: a library module and the program extending its class each know other classes
+	# of spec, and kept values of one name are one (a program's Quakes extends feeds' Polled)
+	kept = "classes·" + names.join("·")
+	index = relocatable(relocated.globals, declared_global(kept, ValueKind.Node)#1)
 	classes = kept_once(kept, index, () => boxed(TypedCode(ValueKind.List, vector_code(names.map(name => boxed(text_value_of(name)))))), Kind.List)
 	held = fresh_node_local(body)
 	tested = runtime_call(word, [TypedCode(ValueKind.Node, held), TypedCode(ValueKind.List, converted(classes, ValueKind.List))])
