@@ -859,8 +859,11 @@ with_quoted_modules(program: Node) as Node := {
 # `{name: "f", code: data [definitions], values: {sun: sun, …}}`: a function with what it reaches, quoted for a reader
 # at run time (lib/shaders.warp, decision shaders-in-lib): its definition and those of the functions it calls,
 # transitively, in the program or in a module it uses, and the values they name, each read anew where the map is made;
-# ø where nothing defines such a function, or where the program assigns the name as a value
+# ø where nothing defines such a function, or where the program assigns the name as a value. A lambda, `x => sin(x)` of
+# `xs.map(x => sin(x)) @gpu`, is the function the program would define as `mapped_item = x => sin(x)`
+LAMBDA_NAME = "mapped_item"
 definitions_reached(f: Node, program: Node) as any := {
+	if is_lambda(f) { return definitions_reached(symbol(LAMBDA_NAME), separated(bracketed([Key(symbol(LAMBDA_NAME), Op.Assign, f)] + level_statements(program), ""), ";")) }
 	if function_definition(f, program) == ø and main_level_value(name_of(f), program) != ø { return ø }
 	brought = with_quoted_modules(program)
 	if function_definition(f, brought) == ø { return ø }

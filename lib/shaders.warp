@@ -247,8 +247,10 @@ wgsl_painted_call(reached: map) as text := {
 	if shading.refusal == "" and called#2 != COLOR_WIDTH { wgsl_refused(f, "a painted function gives a color [r, g, b], a number or yes/no; ${f} gives " + wgsl_type(called#2)) }
 	called#1
 }
-# f called at the pixel's column and row, translated afresh: [its WGSL, its width]
-wgsl_called(reached: map) as list := {
+# f called with these arguments, [WGSL, width] each (the pixel's column and row where it paints), translated afresh:
+# [its WGSL, its width]
+PIXEL_ARGUMENTS = [["position.x - 0.5", 1], ["position.y - 0.5", 1]]
+wgsl_called(reached: map, arguments: list = PIXEL_ARGUMENTS) as list := {
 	shading.definitions = {}
 	for definition in reached.code { shading.definitions[definition_name(definition)] = definition }
 	shading.values = reached.values ?? {}
@@ -260,7 +262,28 @@ wgsl_called(reached: map) as list := {
 	shading.value_widths = {}
 	shading.refusal = ""
 	shading.calling = []
-	wgsl_program_call(name_of(f), [["position.x - 0.5", 1], ["position.y - 0.5", 1]], f)
+	wgsl_program_call(name_of(f), arguments, f)
+}
+
+# `xs.map(f) @gpu` (extensions/rules/modules/shaders.warp): f of every item at once, one WGSL compute kernel over a
+# copy of the numbers, which the GPU computes in f32; xs.map(f) on the CPU where no GPU computes
+MAP_CELLS = "cells"
+MAP_WORKGROUP = 64
+gpu_map(xs: list, reached: map, f) as list := {
+	if not gpu_paints() { return xs.map(f) }
+	gpu_compute(map_kernel(reached), xs.copy(), ceil(#xs / MAP_WORKGROUP))
+}
+# the compute kernel writing f of each cell into it, made at its first map
+map_kernel(reached: map) as text := {
+	key = "map " + reached.name
+	if shaders_made.has(key) { return shaders_made[key]#1 }
+	called = wgsl_called(reached, [[MAP_CELLS + "[at]", 1]])
+	if shading.refusal == "" and called#2 != 1 { wgsl_refused(symbol(reached.name), "a function mapped on the GPU gives one number for each, this one " + wgsl_type(called#2)) }
+	if shading.refusal == "" and #shading.read_values > 0 { wgsl_refused(symbol(shading.read_values#1), "a function mapped on the GPU reads only its item, not the program's value ${shading.read_values#1}") }
+	if shading.refusal != "" { raise "xs.map(f) @gpu: ${shading.refusal}" }
+	kernel = shading.written_functions.join("\n\n") + "\n\n@group(0) @binding(0) var<storage, read_write> ${MAP_CELLS}: array<f32>;\n\n@compute @workgroup_size(${MAP_WORKGROUP}) fn main(@builtin(global_invocation_id) id: vec3u) {\n\tlet at = id.x;\n\tif at < arrayLength(&${MAP_CELLS}) { ${MAP_CELLS}[at] = ${called#1}; }\n}\n"
+	shaders_made[key] = [shader_words(kernel), []]
+	shaders_made[key]#1
 }
 
 wgsl_refused(n: Node, why: text) as list := {
