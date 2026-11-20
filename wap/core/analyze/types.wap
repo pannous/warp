@@ -176,14 +176,14 @@ typed_among(program: Block, library: list, rules: KindRules, library_scope: Scop
 # every function wap refuses, then what else stopped the program, said together
 refused_all(s: TypingState, more: list) := raise (s.refusals.map(each => each.message) + more).join("\n")
 # whether a typed form gives a value: not none, not a jump that never comes back
-gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valued_type(value_type(n))
+gives_value(n: Node) as bool := fact_of(n, TYPE) != ø and not jumps(n) and valued(value_type(n))
 # whether a type is one of a value: not none, not ø alone
 # a typed form's value type, refused where it gives none, saying where the value is wanted: "to pass", "to test" …; a
 # call of a function whose result is not known yet says what to write
 value_of(n: Node, wanted: text) as Node := value_type(n) ?? refused(n, text_of(fact_of(n, RESULT_UNKNOWN)) ?? "this gives no value ${wanted}")
 # a fact's text, ø for none
 text_of(fact: Node?) as text? := match fact { Text(value) => value; _ => ø }
-valued_type(type: Node?) as bool := value_bearing(type) != ø
+valued(type: Node?) as bool := value_bearing(type) != ø
 # a type that holds a value, ø for none or ø's own
 value_bearing(type: Node?) as Node? := if type == symbol(EMPTY_TYPE) then ø else type
 jumps(n: Node) as bool := has_fact(n, JUMPS)
@@ -401,9 +401,9 @@ path_step(key: Node) as text? := match key {
 FIELD_STEP = "."
 ITEM_STEP = "#"
 # whether a path is this one or part of it, `x.inner` and `x#1` within `x`
-part_of(key: text, path: text) as bool := key == path or [FIELD_STEP, ITEM_STEP].any(step => key.starts_with(path + step))
+within(key: text, path: text) as bool := key == path or [FIELD_STEP, ITEM_STEP].any(step => key.starts_with(path + step))
 # what conditions found, without this path and the paths within it, which a new value changes
-forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => not part_of(known.key, key)) }
+forgotten(key: text, f: TypeFrame) := { f.present = f.present.filter(known => not within(known.key, key)) }
 # whether a function's name, where no function is wanted, is a call: it names a definition without parameters, `n := 5`
 names_constant(n: Node, expected: Node?, s: TypingState) as bool := signature(expected) == ø and candidate_scopes(n).flat_map(scope => scope).any(definer => #definition_at(definer, s).parameters == 0)
 # the variables a name's binding keeps: the program's globals, or the frame's locals and parameters
@@ -422,12 +422,6 @@ type_keyed(key: text, bindings: list<Binding>) as Node? := {
 # the type a condition around finds a variable of, ø where none finds it
 found_type(key: text, present: list<Finding>) as Node? := type_keyed(key, present.map(finding => Binding(finding.key, finding.type)))
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
-# the one definition a name means, ø for a name among several, whose DEFINED_AT the binding analysis sets to Empty to
-# forget the one it meant before (core/analyze/scope.wap resolved_taking): the core has no word that drops a fact
-one_definer(name: Node) as Node? := {
-	definer = fact_of(name, DEFINED_AT) ?? return ø
-	if definer is Empty then ø else definer
-}
 # whether a name is the one that defines its variable, its first value rather than a change
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 

@@ -70,7 +70,7 @@ wants_at(definition: Function, at: int, type: Node?) as bool := {
 }
 # the results a call's definitions write, of those taking as many arguments
 results_written(argument: Node, s: TypingState) as list := match argument {
-	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and one_definer(called) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).compact()
+	Call(called, parts) => if fact_of(called, CANDIDATES) == ø and fact_of(called, DEFINED_AT) == ø or holds_value(called) then [] else candidate_scopes(called).flat_map(scope => scope).map(definer => definition_at(definer, s)).filter(definition => takes_count(definition, #parts)).map(definition => definition.result).compact()
 	_ => []
 }
 parameter_type_at(definition: Function, at: int) as Node? := if #definition.parameters < at then ø else definition.parameters#at
@@ -102,8 +102,8 @@ takes_count(definition: Function, count: int) as bool := {
 	count <= #parameters and parameters.drop(count).all(defaulted)
 }
 defaulted(parameter: Node) as bool := has_fact(parameter, DEFAULT)
-# a parameter's default value; a default written ø is the fact Empty, which reads back as none
-parameter_default(parameter: Node) as Node := fact_of(parameter, DEFAULT) ?? Empty
+# a parameter's default value, `= ø` the fact Empty; a call leaves out only parameters with one (takes_count)
+parameter_default(parameter: Node) as Node := fact_of(parameter, DEFAULT) ?? refused(parameter, "a call leaves out this parameter, which has no default")
 # the defaults of the parameters a call leaves out, after the given ones, each typed as its parameter's type wants
 defaults_given(definition: Function, count: int, s: TypingState, f: TypeFrame) as list := {
 	parameters_in(definition.definer).drop(count).map(parameter => typed_form(parameter_default(parameter), s, f, type_given(parameter)))
@@ -182,7 +182,7 @@ own_words(called: Node, given: list, s: TypingState) as list := {
 takes_record(type: Node?, record: Node) as bool := type != ø and text(base_or_self(type)) == record_name(record)
 # the definitions a called name may mean, one list per scope, innermost first: the one it was bound or typed to, else
 # its candidates
-candidate_scopes(called: Node) as list := if one_definer(called) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
+candidate_scopes(called: Node) as list := if fact_of(called, DEFINED_AT) != ø then [[defined_at(called)]] else match fact_of(called, CANDIDATES) {
 	List(scopes, bracket, separator) => scopes.map(scope => match scope { List(items, inner, between) => items; _ => refused(scope, "a name's candidates are a list of definitions") })
 	_ => [[defined_at(called)]]
 }
@@ -397,7 +397,7 @@ shaped_typed(definition: Function, argument_types: list, s: TypingState, at: Nod
 	typed.result = typed.result ?? (if given != ø and given != symbol(EMPTY_TYPE) and base_of_optional(written) != ø then optional_type(given) else given)
 	typed.define = refitted(Define(signed_name(typed), with_items(parameters, typed_parameters), typed_body), definition.definer)
 	typed.late = frame.late
-	if typed.called_unknown and valued_type(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
+	if typed.called_unknown and valued(typed.result) and not typed.jumps { refused(name, typed.unknown_result) }
 	typed.done = yes
 	typed
 }; _ => refused(definition.definer, A_DEFINE) }

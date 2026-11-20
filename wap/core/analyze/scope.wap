@@ -256,7 +256,7 @@ resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
 	if fact_of(name, READ_WITH) != ø and not innermost.kind in [DefinitionKind.Function, DefinitionKind.Library] { refused(name, "a rule reads ${name} as the function ${fact_of(name, READ_WITH)}, but a variable of that name hides it: rename the variable") }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH or innermost.kind == DefinitionKind.Global then innermost.kind else DefinitionKind.Capture
 	bound = with_binding(name, kind)
-	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
+	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(without_fact(bound, DEFINED_AT), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))
 }
 # the depths of these definitions, each once, innermost first as they come
 depths_of(definitions: list) as list := {

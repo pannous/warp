@@ -491,6 +491,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
   defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
+  **Paid (wap-debts-binding):** calls.wap parameter_default refuses a missing default; `= ø` is the fact Empty.
 - **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
   can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
   preload/lists.wap with a test_lists line. Old warp no longer builds wap's tests (wap-facts-replace): the tests'
@@ -505,6 +506,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   program's definitions dispatch across all its modules, and a Node parameter dispatches as any, so analyze's
   `valued(type: Node?)` beside emit's `valued(type: list<int>)` is refused though each call site's types tell them
   apart. Paid off when a call is resolved statically wherever its argument types decide it.
+  **Paid (wap-debts-binding):** the seed and wap tell them apart by their types: `within` and `valued` again.
 - **A preload file compiled as the program brings its definitions twice** (wap/core/pipeline.wap typed_file): the
   file is the program and also part of the library around it, so calls.wap refuses "two definitions share the key"
   (preload/floats.wap, host, texts, preload.wap, prelude.wap) and nodes.wap lists `text(n: Node)` twice. Off the
@@ -517,6 +519,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   Empty beside a name's CANDIDATES; wap/core/analyze/types.wap one_definer is its one reader). Reason: old warp's core
   can drop no fact (its with_attribute only appends), so removing the fact breaks the reference compiler. Paid off when
   old warp can drop a fact: then without_fact, beside with_fact in core/stage.wap.
+  **Paid (wap-debts-binding):** scope.wap drops the name's DEFINED_AT with without_fact; one_definer is gone.
 - **A number is compared with 0 by its narrowed type** (wap/core/format.wap below_zero, read by led_by_sign). Reason:
   under wap2 `value < 0` on a `number` raises "<: no definition takes these values' types" (typing or dispatch gives
   no `<` for a number and an int; reported to warp-wap-binding). Paid off when that compares: led_by_sign's arm is
