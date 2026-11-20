@@ -93,7 +93,7 @@ library_code_of(language: Language, preload: Node) as Block := modules_prepared(
 # functions are there for any caller; typed, then rewritten by the typed rules
 typed_file(language: Language, file: text, preload: Node) as Block := {
 	modules = declared_modules(language, file)
-	whole = modules_prepared(language, modules, preload)
+	whole = with_fact(modules_prepared(language, modules, preload), SCRIPT, True)
 	library_code = library_code_of(language, preload)
 	typed_by_rules(language, typed_shown(whole, library_code), declarations_of(preload), library_code)
 }

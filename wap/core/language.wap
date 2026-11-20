@@ -12,7 +12,8 @@ use "stage.wap"
 # stage reads them.
 class PhraseWords { leading: map<text, bool>, inner: map<text, bool> }
 
-class Rule { head: text, matcher: Matcher, template: Node, fresh: list<text>, written: Node, specificity: int }
+# fact: a fact the matched code must carry, `rule … where script`, none when ""
+class Rule { head: text, matcher: Matcher, template: Node, fresh: list<text>, written: Node, specificity: int, fact: text = "" }
 # the rules of one stage, by head: stage 1 asks only shapes, stage 2 the declarations, stage 3 the types of typed code
 # (a hole of a value type)
 class Rules { by_head: map<text, list<Rule>> }

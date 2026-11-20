@@ -3,6 +3,7 @@
 # and the bindings.
 use "patterns.wap"
 use "../analyze/fits.wap"
+use "../analyze/types.wap"
 use "../parse/operators.wap"
 use "../parse/operator_table.wap"
 use "../../preload/operators.wap"
@@ -105,7 +106,7 @@ rest_matches(m: Matcher, items: list, bindings: map<text, Node>) as bool := {
 
 # whether code has the shape a hole asks for
 of_shape(m: Matcher, n: Node) as bool := {
-	if m.stage == TYPED_STAGE { return fits_type(n, m.type) }
+	if m.stage == TYPED_STAGE { return if spelling_written(m.type) == VALUE_HOLE then gives_value(n) else fits_type(n, m.type) }
 	if m.stage == DECLARED_STAGE { return hole_declaration(m, n) != ø }
 	if m.pattern != ø { return matches(m.pattern.matcher, n, {}) }
 	type = spelling_written(m.type)

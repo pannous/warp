@@ -28,6 +28,8 @@ PATTERN_WORD = "pattern"
 RULE_ARROW = "=>"
 # a template that refuses what its pattern matched: `=> refuse "message"`
 REFUSE_WORD = "refuse"
+# what a rule's pattern ends with to ask a fact of the code, `rule … where script => …`
+WHERE_WORD = "where"
 DEFINITION = "="
 # the head of a pattern that starts with a hole: tried on every node
 NO_HEAD = ""
@@ -78,14 +80,17 @@ declaration_taken(language: Language, called: text, arguments: list) as list<Nod
 	keyword = spelling_written(words#1)
 	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { return [pattern_builder(language, declare_pattern(language, words#2, arguments#2))] }
 	if called == RULE_ARROW and keyword == RULE_WORD {
-		rule_added(language, arguments#1, if #words == 2 then words#2 else List(words[1 ..], Bracket.None, Separator.Space), arguments#2)
+		# `rule P where fact => T`: P fits only code that carries that fact
+		guarded = #words > 3 and spelling_written(words#(#words - 1)) == WHERE_WORD
+		pattern = if guarded then words[1 .. #words - 2] else words[1 ..]
+		rule_added(language, arguments#1, if #pattern == 1 then pattern#1 else List(pattern, Bracket.None, Separator.Space), arguments#2, if guarded then spelling_written(words.last) else "")
 		return []
 	}
 	ø
 }
 
 
-rule_added(language: Language, written: Node, pattern: Node, template: Node) := {
+rule_added(language: Language, written: Node, pattern: Node, template: Node, fact: text) := {
 	normal = normalized(ungrouped(pattern))
 	writes_nothing = ungrouped(template) is Empty
 	output = if writes_nothing then NOTHING_WRITTEN else ungrouped(template)
@@ -95,7 +100,7 @@ rule_added(language: Language, written: Node, pattern: Node, template: Node) := 
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
 	if typed { normal = lowered(language, normal); output = if writes_nothing then output else lowered(language, output) }
 	matcher = compiled_pattern(language, normal)
-	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher))
+	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher) + (if fact == "" then 0 else 1), fact)
 	rules = rules_of_stage(language, stage)
 	if not rules.by_head.has(rule.head) { rules.by_head[rule.head] = [] }
 	# a rule loaded again, its file read twice, is the rule already there
@@ -282,7 +287,7 @@ rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 		if rules.by_head.has(head) {
 			for rule in rules.by_head[head] {
 				bindings = {}
-				if matches(rule.matcher, n, bindings) {
+				if (rule.fact == "" or fact_of(n, rule.fact) != ø) and matches(rule.matcher, n, bindings) {
 					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: ${best.written} and ${rule.written}") }
 					if best == ø or rule.specificity > best.specificity { best = rule; best_bindings = bindings }
 				}

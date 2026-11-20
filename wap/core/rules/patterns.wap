@@ -48,6 +48,8 @@ TYPED_STAGE = 3
 # its result bool, `$p: predicate`
 FUNCTION_HOLE = "function"
 PREDICATE_HOLE = "predicate"
+# the hole type that asks for code giving a value of any type, none and a jump excepted: `$last: value` (stage 3)
+VALUE_HOLE = "value"
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 # its shape as the Node pattern that takes a value apart, `taken`

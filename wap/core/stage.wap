@@ -76,6 +76,8 @@ direct_parts(n: Node) as list<Node> := match n {
 
 # the fact naming the rule that built a node: the rule's head, where it was written
 RULE = "rule"
+# SCRIPT on the block of a program run as a script, whose last value it shows: a rule may ask it, `where script`
+SCRIPT = "script"
 
 # Facts a stage learns about a node (notes/backbone.md "Stage languages"): a name's binding, a type, the overload a
 # call chose. Each is a named entry in the node's metadata, never a hole of its shape, so a form keeps the same holes
