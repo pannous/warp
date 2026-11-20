@@ -25,7 +25,7 @@ function_value_typed(n: Node, parameters: Node, body: Node, s: TypingState, f: T
 	lambda = lambda_of(n, parameters, body, s)
 	captures = captures_of(n).map(definer => type_keyed(place_key(definer), f.variables) ?? refused(definer, "a function value reads this before any value is given to it"))
 	s.captured += captures_of(n).map(place_key)
-	s.found_in[lambda.key] = f.present.filter(known => captures_of(n).any(definer => part_of(known.key, place_key(definer))))
+	s.found_in[lambda.key] = f.present.filter(known => captures_of(n).any(definer => within(known.key, place_key(definer))))
 	with_type_of(n, function_value_type(lambda.key, captures))
 }
 # the function of a function value, made once: named and placed where the value is written
