@@ -3,6 +3,7 @@
 use "stages.wap"
 use "patterns.wap"
 use "matcher.wap"
+use "../parse/operators.wap"
 use "../stage.wap"
 use "../errors.wap"
 use "../language.wap"
