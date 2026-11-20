@@ -204,7 +204,11 @@ checked) and a line here when its language changed. The lead reviews it against 
    4. test/wap/run.sh passes with wap2 as the compiler;
    5. wap1 compiling wap/compiler.wap takes under a minute on the Mac;
    6. wap's source uses no word only the old compiler knows: compiled with no old-compiler library, it still builds;
+      **met 2026-11-20:** wap resolves names only against wap/preload and the files a program uses, no `use` leaves
+      wap/, and test_self.sh's "the compiler wap makes of itself compiles a program that runs" runs it from a folder
+      holding only preload/ and kernel/;
    7. no boxed `any` is left in wap's own source: the boxed-any allowlist of test/wap/test_guardrails.sh is empty.
+      **met 2026-11-20:** test/wap/guardrails_allowed.txt has no boxed-any line.
    Until then nothing lands that turns no function of wap green, unless it fixes a wrong value.
 
 After that, the test pass rate is a ballpark of how well the engine works, nothing more. Then the user and the
