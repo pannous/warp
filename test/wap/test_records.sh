@@ -76,4 +76,8 @@ i = Item(7, ø)
 b = Box(i)
 i.box = b
 print text(b.item.n)')" "7"
+check "a record holding a list of itself, the list given to a function" "$(ran own_list 'class Tree { n: int; kids: list<Tree> }
+count(kids: list<Tree>) as int := #kids
+t = Tree(1, [Tree(2, []), Tree(3, [])])
+print text(count(t.kids))')" "2"
 exit $((failures > 0))
