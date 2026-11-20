@@ -163,10 +163,16 @@ pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> :
 is_type_test(called: Node, scope: Scope) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
 type_test_bound(n: Node, called: Node, arguments: list, scope: Scope, depth: int) as Node := {
 	tested = arguments#2
+	# `a is not b` reads `not (a is b)` (wiki/ambiguity.md "is not"), never a test of `not b`
+	negated = negated_test(tested)
+	if negated != ø { return bound(refitted(Call(symbol(NOT_WORD), [refitted(Call(called, [arguments#1, negated]), n)]), n), scope, depth) }
 	if tested is symbol and names_predicate(tested, scope) { return with_fact(bound(refitted(Call(tested, [arguments#1]), n), scope, depth), PREDICATE, True) }
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }
+NOT_WORD = "not"
+# what a tested `not b` negates, ø for any other tested form
+negated_test(tested: Node) as Node? := match tested { Call(called, parts) => if text(called) == NOT_WORD and #parts == 1 then parts#1 else ø; _ => ø }
 # a call's argument: a named one, `by: f`, its value bound and its name the parameter's word
 argument_bound(argument: Node, scope: Scope, depth: int) as Node := if is_named(argument) then field_bound(argument, scope, depth) else bound(argument, scope, depth)
 is_named(argument: Node) as bool := match argument { Key(name, Op.Colon, value) => name is symbol; _ => no }
