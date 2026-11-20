@@ -439,6 +439,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   core/node.warp whole, but its `List(items: list, …)` gives an untyped list whose items wap can't read (`data#1` is
   refused: no # takes (list, int)). Reading it needs a bare `list` to mean list<any> and an `any` read back as a Node by
   a match. Until then nodes.wap types the items list<Node>, and the two copies must change together.
+  Paid off: wap compiles its own source, so nodes.wap's Node is wap's own; core/node.warp is old warp's (wap-debts-front).
 - **A rewrite that loops forever hangs the compiler instead of being refused** (wap/core/rules/stages.wap): letting
   any rule read a square list as one phrase made `xs = [1 2 3]` hang, some rule rewriting the phrase `1 2 3` again and
   again (the loop was not traced). A list is now one phrase only when its first word leads a rule. A rewrite whose
