@@ -121,4 +121,10 @@ Bo
 3"
 check "an item's own index takes the item first, as a part's does" "$(ran item_index 'xs = [[1, 2, 3], [4]]
 print text(xs#1[1 ..])')" "[2, 3]"
+check "a map's values, a new list in the order their keys were set" "$(ran map_values 'm = {a: 1, b: 2}
+vs = m.values
+vs.add(3)
+print show(vs)
+print text(#m.values())')" "[1, 2, 3]
+2"
 exit $((failures > 0))
