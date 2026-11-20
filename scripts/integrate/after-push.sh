@@ -371,7 +371,7 @@ samples_committed() {
 	local count report=test/samples.txt last=$state/samples-at
 	[ -f "$last" ] && [ $(($(date +%s) - $(cat "$last"))) -lt $((SAMPLES_HOURS * 3600)) ] && return
 	date +%s >"$last"
-	count=$("$scripts/samples.sh" "$TREE" | head -1 | sed -n 's/^samples: \([0-9]* of [0-9]*\) run.*/\1/p')
+	count=$("$scripts/samples.sh" "$TREE" | head -1 | sed -n 's/^samples: \([0-9]* pass of [0-9]*\) run.*/\1/p')
 	cp "$TREE/$report" "$MAIN_CHECKOUT/$report" || return
 	# the slow tree stays clean for its next checkout
 	git -C "$TREE" checkout -q HEAD -- "$report" 2>/dev/null || rm -f "$TREE/$report"
