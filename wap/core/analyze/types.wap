@@ -145,9 +145,12 @@ class TypeFrame {
 }
 
 # the program typed, after the preload's functions it calls
-typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload))
+typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), no)
+# the whole program typed, its value shown: a last statement that gives one is `print(show(it))`, by the show its
+# type has, as every program value shows itself
+typed_shown(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), yes)
 # the program typed, after the library's records and those of its definitions it calls
-typed_among(program: Block, library: list) as Block := {
+typed_among(program: Block, library: list, shown: bool) as Block := {
 	s = TypingState()
 	s.ids = definers_of(program)
 	defines = library.filter(statement => statement is Define)
@@ -157,6 +160,10 @@ typed_among(program: Block, library: list) as Block := {
 	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
 	if s.refusals { refused_all(s, []) }
 	statements = statements_in(typed)
+	if shown and statements and gives_value(statements.last) {
+		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
+		typed = with_type_of(typed, value_type(statements.last))
+	}
 	if s.unknowns > 0 { all_settled(s) }
 	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
