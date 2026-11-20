@@ -130,4 +130,4 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 }
 # whether a type test's word names a type: a built-in one, a record's or a generic letter; a written compound type,
 # `list<int>`, is one
-names_type(tested: Node, s: TypingState) as bool := not tested is symbol or TYPE_WORDS.contains(text(tested)) or record_named(s.records, tested) != ø or is_letter(tested, s.records)
+names_type(tested: Node, s: TypingState) as bool := if not tested is symbol then type_parts(tested) != ø else TYPE_WORDS.contains(text(tested)) or record_named(s.records, tested) != ø or is_letter(tested, s.records)
