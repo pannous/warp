@@ -75,7 +75,7 @@ typed_call_through(n: Node, called: Node, arguments: list, parts: Signature, s: 
 # function takes or gives others
 as_function_type(value: Node, wanted: Node, s: TypingState) as Node? := {
 	parts = signature(wanted) ?? return ø
-	own = value_type(value)
+	own = value_type(value) ?? return ø
 	typed = value_function_typed(parts.parameters, own, s) ?? return ø
 	if not same_types(typed.arguments[#typed.arguments - #parts.parameters ..], parts.parameters) { return shape_taking(value, typed, parts, s, wanted) }
 	if typed.result == ø or not conversion(typed.result, parts.result, s) in STATIC_CONVERSIONS { return ø }

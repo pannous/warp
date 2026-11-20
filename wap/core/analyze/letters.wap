@@ -151,17 +151,18 @@ reads_as(held: Node, given: Node) as bool := {
 # the letters bound with those a function value binds against a function type, [parameter types, result type]: its
 # function typed for the parameter types, its result the type's result; ø when it takes others or gives another
 function_value_bound(wanted: Signature, value: Node, bound: list<Binding>, s: TypingState) as list<Binding>? := {
-	parameters = wanted.parameters.map(type => substituted(type, bound))
+	parameters = wanted.parameters.map(type => type_substituted(type, bound))
 	if parameters.any(type => has_letters(type, s.records)) { return ø }
 	result = (value_function_typed(parameters, value, s) ?? return ø).result ?? return ø
 	unified(wanted.result, result, bound, s)
 }
 # the function of a value of this type, fn<key, capture types…>, typed for these parameter types, a function value's
 # own one taking the value first; ø when its parameters take others
-value_function_typed(parameters: list, type: Node?, s: TypingState) as TypedFunction? := {
-	key = text((function_value_parts(type) ?? return ø)#1)
+value_function_typed(parameters: list<Node>, type: Node?, s: TypingState) as TypedFunction? := {
+	given = type ?? return ø
+	key = text((function_value_parts(given) ?? return ø)#1)
 	definition = definition_keyed(key, s) ?? return ø
-	closure = if is_lambda_key(key, s) then [type] else []
+	closure = if is_lambda_key(key, s) then [given] else []
 	if #definition.parameters != #closure + #parameters { return ø }
 	typed = function_typed(definition, closure + parameters, s, definition.definer)
 	# its parameters take the wanted ones as they are: that type or a shape of it, `(pair: Pair)` where `(Node)` is, or
