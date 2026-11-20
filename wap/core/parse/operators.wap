@@ -30,7 +30,6 @@ OPEN_SIDE = "ø"
 # wherever they stand; a word it defines stays as written, no alias reads it
 operated_program(language: Language, program: Node) as Node := {
 	placements = []
-	language.defined_words = {}
 	words_defined(program, language.defined_words)
 	operators_declared(language, program, placements)
 	for placement in placements { placed(language, placement) }
@@ -49,7 +48,7 @@ operated_form(language: Language, n: Node) as Node := match n {
 	List(items, bracket, separator) => List(items.map(item => operated(language, item)), bracket, separator)
 	Key(left, Op.Colon, right) => chosen(operated(language, left), operated(language, right))
 	Key(left, Op.None, right) => Key(operated(language, left), Op.None, operated(language, right))
-	Key(left, op, right) => key_read(language, n, left, op as text, right)
+	Key(left, op, right) => scoped_key_read(language, n, left, op as text, right)
 	Symbol(spelling) => word_read(language, n, spelling)
 	_ => n
 }
@@ -64,6 +63,16 @@ chosen(left: Node, right: Node) as Node := match left {
 open_choice(n: Node) as bool := match n { Call(called, arguments) => spelling_written(called) == CHOICE and #arguments == 2; _ => no }
 
 # a key the reader built by an operator (`a = 1`, the colon's rules) applied as that infix operator: (Call = a 1)
+# a key read with the words its definition holds as its own, if it is one (core/parse/operator_table.wap)
+scoped_key_read(language: Language, n: Node, left: Node, spelling: text, right: Node) as Node := {
+	locals = local_words_of(n)
+	if locals is empty { return key_read(language, n, left, spelling, right) }
+	outer = language.local_words
+	language.local_words = outer + locals
+	read = key_read(language, n, left, spelling, right)
+	language.local_words = outer
+	read
+}
 key_read(language: Language, n: Node, left: Node, spelling: text, right: Node) as Node := {
 	use = reading_as(language, placed_like(symbol(spelling), n), Fixity.Infix)
 	if use == ø { refused(n, "no infix operator " + spelling + " in the operator table") }
