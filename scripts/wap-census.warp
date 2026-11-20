@@ -342,6 +342,7 @@ copied(base: TypingState) as TypingState := {
 	s.unset = base.unset + []
 	s.dispatchers = base.dispatchers + []
 	s.refusals = base.refusals + []
+	s.library_scope = base.library_scope
 	s
 }
 
