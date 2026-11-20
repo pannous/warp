@@ -19,7 +19,7 @@ joined_settling(a: Node?, b: Node?, s: TypingState) as Node? := {
 	given = value_bearing(a)
 	wanted = value_bearing(b)
 	if given != ø and wanted != ø { settles(given, wanted, s) }
-	joined_type(substituted(a, s.settled), substituted(b, s.settled), s)
+	joined_type(settled_optional(a, s), settled_optional(b, s), s)
 }
 # Code of which one part runs, an if's or a match's arms: of the type joining those that finish, jumping when all jump
 joined_of(n: Node, parts: list, s: TypingState) as Node := if parts.all(jumps) then jumping(n) else with_type_of(n, parts_type(parts, s))

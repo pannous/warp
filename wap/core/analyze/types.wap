@@ -413,7 +413,7 @@ remembered(name: Node, type: Node, s: TypingState, f: TypeFrame) := {
 	forgotten(variable.key, f)
 	if is_bound(name, DefinitionKind.Global) { s.globals += [variable] } else { f.variables += [variable] }
 }
-variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := substituted(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s.settled)
+variable_type(name: Node, s: TypingState, f: TypeFrame) as Node? := settled_optional(type_keyed(place_key(defined_at(name)), variables_of(name, s, f)), s)
 # the type of this key among these bindings
 type_keyed(key: text, bindings: list<Binding>) as Node? := {
 	for binding in bindings { if binding.key == key { return binding.type } }
