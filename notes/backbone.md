@@ -269,6 +269,11 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   the stage-2 self-build; host.wap placing_function names its local `measure` instead. Paid off when an alias applies
   only to a word nothing in the program defines.
 
+- **A function value read from a map, called twice through a parameter, traps** (wap/core/emit/function_values.wap;
+  reported by warp-wap-reader 2026-11-19): `m: map<text, (int) -> int>`, then `f(f(x))` inside a function taking
+  `f: (int) -> int` given `m["inc"]` stops on a null reference. Called once it works, and so does `twice(inc, 3)`.
+  Reason: off the self-build census (user 2026-11-19). Paid off once wap compiles itself.
+
 - **`use "m.wasm"` is not read yet** (card wasm-module-import, wiki/wasm-representation.md): a compiled module can't
   be used as its source is. Reason: paused for the self-build census (user 2026-11-19). Branch wasm-module-import has
   the exports and the `wap` section of header lines; the reader, the body-less `export` declaration and the import
@@ -417,10 +422,6 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`{}` is its own kernel form, EmptyMap** (wap/kernel/forms.wap), not Empty typed as the map wanted, as `[]` is an
   empty list (decided 2026-11-19). Reason: Empty carries no facts in warp's Node, so no TYPE can sit on it while old
   warp reads wap's source. Paid off when old warp no longer reads wap's source: `{}` reads as Empty, the form goes.
-- **A bool does not read as its number where an int is wanted** (wiki/bool.md "acts like the numbers 1 and 0"):
-  `"x" * yes` is refused, `no * takes (char, bool)`. Reason: paused for the self-build census (user 2026-11-19); built
-  and parked on branch bool-reads-int (read_type reads a bool as int, preload `int(b: bool)`, its outcome test). Paid
-  off when wap compiles itself: that branch lands.
 - **An overloaded function is not a value yet**: `parts.map(text)` types only as `parts.map(each => text(each))`
   (shape_taking in analyze/function_values.wap). Reason: a value of a name with several definitions is refused until
   a written function type picks one; the self-build census needs the function typed now. Paid off when the expected
