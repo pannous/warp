@@ -75,7 +75,7 @@ prepared_once(module: Module, modules: list<Module>) as list := {
 # so it changes how no other form types; a top-level statement's refusal is kept with its module. A module that cannot
 # be bound whole joins with the statements that bind alone, so a refusal hides only its statement (probe reports it
 # with the file).
-class Run { state: TypingState, frame: TypeFrame, joined: map<text, list> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
+class Run { state: TypingState, frame: TypeFrame, joined: map<text, list<Node>> = {}, refusals: map<text, list<text>> = {}, probed: map<text, Probed> = {} }
 run = Run(typing_state(library), TypeFrame())
 typing_joined(modules: list<Module>) := {
 	global run
@@ -356,14 +356,15 @@ CALLS = "this calls "
 class Family { root: Refusal, name: text, size: int = 1 }
 refused_name(refusal: Refusal) as text := if refused_names.has(refusal.key) then refused_names[refusal.key] else named_in(refusal, run.state)
 called_refused(refusal: Refusal) as text := if refusal.message.contains(CALLS_REFUSED) then refusal.message.split(CALLS).last.split(CALLS_REFUSED)#1 else ""
-family_of(root: Refusal, refusals: list) as Family := {
+# the functions not yet blocked whose refusals name a blocked one as their callee
+callers_of(blocked: list<text>, refusals: list<Refusal>) as list<text> := refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked)).map(refused_name).unique
+family_of(root: Refusal, refusals: list<Refusal>) as Family := {
 	family = Family(root, refused_name(root))
 	blocked = [family.name]
-	grown = yes
-	while grown {
-		callers = refusals.filter(each => called_refused(each) in blocked and not (refused_name(each) in blocked))
-		blocked = blocked + callers.map(refused_name).unique
-		grown = callers is not empty
+	callers = callers_of(blocked, refusals)
+	while callers is not empty {
+		blocked = blocked + callers
+		callers = callers_of(blocked, refusals)
 	}
 	family.size = #blocked
 	family
