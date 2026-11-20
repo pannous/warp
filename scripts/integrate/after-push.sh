@@ -47,7 +47,6 @@ state=$installed_state
 [ -n "$slow" ] && { TREE=$SLOW_TREE; state=$SLOW_TREE/data/integrate; }
 say() { echo "after-push: $(date '+%H:%M:%S') $*"; }
 main_tip() { git -C "$TREE" ls-remote origin refs/heads/main | cut -f1; }
-checkouts_linked "$TREE" || say "RED: no linked checkouts for $TREE"
 # origin's main fetched, only its ref: a concurrent push of another branch can't fail the fetch on that branch's ref
 # lock ("cannot lock ref … expected old tip", card after-push); a race on main itself is fetched once more a moment later
 fetched_main() { git -C "$TREE" fetch -q origin main || { sleep 5; git -C "$TREE" fetch -q origin main; }; }
@@ -305,6 +304,8 @@ watch() {
 	tip=$1
 	since=$(cat "$state/watched" 2>/dev/null || git -C "$TREE" rev-parse "$tip^")
 	git -C "$TREE" checkout -q --detach "$tip" && tree_at "$tip" || { red "the tree $TREE is not at ${tip:0:10}" --urgent; return 1; }
+	# what moved to its own repository linked again after the checkout (samples/: a commit before the move held them)
+	checkouts_linked "$TREE" || { red "the tree $TREE lacks a linked checkout (scripts/lib/platform.sh LINKED_CHECKOUTS)" --urgent; return 1; }
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	# the repeats main still holds, listed for cards (card repeated-code-check)
 	"$scripts/repeated-code.sh" "$TREE" --report
