@@ -134,14 +134,6 @@ names_case(name: Node, scope: Scope) as bool := {
 	meant = definitions_meant(text(name), scope)
 	not meant is empty and meant#1.kind == DefinitionKind.Case
 }
-# whether a name means functions and no type: a type's word is a type test even beside a function of that name,
-# `3 is int` beside int(t: text)
-names_predicate(name: Node, scope: Scope) as bool := {
-	# a type's or a declared pattern's name after `is` is its test, never a call of its builder: `n is Record`
-	if TYPE_WORDS.contains(text(name)) or shape_called(name, scope) { return no }
-	meant = definitions_meant(text(name), scope)
-	not meant is empty and meant.all(definition => definition.kind == DefinitionKind.Function or definition.kind == DefinitionKind.Library)
-}
 arm_result(arm: Arm) as Node := match arm { Arm(pattern, result) => result }
 pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> := match pattern {
 	Symbol(name) => if name == WILDCARD or names_case(pattern, scope) then [] else [Definition(name, local_kind(depth), pattern, depth)]
@@ -158,21 +150,14 @@ pattern_variables(pattern: Node, scope: Scope, depth: int) as list<Definition> :
 }
 
 # A type test, `x is T`: its value bound, its type a case, which binds as one, or a type's name, which stays a name as
-# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap). A word naming a function and
-# no type is a test of its own, the call of that predicate: `xs is empty` is empty(xs)
+# in `x: int`; the word stays unbound, so typing reads the test (core/analyze/types.wap). A predicate's word, `xs is
+# empty`, and `a is not b` are rules of their own (preload/sugar/types.wap)
 is_type_test(called: Node, scope: Scope) as bool := called is symbol and text(called) == TYPE_TEST_WORD and definitions_meant(TYPE_TEST_WORD, scope) is empty
 type_test_bound(n: Node, called: Node, arguments: list, scope: Scope, depth: int) as Node := {
 	tested = arguments#2
-	# `a is not b` reads `not (a is b)` (wiki/ambiguity.md "is not"), never a test of `not b`
-	negated = negated_test(tested)
-	if negated != ø { return bound(refitted(Call(symbol(NOT_WORD), [refitted(Call(called, [arguments#1, negated]), n)]), n), scope, depth) }
-	if tested is symbol and names_predicate(tested, scope) { return with_fact(bound(refitted(Call(tested, [arguments#1]), n), scope, depth), PREDICATE, True) }
 	type = if tested is symbol and names_case(tested, scope) then resolved(tested, scope, depth) else tested
 	refitted(Call(called, [bound(arguments#1, scope, depth), type]), n)
 }
-NOT_WORD = "not"
-# what a tested `not b` negates, ø for any other tested form
-negated_test(tested: Node) as Node? := match tested { Call(called, parts) => if text(called) == NOT_WORD and #parts == 1 then parts#1 else ø; _ => ø }
 # a call's argument: a named one, `by: f`, its value bound and its name the parameter's word
 argument_bound(argument: Node, scope: Scope, depth: int) as Node := if is_named(argument) then field_bound(argument, scope, depth) else bound(argument, scope, depth)
 is_named(argument: Node) as bool := match argument { Key(name, Op.Colon, value) => name is symbol; _ => no }
@@ -255,6 +240,8 @@ resolved_taking(name: Node, given: int?, scope: Scope, depth: int) as Node := {
 	meant = definitions_meant(text(name), scope)
 	if meant is empty { refused(name, "nothing defines this name, neither the program nor the library") }
 	innermost = if meant#1.kind == DefinitionKind.Case then unambiguous_case(name, meant#1, given, scope) else meant#1
+	# a name a rule read as a function binds to a function, never to a variable of that name in its way
+	if fact_of(name, READ_WITH) != ø and not innermost.kind in [DefinitionKind.Function, DefinitionKind.Library] { refused(name, "a rule reads ${name} as the function ${fact_of(name, READ_WITH)}, but a variable of that name hides it: rename the variable") }
 	kind = if innermost.depth == depth or innermost.depth <= PROGRAM_DEPTH then innermost.kind else DefinitionKind.Capture
 	bound = with_binding(name, kind)
 	if #meant == 1 then with_fact(bound, DEFINED_AT, innermost.definer) else with_fact(with_fact(bound, DEFINED_AT, Empty), CANDIDATES, List(depths_of(meant).map(depth => List(meant.filter(definition => definition.depth == depth).map(definition => definition.definer), Bracket.Square, Separator.Comma)), Bracket.Square, Separator.Comma))

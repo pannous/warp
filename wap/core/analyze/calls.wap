@@ -41,9 +41,6 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	# `{ a; return 7 }`
 	jumped = (1 to #given).filter(at => jumps(given#at))
 	if jumped { return jumping(refitted(Block(given.take(jumped#1)), n)) }
-	# `n is symbol` on a Node tests the kind even beside a maker symbol(name) (core/analyze/shapes.wap kind_named)
-	kind = if fact_of(n, PREDICATE) == ø then ø else kind_named(called, value_type(given#1), s)
-	if kind != ø { return typed_form(shape_test(placed#1, kind, n, s), s, f, ø) }
 	known = candidates.map(definition => definition.key)
 	scopes = scopes + [own_words(called, given, s).filter(definition => not known.contains(definition.key))]
 	made = made_from_map(n, called, candidates, given, s)
@@ -52,7 +49,6 @@ call_typed(n: Node, called: Node, arguments: list, s: TypingState, f: TypeFrame,
 	taken = arguments_fitted(meant, given, s) + defaults_given(meant, #given, s, f)
 	chosen = function_typed(meant, taken.map(argument => value_type(argument)), s, n)
 	called_reads(chosen, n, s, f)
-	if fact_of(n, PREDICATE) != ø and chosen.result != symbol(BOOL_TYPE) { refused(n, "is: ${called}(x) gives ${type_text(chosen.result)}; a test after `is` gives yes or no") }
 	result_of(refitted(Call(with_fact(called, DEFINED_AT, declared_name(signed_name(chosen))), taken), n), chosen)
 }
 # A word with several results gives the one that is wanted (wiki/conversion.md "declared type via as"): an argument

@@ -198,8 +198,6 @@ CHECKED_CAST = "cast"
 BOXED_VALUE = "box"
 TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
-# on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
-PREDICATE = "predicate"
 # on code that never finishes, a return, break or continue, a block ending in one, a choice all of whose arms jump, a
 # call of a function that never returns: it has no type, and a join of arms skips it
 JUMPS = "jumps"
