@@ -108,14 +108,20 @@ declaration_of(statement: Node) as Node? := match statement {
 }
 # an enum's case as lowering writes it: `Leaf(value: int)` a call of its name with its fields, a bare name as it is
 case_lowered(case: Node) as Node := match case { Key(name, Op.None, group) => Call(name, arguments_of(group)); _ => case }
-# what `f(a, b)` or `n` before := declares: a function with its parameters, or a value; a written result type,
-# `f(a): int`, is not declared yet
+# what `f(a, b)` or `n` before := declares: a function with its parameters, or a value, with the result type written
+# after `:` or `as` (`f(a): bool`, `f(a) as bool`, one form here) as its fact WRITTEN_RESULT
 signature_of(head: Node) as Node? := match head {
-	Key(name, Op.Colon, type) => signature_of(name)
+	Key(name, Op.Colon, type) => with_fact(signature_of(name) ?? return ø, WRITTEN_RESULT, type)
 	Key(name, Op.None, group) => match name { Symbol(word) => Key(name, Op.Colon, List(arguments_of(group), Bracket.Square, Separator.Comma)); _ => ø }
 	Symbol(name) => Key(head, Op.Colon, List([], Bracket.Square, Separator.Comma))
 	_ => ø
 }
+WRITTEN_RESULT = "written result"
+# a declaration's parameters as written, none of a value's; its written result type, ø where none is written
+declared_parameters(declaration: Node) as list<Node> := match declaration { Key(name, Op.Colon, List(items, bracket, separator)) => items; _ => [] }
+declared_result(declaration: Node) as Node? := fact_of(declaration, WRITTEN_RESULT)
+# whether a declaration is a function's, `f() :=` too, not a value's
+declares_function(declaration: Node) as bool := match declaration { Key(name, Op.Colon, List(items, bracket, separator)) => yes; _ => no }
 # the value a name before = declares, also of `let x` and `global x`
 value_named(place: Node) as Node? := match place {
 	Symbol(name) => Key(place, Op.Colon, Empty)

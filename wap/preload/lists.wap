@@ -113,6 +113,8 @@ sorted(xs: list<T>, by: (T) -> K): list<T> := {
 	}
 	out
 }
+# the items in their own order, equal ones in the list's order: `["b", "a"].sorted()` is ["a", "b"]
+sorted(xs: list<T>): list<T> := xs.sorted(by: x => x)
 
 # a list's last item; an empty list raises: `[1, 2].last` is 2
 last(xs: list<T>): T := xs#(#xs)

@@ -86,18 +86,23 @@ files=(
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
 done
-# Stage 2: the module wap makes of its own compiler, wap1, compiles a program, and that program runs
+# Stage 2: the module wap makes of its own compiler, wap1, compiles programs, and they run; it is built once, its
+# preload beside it (compile.sh compiler_built)
 wap1=$(compiler_built "$stage/self" 1)
 # wap1 built, or why not
 wap1_built() { [ -f "$wap1" ] || { echo "$wap1"; return 1; }; }
-self_built_hello() {
+# what a program compiled by wap1 prints, or the error of either
+self_built_ran() {
 	wap1_built || return
-	printf 'print "hello from wap"\n' >"$stage/hello.wap"
-	$warp "$wap1" "$stage/hello.wap" "$stage/hello.wasm" 2>&1 && $warp "$stage/hello.wasm" 2>&1
+	printf '%s\n' "$2" >"$stage/$1.wap"
+	$warp "$wap1" "$stage/$1.wap" "$stage/$1.wasm" 2>&1 && $warp "$stage/$1.wasm" 2>&1
 }
-check "the compiler wap makes of itself compiles a program that runs" "$(self_built_hello)" "hello from wap"
-# and compiles wap's compiler in under a minute (milestone 2, notes/backbone.md)
-# its CPU seconds (user and system), so the machine's load leaves the measure alone
+check "the compiler wap makes of itself compiles a program that runs" "$(self_built_ran hello 'print "hello from wap"')" "hello from wap"
+check "the self-built compiler keeps two enums' cases of one name apart" "$(self_built_ran tags 'enum A { X, Y }
+enum B { Y, X }
+print text(B.X == A.X)')" "no"
+# and compiles wap's compiler in under a minute (milestone 2, notes/backbone.md), its CPU seconds (user and system),
+# so the machine's load leaves the measure alone
 self_compile_time() {
 	wap1_built || return
 	local cpu seconds TIMEFORMAT="%U %S"

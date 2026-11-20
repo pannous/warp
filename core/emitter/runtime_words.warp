@@ -236,8 +236,16 @@ def class_test_code(body: Body, value: TypedCode, spec: text, word: text) as Typ
 	index = relocatable(relocated.globals, declared_global(kept, ValueKind.Node)#1)
 	names = module.classes.keys.filter(name => descends(name, spec))
 	classes = kept_once(kept, index, () => boxed(TypedCode(ValueKind.List, vector_code(names.map(name => boxed(text_value_of(name)))))), Kind.List)
-	runtime_call(word, [TypedCode(ValueKind.Node, boxed(value)), TypedCode(ValueKind.List, converted(classes, ValueKind.List))])
+	held = fresh_node_local(body)
+	tested = runtime_call(word, [TypedCode(ValueKind.Node, held), TypedCode(ValueKind.List, converted(classes, ValueKind.List))])
+	if word not in entry_tests { return TypedCode(ValueKind.Bool, boxed(value) + [op.local_set] + held[1..] + tested.code) }
+	# only an entry is an instance: any other value, a text beside a class's `==`, is told none before the classes are
+	# read (card text-comparison: the classes read and listed were most of each `==·operator` of two texts)
+	entry = held + [op.ref_is_null, op.if] + value_type(ValueKind.Bool) + [op.i32_const, 0, op.else] + kind_code_of(held) + [op.i64_const] + sleb(Kind.Key) + [op.i64_eq, op.end]
+	TypedCode(ValueKind.Bool, boxed(value) + [op.local_set] + held[1..] + entry + if_else_code(ValueKind.Bool, tested, TypedCode(ValueKind.Bool, [op.i32_const, 0])))
 }
+# the class tests taking only an entry, an instance's shape (runtime/types.warp instance_among); real_among takes numbers too
+entry_tests = ["instance_among"]
 def type_test_code(body: Body, subject: Node, written: text) as TypedCode { value_type_test(body, expression_code(body, subject), written) }
 # `kinds`: code reading the value's kind bits where a match read them once (kinds·of), else none
 def value_type_test(body: Body, value: TypedCode, written: text, kinds: list = []) as TypedCode {
