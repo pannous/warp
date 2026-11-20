@@ -523,3 +523,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **The source avoids comparing an optional record with ø** (core/rules/patterns.wap names_pattern, matcher.wap
   of_shape, stages.wap rule_applied's best as a list), because the seed's emitter compares records field by field.
   Paid off at the next seed refresh, once the seed compares an optional with ø: `!= ø` and `best: Rule? = ø` again.
+
+- **analyze/types.wap reaches rules/ (typed.wap) through a use**, because wap cannot call a function value read from
+  a field (`this holds a function, no function to call`). Paid off when a field's function value can be called; then
+  it is a function value on TypingState.

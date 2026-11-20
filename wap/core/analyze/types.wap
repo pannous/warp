@@ -34,6 +34,7 @@ use "../../kernel/forms.wap"
 use "letters.wap"
 use "shapes.wap"
 use "../rules/typed.wap"
+use "names.wap"
 
 # the types of the literals, as a program writes them
 INT_TYPE = "int"
