@@ -72,14 +72,16 @@ field_checked(given: Node, field: Node, value: Node, s: TypingState) as Node := 
 # every other way repacks; written, `x as T` is the maker T(x) ("Making").
 # How a value of the given type gets where the wanted one is: as it is, of that type, a list where a bare `list` is, a
 # function value where a bare `function` is, an enum where a bare `enum` is, or code that never finishes; boxed, into
-# any or a number; read, a character as its text, where a text or a text? is (wiki/char.md, 'a' == "a"); wrapped, a T
+# any or a number; widened, an int where a float is (wiki/type.md); read, a character as its text, where a text or a text? is (wiki/char.md, 'a' == "a"); wrapped, a T
 # or ø where T? is; narrowed, a value of the type a shape narrows where the shape is (core/analyze/shapes.wap), raising
 # there when it is of another shape; settled, the unknowns of either becoming the other's types, `[]` where a
 # list<int> is; checked, an any's value where another type is, raising there when it holds another; ø when it cannot.
 # The conversions a choice of overloads asks for, the static ones, never check: an any argument, or a Node where a
 # shape is wanted, is chosen for at run time (core/analyze/dispatch.wap).
-enum Conversion { Same, Boxed, Read, Wrapped, Narrowed, Settled, Checked }
-STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Read, Conversion.Wrapped]
+enum Conversion { Same, Boxed, Widened, Read, Wrapped, Narrowed, Settled, Checked }
+STATIC_CONVERSIONS = [Conversion.Same, Conversion.Boxed, Conversion.Widened, Conversion.Read, Conversion.Wrapped]
+# the primitive that widens an int to a float
+WIDENING = "f64_convert_i64_s"
 conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	if given == ø or wanted == ø { return ø }
 	if same_type(given, wanted) or bare_fit(given, wanted, s.records) { return Conversion.Same }
@@ -93,6 +95,7 @@ conversion(given: Node?, wanted: Node?, s: TypingState) as Conversion? := {
 	narrowing = narrowed_type(wanted)
 	if narrowing != ø and same_type(given, narrowing) { return Conversion.Narrowed }
 	if boxed_fit(given, wanted) { return Conversion.Boxed }
+	if given == symbol(INT_TYPE) and wanted == symbol(FLOAT_TYPE) { return Conversion.Widened }
 	optional = base_of_optional(wanted)
 	if reads_as(optional ?? wanted, given) { return Conversion.Read }
 	# an optional where one is wanted whose value is as it is: a list<int>? where a list? is
@@ -110,9 +113,16 @@ converted(n: Node, wanted: Node, s: TypingState, at: Node, place: text) as Node 
 	given = value_type(n) ?? refused(at, "this gives no value, ${place} ${wanted}")
 	way = conversion(given, wanted, s) ?? refused(at, "this gives ${given}, ${place} ${wanted}")
 	if way == Conversion.Settled { settles(given, wanted, s) }
-	if way == Conversion.Read { return as_read(n, base_of(wanted), s) }
 	if way == Conversion.Narrowed { return narrowed_call(n, wanted, at, s) }
-	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+	if way == Conversion.Checked then with_type_of(placed_like(Prim(symbol(CHECKED_CAST), [n]), n), wanted) else repacked(n, way, wanted, s)
+}
+# a value converted the static way it gets where the wanted type is: read, boxed or wrapped, widened
+repacked(n: Node, way: Conversion, wanted: Node, s: TypingState) as Node := match way {
+	Conversion.Read => as_read(n, base_of(wanted), s)
+	Conversion.Boxed => boxed(n, wanted)
+	Conversion.Wrapped => boxed(n, wanted)
+	Conversion.Widened => with_type_of(placed_like(Prim(symbol(WIDENING), [n]), n), wanted)
+	_ => n
 }
 # a plain value put where a reference is wanted, an any, a number or an optional, in its box: `prim box(3)`; any
 # other value as it is, a reference already
@@ -126,8 +136,7 @@ unboxed(n: Node) as Node := match n {
 # `if c then 'a' else ""`, a plain value where a reference is wanted boxed, any other value as it is
 as_wanted(n: Node, wanted: Node?, s: TypingState) as Node := {
 	if wanted == ø or jumps(n) { return n }
-	way = conversion(value_type(n), wanted, s)
-	if way == Conversion.Read then as_read(n, base_of(wanted), s) else if way in [Conversion.Boxed, Conversion.Wrapped] then boxed(n, wanted) else n
+	repacked(n, conversion(value_type(n), wanted, s) ?? return n, wanted, s)
 }
 # a value of a kind where its bare kind's word is wanted: `list`, `function` (a function value or a written function
 # type, `(int) -> int`), `enum`
