@@ -59,4 +59,4 @@ commented(n: Node, comments: list) as Node := {
 }
 
 # a node placed where it was written; an empty `{}` or `()` is Empty in warp's Node and carries no metadata
-placed(n: Node, line: int, column: int) as Node := if n == ø then n else positioned(n, line, column)
+placed(n: Node, line: int, column: int) as Node := if n is Empty then n else positioned(n, line, column)
