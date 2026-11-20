@@ -24,10 +24,11 @@ ROUNDS_LIMIT = 100
 # the typed rules and the scope what they write binds in: the program's top level, inside the library
 class KindRules { language: Language; scope: Scope }
 
-# the bound program typed, its value shown, the typed rules firing as it is typed
+# the bound program typed, the typed rules firing as it is typed (a script's value is shown by one,
+# preload/sugar/calls.wap)
 typed_by_rules(language: Language, program: Block, library: list, preload: Block) as Block := {
 	scope = block_scope(program, statements_in(program), scope_around(library, []), PROGRAM_DEPTH)
-	typed_shown(program, preload, KindRules(language, scope))
+	typed_program(program, preload, KindRules(language, scope))
 }
 # typed code rewritten by the typed rule that fits it, what the rule wrote bound and typed in its place
 kind_rewritten(typed: Node, s: TypingState, f: TypeFrame, expected: Node?) as Node := {

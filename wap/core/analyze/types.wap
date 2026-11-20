@@ -148,13 +148,10 @@ class TypeFrame {
 	late: list<Node> = []
 }
 
-# the program typed, after the preload's functions it calls
-typed_program(program: Block, preload: Block) as Block := typed_among(program, statements_in(preload), no, ø)
-# the whole program typed, its value shown: a last statement that gives one is `print(show(it))`, by the show its
-# type has, as every program value shows itself
-typed_shown(program: Block, preload: Block, rules: KindRules) as Block := typed_among(program, statements_in(preload), yes, rules)
+# the program typed, after the preload's functions it calls, the typed rules firing as it is typed
+typed_program(program: Block, preload: Block, rules: KindRules) as Block := typed_among(program, statements_in(preload), rules)
 # the program typed, after the library's records and those of its definitions it calls
-typed_among(program: Block, library: list, shown: bool, rules: KindRules?) as Block := {
+typed_among(program: Block, library: list, rules: KindRules) as Block := {
 	s = TypingState()
 	s.kind_rules = rules
 	s.ids = definers_of(program)
@@ -165,10 +162,6 @@ typed_among(program: Block, library: list, shown: bool, rules: KindRules?) as Bl
 	typed = try typed_form(program, s, TypeFrame(), ø) catch e { refused_all(s, [e.message]) }
 	if s.refusals { refused_all(s, []) }
 	statements = statements_in(typed)
-	if shown and statements and gives_value(statements.last) {
-		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
-		typed = with_type_of(typed, value_type(statements.last))
-	}
 	if s.unknowns > 0 { all_settled(s) }
 	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
@@ -243,7 +236,8 @@ with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fac
 # calls it, unless it is TYPED_WHEN_CALLED.
 block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	s.records = added_records(s.records, written)
-	s.definitions = s.definitions + written.filter(statement => statement is Define).map(function_of)
+	# a block typed again, a typed rule's code around it, adds only the definitions typing does not hold yet
+	s.definitions = s.definitions + written.filter(statement => statement is Define and definition_keyed(function_key_of(statement), s) == ø).map(function_of)
 	# shaped once all are known: a pattern's builder may come after a definition naming its type
 	s.definitions = shaped_definitions(s.definitions, s)
 	# each definition as the typing stage keeps it, its written types' shapes known
