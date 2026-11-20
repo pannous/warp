@@ -83,7 +83,7 @@ found_of_type(path: Node, type: Node?) as Finding? := {
 	key = path_key(path) ?? return ø
 	Finding(key, 1, type ?? return ø)
 }
-is_variable(n: Node) as bool := n is symbol and fact_of(n, DEFINED_AT) != ø
+is_variable(n: Node) as bool := n is symbol and one_definer(n) != ø
 EQUAL_WORD = "=="
 UNEQUAL_WORD = "!="
 condition_typed(condition: Node, s: TypingState, f: TypeFrame) as Node := {

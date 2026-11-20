@@ -461,3 +461,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`===` is value equality in the prelude** (wap/preload/prelude.wap `===(a: T, b: T) := a == b`), where warp's `===`
   is identity (the user, 2026-11-18; wiki/equality.md): two separately built `[1]` are `===` under wap. Off the
   census: wap's own compiler compares definitions by their DEFINER id instead. Paid off when `===` is ref.eq identity.
+- **The binder forgets a definer with an Empty marker** (wap/core/analyze/scope.wap resolved_taking writes DEFINED_AT
+  Empty beside a name's CANDIDATES; wap/core/analyze/types.wap one_definer is its one reader). Reason: old warp's core
+  can drop no fact (its with_attribute only appends), so removing the fact breaks the reference compiler. Paid off when
+  old warp can drop a fact: then without_fact, beside with_fact in core/stage.wap.

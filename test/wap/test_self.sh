@@ -65,6 +65,21 @@ files=(
 	wap/core/rules/stages.wap
 	wap/core/rules/templates.wap
 	wap/core/rules/typed.wap
+	wap/core/analyze/calls.wap
+	wap/core/analyze/conditions.wap
+	wap/core/analyze/data.wap
+	wap/core/analyze/declarations.wap
+	wap/core/analyze/dispatch.wap
+	wap/core/analyze/fits.wap
+	wap/core/analyze/function_values.wap
+	wap/core/analyze/letters.wap
+	wap/core/analyze/matching.wap
+	wap/core/analyze/modules.wap
+	wap/core/analyze/scope.wap
+	wap/core/analyze/shapes.wap
+	wap/core/analyze/types.wap
+	wap/core/analyze/variables.wap
+	wap/core/pipeline.wap
 )
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
