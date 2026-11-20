@@ -414,6 +414,12 @@ type_keyed(key: text, bindings: list<Binding>) as Node? := {
 # the type a condition around finds a variable of, ø where none finds it
 found_type(key: text, present: list<Finding>) as Node? := type_keyed(key, present.map(finding => Binding(finding.key, finding.type)))
 defined_at(name: Node) as Node := fact_of(name, DEFINED_AT) ?? refused(name, "this name reached the typing stage unbound")
+# the one definition a name means, ø for a name among several, whose DEFINED_AT the binding analysis sets to Empty to
+# forget the one it meant before (core/analyze/scope.wap resolved_taking): the core has no word that drops a fact
+one_definer(name: Node) as Node? := {
+	definer = fact_of(name, DEFINED_AT) ?? return ø
+	if definer is Empty then ø else definer
+}
 # whether a name is the one that defines its variable, its first value rather than a change
 is_definer(name: Node) as bool := place_key(name) == place_key(defined_at(name))
 
