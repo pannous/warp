@@ -73,7 +73,7 @@ lowered_form(language: Language, n: Node) as Node := match n {
 	List(items, Bracket.Curly, separator) => if items.all(is_fields) then fields_lowered(language, items, separator, n) else lowered_block(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Comma) => List(items.map(item => lowered(language, item)), Bracket.Square, Separator.Comma)
 	# a kernel form a rule built, `(If c a b)`, `(Break)`, its parts lowered; any other group its statements
-	List(items, Bracket.Round, separator) => if (separator == Separator.Space or #items == 1) and pattern_called(language, items#1) != ø then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, separator) else group_lowered(language, statements_of(List(items, Bracket.None, separator)))
+	List(items, Bracket.Round, separator) => if (separator == Separator.Space or #items == 1) and names_pattern(language, items#1) then List([items#1] + items[1 ..].map(item => lowered(language, item)), Bracket.Round, separator) else group_lowered(language, statements_of(List(items, Bracket.None, separator)))
 	List(items, Bracket.None, Separator.Space) => phrase_lowered(language, items, n)
 	# a word written against what follows it, `...rest`, as a phrase
 	List(items, Bracket.None, Separator.None) => phrase_lowered(language, items, n)

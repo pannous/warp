@@ -33,7 +33,7 @@ rules_on(rules: Rules, heads: list<text>) as list<Rule> := heads.filter(head => 
 # the heads of every node a template spells (not the code its holes bring)
 template_heads(language: Language, n: Node) as list<text> := match n {
 	List(items, bracket, separator) => heads_of(language, n) + items.flat_map(item => template_heads(language, item))
-	Key(left, op, right) => (if op == Op.None and pattern_called(language, left) != ø then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
+	Key(left, op, right) => (if op == Op.None and names_pattern(language, left) then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
 	Symbol(name) => heads_of(language, n)
 	_ => []
 }

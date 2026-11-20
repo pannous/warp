@@ -520,3 +520,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   no `<` for a number and an int; reported to warp-wap-binding). Paid off when that compares: led_by_sign's arm is
   `Number(value) => value < 0` again and below_zero goes. Paid off: binding's number-compare (445d612b1c) widens the
   int, and led_by_sign reads `value < 0` again.
+
+- **The source avoids comparing an optional record with ø** (core/rules/patterns.wap names_pattern, matcher.wap
+  of_shape, stages.wap rule_applied's best as a list), because the seed's emitter compares records field by field.
+  Paid off at the next seed refresh, once the seed compares an optional with ø: `!= ø` and `best: Rule? = ø` again.

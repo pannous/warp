@@ -235,7 +235,7 @@ with_rule_of(item: Node, sequence: Node) as Node := {
 	rule = fact_of(sequence, RULE)
 	if rule == ø or item is Empty then item else with_fact(item, RULE, rule)
 }
-one_phrase(language: Language, items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and pattern_called(language, items#1) == ø
+one_phrase(language: Language, items: list, bracket: Bracket) as bool := bracket == Bracket.Curly or bracket == Bracket.Round and not names_pattern(language, items#1)
 
 rewritten(language: Language, rules: Rules, n: Node, fired: list) as Node := {
 	current = n
@@ -260,24 +260,26 @@ marked_typed(code: Node) as Node := if code is Empty then code else with_fact(co
 # the code the most specific fitting rule builds from it, as a list of that one code, empty when none fits; two equally
 # specific ones are refused
 rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
-	best: Rule? = ø
+	# the most specific fitting rule so far, none or one (a list: the seed compares no record holding a map with ø)
+	best: list<Rule> = []
 	best_bindings = {}
 	for head in heads_of(language, n) {
 		if rules.by_head.has(head) {
 			for rule in rules.by_head[head] {
 				bindings = {}
 				if (rule.fact == "" or fact_of(n, rule.fact) == True) and matches(rule.matcher, n, bindings) {
-					if best != ø and best.specificity == rule.specificity { refused(n, "two rules fit equally: ${best.written} and ${rule.written}") }
-					if best == ø or rule.specificity > best.specificity { best = rule; best_bindings = bindings }
+					if best is not empty and best#1.specificity == rule.specificity { refused(n, "two rules fit equally: ${best#1.written} and ${rule.written}") }
+					if best is empty or rule.specificity > best#1.specificity { best = [rule]; best_bindings = bindings }
 				}
 			}
 		}
 	}
-	if best == ø { return [] }
-	refusal = refusal_of(best.template)
+	if best is empty { return [] }
+	chosen = best#1
+	refusal = refusal_of(chosen.template)
 	if refusal != ø { refused(n, refusal) }
-	taken_holes = if matcher_stage(best.matcher) == TYPED_STAGE then typed_holes(best_bindings) else best_bindings
-	result = built(language, best.template, with_fresh_names(taken_holes, best.fresh))
-	taken = if best.fact == "" or result is Empty then result else with_fact(result, best.fact, False)
-	[if taken is Empty then taken else with_fact(taken, RULE, best.written)]
+	taken_holes = if matcher_stage(chosen.matcher) == TYPED_STAGE then typed_holes(best_bindings) else best_bindings
+	result = built(language, chosen.template, with_fresh_names(taken_holes, chosen.fresh))
+	taken = if chosen.fact == "" or result is Empty then result else with_fact(result, chosen.fact, False)
+	[if taken is Empty then taken else with_fact(taken, RULE, chosen.written)]
 }
