@@ -122,8 +122,8 @@ added_group(m: WasmModule, types: list<list<int>>) as int := {
 	m.types += types
 	m.groups.last.first
 }
-# A type known by its name, a record's: its index, or ø while it is not built yet, which starts building it. A name
-# asked for again while its type is being built refers back to itself: its index is reserved at once.
+# A type known by a name, a record's by its declaration: its index, or ø while it is not built yet, which starts
+# building it. A name asked for again while its type is being built refers back to itself: its index is reserved.
 named_index(m: WasmModule, name: text) as int? := {
 	if m.named.has(name) { return m.named[name] }
 	if not m.naming.contains(name) {
@@ -146,7 +146,7 @@ named_added(m: WasmModule, name: text, type: list<int>) as int := {
 	at = m.named[name]
 	m.types = m.types[0 .. at] + [type] + m.types[at + 1 ..]
 	if m.reserved.all(slot => m.types#(slot + 1) != []) {
-		m.groups += [RecursionGroup(m.reserved.first, #m.types - m.reserved.first)]
+		m.groups += [RecursionGroup(m.reserved#1, #m.types - m.reserved#1)]
 		m.reserved = []
 	}
 	at
