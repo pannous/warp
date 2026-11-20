@@ -439,6 +439,10 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
 - **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
   can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
   preload/lists.wap with a test_lists line.
+- **A shape's value is named a Node before it joins a list of Nodes** (wap/core/analyze/matching.wap shape_missing,
+  list_missing): `[Call(…)] + inner` binds `+`'s T to Call and to Node, which bound_as refuses, so the witness is
+  written `shape: Node = Call(…)` first. Paid off when a letter bound to a shape and to the type it narrows binds that type.
+  **Paid 2026-11-20 (census-shape-join):** a letter bound to a shape and its base binds the base.
 - **Helpers named apart from same-named ones** (wap/core/analyze: `within` became part_of beside names.wap's scope
   `within`, `valued` value_bearing beside the emitter's): a
   program's definitions dispatch across all its modules, and a Node parameter dispatches as any, so analyze's
