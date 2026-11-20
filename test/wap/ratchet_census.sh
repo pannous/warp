@@ -16,10 +16,10 @@ source "$(dirname "$0")/compile.sh"
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 
 # one census of every file, in one process: the files share their modules and their typing (scripts/wap-census.warp),
-# compiled by the compiler under test (--compiler <module>, or wap's source run by the old compiler) beside its source,
-# where it finds wap/ and notes/ from its own folder, and run
+# compiled by the compiler under test (--compiler <module>, or wap's source run by the old compiler), and run from the
+# tree's root, where it reads wap/ and notes/
 report="$stage/census.out"
-census="$root/scripts/wap-census.wasm"
+census="$stage/wap-census.wasm"
 (cd "$root" && $warp --no-window "$compiler" scripts/wap-census.warp "$census" >"$report" 2>&1 &&
 	scripts/job-slot.sh $warp --no-window "$census" $(git ls-files 'wap/*.wap') >"$report" 2>&1)
 total=$(grep '^total' "$report" | cut -f2)
