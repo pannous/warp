@@ -108,4 +108,7 @@ print(text(empty(a)) + " " + text(empty(b)))
 a += ["y"]
 print(text(empty(a)))')" "yes no
 no"
+check "a list of a shape's values joins a list of the type it narrows" "$(ran shape_join 'xs: list<Node> = [Symbol("b")]
+ys = [Text("a")] + xs
+print(text(#ys))')" "2"
 exit $((failures > 0))
