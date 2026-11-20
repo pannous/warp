@@ -105,7 +105,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section>
     <h2>wap, the new compiler</h2>
-    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; then the road to self-build, measured by scripts/wap-census.warp on each wap file (functions typed, files typed whole and emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); the wap compiler built by warp (always cold), hello by wap (always warm) and both together; and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
+    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); the wap compiler built by warp (always cold), hello by wap (always warm) and both together; and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
     <div class="table-wrap"><table id="wap-blockers"></table></div>
   </section>
@@ -321,17 +321,15 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   if (censuses.length) {
     const latest = censuses[censuses.length - 1], census = (...fields) => pointsOf(censuses, ...fields);
     const describeCensus = p => `${p[0]} · ${p[1]} · ${p.slice(2).join(" / ")}`;
-    if (latest.functions) trendPanel(holder, { label: "road to self-build: functions", value: `${latest.functions_typed} of ${latest.functions} typed`, note: note([latest.commit, latest.time]),
-      lines: [{ name: "functions", points: census("functions"), index: 2, color: "--ink-3" }, { name: "typed alone", points: census("functions_typed"), index: 2, color: "--s3" }], describe: describeCensus });
-    trendPanel(holder, { label: "road to self-build: files", value: `${latest.typed} typed whole, ${latest.emitted} emitted`, note: note([latest.commit, latest.time], ` · of ${latest.files} program files${latest.timed_out && latest.timed_out.length ? `, timed out: ${latest.timed_out.join(", ")}` : ""}${latest.missing ? `, ${latest.missing} without a result` : ""}`),
-      lines: [{ name: "typed whole", points: census("typed"), index: 2, color: "--s1" }, { name: "emitted", points: census("emitted"), index: 2, color: "--s3" }], describe: describeCensus });
+    trendPanel(holder, { label: "road to self-build: files", value: `${latest.emitted} emitted`, note: note([latest.commit, latest.time], ` · of ${latest.files} program files${latest.timed_out && latest.timed_out.length ? `, timed out: ${latest.timed_out.join(", ")}` : ""}${latest.missing ? `, ${latest.missing} without a result` : ""}`),
+      lines: [{ name: "emitted", points: census("emitted"), index: 2, color: "--s3" }], describe: describeCensus });
     document.getElementById("wap-blockers").innerHTML = latest.blockers.length ? `<thead><tr><th>Stage</th><th>Top blockers of the census at ${latest.commit}</th><th style="text-align:right">Count</th></tr></thead><tbody>` +
       latest.blockers.map(([stage, message, count]) => `<tr><td>${stage}</td><td title="${escape(message)}">${escape(message.length > BLOCKER_SHOWN ? message.slice(0, BLOCKER_SHOWN) + " …" : message)}</td><td class="num">${count}</td></tr>`).join("") + "</tbody>" : "";
   } else noMeasurement("road to self-build");
   if (tests.length) {
     const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
     trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh, run ${latest.time}`,
-      lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }, { name: "failed", points: tests.map(point), index: 3, color: "--s2" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
+      lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
   } else noMeasurement("wap tests");
   // wap compiling hello: the compiler built by warp (cold), hello by wap (warm), and their sum, the first run after a change
   const timed = snapshots.filter(s => s.kind === "hello");
