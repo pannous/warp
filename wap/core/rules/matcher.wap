@@ -14,6 +14,7 @@ use "../parse/atoms.wap"
 use "../../kernel/forms.wap"
 use "../bindings.wap"
 use "../analyze/modules.wap"
+use "../analyze/declarations.wap"
 
 # whether the code fits the matcher, its holes bound in `bindings` (a hole met twice must meet equal code)
 # Round brackets around one key or call only group it: `($f: $t)` in a pattern is the key, and code in such brackets is
