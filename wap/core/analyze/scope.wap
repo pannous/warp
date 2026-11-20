@@ -20,6 +20,7 @@ use "../errors.wap"
 use "../stage.wap"
 use "definers.wap"
 use "../bindings.wap"
+use "library.wap"
 use "../parse/operator_table.wap"
 use "../../preload/operators.wap"
 use "types.wap"
@@ -40,10 +41,8 @@ PRELOAD_DEPTH = -2
 # the program bound inside the modules it uses and the preload, whose declarations (`name: signature`) it may use;
 # two modules defining one name are refused, used or not
 bound_program(program: Block, preload: list, modules: list<Module>) as Block := {
-	codes = codes_of(modules)
-	clashes_refused(codes)
-	ids = definers_of(program)
-	with_definers(late_reads_checked(bound(definers_identified(program, ids), scope_around(preload, codes), PROGRAM_DEPTH)), ids)
+	known = identified_program(program, preload, modules)
+	finished(known, known.statements.map(statement => bound(statement, known.scope, PROGRAM_DEPTH)))
 }
 # the words around a program: the modules it uses, then the preload's, outermost
 scope_around(preload: list, modules: list<Node>) as Scope := scope_of(modules_scope(modules) + preload_scope(preload))
