@@ -25,6 +25,9 @@ surface (any warp)
  │ declare                    core/analyze/declarations.wap
  ▼
 surface + declarations
+ │ declaration rules          core/rules/declared.wap  stage 2: rules that ask the declarations in force
+ ▼
+surface + declarations
  │ lower                      core/rules/lowering.wap   writes the kernel forms: glued, operator and phrase calls,
  │                                              := = =>, data and blocks; a phrase stays a call, typing decides it
  ▼
@@ -85,6 +88,7 @@ wap/
       templates.wap           building a rule's output: splicing, fresh names, free words resolved in the rule's module
       stages.wap              shape rules (stage 1): rules indexed by head, run over operated code
       lines.wap               a program's lines as the rules read them: a line led by a rule word
+      declared.wap            declaration rules (stage 2): holes that ask the declarations, after declare
       typed.wap               typed rules (stage 3): holes of value types, typed again after each round
       lowering.wap            declared → kernel by hand: phrases, statements, the forms no rule writes yet
 

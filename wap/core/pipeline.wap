@@ -20,6 +20,8 @@ RULES_FILE = "preload/rules.wap"
 # the standard language every program gets, as definitions
 PRELOAD_FILE = "preload/preload.wap"
 INCLUDE_WORD = "include"
+# SCRIPT on the block of a program run as a script, whose last value it shows: a rule may ask it, `where script`
+SCRIPT = "script"
 
 # the rules loaded from the wap folder, then the preload declared once: what it declares is the library every program
 # is bound in

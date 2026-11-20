@@ -28,7 +28,8 @@ PATTERN_WORD = "pattern"
 RULE_ARROW = "=>"
 # a template that refuses what its pattern matched: `=> refuse "message"`
 REFUSE_WORD = "refuse"
-# what a rule's pattern ends with to ask a fact of the code, `rule … where script => …`
+# what a rule's pattern ends with to ask a fact of the code, `rule … where script => …`: the rule takes the fact, what it
+# writes holds it no more, so it fires once where a stage wrote it, and the termination check passes it
 WHERE_WORD = "where"
 DEFINITION = "="
 # the head of a pattern that starts with a hole: tried on every node
@@ -80,7 +81,6 @@ declaration_taken(language: Language, called: text, arguments: list) as list<Nod
 	keyword = spelling_written(words#1)
 	if called == DEFINITION and keyword == PATTERN_WORD and #words == 2 { return [pattern_builder(language, declare_pattern(language, words#2, arguments#2))] }
 	if called == RULE_ARROW and keyword == RULE_WORD {
-		# `rule P where fact => T`: P fits only code that carries that fact
 		guarded = #words > 3 and spelling_written(words#(#words - 1)) == WHERE_WORD
 		pattern = if guarded then words[1 .. #words - 2] else words[1 ..]
 		rule_added(language, arguments#1, if #pattern == 1 then pattern#1 else List(pattern, Bracket.None, Separator.Space), arguments#2, if guarded then spelling_written(words.last) else "")
@@ -96,9 +96,8 @@ rule_added(language: Language, written: Node, pattern: Node, template: Node, fac
 	output = if writes_nothing then NOTHING_WRITTEN else ungrouped(template)
 	for hole in holes_in(output) { if not holes_in(normal).contains(hole) and not holes_in(normal).contains(hole + REST_MARK) { refused(written, "the rule writes " + hole + ", which its pattern has no hole for") } }
 	stage = matcher_stage(compiled_pattern(language, normal))
-	typed = stage == TYPED_STAGE
 	# a typed rule meets typed kernel: its pattern and template are lowered as the program is, `twice $x: int`
-	if typed { normal = lowered(language, normal); output = if writes_nothing then output else lowered(language, output) }
+	if stage == TYPED_STAGE { normal = lowered(language, normal); output = if writes_nothing then output else lowered(language, output) }
 	matcher = compiled_pattern(language, normal)
 	rule = Rule(heads_of(language, normal)#1, matcher, output, names_bound_in(language, output), written, specificity(matcher) + (if fact == "" then 0 else 1), fact)
 	rules = rules_of_stage(language, stage)
@@ -108,8 +107,6 @@ rule_added(language: Language, written: Node, pattern: Node, template: Node, fac
 	rules.by_head[rule.head].add(rule)
 	match normal { List(items, Bracket.None, Separator.Space) => words_told(language, items, #matcher.parts.filter(takes_block) > 0); _ => ø }
 }
-# the rules of a stage: 1 shapes, 2 declarations, 3 types
-rules_of_stage(language: Language, stage: int) as Rules := if stage == SHAPE_STAGE then language.shape_rules else if stage == DECLARED_STAGE then language.declared_rules else language.typed_rules
 # a phrase pattern's words told the operator stage: the first ones lead it, the words after the first are inner words
 words_told(language: Language, items: list, block: bool) := {
 	for word in list_heads(language, items) { if block or not language.phrase_words.leading.has(word) { language.phrase_words.leading[word] = block } }
@@ -152,8 +149,7 @@ refusal_of(template: Node) as text? := phrase_text(template, REFUSE_WORD)
 # ---- termination, checked once all rules are loaded
 
 # Every rule's template names heads that may fire again where it built. Following those from head to head must
-# never come back, unless each rule on the way writes less code than it matched (each hole counted once), or takes a
-# fact: no template writes one, so such a rule fires once where a stage wrote it.
+# never come back, unless each rule on the way writes less code than it matched (each hole counted once) or takes a fact.
 terminating(language: Language, rules: Rules) := {
 	for head in rules.by_head.keys { cycle_refused(language, rules, head, []) }
 }
@@ -299,7 +295,6 @@ rule_applied(language: Language, rules: Rules, n: Node) as list<Node> := {
 	refusal = refusal_of(best.template)
 	if refusal != ø { refused(n, refusal) }
 	result = built(language, best.template, with_fresh_names(best_bindings, best.fresh))
-	# a rule that asks a fact takes it: what it writes holds it no more, so it fires once where a stage wrote the fact
 	taken = if best.fact == "" or result is Empty then result else with_fact(result, best.fact, False)
 	[if taken is Empty then taken else with_fact(taken, RULE, best.written)]
 }

@@ -23,6 +23,9 @@ class Rules { by_head: map<text, list<Rule>> }
 # `groups` whenever they change (core/parse/operator_table.wap related_groups)
 class Language { groups: list<Group>, operators: list<Operator>, phrase_words: PhraseWords, shape_rules: Rules, typed_rules: Rules, patterns: map<text, Declared>, declared_rules: Rules = Rules({}), declarations: Declarations = Declarations({}), looser_than: map<text, list<text>> = {}, group_names: NameIndex = NameIndex(), operator_names: NameIndex = NameIndex(), defined_words: map<text, bool> = {}, local_words: list<text> = [] }
 
+# the rules of a stage: 1 shapes, 2 declarations, 3 types
+rules_of_stage(language: Language, stage: int) as Rules := if stage == SHAPE_STAGE then language.shape_rules else if stage == DECLARED_STAGE then language.declared_rules else language.typed_rules
+
 # the language every program starts from: the preload's operator table, copied row by row so that what a program
 # declares joins its own copy, no rules or patterns yet
 base_language() as Language := {
