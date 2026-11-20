@@ -124,7 +124,7 @@ pattern asks:
 |---|---|---|---|
 | 1 shape | right after reading | the shape only | `for` → `While`, `unless` → `If`, `try x else y`, `a ?: b`, `Color::Red`, comprehensions, ranges |
 | 2 signature | after the declarations are collected | declared signatures and types (`takes value`, `is function`, `$x: Meters` of a declared parameter) | `print -1`, `x is T`, overloads by arity |
-| 3 kind | after typing, on kernel code | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
+| 3 kind | in the type walk, on each kernel node as typed | the inferred type of a hole | `Meters + Meters` of variables, `d[1]` on a map that started `{}` |
 
 The holes that pick stage 2 and 3 by name: `$f: function` takes a name the declarations in force declare as a
 function, `$p: predicate` one declared as a test of one value with result bool (`rule $x is $p: predicate => $p($x)`),

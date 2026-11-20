@@ -32,10 +32,7 @@ surface + declarations
  │                                              := = =>, data and blocks; a phrase stays a call, typing decides it
  ▼
 kernel (kernel/forms.wap)
- │ scope, typing              core/analyze/
- ▼
-typed kernel
- │ kind rules                 core/rules/        stage 3: rules that ask inferred types, output re-checked
+ │ scope, typing, kind rules   core/analyze/, core/rules/typed.wap   stage 3 fires on each node as typed
  ▼
 typed kernel
  │ emit                       core/emit/
@@ -90,7 +87,7 @@ wap/
       termination.wap         the rules checked to end: no chain of them rewrites forever
       lines.wap               a program's lines as the rules read them: a line led by a rule word
       declared.wap            declaration rules (stage 2): holes that ask the declarations, after declare
-      typed.wap               typed rules (stage 3): holes of value types, typed again after each round
+      typed.wap               typed rules (stage 3): holes of value types, fired in the type walk, typed in place
       lowering.wap            declared → kernel by hand: phrases, statements, the forms no rule writes yet
 
     analyze/                  facts about the program, no rewriting
