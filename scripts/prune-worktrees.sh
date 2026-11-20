@@ -11,15 +11,17 @@
 #      than STALE_HOURS, are typed to the supervisor (tmux SUPERVISOR_TMUX) to land, note for the Integrator or
 #      discard. The cloud lanes' result branches (RESULT_BRANCHES) are skipped there
 #   5. the cloud lane's cloud-jobs/ and cloud-results/ branches older than LEFTOVER_DAYS: deleted
-# Detached worktrees (integrate, main-binary …) are never removed; DONOR, which cowtree clones new worktrees from on
-# the Worktrees volume (notes/churn_volume.md), is moved to origin/main when clean. Skips for untracked files are listed.
+# Detached worktrees (integrate, main-binary …) are never removed; each project's donor, which cowtree clones new
+# worktrees from on the Worktrees volume (notes/churn_volume.md), is made when missing and moved to origin/main when clean. Skips for untracked files are listed.
 #   prune-worktrees.sh            prune, print what it did
 #   prune-worktrees.sh --dry-run  only print what it would do
 # Run every 12 hours by cron.
 WARP=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
 # worktrees live on the Worktrees volume (notes/churn_volume.md); integrator/ there is a plain folder, not a worktree
 WORKTREE_ROOTS=(/Volumes/Worktrees)
-DONOR=/Volumes/Worktrees/warp  # named after the project: the volume may hold other projects
+# cowtree clones a new worktree from a donor of its repository on the same volume: each project's donor is
+# /Volumes/Worktrees/<its folder's name>, made when missing (notes/churn_volume.md)
+PROJECTS=($WARP $HOME/dev/angles/wap)
 LEFTOVERS=$WARP/data/worktree-leftovers
 IDLE_HOURS=${IDLE_HOURS:-6}
 LEFTOVER_DAYS=2
@@ -84,10 +86,17 @@ for remote in $($git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/or
   older_than $(( LEFTOVER_DAYS * 24 )) origin/$remote && act $git push --quiet origin --delete $remote
 done
 
-# the donor follows main, so new clones share most files with it
-if [[ -d $DONOR && -z $(git -C $DONOR status --porcelain --untracked-files=no 2>/dev/null) ]]; then
-  [[ $(git -C $DONOR rev-parse HEAD) == $($git rev-parse origin/main) ]] || act git -C $DONOR checkout --quiet --detach origin/main
-fi
+# each donor follows its project's main, so new clones share most files with it
+for project in $PROJECTS; do
+  [[ -d $project/.git ]] || continue
+  donor=$WORKTREE_ROOTS[1]/${project:t}
+  [[ $project == $WARP ]] || git -C $project fetch --quiet origin
+  if [[ ! -d $donor ]]; then
+    act git -C $project worktree add --quiet --detach $donor origin/main
+  elif [[ -z $(git -C $donor status --porcelain --untracked-files=no 2>/dev/null) ]]; then
+    [[ $(git -C $donor rev-parse HEAD) == $(git -C $project rev-parse origin/main) ]] || act git -C $donor checkout --quiet --detach origin/main
+  fi
+done
 
 stale=()
 stray=$(cd $WARP && $TODO stray 2>&1) || stale+=("todo stray failed: ${stray:0:200}")
