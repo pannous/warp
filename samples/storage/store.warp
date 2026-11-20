@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-# a value stored across runs: each run counts a up by one
-stored a default 1
-a++
-print(storage)

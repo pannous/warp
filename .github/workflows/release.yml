@@ -67,6 +67,7 @@ jobs:
     - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
       with:
         path: .workflow
+    - uses: ./.workflow/.github/actions/samples
     - name: our wasmtime C API
       # the tag's, which the tag's native warp built in the next step calls (scripts/ci-compilers.sh)
       run: WARP_WASMTIME_TARGET=$PWD/crates/wasmtime-capi/target WARP_GPU_TARGET="$RUNNER_TEMP/warp-gpu" scripts/wasmtime-c-api.sh lib
@@ -117,6 +118,7 @@ jobs:
     - uses: actions/checkout@v7 # the workflow's own commit, whose release-bootstrap.sh fits any older tag
       with:
         path: .workflow
+    - uses: ./.workflow/.github/actions/samples
     - uses: dtolnay/rust-toolchain@stable
     - uses: actions/download-artifact@v8
       with:
@@ -189,6 +191,9 @@ jobs:
     - uses: actions/checkout@v7
       with:
         ref: ${{ env.TAG }}
+    # no .workflow checkout here, and an older tag has no .github/actions/samples: the action's one line, as is
+    - shell: bash
+      run: "[ -d samples ] || git clone -q --depth 1 https://github.com/pannous/samples samples"
     - uses: dtolnay/rust-toolchain@stable
     - uses: actions/download-artifact@v8
       with:

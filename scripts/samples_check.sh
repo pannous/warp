@@ -34,6 +34,7 @@ scripts_dir=$(cd "$(dirname "$0")" && pwd)
 source "$scripts_dir/lib/platform.sh"
 
 tree=$(cd "$scripts_dir/.." && pwd)
+checkouts_linked "$tree" || exit 2
 WARP=${1:-${WARP:-$warp_binary}}
 PROGRAM=${2:-samples/servers/server.warp}
 PORT=${3:-0}
