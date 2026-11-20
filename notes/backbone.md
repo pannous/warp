@@ -514,3 +514,7 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   Empty beside a name's CANDIDATES; wap/core/analyze/types.wap one_definer is its one reader). Reason: old warp's core
   can drop no fact (its with_attribute only appends), so removing the fact breaks the reference compiler. Paid off when
   old warp can drop a fact: then without_fact, beside with_fact in core/stage.wap.
+- **A number is compared with 0 by its narrowed type** (wap/core/format.wap below_zero, read by led_by_sign). Reason:
+  under wap2 `value < 0` on a `number` raises "<: no definition takes these values' types" (typing or dispatch gives
+  no `<` for a number and an int; reported to warp-wap-binding). Paid off when that compares: led_by_sign's arm is
+  `Number(value) => value < 0` again and below_zero goes.

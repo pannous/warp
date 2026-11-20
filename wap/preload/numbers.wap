@@ -37,7 +37,8 @@ float(t: text): float := {
 	}
 	if at < n and byte_at(t, at) in EXPONENT_BYTES { scale += int(bytes_between(t, at + 1, n).replace("+", "")); at = n }
 	if at < n or n == 0 { raise("float: " + t + " is no decimal number") }
-	value = float(mantissa) * 10.0 ^ scale
+	# divided by a power of ten rather than times its inverse, which no float holds exactly: 25e-6 is 0.000025
+	value = if scale < 0 then float(mantissa) / 10.0 ^ (0 - scale) else float(mantissa) * 10.0 ^ scale
 	if n > 0 and byte_at(t, 0) == MINUS_BYTE then -value else value
 }
 is_digit_byte(b: int): bool := b >= ZERO_BYTE and b < ZERO_BYTE + 10
