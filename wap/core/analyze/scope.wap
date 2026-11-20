@@ -50,7 +50,7 @@ preload_scope(preload: list) as list<Definition> := preload.flat_map(declaration
 # a library's words: a function of the preload or of a used module, or a used module's variable, `x = 1` (signature
 # ø), or a class or an enum it declares, its cases and its fields for methods, as the program's own
 library_words(declaration: Node, depth: int) as list<Definition> := match declaration {
-	Key(name, Op.Colon, signature) => [Definition(text(name), if signature == ø then DefinitionKind.Global else DefinitionKind.Library, name, depth)]
+	Key(name, Op.Colon, signature) => [Definition(text(name), if signature is Empty then DefinitionKind.Global else DefinitionKind.Library, name, depth)]
 	Record(name, fields, variants) => definitions_made_by(declaration, Scope(), depth)
 	_ => refused(declaration, "a library declares names and records")
 }
