@@ -21,6 +21,10 @@ SLASH := 47
 # WASI: the files a program starts with open, its standard output and error
 STANDARD_OUTPUT := 1
 STANDARD_ERROR := 2
+# WASI: the wall clock, its time in nanoseconds since 1970, asked to a millisecond; a word's range, two words one int
+WALL_CLOCK := 0
+NANOS_PER_MILLI := 1000000
+WORD_RANGE := 4294967296
 
 memory_byte(at: int): int := prim memory_byte(at)
 memory_word(at: int): int := prim memory_word(at)
@@ -40,6 +44,7 @@ path_open(folder: int, lookup: int, path_at: int, length: int, flags: int, right
 fd_seek(file: int, offset: int, whence: int, position_at: int): int := prim fd_seek(file, offset, whence, position_at)
 fd_read(file: int, iovecs_at: int, count: int, moved_at: int): int := prim fd_read(file, iovecs_at, count, moved_at)
 fd_close(file: int): int := prim fd_close(file)
+clock_time_get(clock: int, precision: int, time_at: int): int := prim clock_time_get(clock, precision, time_at)
 
 # the memory's bytes from an address, as a text
 memory_text(at: int, count: int): text := {
