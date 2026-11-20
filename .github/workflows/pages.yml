@@ -13,7 +13,7 @@ name: Playground
 on:
   push:
     branches: [main]
-    paths: [core/**, lib/**, web/playground/**, samples/**, scripts/ci-compilers.sh, .github/workflows/pages.yml]
+    paths: [core/**, lib/**, web/playground/**, scripts/ci-compilers.sh, .github/workflows/pages.yml, .github/actions/samples/**]
   schedule:
     - cron: "17 * * * *"
   workflow_dispatch:
@@ -42,7 +42,8 @@ env:
   AGENT_BROWSER_ARGS: --enable-unsafe-webgpu,--enable-unsafe-swiftshader,--use-webgpu-adapter=swiftshader,--enable-features=Vulkan
 
 jobs:
-  # the hourly run builds only when main changed what the site is made of since the last green run; a dispatch always
+  # the hourly run builds only when main changed what the site is made of since the last green run, or the samples'
+  # repository (github.com/pannous/samples) has a commit since; a dispatch always
   changed:
     runs-on: ubuntu-latest
     outputs:
@@ -54,12 +55,15 @@ jobs:
     - id: since
       env:
         GH_TOKEN: ${{ github.token }}
-        SITE_PATHS: core lib web/playground samples scripts/ci-compilers.sh .github/workflows/pages.yml
+        SITE_PATHS: core lib web/playground scripts/ci-compilers.sh .github/workflows/pages.yml .github/actions/samples
       run: |
         if [ "${{ github.event_name }}" != schedule ]; then echo "run=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-        green=$(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 --json headSha -q '.[0].headSha')
-        echo "last green run: ${green:-none}, now: $GITHUB_SHA"
-        if [ -n "$green" ] && git cat-file -e "$green" 2>/dev/null && git diff --quiet "$green" HEAD -- $SITE_PATHS; then
+        read -r green since < <(gh run list -R "$GITHUB_REPOSITORY" -w Playground -b main -s success -L 1 \
+          --json headSha,createdAt -q '.[0] | "\(.headSha) \(.createdAt)"')
+        samples_since=$(gh api "repos/pannous/samples/commits?since=$since&per_page=1" -q length 2>/dev/null || echo 1)
+        echo "last green run: ${green:-none} at ${since:-never}, now: $GITHUB_SHA; samples commits since: $samples_since"
+        if [ -n "$green" ] && git cat-file -e "$green" 2>/dev/null && git diff --quiet "$green" HEAD -- $SITE_PATHS &&
+          [ "$samples_since" = 0 ]; then
           echo "run=false"; else echo "run=true"; fi >> "$GITHUB_OUTPUT"
 
   build:
@@ -70,6 +74,7 @@ jobs:
     - uses: actions/checkout@v7
     # the compiler the page runs is this checkout's (scripts/ci-compilers.sh, as the Release workflow builds it): the
     # last release's warp.wasm dropped the rules of a newer lib/ it serves (card safari-painting-checks)
+    - uses: ./.github/actions/samples
     - name: This checkout's compilers
       env:
         GH_TOKEN: ${{ github.token }}
@@ -101,6 +106,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
+    - uses: ./.github/actions/samples
     - uses: actions/download-artifact@v8
       with:
         name: site
@@ -118,6 +124,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
+    - uses: ./.github/actions/samples
     - uses: actions/download-artifact@v8
       with:
         name: site
@@ -136,6 +143,7 @@ jobs:
     runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
     - uses: actions/checkout@v7
+    - uses: ./.github/actions/samples
     - uses: actions/download-artifact@v8
       with:
         name: site
@@ -171,6 +179,7 @@ jobs:
     timeout-minutes: 20
     steps:
     - uses: actions/checkout@v7
+    - uses: ./.github/actions/samples
     - uses: actions/download-artifact@v8
       with:
         name: site
@@ -209,6 +218,7 @@ jobs:
     - uses: actions/checkout@v7
     # the built files: the check waits until the live site serves every one of them, not a CDN's mix of old and new
     # (card playground-verify)
+    - uses: ./.github/actions/samples
     - uses: actions/download-artifact@v8
       with:
         name: site

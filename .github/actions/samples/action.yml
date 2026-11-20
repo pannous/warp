@@ -1,0 +1,9 @@
+# warp's sample programs, their own repository since 2026-11-20 (github.com/pannous/samples), cloned to ./samples
+# where the checked-out commit no longer holds them (an older tag still does)
+name: samples
+description: clone github.com/pannous/samples into ./samples unless the commit holds samples/
+runs:
+  using: composite
+  steps:
+  - shell: bash
+    run: "[ -d samples ] || git clone -q --depth 1 https://github.com/pannous/samples samples"

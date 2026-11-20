@@ -1,1 +1,0 @@
-use math;for 1…100:it%digits(it).sum()||print it

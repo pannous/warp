@@ -1,1 +1,0 @@
-use math;print (1…100).filter(is_prime).join("\n")

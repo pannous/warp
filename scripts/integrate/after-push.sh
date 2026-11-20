@@ -304,6 +304,8 @@ watch() {
 	tip=$1
 	since=$(cat "$state/watched" 2>/dev/null || git -C "$TREE" rev-parse "$tip^")
 	git -C "$TREE" checkout -q --detach "$tip" && tree_at "$tip" || { red "the tree $TREE is not at ${tip:0:10}" --urgent; return 1; }
+	# what moved to its own repository linked again after the checkout (samples/: a commit before the move held them)
+	checkouts_linked "$TREE" || { red "the tree $TREE lacks a linked checkout (scripts/lib/platform.sh LINKED_CHECKOUTS)" --urgent; return 1; }
 	pushed=$(git -C "$TREE" log --first-parent --format=%s "$since..$tip" | head -5 | paste -sd ';' -)
 	# the repeats main still holds, listed for cards (card repeated-code-check)
 	"$scripts/repeated-code.sh" "$TREE" --report

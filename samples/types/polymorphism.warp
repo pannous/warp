@@ -1,8 +1,0 @@
-#!/usr/bin/env warp
-# one function name, two definitions: the argument types choose which runs
-combine(a: number, b: number) := a + b
-combine(a: int, b: int) := a * b
-
-test combine(1.1, 2.2) == 3.3
-test combine(2, 3) == 6
-"OK"

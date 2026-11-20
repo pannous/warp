@@ -1,5 +1,0 @@
-#!/usr/bin/env warp
-# A page is markup inside html{…}: run from a terminal, `warp samples/web/hello_div.warp` opens the app
-# window; piped or redirected it prints the HTML
-on key { exit }
-html{ h1{ "hello" } p{ "html{…} is enough to open the app" } }
