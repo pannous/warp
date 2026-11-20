@@ -70,6 +70,12 @@ WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
 WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap/ and the census script of main's tip, extracted to run them: one folder per job
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
+# what measures wap: wap1, main's wap/ compiled by wap's seed (test/wap/compile.sh, which builds it once per state of
+# wap/ into the folder's data/ and names it), with what compile.sh reads and the census's owners table beside it
+WAP_COMPILE = "test/wap/compile.sh"
+WAP_EXTRACTED = ["wap", WAP_CENSUS, WAP_COMPILE, "test/native/checks.sh", "notes/wap.md"]
+WAP_MEASURED_BY = "wap1"  # each snapshot says which compiler measured it: old warp ran wap's source before 2026-11-20
+WAP_CENSUS_MODULE = "wap-census.wasm"
 WAP_CENSUS_PID = os.path.join(REPO, "data/vitals/wap-census.pid")
 WAP_CENSUS_LOG = os.path.join(REPO, "data/vitals/wap-census.log")
 WAP_CENSUS_JOBS = 4  # census runs at once, each in a machine-wide job slot (scripts/job-slot.sh, niced): ~25 s each
@@ -165,21 +171,49 @@ def wap_sizes():
 
 def wap_extracted(kind):
     """wap/ and the census script of main's tip, extracted fresh into the folder of <kind> (the census job and the hello
-    measure run apart, each in its own)"""
+    measure run apart, each in its own); its data/ is kept, where compile.sh caches wap1. A wap/ that is a link (into
+    wap's own repository) is read through the tree's own wap/"""
     folder = WAP_TREE % kind
-    shutil.rmtree(folder, ignore_errors=True)
-    os.makedirs(folder)
-    subprocess.run(f"git -C {REPO} archive {TIP} wap {WAP_CENSUS} | tar -x -C {folder}", shell=True, check=True)
+    os.makedirs(folder, exist_ok=True)
+    for name in os.listdir(folder):
+        if name != "data":
+            path = os.path.join(folder, name)
+            shutil.rmtree(path) if os.path.isdir(path) and not os.path.islink(path) else os.remove(path)
+    subprocess.run(f"git -C {REPO} archive {TIP} {' '.join(WAP_EXTRACTED)} | tar -x -C {folder}", shell=True, check=True)
+    wap = os.path.join(folder, "wap")
+    if os.path.islink(wap):
+        os.remove(wap)
+        os.symlink(os.path.realpath(os.path.join(REPO, "wap")), wap)
     return folder
+
+
+def wap1_of(folder):
+    """wap1 of the extracted folder, as compile.sh builds and names it, or None (its error printed)"""
+    built = subprocess.run(["bash", "-c", f'source {WAP_COMPILE} && echo "$compiler"'], capture_output=True, text=True,
+                           cwd=folder, env={**os.environ, "WARP": WARP, "WARP_WINDOW": "0"})
+    wap1 = built.stdout.strip().splitlines()[-1] if built.stdout.strip() else ""
+    if built.returncode != 0 or not os.path.isfile(wap1):
+        print(f"vitals: no wap1 in {folder}: {(built.stdout + built.stderr).strip()[-300:]}", file=sys.stderr)
+        return None
+    return wap1
 
 
 def wap_census(folder, files):
     """The census (notes/wap.md "Road to self-build") of each of <files> in <folder>, each in a job slot, WAP_CENSUS_JOBS at a time, summed:
     statements, lowered, bound, files typed whole and emitted, functions typed, the files that timed out and those without
-    a result, and the WAP_BLOCKERS most frequent refusals [stage, message, count]"""
+    a result, and the WAP_BLOCKERS most frequent refusals [stage, message, count]. The census is compiled once by wap1
+    and run from the folder, where it reads wap/ and notes/."""
+    census = os.path.join(folder, WAP_CENSUS_MODULE)
+    wap1 = wap1_of(folder)
+    compiled = wap1 and subprocess.run([JOB_SLOT, WARP, "--no-window", wap1, WAP_CENSUS, census], capture_output=True,
+                                       text=True, cwd=folder, env={**os.environ, "WARP_WINDOW": "0"})
+    if not compiled or compiled.returncode != 0:
+        print(f"vitals: wap1 compiled no census: {(compiled.stdout + compiled.stderr).strip()[-300:] if compiled else ''}", file=sys.stderr)
     def run(file):
+        if not compiled or compiled.returncode != 0:
+            return ""
         try:
-            return subprocess.run([JOB_SLOT, WARP, "--no-window", WAP_CENSUS, file], capture_output=True, text=True,
+            return subprocess.run([JOB_SLOT, WARP, "--no-window", census, file], capture_output=True, text=True,
                                   cwd=folder, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS).stdout
         except subprocess.TimeoutExpired:
             return "timeout\t"
@@ -201,7 +235,7 @@ def wap_census(folder, files):
         if "ok\t" not in output and file not in timed_out:
             sums.update(missing=1)
             print(f"vitals: wap census of {file} gave no result: {output.strip()[-200:]}", file=sys.stderr)
-    return {**sums, "timed_out": timed_out, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
+    return {**sums, "by": WAP_MEASURED_BY, "timed_out": timed_out, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
 
 
 def census_job_running():
@@ -231,19 +265,21 @@ def census_due(censuses, tree):
 
 
 def wap_hello():
-    """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed: the wap compiler built by warp,
-    always cold (--no-cache: compiled anew, nothing kept); hello by wap, always warm (wap compiling hello and
-    that run, the compiler's compile cached by then)."""
+    """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed, measured by wap1: the wap
+    compiler built, wap1 compiling wap's compiler (milestone 2's self-compile); hello, wap1 compiling hello and that run."""
     folder = wap_extracted("hello")
-    source, module = (os.path.join(folder, name) for name in ("hello.wap", "hello.wasm"))
+    wap1 = wap1_of(folder)
+    if not wap1:
+        return None
+    source, module, built = (os.path.join(folder, name) for name in ("hello.wap", "hello.wasm", "wap.wasm"))
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
-    compile_hello = [os.path.join(folder, "wap/compiler.wap"), source, module]
-    cold = cheapest_cost(WARP, ["--no-cache", *compile_hello], "", 1)
-    warm, run = cheapest_cost(WARP, compile_hello, ""), cheapest_cost(WARP, [module], "Hello")
-    if None in (cold, warm, run):
+    build = cheapest_cost(WARP, [wap1, os.path.join(folder, "wap/compiler.wap"), built], "", 1)
+    compiled, run = cheapest_cost(WARP, [wap1, source, module], ""), cheapest_cost(WARP, [module], "Hello")
+    if None in (build, compiled, run):
         return None
-    return {"build": [round(cold[i] - warm[i], 2) for i in (0, 1)], "hello": [round(warm[i] + run[i], 2) for i in (0, 1)]}
+    return {"by": WAP_MEASURED_BY, "build": [round(build[i], 2) for i in (0, 1)],
+            "hello": [round(compiled[i] + run[i], 2) for i in (0, 1)]}
 
 
 def wap_road():
