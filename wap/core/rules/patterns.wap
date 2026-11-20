@@ -117,8 +117,7 @@ literal_matcher(n: Node) as Matcher := Matcher(Test.Literal, literal: n, spelled
 shape_matcher(language: Language, n: Node) as Matcher := match n {
 	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), stage: hole_stage(language, hole_type(n)), declarations: language.declarations, pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else literal_matcher(n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
-		pattern = pattern_called(language, head)
-		if pattern != ø then compiled_pattern(language, instance(language, pattern, arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
+		if names_pattern(language, head) then compiled_pattern(language, instance(language, pattern_called(language, head)!, arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
 	}
 	Key(left, op, right) => pair_matcher(language, n, left, op, right)
 	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(language, items#1) else sequence_matcher(language, items, bracket, separator)
@@ -137,9 +136,11 @@ repeated_part(n: Node) as Node? := match n {
 pair_matcher(language: Language, n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(language, left), compiled_pattern(language, right)])
 
 # the declared pattern a name calls, ø for any other name
-pattern_called(language: Language, head: Node) as Declared? := match head {
-	Symbol(name) => if language.patterns.has(name) then language.patterns[name] else ø
-	_ => ø
+pattern_called(language: Language, head: Node) as Declared? := if names_pattern(language, head) then language.patterns[text(head)] else ø
+# whether a name calls a declared pattern: a test of its own, as the seed compares no record holding a map with ø
+names_pattern(language: Language, head: Node) as bool := match head {
+	Symbol(name) => language.patterns.has(name)
+	_ => no
 }
 
 # a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
