@@ -1,7 +1,7 @@
 # The one walker every stage runs through: a rewrite applied to a node, and the metadata carried over (notes/wap.md
 # "The pipeline").
 #
-# A stage only says what a node becomes. Where the result was written is never its business: `staged` gives every
+# A stage only says what a node becomes. Where the result was written is never its business: `replaced` gives every
 # node the rewrite built the position of the node it rewrote, so an error found three stages later still points at
 # the user's line. Nodes the rewrite reused, the parts of the input it took apart and put back (a pattern's holes),
 # keep their own positions:
@@ -16,11 +16,10 @@
 use "errors.wap"
 use "../kernel/forms.wap"
 
-# n replaced by what a stage built from it (or by its rewrite of n), every node built placed where n was written; the
+# n replaced by what a stage built from it, every node built placed where n was written; the
 # result stands for n, so it also takes the facts earlier stages learned about n (a definition's declaration survives
 # its lowering)
 replaced(n: Node, built: Node) as Node := with_facts_of(placed_like(built, n), n)
-staged(n: Node, rewrite: (Node) -> Node) as Node := replaced(n, rewrite(n))
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }

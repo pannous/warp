@@ -169,7 +169,10 @@ rewritten_by(language: Language, rules: Rules, code: Node) as Fired := {
 	Fired(result, fired[0])
 }
 
-rules_applied(language: Language, rules: Rules, n: Node, fired: list) as Node := staged(rewritten(language, rules, unglued(language, n), fired), whole => parts_applied(language, rules, whole, fired))
+rules_applied(language: Language, rules: Rules, n: Node, fired: list) as Node := {
+	whole = rewritten(language, rules, unglued(language, n), fired)
+	replaced(whole, parts_applied(language, rules, whole, fired))
+}
 
 # A block or group of one phrase, `{ if c { a } }`, `(if c then a else b)`, holds the phrase's words: its one statement
 # is that phrase, rewritten as one. A list whose words start with a rule's word, `[if c then a else b]`, holds

@@ -486,13 +486,16 @@ A kernel addition, a debt or a rise in core lines shows up there the day it happ
   taken. Paid off when a function's value fits a written function type wherever it is given.
 - **stage.wap's `replaced` is `staged`'s Node form, named apart** (wap/core/stage.wap): old warp cannot tell a Node
   parameter from a function-typed one, so `staged(n, built: Node)` beside `staged(n, rewrite: (Node) -> Node)` is
-  refused. Paid off when old warp retires: one overloaded `staged`.
+  refused. Paid off when old warp retires: one overloaded `staged`. Paid (wap-facts-replace): one function,
+  `replaced(n, built)`; a stage that rewrites n passes what it built from n.
 - **A parameter's default of ø reads as no default** (wap/core/analyze/calls.wap defaults_given): old warp's
   `fact_of` gives ø for an Empty fact, so `pattern: Declared? = ø` and a parameter without a default look alike, and
   defaults_given reads a missing default as Empty. Paid off when old warp retires: a missing default is refused there.
 - **`compact` lives in core/stage.wap, not the preload** (wap/core/stage.wap): old warp's prelude lacks it, and wap
   can't hold two same-arity definitions of one name. Paid off when old warp retires: it moves to
-  preload/lists.wap with a test_lists line.
+  preload/lists.wap with a test_lists line. Old warp no longer builds wap's tests (wap-facts-replace): the tests'
+  compiler starts from the seed beside the seed's own preload, which lacks `compact` too, so the move waits for a seed
+  whose preload holds it.
 - **A shape's value is named a Node before it joins a list of Nodes** (wap/core/analyze/matching.wap shape_missing,
   list_missing): `[Call(…)] + inner` binds `+`'s T to Call and to Node, which bound_as refuses, so the witness is
   written `shape: Node = Call(…)` first. Paid off when a letter bound to a shape and to the type it narrows binds that type.

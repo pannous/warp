@@ -187,8 +187,8 @@ pattern_builder(language: Language, pattern: Declared) as Node := {
 # in its first operand
 leftmost_marked(n: Node, name: text, value: Node) as Node := match n {
 	Symbol(word) => with_fact(n, name, value)
-	Call(called, operands) => staged(n, whole => Call(called, [leftmost_marked(operands#1, name, value)] + operands[1 ..]))
-	Key(left, op, right) => staged(n, whole => Key(leftmost_marked(left, name, value), op, right))
+	Call(called, operands) => replaced(n, Call(called, [leftmost_marked(operands#1, name, value)] + operands[1 ..]))
+	Key(left, op, right) => replaced(n, Key(leftmost_marked(left, name, value), op, right))
 	_ => n
 }
 # a hole as its builder's parameter: of its type, Node when it has none, a rest hole a list<Node>
