@@ -16,4 +16,9 @@ twice 3')" "8"
 check "a typed rule sees the type a parameter without one was called with" "$(ran untyped 'g(x) := x
 rule g $x: text => 4
 g "a b"')" "4"
+# a generic's bare name in a hole takes it with any parts: `$m: map` any map, `$xs: list` any list
+check "a hole of a bare generic type takes any of its instances" "$(ran bare_generic 'size_of(x) := 0
+rule size_of $m: map => 7
+rule size_of $xs: list => 3
+print(text(size_of {"a": 1}) + " " + text(size_of [1, 2]) + " " + text(size_of 5))')" "7 3 0"
 exit $((failures > 0))
