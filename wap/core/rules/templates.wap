@@ -42,8 +42,7 @@ filled(language: Language, template: Node, bindings: map<text, Node>) as Node :=
 # A call the template writes, `If(…)`, `Break()`: a declared pattern called by name builds its node, a literal called
 # by its case's name its case, `False()` (kernel/forms.wap literal_named); any other head is called with the group
 called_built(language: Language, head: Node, arguments: list<Node>, group: Node, bindings: map<text, Node>) as Node := {
-	pattern = pattern_called(language, head)
-	if pattern != ø { return instance(language, pattern, arguments) }
+	if names_pattern(language, head) { return instance(language, pattern_called(language, head)!, arguments) }
 	literal = if head is symbol and arguments is empty then literal_named(text(head)) else []
 	if literal is empty then Key(built(language, head, bindings), Op.None, group) else literal#1
 }

@@ -2,6 +2,8 @@
 
 # a list's item by its place, counting from 1: `xs#2`
 rule ($subject#$key) => Get($subject, $key)
+# an item given a value by its place, `xs#2 = 5`, `m#"a" = 1`: the set of the subject's type, a list's or a map's
+rule ($subject#$key = $value) => set($key, of: $subject, to: $value)
 # an item's own item, `xs#1[1 ..]`, is the item taken first, then its index: the reader glued the brackets to the
 # place, as it glues them to a part's name (calls.wap `x.f[key]`)
 rule ($subject#$key[$index]) => Get($subject, $key)[$index]
@@ -9,3 +11,6 @@ rule ($subject#$key[$index]) => Get($subject, $key)[$index]
 
 # a list's item by its index, counting from 0 (wiki/indexing.md): `xs[0]` is the first item, `xs#1`
 rule $subject[$index] => Item($subject, $index)
+# a map's entry given a value by any spelling of its place, `m["a"] = 1`, `m.a = 1`: typing reads a place of no list as
+# a call of `#`, and the map's set gives it its value
+rule (#($m: map, $k) = $v) => set($k, of: $m, to: $v)

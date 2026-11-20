@@ -1,0 +1,28 @@
+# Declaration rules (stage 2): declared surface → declared surface (notes/kernel.md "How a program reaches the
+# kernel"). A rule with a hole that asks the declarations, `$f: function` or `$p: predicate`, runs after declare and
+# before lowering, on the code stage 1 shaped (core/rules/patterns.wap hole_stage).
+#
+#   rule $x is $p: predicate => $p($x)     `xs is empty` is empty(xs), empty declared a test of one value
+use "stages.wap"
+use "patterns.wap"
+use "../analyze/declarations.wap"
+use "../analyze/modules.wap"
+use "../stage.wap"
+use "../../kernel/forms.wap"
+use "../language.wap"
+
+# A declared module rewritten by the declaration rules (stage 2), which read the declarations in force: the module's
+# own, then the library's, those of the modules it uses and the preload's. A name nothing at the top declares is no
+# function to them, so a local that hides a declared one is binding's to refuse (core/analyze/scope.wap)
+declared_rewritten(language: Language, module: Node, library: list) as Node := {
+	language.declarations.by_name = declarations_by_name(declarations_of(module) + library)
+	with_facts_of(rewritten_by(language, language.declared_rules, module).code ?? Block([]), module)
+}
+declarations_by_name(declarations: list) as map<text, list<Node>> := {
+	by_name: map<text, list<Node>> = {}
+	for declaration in declarations {
+		name = text(declaration_name(declaration))
+		by_name[name] = (if by_name.has(name) then by_name[name] else []) + [declaration]
+	}
+	by_name
+}

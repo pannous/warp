@@ -7,8 +7,9 @@
 #   (If $condition: Node $then …)   a hole typed by a shape: Symbol, List, Key, Text, Number, Node or a declared pattern
 #   (Block $statements...: Node)    a rest hole takes the remaining items, each of the type
 #
-# A hole's type is a shape, checked here; a value type (`$k: int`, `$xs: list<int>`) makes the rule a stage-3 rule,
-# checked by typing (core/analyze/types.wap fits_type).
+# A hole's type picks the stage its rule runs in: a shape is checked here (stage 1); `function` or `predicate` asks the
+# declarations in force, `$p: predicate` a name declared as a test of one value (stage 2, after declare); a value type
+# (`$k: int`, `$xs: list<int>`) is checked by typing (stage 3, core/analyze/types.wap fits_type).
 use "../analyze/types.wap"
 use "../parse/reader.wap"
 use "../parse/operators.wap"
@@ -39,6 +40,16 @@ EMPTY_GROUPS = [Bracket.Round, Bracket.Curly]
 # the separators that end a statement, one for matching: a block's statements fit a pattern whether `;` or line ends
 # part them, and a pattern that parts them by spaces, `{ $a... $b... }`, fits either
 STATEMENT_SEPARATORS = [Separator.Semicolon, Separator.Newline]
+# the stages a rule may run in, by what its holes ask: the shape, the declarations, the inferred types
+SHAPE_STAGE = 1
+DECLARED_STAGE = 2
+TYPED_STAGE = 3
+# the hole types that ask the declarations: a name declared as a function, `$f: function`, or as a test of one value,
+# its result bool, `$p: predicate`
+FUNCTION_HOLE = "function"
+PREDICATE_HOLE = "predicate"
+# the hole type that asks for code giving a value of any type, none and a jump excepted: `$last: value` (stage 3)
+VALUE_HOLE = "value"
 
 # a pattern declared by `pattern Name = shape` (kernel/forms.wap, a rule file, a program): its shape, its holes in order
 # its shape as the Node pattern that takes a value apart, `taken`
@@ -46,13 +57,17 @@ class Declared { name: text, shape: Node, holes: list<text>, matcher: Matcher, t
 
 # what a part of a pattern asks of the code at its place
 enum Test { Hole, Literal, Sequence, Pair, Repeat }
-# a hole's matcher knows, from when it was compiled, whether its type is a shape and which declared pattern it names;
-# a literal's, how the literal is spelled
-class Matcher { test: Test, name: text = "", type: Node = Empty, shaped: bool = yes, pattern: Declared? = ø, rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list<Matcher> = [], spelled: text = "" }
+# the declarations stage 2 reads, by name: those of the module it rewrites, of the modules it uses and of the preload
+class Declarations { by_name: map<text, list<Node>> }
+# a hole's matcher knows, from when it was compiled, the stage its type asks for, which declared pattern it names and
+# the declarations it reads; a literal's, how the literal is spelled
+class Matcher { test: Test, name: text = "", type: Node = Empty, stage: int = SHAPE_STAGE, pattern: Declared? = ø, declarations: Declarations = Declarations({}), rest: bool = no, literal: Node = Empty, bracket: Bracket = Bracket.None, separator: Separator = Separator.None, op: Op = Op.None, parts: list<Matcher> = [], spelled: text = "" }
 
 # ---- holes
 
 is_hole(n: Node) as bool := is_hole_word(n)
+# a word that is no hole: what a rule's literal word or a declaration hole takes
+is_name(n: Node) as bool := n is symbol and not is_hole(n)
 is_rest_hole(n: Node) as bool := is_hole(n) and spelling_written(n).ends_with(REST_MARK)
 # the spelling a hole is bound under: `$c`, `$items...`
 hole_key(n: Node) as text := spelling_written(n)
@@ -68,6 +83,9 @@ is_shape(language: Language, type: Node) as bool := match type {
 	Symbol(name) => name == NODE_TYPE or SHAPES.contains(name) or language.patterns.has(name)
 	_ => no
 }
+
+# the stage a hole's type asks for
+hole_stage(language: Language, type: Node) as int := if is_shape(language, type) then SHAPE_STAGE else if type is symbol and [FUNCTION_HOLE, PREDICATE_HOLE].contains(spelling_written(type)) then DECLARED_STAGE else TYPED_STAGE
 
 # A typed hole `$c: Symbol` reads as a colon key (the reader gives a hole's `:` one type): the hole, its type a fact.
 # A hole after the colon makes a key of two holes, `$field: $type`, as in `class $name { ($field: $type)... }`
@@ -97,10 +115,9 @@ compiled_pattern(language: Language, n: Node) as Matcher := {
 # a literal's matcher, which knows how the literal is spelled, a word by its canonical spelling, once
 literal_matcher(n: Node) as Matcher := Matcher(Test.Literal, literal: n, spelled: match n { Symbol(name) => canonical_word(name); _ => "${n}" })
 shape_matcher(language: Language, n: Node) as Matcher := match n {
-	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), shaped: is_shape(language, hole_type(n)), pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else literal_matcher(n)
+	Symbol(name) => if is_hole(n) then Matcher(Test.Hole, name: hole_key(n), type: hole_type(n), stage: hole_stage(language, hole_type(n)), declarations: language.declarations, pattern: pattern_called(language, hole_type(n)), rest: is_rest_hole(n)) else literal_matcher(n)
 	Key(head, Op.None, List(arguments, Bracket.Round, separator)) => {
-		pattern = pattern_called(language, head)
-		if pattern != ø then compiled_pattern(language, instance(language, pattern, arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
+		if names_pattern(language, head) then compiled_pattern(language, instance(language, pattern_called(language, head)!, arguments)) else pair_matcher(language, n, head, Op.None, List(arguments, Bracket.Round, separator))
 	}
 	Key(left, op, right) => pair_matcher(language, n, left, op, right)
 	List(items, bracket, separator) => if grouped_item(n) != ø and not is_hole(items#1) then compiled_pattern(language, items#1) else sequence_matcher(language, items, bracket, separator)
@@ -119,9 +136,11 @@ repeated_part(n: Node) as Node? := match n {
 pair_matcher(language: Language, n: Node, left: Node, op: Op, right: Node) as Matcher := Matcher(Test.Pair, op: op, parts: [compiled_pattern(language, left), compiled_pattern(language, right)])
 
 # the declared pattern a name calls, ø for any other name
-pattern_called(language: Language, head: Node) as Declared? := match head {
-	Symbol(name) => if language.patterns.has(name) then language.patterns[name] else ø
-	_ => ø
+pattern_called(language: Language, head: Node) as Declared? := if names_pattern(language, head) then language.patterns[text(head)] else ø
+# whether a name calls a declared pattern: a test of its own, as the seed compares no record holding a map with ø
+names_pattern(language: Language, head: Node) as bool := match head {
+	Symbol(name) => language.patterns.has(name)
+	_ => no
 }
 
 # a declared pattern's shape with the given parts at its holes, in order; a rest hole takes the remaining parts
@@ -168,8 +187,8 @@ pattern_builder(language: Language, pattern: Declared) as Node := {
 # in its first operand
 leftmost_marked(n: Node, name: text, value: Node) as Node := match n {
 	Symbol(word) => with_fact(n, name, value)
-	Call(called, operands) => staged(n, whole => Call(called, [leftmost_marked(operands#1, name, value)] + operands[1 ..]))
-	Key(left, op, right) => staged(n, whole => Key(leftmost_marked(left, name, value), op, right))
+	Call(called, operands) => replaced(n, Call(called, [leftmost_marked(operands#1, name, value)] + operands[1 ..]))
+	Key(left, op, right) => replaced(n, Key(leftmost_marked(left, name, value), op, right))
 	_ => n
 }
 # a hole as its builder's parameter: of its type, Node when it has none, a rest hole a list<Node>

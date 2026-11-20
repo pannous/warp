@@ -25,13 +25,13 @@ use "../stage.wap"
 HASH_COMMENT_FOLLOWERS = " \t\n!#"
 
 # the notation of a text read from a file: its one item, the list of its items, Empty for none, each node marked with
-# the file (core/stage.wap file_of); text it cannot read is refused where it was written (core/errors.wap)
+# the file (core/stage.wap file_of); a text it cannot read is an Error of why and where, `Error("this bracket is never
+# closed": "(a")`, which a compiler refuses (core/pipeline.wap read_notation) and data may hold
 notation(source: text, file: text) as Node := {
 	code = source.codepoints
 	r = Reader{code: code, n: code.length}
 	read_tokens(r)
-	if r.error != "" { refused(filed(r.failure, file), r.error) }
-	filed(built(r.tokens), file)
+	if r.error == "" then filed(built(r.tokens), file) else Error(Key(Text(r.error), Op.Colon, filed(r.failure, file)))
 }
 # n and each part of it that has a position, marked with the file it was read from
 filed(n: Node, file: text) as Node := {

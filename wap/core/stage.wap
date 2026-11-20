@@ -1,7 +1,7 @@
 # The one walker every stage runs through: a rewrite applied to a node, and the metadata carried over (notes/wap.md
 # "The pipeline").
 #
-# A stage only says what a node becomes. Where the result was written is never its business: `staged` gives every
+# A stage only says what a node becomes. Where the result was written is never its business: `replaced` gives every
 # node the rewrite built the position of the node it rewrote, so an error found three stages later still points at
 # the user's line. Nodes the rewrite reused, the parts of the input it took apart and put back (a pattern's holes),
 # keep their own positions:
@@ -16,11 +16,10 @@
 use "errors.wap"
 use "../kernel/forms.wap"
 
-# n replaced by what a stage built from it (or by its rewrite of n), every node built placed where n was written; the
+# n replaced by what a stage built from it, every node built placed where n was written; the
 # result stands for n, so it also takes the facts earlier stages learned about n (a definition's declaration survives
 # its lowering)
 replaced(n: Node, built: Node) as Node := with_facts_of(placed_like(built, n), n)
-staged(n: Node, rewrite: (Node) -> Node) as Node := replaced(n, rewrite(n))
 
 # where n was written, its line and column together, ø for a node without a position
 class Position { line: int, column: int }
@@ -53,11 +52,11 @@ refitted(built: Node, original: Node) as Node := {
 	with_facts_of(positioned_like(built, original), original)
 }
 
-# n with each fact of the original it does not hold yet; Empty carries none
+# n with each fact of the original whose name it holds no fact of: what n learned itself wins; Empty carries none
 with_facts_of(n: Node, original: Node) as Node := {
 	if n is Empty { return n }
 	held = attributes_of(n)
-	for fact in attributes_of(original) { if not held.contains(fact) { n = with_attribute(n, fact) } }
+	for fact in attributes_of(original) { if (if fact_name(fact) == "" then not held.contains(fact) else not held.map(fact_name).contains(fact_name(fact))) { n = with_attribute(n, fact) } }
 	n
 }
 
@@ -82,12 +81,13 @@ RULE = "rule"
 # from stage to stage. A later fact of the same name replaces the earlier.
 with_fact(n: Node, name: text, value: Node) as Node := with_attribute(n, Key(symbol(name), Op.Colon, value))
 # whether a stage has learned the fact of that name; one that holds ø is learned too, `o: text? = ø` a default
-has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => is_fact_named(fact, name))
-is_fact_named(fact: Node, name: text) as bool := match fact { Key(Symbol(fact_name), Op.Colon, value) => fact_name == name; _ => no }
+has_fact(n: Node, name: text) as bool := attributes_of(n).any(fact => fact_name(fact) == name)
+# a fact's name, "" of an attribute that is no fact
+fact_name(fact: Node) as text := match fact { Key(Symbol(name), Op.Colon, value) => name; _ => "" }
 # the fact of that name, ø when no stage has learned it
 fact_of(n: Node, name: text) as Node? := {
 	found: Node? = ø
-	for fact in attributes_of(n) { match fact { Key(fact_name, op, value) => if is_fact_named(fact, name) { found = value }; _ => ø } }
+	for fact in attributes_of(n) { match fact { Key(key, op, value) => if fact_name(fact) == name { found = value }; _ => ø } }
 	found
 }
 # the items of a fact that holds a list, none when no stage has learned it; a fact set to anything else is a stage's bug
@@ -197,8 +197,6 @@ CHECKED_CAST = "cast"
 BOXED_VALUE = "box"
 TESTED = "tested"
 OPTIONAL_VALUE = "optional_value"
-# on the call a predicate's word after `is` became, `xs is empty` empty(xs): a test, so it gives yes or no
-PREDICATE = "predicate"
 # on code that never finishes, a return, break or continue, a block ending in one, a choice all of whose arms jump, a
 # call of a function that never returns: it has no type, and a join of arms skips it
 JUMPS = "jumps"

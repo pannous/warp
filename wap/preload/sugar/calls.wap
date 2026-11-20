@@ -4,3 +4,5 @@ rule $x.$f($arguments...) => $f($x, $arguments...)
 # a part's item, `g.names["b"]`, is the part taken first, then its item: the reader glued the brackets to the name
 rule $x.$f[$key] => Get($x, "$f")[$key]
 rule $x.$f => Get($x, "$f")
+# a script shows its last value, if it gives one: `1 + 2` alone prints 3
+rule (Block $statements... $last: value) where script => { $statements...; print(show($last)) }

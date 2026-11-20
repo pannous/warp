@@ -120,11 +120,12 @@ type_test_typed(n: Node, arguments: list, s: TypingState, f: TypeFrame) as Node 
 	# a shape, `n is Record`, by its pattern (core/analyze/shapes.wap)
 	if narrowed_type(shaped(tested, s)) != ø { return typed_form(shape_test(subject, shaped(tested, s), n, s), s, f, ø) }
 	if is_bound(tested, DefinitionKind.Case) { return typed_form(placed_like(Case(subject, [Arm(tested, True), Arm(symbol(WILDCARD), False)]), n), s, f, ø) }
-	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	typed = typed_form(subject, s, f, ø)
 	type = value_of(typed, "to test")
+	# a Node kind's word, `n is symbol`, tests the kind (core/analyze/shapes.wap kind_named)
 	kind = kind_named(tested, type, s)
 	if kind != ø { return typed_form(shape_test(subject, kind, n, s), s, f, ø) }
+	if not names_type(tested, s) { refused(tested, "is: ${tested} names no type and no test: define a type ${tested}, or ${tested}(x): bool") }
 	if boxed_fit(tested, type) and not same_type(type, tested) { return with_fact(with_type(placed_like(Prim(symbol(BOXED_TEST), [typed]), n), BOOL_TYPE), TESTED, tested) }
 	typed_form(placed_like(Block([subject, if same_type(type, tested) then True else False]), n), s, f, ø)
 }

@@ -1,0 +1,46 @@
+# Termination of the rules, checked once all of a stage's rules are loaded (core/rules/stages.wap): no chain of
+# rules may rewrite forever.
+use "stages.wap"
+use "patterns.wap"
+use "matcher.wap"
+use "../parse/operators.wap"
+use "../stage.wap"
+use "../errors.wap"
+use "../language.wap"
+
+# Every rule's template names heads that may fire again where it built. Following those from head to head must
+# never come back, unless each rule on the way writes less code than it matched (each hole counted once) or takes a
+# fact, or the cycle is one rule whose pattern fits no node of its own template: it fires again only where its holes
+# bring code of the shape it consumes, `rule $a is not $b => not ($a is $b)` once per `not` the program wrote.
+terminating(language: Language, rules: Rules) := {
+	for head in rules.by_head.keys { cycle_refused(language, rules, head, []) }
+}
+
+cycle_refused(language: Language, rules: Rules, head: text, path: list) := {
+	if path.contains(head) {
+		closing = path[path.index_of(head) ..] + [head]
+		alone = #closing.unique == 1
+		growing = rules_on(rules, closing).filter(rule => not shrinking(rule) and rule.fact == "" and (not alone or fires_on_itself(rule)))
+		if growing is not empty { refused(growing#1.written, "these rules may rewrite forever: " + closing.join(" → ")) }
+		return
+	}
+	if not rules.by_head.has(head) { return }
+	for rule in rules.by_head[head] { for next in template_heads(language, rule.template) { cycle_refused(language, rules, next, path + [head]) } }
+}
+
+rules_on(rules: Rules, heads: list<text>) as list<Rule> := heads.filter(head => rules.by_head.has(head)).flat_map(head => rules.by_head[head])
+
+# the heads of every node a template spells (not the code its holes bring)
+template_heads(language: Language, n: Node) as list<text> := match n {
+	List(items, bracket, separator) => heads_of(language, n) + items.flat_map(item => template_heads(language, item))
+	Key(left, op, right) => (if op == Op.None and names_pattern(language, left) then [spelling_written(left)] else heads_of(language, n)) + template_heads(language, left) + template_heads(language, right)
+	Symbol(name) => heads_of(language, n)
+	_ => []
+}
+
+shrinking(rule: Rule) as bool := size_of(rule.template) < matcher_size(rule.matcher) and #holes_in(rule.template) == #holes_in(rule.template).unique
+matcher_size(m: Matcher) as int := 1 + m.parts.map(matcher_size).sum()
+size_of(n: Node) as int := 1 + direct_parts(n).map(size_of).sum()
+# whether a rule's pattern fits a node of its own template, its holes taken as the words they are
+fires_on_itself(rule: Rule) as bool := nodes_in(rule.template).any(node => matches(rule.matcher, node, {}))
+nodes_in(n: Node) as list<Node> := [n] + direct_parts(n).flat_map(nodes_in)

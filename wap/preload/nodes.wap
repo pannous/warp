@@ -1,7 +1,6 @@
-# The preload's node (notes/wap.md "Layers"): warp's Node, declared case for case as core/node.warp declares it, so
-# wap's own source reads the same under both compilers, and the words over it in plain warp: a node's position and
-# facts, a symbol by its name. A Meta node's data is the list [line, column, facts…] (warp's runtime keeps the same
-# three in its own Meta layout). A list's items are typed list<Node>, which core/node.warp's bare `list` means.
+# The preload's node (notes/wap.md "Layers"): wap's Node, the one notation of data and code (notes/first_principles.md),
+# and the words over it in plain warp: a node's position and facts, a symbol by its name. A Meta node's data is the
+# list [line, column, facts…]. A list's items are typed list<Node>.
 
 enum Node {
 	True
@@ -76,7 +75,7 @@ int_in(n: Node) := match n {
 # n where it was written, its facts kept
 positioned(n: Node, line: int, column: int): Node := Meta(unwrapped(n), meta_data(line, column, attributes_of(n)))
 
-# the facts a stage marked n with, and n with one more
+# the facts a stage marked n with, and n with one more in place of one of its name: `type: int` replaces `type: text`
 attributes_of(n: Node): list<Node> := match n {
 	Meta(node, List(data, bracket, separator)) => facts_in(data)
 	_ => []
@@ -84,8 +83,13 @@ attributes_of(n: Node): list<Node> := match n {
 # a Meta's data past its line and column
 facts_in(data: list<Node>): list<Node> := data[META_FACTS - 1 ..]
 with_attribute(n: Node, fact: Node): Node := match n {
-	Meta(node, List(data, bracket, separator)) => Meta(node, List(data + [fact], bracket, separator))
+	Meta(node, List(data, bracket, separator)) => Meta(node, List(data.take(META_FACTS - 1) + facts_in(data).filter(held => not same_name(held, fact)) + [fact], bracket, separator))
 	_ => Meta(n, meta_data(NO_LINE, NO_LINE, [fact]))
+}
+# whether two facts have one name, `type: int` and `type: text`
+same_name(fact: Node, other: Node): bool := match fact {
+	Key(name, Op.Colon, value) => match other { Key(other_name, Op.Colon, other_value) => name == other_name; _ => no }
+	_ => no
 }
 
 # the node a Meta wraps, any other node itself
@@ -95,8 +99,7 @@ unwrapped(n: Node): Node := match n {
 }
 meta_data(line: int, column: int, facts: list<Node>): Node := List([Number(line), Number(column)] + facts, Bracket.Square, Separator.Comma)
 
-# the text a node carries for an operator, `Op.Add as text` is "+" (core/passes/node_cases.warp node_spellings, case
-# for case)
+# the text a node carries for an operator, `Op.Add as text` is "+"
 text(op: Op): text := match op {
 	Op.Colon => ":"
 	Op.Dot => "."
@@ -202,8 +205,7 @@ code(n: Node): text := match n {
 	Meta(node, data) => code(node)
 	_ => text(n)
 }
-# a list's brackets and separator as written; core/format.wap keeps its own copy while warp compiles it, which
-# cannot take the preload's Node (notes/backbone.md)
+# a list's brackets and separator as written
 opening(bracket: Bracket): text := match bracket {
 	Bracket.Curly => "{"
 	Bracket.Square => "["

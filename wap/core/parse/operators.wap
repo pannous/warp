@@ -41,7 +41,7 @@ operated_program(language: Language, program: Node) as Node := {
 
 
 # code with each operator phrase in it read, placed where it was written (core/stage.wap)
-operated(language: Language, n: Node) as Node := staged(n, form => operated_form(language, form))
+operated(language: Language, n: Node) as Node := replaced(n, operated_form(language, n))
 operated_form(language: Language, n: Node) as Node := match n {
 	List(items, Bracket.None, Separator.None) => phrase_read(language, glued_tokens(language, items))
 	List(items, bracket, Separator.Space) => in_brackets(phrase_read(language, tokens_of(language, items)), bracket)
