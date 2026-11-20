@@ -53,6 +53,18 @@ files=(
 	wap/preload/sugar/ranges.wap
 	wap/preload/sugar/records.wap
 	wap/preload/sugar/types.wap
+	wap/core/format.wap
+	wap/core/language.wap
+	wap/core/parse/operator_table.wap
+	wap/core/parse/operators.wap
+	wap/core/parse/tokens.wap
+	wap/core/rules/lines.wap
+	wap/core/rules/lowering.wap
+	wap/core/rules/matcher.wap
+	wap/core/rules/patterns.wap
+	wap/core/rules/stages.wap
+	wap/core/rules/templates.wap
+	wap/core/rules/typed.wap
 )
 for file in "${files[@]}"; do
 	check "wap compiles $file and the result loads" "$(loaded "$file")" "loads"
