@@ -156,15 +156,11 @@ typed_among(program: Block, library: list, shown: bool) as Block := {
 		statements = statements.take(#statements - 1) + [word_called(statements.last, PRINT_WORD, [word_called(statements.last, SHOW_WORD, [statements.last], ø, s)], ø, s)]
 		typed = with_type_of(typed, value_type(statements.last))
 	}
-	typed_before = #s.functions
 	if s.unknowns > 0 { all_settled(s) }
-	settled_late = s.functions.drop(typed_before)
 	s.functions = distinct_instances(s.functions, s)
 	written = defines + s.lambdas + s.dispatchers
-	library_keys = written.map(function_key_of)
-	# the program's functions first typed once the unknowns settled, which no block placed
-	late = settled_late.filter(each => not (each.function.key in library_keys) and s.functions.any(kept => kept === each)).map(each => each.define)
-	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + late + statements), typed)
+	placed = statements_in(instances_placed(refitted(Block(statements), typed), s))
+	whole = refitted(Block(s.records.items + functions_typed_from(written, s) + placed), typed)
 	if s.unknowns > 0 then settled_everywhere(whole, s) else whole
 }
 # every function wap refuses, then what else stopped the program, said together
@@ -227,9 +223,9 @@ with_type(n: Node, type: text) as Node := with_fact(n, TYPE, symbol(type))
 value_type(n: Node) as Node? := if n == ø then symbol(EMPTY_TYPE) else fact_of(n, TYPE)
 with_type_of(n: Node, type: Node?) as Node := if type == ø then n else with_fact(n, TYPE, type)
 
-# Statements typed in order, the last one expected the block's type. A function it defines stands where it was
-# written as each of its typed versions; one whose parameters all have their types is typed even when nothing calls it,
-# unless it is TYPED_WHEN_CALLED.
+# Statements typed in order, the last one expected the block's type. A function it defines stays as written until the
+# whole program is typed (instances_placed); one whose parameters all have their types is typed even when nothing
+# calls it, unless it is TYPED_WHEN_CALLED.
 block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node?) as Node := {
 	s.records = added_records(s.records, written)
 	s.definitions = s.definitions + written.filter(statement => statement is Define).map(function_of)
@@ -243,7 +239,7 @@ block_typed(n: Node, written: list, s: TypingState, f: TypeFrame, expected: Node
 		raise e.message
 	}
 	typed_alone(statements, s)
-	block = refitted(Block(typed.flat_map(statement => if statement is Define then functions_typed_from([statement], s) else [statement])), n)
+	block = refitted(Block(typed), n)
 	if typed is empty then block else typed_like(block, typed.last)
 }
 # each definition whose parameters all have their types typed, even when nothing calls it, unless TYPED_WHEN_CALLED;
@@ -262,6 +258,12 @@ function_added(definition: Node, s: TypingState) as Function := {
 	added = function_of(definition)
 	s.definitions += [added]
 	added
+}
+# The typed program with each definition it writes standing where it was written as the functions it became, once
+# every unknown settled: instances one settling made alike are one (letters.wap distinct_instances)
+instances_placed(n: Node, s: TypingState) as Node := match n {
+	Block(statements) => refitted(Block(statements.flat_map(statement => if statement is Define then functions_typed_from([statement], s).map(define => instances_placed(define, s)) else [instances_placed(statement, s)])), n)
+	_ => refitted(with_parts(n, part => instances_placed(part, s)), n)
 }
 # the Defines each of these definitions became, in the order typed
 functions_typed_from(definitions: list, s: TypingState) as list := {
