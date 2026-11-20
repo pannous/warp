@@ -1,11 +1,19 @@
 // The standard library module net (notes/stdlib.md section 7): `use net`, or a program naming the global fetch. post
-// sends a text through the adapter std_io and gives the answer's text (a synchronous request in the browser;
-// the native warp has no net.post yet, card net-get-curl)
+// sends a text through the adapter std_io and gives the answer's text (a synchronous request in the browser, curl
+// natively)
 use json
-public post(url: any, body: any) := std_io("net", "post", [url, body])
+// a posted text's type unless the headers name one
+POST_CONTENT_TYPE = "text/plain; charset=utf-8"
+public post(url: any, body: any) := post(url, body, {})
 // post(url, body, {"x-api-key": key}): the map's pairs are the request's headers; an answer of status >= 400 is the
 // error, with the answer's text
-public post(url: any, body: any, headers: any) := std_io("net", "post", [url, body, headers])
+public post(url: any, body: any, headers: any) := std_io("net", "post", [url, body, header_lines(typed_headers(headers))])
+typed_headers(headers: map) as map := {
+	if keys(headers).any(name => lower(name) == "content-type") { return headers }
+	typed = {"Content-Type": POST_CONTENT_TYPE}
+	for name in keys(headers) { typed[name] = headers.get(name) }
+	typed
+}
 // fetch(url): what a GET of the url answers (the page answers it with a request, the native warp by curl): a JSON
 // array or object as warp data (lists, maps), any other answer its text (notes/web_framework.md "Async data"); no
 // declared result, so a failed request's error comes through as itself

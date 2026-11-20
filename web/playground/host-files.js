@@ -65,7 +65,7 @@ function getSync(url, timeout, binary = false, headerLines = []) {
 	if (isUnserved(url)) throw new Error(HTTP_NOT_FOUND);
 	const request = new XMLHttpRequest();
 	request.open("GET", ofThisBuild(url), false);
-	for (const line of headerLines) { const colon = line.indexOf(":"); request.setRequestHeader(line.slice(0, colon).trim(), withPageSecret(url, line.slice(colon + 1).trim())); }
+	for (const [name, value] of headerPairs(headerLines)) request.setRequestHeader(name, withPageSecret(url, value));
 	if (timeout) request.timeout = timeout;
 	if (binary) request.overrideMimeType("text/plain; charset=x-user-defined"); // bytes as they are
 	request.send();
@@ -81,17 +81,22 @@ function bytesOfText(text) {
 	return bytes;
 }
 
-// a synchronous POST of a text with its headers (stdlib net's post, src/extensions/utils.rs post_within), its answer's
+// "Name: value" header lines (stdlib net's header_lines) as [name, value] pairs
+function headerPairs(lines) {
+	return lines.map(line => { const colon = line.indexOf(":"); return [line.slice(0, colon).trim(), line.slice(colon + 1).trim()]; });
+}
+
+// a synchronous POST of a text with its header lines (stdlib net's post, its Content-Type among them), its answer's
 // text; an answer of status >= 400 is the error, with its text (an API's own reason)
-function postSync(url, body, headers = {}) {
+function postSync(url, body, headerLines = []) {
 	url = withPageProtocol(url);
 	const request = new XMLHttpRequest();
 	request.open("POST", url, false);
-	request.setRequestHeader("Content-Type", "text/plain; charset=utf-8");
-	for (const [name, value] of Object.entries(headers)) request.setRequestHeader(name, withPageSecret(url, value));
+	const headers = headerPairs(headerLines);
+	for (const [name, value] of headers) request.setRequestHeader(name, withPageSecret(url, value));
 	request.send(body);
 	// the page marks its key by each answer to a request carrying it (assistant.js keyAnswered)
-	if (Object.values(headers).some(value => self.pageSecrets?.[value])) self.postMessage({ type: "key answered", status: request.status });
+	if (headers.some(([, value]) => self.pageSecrets?.[value])) self.postMessage({ type: "key answered", status: request.status });
 	if (request.status === 0) throw new Error("network error (blocked by CORS?)");
 	if (request.status >= 400) throw new Error(`HTTP status ${request.status}: ${request.responseText}`);
 	return request.responseText;
@@ -555,7 +560,7 @@ addHostPart({
 		// a filter compiled natively is an SQL query (a page compiled by the browser keeps filters as comprehensions)
 		table: { open: openTable, migrate: migrateTable, rows: tableRows, page: tablePage, count: (table, schema, file) => storedTable(file, table).rows.length, insert: insertRow, delete: deleteRow, update: updateRow, begin: beginTransaction, commit: file => { delete tablesBefore[file]; return null; }, rollback: rollBack, select: table => { throw new Error(`a filter of the table ${table} is an SQL query: it runs natively (warp serve)`); } },
 		// `get(url, "bytes")`, core/host_io.warp url_bytes: the answer's bytes, ints 0 to 255
-		net: { get: (url, as, headerLines) => as === "bytes" ? Array.from(getSync(url, 0, true, headerLines)) : getSync(url, 0, false, headerLines), post: (url, body, headers) => postSync(url, contentText(body), headers ?? {}) },
+		net: { get: (url, as, headerLines) => as === "bytes" ? Array.from(getSync(url, 0, true, headerLines)) : getSync(url, 0, false, headerLines), post: (url, body, headerLines) => postSync(url, contentText(body), headerLines ?? []) },
 		// `clipboard.write(text)` (lowering/signals/system_values.rs): a page writes it (markup.js copyText), a Worker has no
 		// clipboard and hands the text to its page (self.writeClipboard: worker.js)
 		clipboard: { write: text => { (self.writeClipboard ?? copyText)(contentText(text)); return null; } },

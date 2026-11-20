@@ -4,3 +4,6 @@
 
 'fetch("https://httpbin.org/headers", {"X-Warp": "yes"}).headers["X-Warp"]'	'yes'
 'h = fetch("https://httpbin.org/headers", {"User-Agent": "warp-test", "Accept": "application/json"}).headers; [h["User-Agent"], h["Accept"]]'	['warp-test', 'application/json']
+# post(url, body, headers) natively too, by curl (card net-get-curl): the body as sent, the map's pairs as its headers
+'use net; json(post("https://httpbin.org/post", "hi")).data'	'hi'
+'use net; a = json(post("https://httpbin.org/post", "{}", {"Content-Type": "application/json", "X-Warp": "yes"})); [a.headers["X-Warp"], a.headers["Content-Type"]]'	['yes', 'application/json']
