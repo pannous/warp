@@ -61,11 +61,11 @@ HELLO_SNAPSHOTS = os.path.join(REPO, "data/vitals/hello.jsonl")  # one line per 
 # measured by hand before the series began: (label, revision, 10^9 instructions, seconds)
 HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.22), ("1.6.1", "v1.6.1", 6.1, 0.47),
                     ("before hello-takes", "d152612c4d^1", 5.4, 0.53), ("hello-takes", "d152612c4d", 3.1, 0.22)]
-# wap, the new compiler (notes/wap.md): its lines by stage folder, its road to self-build and its tests, as trends
+# wap, the new compiler (pannous/wap): its lines by stage folder, its road to self-build and its tests, as trends
 WAP_STAGES = [("parse", "wap/core/parse/"), ("analyze", "wap/core/analyze/"), ("rules", "wap/core/rules/"),
               ("emit", "wap/core/emit/"), ("kernel", "wap/kernel/"), ("preload", "wap/preload/")]
 WAP_OTHER = "other"  # compiler.wap and wap/core/*.wap
-WAP_LINE_LIMIT = 300  # a wap file past it is split (notes/wap.md)
+WAP_LINE_LIMIT = 300  # a wap file past it is split (wap's long-file guardrail)
 WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
 # wap's own repository (pannous/wap) since it left warp at WAP_CUT, warp's last commit holding wap/: wap's history is
@@ -77,7 +77,7 @@ WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 # what measures wap: wap1, main's wap/ compiled by wap's seed (test/wap/compile.sh, which builds it once per state of
 # wap/ into the folder's data/ and names it), with what compile.sh reads and the census's owners table beside it
 WAP_COMPILE = "test/wap/compile.sh"
-WAP_EXTRACTED = ["wap", WAP_CENSUS, WAP_COMPILE, "test/native/checks.sh", "notes/wap.md"]
+WAP_EXTRACTED = ["wap", WAP_CENSUS, WAP_COMPILE, "test/native/checks.sh", "notes/agents/wap-owner.md"]
 WAP_MEASURED_BY = "wap1"  # each snapshot says which compiler measured it: old warp ran wap's source before 2026-11-20
 WAP_CENSUS_MODULE = "wap-census.wasm"
 WAP_CENSUS_PID = os.path.join(REPO, "data/vitals/wap-census.pid")
@@ -210,7 +210,7 @@ def wap1_of(folder):
 
 
 def wap_census(folder, files):
-    """The census (notes/wap.md "Road to self-build") of each of <files> in <folder>, each in a job slot, WAP_CENSUS_JOBS at a time, summed:
+    """The census (wap's test/wap/ratchet_census.sh) of each of <files> in <folder>, each in a job slot, WAP_CENSUS_JOBS at a time, summed:
     statements, lowered, bound, files typed whole and emitted, functions typed, the files that timed out and those without
     a result, and the WAP_BLOCKERS most frequent refusals [stage, message, count]. The census is compiled once by wap1
     and run from the folder, where it reads wap/ and notes/."""

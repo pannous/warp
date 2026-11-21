@@ -76,12 +76,8 @@ WAP_CHECKOUT=$HOME/dev/angles/wap
 WAP_LINKED="wap
 test/wap
 notes/backbone.md
-notes/wap.md
-notes/wap_review.md
 notes/kernel.md
-notes/rules.md
 notes/reader.md
-notes/operators.md
 notes/agents/wap-owner.md
 notes/agents/simplifier.md"
 LINKED_CHECKOUTS="

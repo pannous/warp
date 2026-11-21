@@ -1,1 +1,0 @@
-/Users/me/dev/angles/wap/notes/operators.md
