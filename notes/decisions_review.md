@@ -1,6 +1,6 @@
 # Decisions to review
 
-Put ✓ in front of every line that goes verbatim into the wiki; ✗ for lines to drop; leave the rest unmarked.
+Put ✓ in front of every line that goes verbatim into the wiki (a program can see it); N for implementation notes (only the compiler sees it: goes to the code header or notes/); ✗ to drop; leave the rest unmarked.
 
 
 ## Inbox
