@@ -72,7 +72,9 @@ WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: 
 # warp's up to the cut, the checkout's after it
 WAP_CHECKOUT = "/Users/me/dev/angles/wap"
 WAP_CUT = "ffcad762e0"
-WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap's tip, extracted whole to run it: one folder per job
+# wap's tip, extracted whole to run it: one folder per job, by its real path, as a module's WASI follows no link (data/
+# is one, to a scratch volume)
+WAP_TREE = os.path.join(os.path.realpath(os.path.join(REPO, "data")), "vitals/wap-tree-%s")
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 # what measures wap: wap1, main's wap/ compiled by wap's seed (test/wap/compile.sh, which builds it once per state of
 # wap/ into the folder's data/ and names it)
