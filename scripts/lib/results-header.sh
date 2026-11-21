@@ -23,3 +23,5 @@ results_header() {
 
 # results_rate <file>: the percent its header names, empty without a header
 results_rate() { head -1 "$1" 2>/dev/null | sed -n "s/^$RESULTS_HEADER_MARK.* \([0-9.]*\)%$/\1/p"; }
+# results_commit <file>: the commit its header names, empty without a header
+results_commit() { head -1 "$1" 2>/dev/null | sed -n "s/^$RESULTS_HEADER_MARK\([0-9a-f]*\) .*/\1/p"; }
