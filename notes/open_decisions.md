@@ -12,6 +12,11 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - enum-case-as-type (warp-lead, 2026-11-21, for the user's morning): may a parameter be typed as one case of an enum and read its fields by name? `enum Shape { Dot(size: int), Line(parts: list<Shape>) }; first_size(d: Dot) := d.size` is refused today. A) a case is a type: `d: Dot` narrows, `d.size` reads the field, est. 15–30 wap core lines + a variant.md passage; it lets review 2's Matcher/Lexeme cleanup shrink core (recommended). B) no, cases only matched, 0 lines. C) park. A new language feature, so held for the user, not decided at night.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- export-dispatcher-size (night): the plain-name export dispatcher came in at +49 wap core lines (estimate ~10); only the plain-name export landed first.
+- wap-wiki-from-notes (night): wiki precedence.md gained "Spacing picks an operator's fixity" and "A program's own precedence"; rule.md is a new page.
+- wap-primitive-table-dropped (night): one primitive table dropped for too little general benefit.
+- wap-c-foreign (night): lib's `f(s: text): i64 from 'c'` lines are built by a rule in wap/extensions/c.
+- wap-enum-case-constants (interviewer, +11 core lines): constant case values are built once as shared globals; node ceiling 108193.
 - wap-reader-wiki (night, landed): `|` is the pipe; `//` after `:` is not a comment; kebab-case names only inside html; the `a.b`/`a. b` bullet dropped; `a {x}` still marked "// sure?".
 - Remote branches to delete (merged; the hook lets only the user delete them): pannous/warp land/* from 11-21 and wap-rules-*; pannous/wap wap-module-reassign, wap-lambda-any, wap-console-variables, wap-function-value-place, seed-refresh-2026-11-21-*, preload-wasm, wap-boxed-adapter, wap-adapted-wrapper, wap-is-bare-list; warp.wiki wap-notes-wiki, wap-reader-wiki, wiki-public.
 
