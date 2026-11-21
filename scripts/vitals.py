@@ -66,8 +66,12 @@ HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.
 WAP_RENAMED = {"preload": "types"}
 WAP_OTHER = "other"  # compiler.wap, nodes.wap and wap/core/*.wap
 WAP_LINE_LIMIT = 300  # a wap file past it is split (wap's long-file guardrail)
+# a layer is a folder of wap/ (core, kernel, types, extensions …): its nodes (WAP_SIZE, comments count nothing) beside its
+# code lines and its comment or blank lines, so a growth of comments shows apart (user 2026-11-21)
+WAP_COMMENT_STARTS = (b"#", b"//")
+WAP_SIZE = "scripts/wap-size.warp"  # wap's own measure: each file's nodes, Meta excluded
 WARP = os.path.expanduser("~/dev/bin/warp")
-WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
+WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" and "size" (when wap/ changed), "tests"
 # wap's own repository (pannous/wap) since it left warp at WAP_CUT, warp's last commit holding wap/: wap's history is
 # warp's up to the cut, the checkout's after it
 WAP_CHECKOUT = "/Users/me/dev/angles/wap"
@@ -120,8 +124,8 @@ TIP = git("rev-parse", "origin/main").strip()
 WAP_TIP = git("rev-parse", "origin/main", repository=WAP_CHECKOUT).strip()
 
 
-def file_lines(commit, classify=component, repository=REPO):
-    """(path, lines) of each file of <commit> that <classify> names a component of"""
+def file_contents(commit, classify=component, repository=REPO):
+    """(path, content) of each file of <commit> that <classify> names a component of"""
     wanted = [f for f in git("ls-tree", "-r", "--name-only", commit, repository=repository).splitlines() if classify(f)]
     blob = subprocess.run(["git", "-C", repository, "cat-file", "--batch"], capture_output=True, check=True,
                           input="".join(f"{commit}:{f}\n" for f in wanted).encode()).stdout
@@ -129,10 +133,18 @@ def file_lines(commit, classify=component, repository=REPO):
     for f in wanted:
         header_end = blob.index(b"\n", position)
         size = int(blob[position:header_end].split()[-1])
-        content = blob[header_end + 1:header_end + 1 + size]
-        # as git's numstat counts them: a last line without its newline is a line
-        yield f, content.count(b"\n") + (not content.endswith(b"\n") and bool(content))
+        yield f, blob[header_end + 1:header_end + 1 + size]
         position = header_end + 2 + size
+
+
+def line_count(content):
+    """as git's numstat counts them: a last line without its newline is a line"""
+    return content.count(b"\n") + (not content.endswith(b"\n") and bool(content))
+
+
+def file_lines(commit, classify=component, repository=REPO):
+    """(path, lines) of each file of <commit> that <classify> names a component of"""
+    return ((f, line_count(content)) for f, content in file_contents(commit, classify, repository))
 
 
 def lines_at(commit, classify=component):
@@ -173,31 +185,49 @@ def wap_commits():
 
 def wap_sizes():
     """wap's lines at each commit of main that changed wap/ (warp's, then wap's own repository's): [date, commit, total,
-    lines per stage, core lines then, files over WAP_LINE_LIMIT then] and the files over the limit at the tip, [path, lines]"""
+    lines per stage, core lines then, files over WAP_LINE_LIMIT then, [code lines, comment or blank lines] per layer] and
+    the files over the limit at the tip, [path, lines]"""
     classify = lambda path: path.endswith(".wap") and path.startswith("wap/") and wap_stage(path)
     series, over = [], []
     for repository, sha, date in wap_commits():
-        stages, files = collections.Counter(), list(file_lines(sha, classify, repository))
-        for path, lines in files:
+        stages, layers, files = collections.Counter(), {}, []
+        for path, content in file_contents(sha, classify, repository):
+            lines, commented, layer = line_count(content), comment_or_blank_lines(content), layers.setdefault(wap_layer(path), [0, 0])
+            files.append((path, lines))
             stages[classify(path)] += lines
+            layer[0] += lines - commented
+            layer[1] += commented
         over = sorted(([path, lines] for path, lines in files if lines > WAP_LINE_LIMIT), key=lambda file: -file[1])
         date = date[:16].replace("T", " ")
         core = next((sum(row[3][:-1]) for row in reversed(rows) if row[0] <= date), 0)
-        series.append([date, sha[:10], sum(stages.values()), dict(stages), core, len(over)])
+        series.append([date, sha[:10], sum(stages.values()), dict(stages), core, len(over), layers])
     return series, over
 
 
-def wap_stage(path):
-    """the stage folder of a wap/ file, by its name now, or WAP_OTHER"""
-    within = path.removeprefix("wap/").removeprefix("core/")
+def wap_folder(within):
+    """the folder a path within wap/ starts with, by its name now, or WAP_OTHER for a file beside the folders"""
     folder, _, rest = within.partition("/")
     return WAP_RENAMED.get(folder, folder) if rest else WAP_OTHER
 
 
-def wap_stages(sizes):
-    """the stage folders the sizes name, the largest at the tip first, "other" last"""
-    named = {stage for row in sizes for stage in row[3]} - {WAP_OTHER}
-    return sorted(named, key=lambda stage: -sizes[-1][3].get(stage, 0)) + [WAP_OTHER]
+def wap_stage(path):
+    """the stage folder of a wap/ file: a folder of wap/core/ or of wap/"""
+    return wap_folder(path.removeprefix("wap/").removeprefix("core/"))
+
+
+def wap_layer(path):
+    """the layer of a wap/ file: its folder of wap/"""
+    return wap_folder(path.removeprefix("wap/"))
+
+
+def comment_or_blank_lines(content):
+    return sum(1 for line in content.splitlines() if not line.strip() or line.lstrip().startswith(WAP_COMMENT_STARTS))
+
+
+def wap_folders(sizes, field, weight=lambda lines: lines):
+    """the folders a field of the sizes names (stages, layers), the largest at the tip first, "other" last"""
+    named = {folder for row in sizes for folder in row[field]} - {WAP_OTHER}
+    return sorted(named, key=lambda folder: -weight(sizes[-1][field][folder]) if folder in sizes[-1][field] else 0) + [WAP_OTHER]
 
 
 def wap_extracted(kind):
@@ -292,13 +322,9 @@ def census_due(censuses, tree):
     return not (censuses and censuses[-1]["tree"] == tree or census_job_running())
 
 
-def wap_hello():
+def wap_hello(folder, wap1):
     """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed, measured by wap1: the wap
     compiler built, wap1 compiling wap's compiler (milestone 2's self-compile); hello, wap1 compiling hello and that run."""
-    folder = wap_extracted("hello")
-    wap1 = wap1_of(folder)
-    if not wap1:
-        return None
     source, module, built = (os.path.join(folder, name) for name in ("hello.wap", "hello.wasm", "wap.wasm"))
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
@@ -310,9 +336,24 @@ def wap_hello():
             "hello": [round(compiled[i] + run[i], 2) for i in (0, 1)]}
 
 
+def wap_nodes(folder, wap1):
+    """wap's nodes per layer ({"nodes": …}), by WAP_SIZE compiled by wap1 and run on each wap/*.wap file of <folder>; None when it fails"""
+    measure, files = os.path.join(folder, "size.wasm"), sorted(os.path.relpath(path, folder) for path in glob.glob(os.path.join(folder, "wap/**/*.wap"), recursive=True))
+    environment = {**os.environ, "WARP_WINDOW": "0"}
+    built = subprocess.run([WARP, wap1, WAP_SIZE, measure], capture_output=True, text=True, cwd=folder, env=environment)
+    run = built.returncode == 0 and subprocess.run([WARP, measure, *files], capture_output=True, text=True, cwd=folder, env=environment)
+    if not run or run.returncode != 0:
+        print(f"vitals: {WAP_SIZE} failed: {((run or built).stdout + (run or built).stderr).strip()[-300:]}", file=sys.stderr)
+        return None
+    nodes = collections.Counter()
+    for path, count in (line.split("\t") for line in run.stdout.splitlines() if line.startswith("wap/")):
+        nodes[wap_layer(path)] += int(count)
+    return {"nodes": dict(nodes)}
+
+
 def wap_road():
-    """wap's snapshots: the newest census (taken by the detached census job, started here when due), hello by wap measured here
-    when wap/ changed since its last snapshot, and the summary of each run of all wap's tests."""
+    """wap's snapshots: the newest census (taken by the detached census job, started here when due), hello by wap and its
+    nodes per layer measured here when wap/ changed since their last snapshot, and the summary of each run of all wap's tests."""
     snapshots, tree = read_snapshots(WAP_SNAPSHOTS), wap_tree()
     if census_due([s for s in snapshots if s["kind"] == "census"], tree):
         with open(WAP_CENSUS_LOG, "w") as log:
@@ -320,9 +361,13 @@ def wap_road():
                                    stderr=subprocess.STDOUT, start_new_session=True)
         with open(WAP_CENSUS_PID, "w") as pid:
             pid.write(str(job.pid))
-    if not any(s["kind"] == "hello" and s["tree"] == tree for s in snapshots) and (measured := wap_hello()):
-        snapshots.append({"kind": "hello", "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
-        append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
+    measures = {"hello": wap_hello, "size": wap_nodes}  # each measured by wap1 in one extracted tip when wap/ changed
+    due = [kind for kind in measures if not any(s["kind"] == kind and s["tree"] == tree for s in snapshots)]
+    wap1 = due and wap1_of(folder := wap_extracted("hello"))
+    for kind in due if wap1 else []:
+        if measured := measures[kind](folder, wap1):
+            snapshots.append({"kind": kind, "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
+            append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
     summary = max((path for pattern in WAP_TESTS_SUMMARIES for path in glob.glob(pattern)), key=os.path.getmtime, default=None)
     if not summary:
         print(f"vitals: no run of all wap tests has written its summary ({', '.join(WAP_TESTS_SUMMARIES)}): the wap tests panel keeps its last count", file=sys.stderr)
@@ -336,7 +381,7 @@ def wap_road():
 
 def wap_track():
     sizes, over = wap_sizes()
-    return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": wap_stages(sizes),
+    return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": wap_folders(sizes, 3), "layers": wap_folders(sizes, 6, sum),
             "snapshots": wap_road(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
 
 

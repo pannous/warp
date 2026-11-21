@@ -106,7 +106,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section id="wap-section">
     <h2>wap, the new compiler</h2>
-    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); measured by wap1, wap/ compiled by wap's seed (since 2026-11-20; before, old warp ran wap's source): the wap compiler built (wap1 compiling wap's compiler), hello by wap and both together; and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
+    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none, measured since 2026-11-21), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); measured by wap1, wap/ compiled by wap's seed (since 2026-11-20; before, old warp ran wap's source): the wap compiler built (wap1 compiling wap's compiler), hello by wap and both together; and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
     <div class="table-wrap"><table id="wap-blockers"></table></div>
   </section>
@@ -306,16 +306,16 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
 // wap, the new compiler (pannous/wap): its size beside the core's, the road to self-build, its tests, hello by wap, its
 // files over the line limit
 (function wap() {
-  const { sizes, over, limit, stages, snapshots } = DATA.wap, holder = document.getElementById("wap");
-  const censuses = snapshots.filter(s => s.kind === "census"), tests = snapshots.filter(s => s.kind === "tests");
+  const { sizes, over, limit, stages, layers, snapshots } = DATA.wap, holder = document.getElementById("wap");
+  const censuses = snapshots.filter(s => s.kind === "census"), nodeSizes = snapshots.filter(s => s.kind === "size"), tests = snapshots.filter(s => s.kind === "tests");
   const pointsOf = (list, ...fields) => list.filter(s => fields.every(f => typeof s[f] === "number")).map(s => [s.time, s.commit, ...fields.map(f => s[f])]);  // a snapshot from before a field was measured has no point
   const noMeasurement = label => { holder.insertAdjacentHTML("beforeend", `<div class="tier"><div class="label">${label}</div><div class="empty">no measurement yet</div></div>`); };
   const note = (point, extra = "") => `${point[1]} · ${point[0]}${extra}`;
-  // sizes: [date, commit, total, per stage, core, files over the limit]
-  const TOTAL = 2, CORE = 4, OVER = 5, EXTENSIONS = 6, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+  // sizes: [date, commit, total, per stage, core, files over the limit, [code, comment or blank] lines per layer]
+  const TOTAL = 2, CORE = 4, OVER = 5, LAYERS = 6, EXTENSIONS = 7, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
   if (sizes.length) {
     const latest = sizes[sizes.length - 1], describeSize = p => `${p[0]} · ${p[1]} · wap ${format(p[TOTAL])} lines (` + stages.map(name => `${name} ${p[3][name] || 0}`).join(", ") + `) · core ${format(p[CORE])}`;
-    const withExtensions = sizes.map(p => [...p, p[3].extensions || 0]);  // wap/extensions/ is watched against extension sprawl
+    const withExtensions = sizes.map(p => [...p, p[3].extensions || 0]);  // wap/extensions/ (appended, EXTENSIONS) is watched against extension sprawl
     trendPanel(holder, { label: "wap source lines beside the core", value: `${format(latest[TOTAL])} of core's ${format(latest[CORE])}`, note: note(latest, ` · ${percent(sizes[0][TOTAL], latest[TOTAL])} since ${shortDay(sizes[0][0].slice(0, 10))}`),
       lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3" }, { name: "core/ without extensions", points: sizes, index: CORE, color: "--s1" }, { name: "wap/extensions/", points: withExtensions, index: EXTENSIONS, color: "--s2" }], describe: describeSize });
     const byStage = stages.map((name, i) => ({ name, points: sizes.map(p => [p[0], p[1], p[3][name] || 0]), index: 2, color: STAGE_COLORS[i % STAGE_COLORS.length] }));
@@ -323,6 +323,20 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
     trendPanel(holder, { label: `wap files over ${limit} lines`, value: String(latest[OVER]), note: note(latest, over.length ? " · " + over.map(([path, n]) => `${path.replace(/^wap\//, "")} ${n}`).join(", ") : ""),
       lines: [{ name: "files", points: sizes, index: OVER, color: "--s2" }], describe: p => `${p[0]} · ${p[1]} · ${p[OVER]} files over ${limit} lines` });
   } else noMeasurement("wap source lines");
+  // each layer (a folder of wap/) in three panels, one color throughout: its nodes, which comments never count, beside its
+  // code lines and its comment or blank lines, so comments growing show on their own (user 2026-11-21)
+  const layerColor = i => STAGE_COLORS[i % STAGE_COLORS.length], latestLayers = sizes.length ? sizes[sizes.length - 1][LAYERS] : {};
+  const layerPanel = (label, unit, linesOf, latestOf) => trendPanel(holder, { label, value: `${format(layers.reduce((sum, name) => sum + latestOf(name), 0))} ${unit}`,
+    note: layers.map(name => `${name} ${format(latestOf(name))}`).join(", "), lines: layers.map((name, i) => ({ name, points: linesOf(name), index: 2, color: layerColor(i) })),
+    describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${format(p[2])} ${unit}` });
+  if (nodeSizes.length) {
+    const latest = nodeSizes[nodeSizes.length - 1];
+    layerPanel("wap nodes by layer", "nodes", name => nodeSizes.map(s => [s.time, s.commit, s.nodes[name] || 0]), name => latest.nodes[name] || 0);
+  } else noMeasurement("wap nodes by layer");
+  if (sizes.length) {
+    [["wap code lines by layer", "code lines", 0], ["wap comment and blank lines by layer", "comment or blank lines", 1]].forEach(([label, unit, part]) =>
+      layerPanel(label, unit, name => sizes.map(p => [p[0], p[1], (p[LAYERS][name] || [0, 0])[part]]), name => (latestLayers[name] || [0, 0])[part]));
+  }
   if (censuses.length) {
     const latest = censuses[censuses.length - 1], census = (...fields) => pointsOf(censuses, ...fields);
     const describeCensus = p => `${p[0]} · ${p[1]} · ${p.slice(2).join(" / ")}`;
