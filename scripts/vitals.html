@@ -311,11 +311,12 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   const noMeasurement = label => { holder.insertAdjacentHTML("beforeend", `<div class="tier"><div class="label">${label}</div><div class="empty">no measurement yet</div></div>`); };
   const note = (point, extra = "") => `${point[1]} · ${point[0]}${extra}`;
   // sizes: [date, commit, total, per stage, core, files over the limit]
-  const TOTAL = 2, CORE = 4, OVER = 5, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+  const TOTAL = 2, CORE = 4, OVER = 5, EXTENSIONS = 6, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
   if (sizes.length) {
     const latest = sizes[sizes.length - 1], describeSize = p => `${p[0]} · ${p[1]} · wap ${format(p[TOTAL])} lines (` + stages.map(name => `${name} ${p[3][name] || 0}`).join(", ") + `) · core ${format(p[CORE])}`;
+    const withExtensions = sizes.map(p => [...p, p[3].extensions || 0]);  // wap/extensions/ is watched against extension sprawl
     trendPanel(holder, { label: "wap source lines beside the core", value: `${format(latest[TOTAL])} of core's ${format(latest[CORE])}`, note: note(latest, ` · ${percent(sizes[0][TOTAL], latest[TOTAL])} since ${shortDay(sizes[0][0].slice(0, 10))}`),
-      lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3" }, { name: "core/ without extensions", points: sizes, index: CORE, color: "--s1" }], describe: describeSize });
+      lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3" }, { name: "core/ without extensions", points: sizes, index: CORE, color: "--s1" }, { name: "wap/extensions/", points: withExtensions, index: EXTENSIONS, color: "--s2" }], describe: describeSize });
     const byStage = stages.map((name, i) => ({ name, points: sizes.map(p => [p[0], p[1], p[3][name] || 0]), index: 2, color: STAGE_COLORS[i % STAGE_COLORS.length] }));
     trendPanel(holder, { label: "wap source lines by stage folder", value: `${format(latest[TOTAL])} lines`, note: note(latest, " · " + stages.map(name => `${name} ${latest[3][name] || 0}`).join(", ")), lines: byStage, describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${p[2]} lines` });
     trendPanel(holder, { label: `wap files over ${limit} lines`, value: String(latest[OVER]), note: note(latest, over.length ? " · " + over.map(([path, n]) => `${path.replace(/^wap\//, "")} ${n}`).join(", ") : ""),
