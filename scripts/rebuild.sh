@@ -26,7 +26,6 @@
 set -uo pipefail
 STEPS=(seed optimize runtime modules)  # core/native/warp.warp rebuilt, in order
 COMPILER_PARTS=("" .driver.cwasm .driver.cwasm.key .driver.build.cwasm .driver.build.cwasm.key)  # a compiler file, then its machine code
-WARMING_PROGRAM=samples/hello/hello.warp  # run once before a measured self build (compiler_warmed)
 SHOWN_LINES=60  # of a failed step's output, printed before its log's path
 ERROR_LINE='[Ee]rror|refus|trap|panic|is missing|failed'  # the line of a longer failed step's output printed first
 check= force= which=pure tree=
@@ -42,6 +41,7 @@ tree=$(cd "${tree:-$(git rev-parse --show-toplevel)}" && pwd) || exit 1
 scripts=$(cd "$(dirname "$0")" && pwd)
 lib=$tree/lib compilers=$tree/lib
 source "$scripts/lib/platform.sh"
+WARMING_PROGRAM=$HELLO_PROGRAM  # run once before a measured self build (compiler_warmed)
 checkouts_linked "$tree" || exit 1
 source "$scripts/lib/modules.sh"
 packages_linked "$tree"

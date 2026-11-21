@@ -90,7 +90,7 @@ for name in $STAGES; do
 done
 [ -n "$chosen" ] || { echo "refresh-seed: no stage compiled itself once more (WARP_SEED_STAGES: $STAGES); the seed stays" >&2; exit 1; }
 # and the chosen stage runs a program (decision no-fixpoint): the last rebuild, by the chosen stage, runs hello
-hello=$(cd "$tree" && "$warp" samples/hello/hello.warp 2>&1)
+hello=$(cd "$tree" && "$warp" $HELLO_PROGRAM 2>&1)
 echo "$hello" | grep -q Hello || { echo "refresh-seed: $(basename "$chosen" .wasm) runs no hello ($(echo "$hello" | tail -1 | cut -c1-200)); the seed stays" >&2; exit 1; }
 echo "refresh-seed: NEW SEED $(basename "$chosen" .wasm) $(wc -c <"$chosen" | tr -d ' ') B sha256 $(shasum -a 256 "$chosen" | cut -d' ' -f1)"
 # a seed is what every `warp rebuild` runs: one that builds warp.wasm clearly slower than the seed it replaces is no

@@ -83,7 +83,7 @@ else echo "gate: no warp-self.wasm: self lane skipped (scripts/promote-self.sh p
 if wants 0; then
 	t0=$(date +%s) ok=1
 	for lane in $lanes; do
-		got=$(timeout 300 "$warp" --no-hints $lane samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+		got=$(timeout 300 "$warp" --no-hints $lane $HELLO_PROGRAM 2>&1 | without_runtime_noise | tail -1)
 		[[ $got == *Hello* ]] || { echo "FAIL $lane hello: got ${got:0:160}"; red 0; }
 	done
 	echo "tier 0 (rebuild + hello, $lanes): $( ((ok)) && echo ok || echo RED) $(since $t0)"

@@ -51,7 +51,7 @@ base=$(git -C "$tree" rev-parse HEAD)
 tier0() {
 	"$scripts/rebuild.sh" pure "$tree" || { failure="rebuild pure failed"; return 1; }
 	local got
-	got=$(cd "$tree" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" pure samples/hello/hello.warp 2>&1 | tail -1)
+	got=$(cd "$tree" && WARP_WINDOW=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" pure $HELLO_PROGRAM 2>&1 | tail -1)
 	[[ $got == *$EXPECTED* ]] || { failure="pure hello got ${got:0:160}"; return 1; }
 	got=$(cd "$tree" && WARP_WINDOW=0 WARP_SOUND=0 timeout 300 "$MAIN_WARP" --lib "$tree/lib" test "$TEST_PROBE" 2>&1 | tail -1)
 	[[ $got == ✓* ]] || { failure="warp test $TEST_PROBE got ${got:0:160}"; return 1; }

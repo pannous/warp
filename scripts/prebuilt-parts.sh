@@ -6,7 +6,8 @@
 # read-only). after-push.sh runs it before the
 # link switches, packaging/native_dist.sh before the tarball.
 set -uo pipefail
-HELLO=$(cd "$(dirname "$0")/.." && pwd)/samples/hello/hello.warp
+source "$(dirname "$0")/lib/platform.sh"
+HELLO=$(cd "$(dirname "$0")/.." && pwd)/$HELLO_PROGRAM
 FUEL=1000000  # the steps of a run counting them, `warp fuel`, whose engine makes machine code of its own
 folder=$(cd "${1:?usage: prebuilt-parts.sh <folder>}" && pwd) || exit 2
 probe=$(mktemp -d "${TMPDIR:-/tmp}/prebuilt-parts.XXXXXX") || exit 1

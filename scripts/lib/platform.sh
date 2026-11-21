@@ -44,6 +44,9 @@ launcher_of() {
 }
 # the main checkout and the compiler store (scripts/rebuild.sh)
 warp_main_checkout=${WARP_MAIN_CHECKOUT:-$HOME/dev/angles/warp}
+# the greeting every smoke, build and install check runs, relative to a tree: tracked in warp, so no linked checkout
+# (samples/) has to be there
+HELLO_PROGRAM=test/gate/hello.warp
 # packages_linked <tree>: a worktree's packages/ the main checkout's, which git ignores, so a cowtree worktree has none
 # and its package tests fail (card worktree-packages-link; scripts/link-packages.sh fills the main checkout's)
 packages_linked() {

@@ -62,7 +62,7 @@ tree_options=(--lib $worktree/lib --no-hints)
 # warp.wasm once it compiles itself, self_lane below); a lib/ that passed self alone broke main's `warp rebuild pure`
 # twice on 2026-10-22
 check_lane() {
-  said=$($warp $tree_options $1 samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+  said=$($warp $tree_options $1 $HELLO_PROGRAM 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { verdict="SELF CHECK RED: warp $1 hello said: $said"; return 1; }
   verdict="SELF CHECK ok: $said"
 }
@@ -135,7 +135,7 @@ stage_two() {
   cat $log.runtime >>$log
   [[ $built == 0 && -s $stage/runtime.wasm ]] && ! grep -q Error $log.runtime ||
     { stage_two_failed "stage 2 (compiler.warp built by warp.wasm) does not build runtime.wasm"; return 1; }
-  said=$($native --lib $stage samples/hello/hello.warp 2>&1 | without_runtime_noise | tail -1)
+  said=$($native --lib $stage $HELLO_PROGRAM 2>&1 | without_runtime_noise | tail -1)
   [[ $said == *$expected* ]] || { print -r -- "hello said: $said" >>$log; stage_two_failed "stage 2's hello said: $said"; return 1; }
   mkdir -p ${record:h} && mv $log $measured/build.log && { [[ -d $record.record ]] || mv $measured $record.record }
   print -r -- "$hash commit=$(git -C $worktree rev-parse --short HEAD) passed=$(date '+%Y-%m-%dT%H:%M:%S%z')" >$record.passed

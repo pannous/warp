@@ -52,7 +52,7 @@ STORE = os.environ.get("WARP_STORE", "/Volumes/Build/compilers")  # build record
 # record's own warp.wasm, run once, so its records are alike)
 BUILDS = [("warp.wasm, built by the seed", "warp.record", True),
           ("self-compile: warp.wasm compiles itself", "warp-self.record", False)]
-HELLO = "samples/hello/hello.warp"
+HELLO = "test/gate/hello.warp"  # scripts/lib/platform.sh HELLO_PROGRAM
 HELLO_RUNS = 3  # the cheapest of these runs counts: instructions and wall time only ever gain from the machine's load
 # the startup a compile shares, warp.wasm loaded and started (notes/hello_startup.md): hello minus it is the compile
 STARTUP = ["version"]
