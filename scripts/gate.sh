@@ -127,13 +127,13 @@ if wants 1; then
 	((ok)) || red 1
 fi
 
-from=$(git merge-base "$base" HEAD 2>/dev/null)
 # `warp test` held machine-wide while this file exists, its text the reason (the runner killed garbage pids)
 TEST_HOLD=$HOME/.cache/warp/warp-test-held
 if wants 2 && [ -f "$TEST_HOLD" ]; then echo "tier 2 held: $(cat "$TEST_HOLD") (remove $TEST_HOLD to run it)"
 elif wants 2; then
 	t2=$(date +%s)
-	files=$(git diff --name-only --diff-filter=AMR "$from" HEAD -- 'test/*.warp' 2>/dev/null)
+	from=$(git merge-base "$base" HEAD) || { echo "gate: no merge base of $base and HEAD, so no changed tests to name"; red 2; }
+	files=$(git diff --name-only --diff-filter=AMR "$from" HEAD -- 'test/*.warp')
 	if [[ -z $files ]]; then echo "tier 2 (pure warp test of the changed tests): none changed since $base"
 	else
 		targets=$files; ((folders)) && targets=$(dirname $files | sort -u)
@@ -143,11 +143,11 @@ elif wants 2; then
 		# red: a line the baseline had ✓ that fails now, or a line this change wrote that fails; a line red before the
 		# change is a known red, counted, never the gate's failure (a touched file's old reds kept tier 2 red for days)
 		failing=$(grep -oE '^✗ [^ ]+:[0-9]+' "$logs/tests.log" | sed 's/^✗ //' | sort -u)
-		regressions=$("$(dirname "$0")/baseline.sh" --regressions "$logs/tests.log" 2>/dev/null | grep -oE '^[^ ]+:[0-9]+' | sort -u)
+		regressions=$("$(dirname "$0")/baseline.sh" --regressions "$logs/tests.log" 2>>"$logs/baseline.log" | grep -oE '^[^ ]+:[0-9]+' | sort -u)
 		# a written line the baseline had red already stays a known red: at its place (an expectation edited, still
 		# failing), or as the same case anywhere in the baseline (a case moved to another file: joined files, 11-11)
-		red_places=$("$(dirname "$0")/baseline.sh" $files 2>/dev/null | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
-		red_cases=$("$(dirname "$0")/baseline.sh" test 2>/dev/null | grep '^✗' | case_text | sort -u)
+		red_places=$("$(dirname "$0")/baseline.sh" $files 2>>"$logs/baseline.log" | grep -oE '^✗ [^ ]+:[0-9]+' | sed 's/^✗ //' | sort -u)
+		red_cases=$("$(dirname "$0")/baseline.sh" test 2>>"$logs/baseline.log" | grep '^✗' | case_text | sort -u)
 		new_reds=$(comm -12 <(echo "$failing") <(written_lines $files) | comm -23 - <(echo "$red_places") | while read -r place; do
 			grep -m1 -F "✗ $place " "$logs/tests.log" | case_text | grep -qxF -f <(echo "$red_cases") || echo "$place"
 		done)
