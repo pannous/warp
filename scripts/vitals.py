@@ -306,13 +306,16 @@ def census_job_running():
 
 
 def wap_census_job():
-    """`vitals.py --census`, started detached by the hourly run: the census of main's tip, its snapshot appended when it ends"""
+    """`vitals.py --census`, started detached by the hourly run: the census of main's tip, its snapshot appended when it ends;
+    then the nodes of the commits not measured yet"""
     try:
         folder = wap_extracted("census")
         files = sorted(f for f in git("ls-tree", "-r", "--name-only", WAP_TIP, "wap", repository=WAP_CHECKOUT).splitlines() if f.endswith(".wap"))
         census = wap_census(folder, files)
         append_snapshot(WAP_SNAPSHOTS, {"kind": "census", "time": datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
                                          "commit": WAP_TIP[:10], "tree": wap_tree(), **census})
+        if wap1 := wap1_of(folder):
+            wap_nodes_history(folder, wap1)
     finally:
         os.remove(WAP_CENSUS_PID)
 
@@ -336,19 +339,53 @@ def wap_hello(folder, wap1):
             "hello": [round(compiled[i] + run[i], 2) for i in (0, 1)]}
 
 
-def wap_nodes(folder, wap1):
-    """wap's nodes per layer ({"nodes": …}), by WAP_SIZE compiled by wap1 and run on each wap/*.wap file of <folder>; None when it fails"""
-    measure, files = os.path.join(folder, "size.wasm"), sorted(os.path.relpath(path, folder) for path in glob.glob(os.path.join(folder, "wap/**/*.wap"), recursive=True))
-    environment = {**os.environ, "WARP_WINDOW": "0"}
-    built = subprocess.run([WARP, wap1, WAP_SIZE, measure], capture_output=True, text=True, cwd=folder, env=environment)
-    run = built.returncode == 0 and subprocess.run([WARP, measure, *files], capture_output=True, text=True, cwd=folder, env=environment)
-    if not run or run.returncode != 0:
-        print(f"vitals: {WAP_SIZE} failed: {((run or built).stdout + (run or built).stderr).strip()[-300:]}", file=sys.stderr)
+def wap_run(arguments, folder):
+    """`warp <arguments>` in <folder>, its output; None when it fails (its error printed)"""
+    run = subprocess.run([WARP, *arguments], capture_output=True, text=True, cwd=folder, env={**os.environ, "WARP_WINDOW": "0"})
+    if run.returncode != 0:
+        print(f"vitals: warp {' '.join(arguments)[:200]} failed in {folder}: {(run.stdout + run.stderr).strip()[-300:]}", file=sys.stderr)
+        return None
+    return run.stdout
+
+
+def wap_size_measure(folder, wap1):
+    """WAP_SIZE of <folder> compiled by wap1, the module's path; None when it fails"""
+    measure = os.path.join(folder, "size.wasm")
+    return measure if wap_run([wap1, WAP_SIZE, measure], folder) is not None else None
+
+
+def wap_nodes_in(measure, folder):
+    """the nodes per layer ({"nodes": …}) of each wap/*.wap file of <folder>, by the compiled measure; None when it fails"""
+    files = sorted(os.path.relpath(path, folder) for path in glob.glob(os.path.join(folder, "wap/**/*.wap"), recursive=True))
+    output = wap_run([measure, *files], folder)
+    if output is None:
         return None
     nodes = collections.Counter()
-    for path, count in (line.split("\t") for line in run.stdout.splitlines() if line.startswith("wap/")):
+    for path, count in (line.split("\t") for line in output.splitlines() if line.startswith("wap/")):
         nodes[wap_layer(path)] += int(count)
     return {"nodes": dict(nodes)}
+
+
+def wap_nodes(folder, wap1):
+    """wap's nodes per layer at the tip extracted in <folder>"""
+    measure = wap_size_measure(folder, wap1)
+    return measure and wap_nodes_in(measure, folder)
+
+
+def wap_nodes_history(folder, wap1):
+    """the nodes per layer of each commit that changed wap/ and has no size snapshot, by the tip's measure (it reads old
+    sources too), each appended as it is measured: once, so node and line trends cover the same span. A commit whose
+    files the measure fails on is kept with nodes null (its error printed), never measured again."""
+    measured = {s["commit"] for s in read_snapshots(WAP_SNAPSHOTS) if s["kind"] == "size"}
+    measure, past = wap_size_measure(folder, wap1), os.path.join(folder, "data/past")
+    for repository, sha, date in [] if not measure else wap_commits():
+        if sha[:10] in measured:
+            continue
+        shutil.rmtree(past, ignore_errors=True)
+        os.makedirs(past)
+        subprocess.run(f"git -C {repository} archive {sha} wap | tar -x -C {past}", shell=True, check=True)
+        append_snapshot(WAP_SNAPSHOTS, {"kind": "size", "time": date[:16].replace("T", " "), "commit": sha[:10],
+                                        "nodes": (wap_nodes_in(measure, past) or {}).get("nodes")})
 
 
 def wap_road():
@@ -362,7 +399,7 @@ def wap_road():
         with open(WAP_CENSUS_PID, "w") as pid:
             pid.write(str(job.pid))
     measures = {"hello": wap_hello, "size": wap_nodes}  # each measured by wap1 in one extracted tip when wap/ changed
-    due = [kind for kind in measures if not any(s["kind"] == kind and s["tree"] == tree for s in snapshots)]
+    due = [kind for kind in measures if not any(s["kind"] == kind and s.get("tree") == tree for s in snapshots)]
     wap1 = due and wap1_of(folder := wap_extracted("hello"))
     for kind in due if wap1 else []:
         if measured := measures[kind](folder, wap1):
