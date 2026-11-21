@@ -361,7 +361,7 @@ console(compiler: text) as nothing := {
 line_compiled(compiler: text, folder: text, line: text, module: text) as bool := {
 	said = joined(folder, "/compile.out")
 	given = words(compiler, "repl-step", folder, line, module, joined(library_folder(), "/runtime.wasm"))
-	failure = run_into(read_file(compiler), given, machine_code_file(compiler, RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, said)
+	failure = run_into(read_file(compiler), given, machine_code_file(compiler, RUN_GC_HEAP_BYTES), RUN_GC_HEAP_BYTES, said, compiler)
 	output = read_file(said)
 	unlink(said)
 	fd_write(STDOUT, output, 1, allocate(4))
