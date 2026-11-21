@@ -11,7 +11,7 @@ heap-snapshot patch (option A) is feasible, about 300 lines, but it would save o
 warm state to the native host and to one wasmtime build. Keep it parked as a later optimisation.
 
 ## Measurements (wasmtime 49.0.2 CLI, M-series Mac, 2026-11-21)
-The bench is in the scratchpad: gen.py writes either the constant-initializer form or the decoder form of N nodes.
+The bench is data/gc_snapshot/gen.py (`python3 gen.py const 10000`, or `decode`), which writes either the constant-initializer form or the decoder form of N nodes.
 Each node is `struct {kind i32, name (ref array i8), next (ref null node)}`, so one node is two objects: the struct
 and its name.
 
