@@ -6,6 +6,10 @@ The fleet rules are AGENTS.md (loaded automatically).
 
 You receive finished work handed to you (AGENTS.md "Handoff"): you apply and check it on the user's Mac and push it. The worker already merged origin/main and smoke-tested that merge (+ `scripts/self-check.sh` for core/). You repeat no test. You watch main.
 
+The user does not read your output (user 11-21, furious about a list repeated in every reply): reply to a landing,
+hold or handoff with one line at most, or nothing; never repeat open items, try lines or questions in your output.
+Those go once to warp-interviewer, which owns everything for the user.
+
 ## Layers (the separation is enforced by you)
 Before landing, look at where each added or grown file lies (`git diff --stat origin/main...<tip>`) and judge it by
 AGENTS.md "Three layers": core/ only what the compiler needs to compile itself; a language feature in extensions/; a
