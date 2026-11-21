@@ -10,6 +10,13 @@ host, its machine code does not grow with the number of objects, and it builds 5
 heap-snapshot patch (option A) is feasible, about 300 lines, but it would save only those ~4 ms. It would also tie the
 warm state to the native host and to one wasmtime build. Keep it parked as a later optimisation.
 
+**Update, same day, measured on the real prepared state:**
+- The bytes should be "packed warp", the universal binary spelling of a Node (section E).
+- Its back-references for repeated texts and repeated subtrees bring the state to ~370 KB.
+- Today's cold preparation takes ~245 ms; unpacking takes ~27 ms, or less with sharing.
+- Plain warp text (option D) loses badly: it is 5.9 MB and wap's reader is quadratic. Even the 59 KB code-only form,
+  which has no facts, reads slower than the cold preparation it would replace.
+
 ## Measurements (wasmtime 49.0.2 CLI, M-series Mac, 2026-11-21)
 The bench is data/gc_snapshot/gen.py (`python3 gen.py const 10000`, or `decode`), which writes either the constant-initializer form or the decoder form of N nodes.
 Each node is `struct {kind i32, name (ref array i8), next (ref null node)}`, so one node is two objects: the struct
@@ -115,6 +122,101 @@ expose struct or array access anyway.
 - **Risk:** low. Plain wasm, every host, any collector. The format is versioned by the compiler hash that the program
   cache already uses.
 
+## D: the prepared state as plain warp text (user's option)
+**Idea:** warp is a data format, so the compiler could store its prepared state as Node notation. At start it would
+only read that file and take the nodes as its tables, skipping the analysis of types/ and the rules.
+
+**Measured with probes compiled by the wap seed and run with `warp --no-window`** (data/gc_snapshot/probe.wap,
+probe2.wap, readtime.wap):
+- **The state, as nodes:**
+  - the shape, declared and typed rules (template and written node of each);
+  - the declared types module;
+  - the library's bound statements (library_code_of).
+- **Size:** 424 151 nodes. Only 2 of them are `Data(any)`, so Nodes can express the state completely.
+- **Facts:** 48 306 nodes are Meta, carrying facts. The biggest fact is `file: "…"`, repeated 48 286 times; then come
+  `definer` 3 273, `derived` 2 779, `rule` 2 449 and `comment` 2 025.
+- **What this does not cover:** class state (Rule matchers, Signatures, Scope maps). It would be rebuilt from the
+  nodes, or packed per class (open).
+- **Pitfall:** a `match` on a Node is transparent to Meta (a `Key(…)` arm matches `Meta(Key …)`). A walker that keeps
+  facts must put its `Meta` arm first; the first probe lost every fact that way.
+
+| step | time | size |
+|---|---|---|
+| cold preparation today: rules 38–70 ms + types declared 116–200 ms + library bound 82–290 ms | **≈ 245 ms** (median runs) | – |
+| dump as warp text, constructor notation with every fact (`m(k(s("x"), ":", 1), l("[", ", ", [3, 7, k(s("file"), ":", "…")]))`) | 846 ms to write | **5.9 MB** |
+| the same without facts (no `m(`) | – | 336 KB |
+| read the 336 KB dump back with wap's reader | **52.8 s** | – |
+| read samples of it: 20 KB / 40 KB / 80 KB / 166 KB | 0.13 / 0.53 / 2.6 / 12.8 s, quadratic | – |
+| the library printed by the existing printer (`code(n)`, no facts), read and operated | 391 ms | 59 KB |
+| packed binary (section E, probe2.wap), written / read | 62–80 ms / **26–27 ms** | 1.15 MB |
+
+- **Verdict:** text cannot win. Even the code-only form, which drops every fact and so the analysis the state was
+  meant to keep, takes longer to read (391 ms) than the whole cold preparation (245 ms).
+- **Why the reader is slow:**
+  - It is quadratic in input length; noted on card wap-parsing as reader-quadratic. Suspects are list `+=` in loops
+    in core/parse/cascade.wap, which copies, and each nesting level scanning its tokens again.
+  - Even at its best linear rate, ~1.5 ms/KB on source, the 5.9 MB state would take ~9 s.
+- **Core cost if it were wanted:**
+  - a fact-keeping printer, ~15 lines;
+  - a decoder from the read notation back to Nodes (constructor calls to variants), ~40 lines;
+  - the reader made linear (its own card).
+- **What it is good for:** text is the readable form, for debugging the state. It is not the load path.
+
+## E: one universal binary form of warp ("packed warp")
+Every warp value is a Node, so one Node-shaped binary form serves the compiler state, files, IPC and the host boundary
+alike. The same real state as above, encoded by data/gc_snapshot/formats.py:
+
+| form | bytes | notes |
+|---|---|---|
+| warp text, constructor notation | 5 876 724 | needs the reader |
+| pickle (protocol 5) | 5 852 786 | Python-only opcode VM; GLOBAL/REDUCE run arbitrary callables on load ("never unpickle untrusted data"); its memo shares by object identity, so equal texts are not even shared |
+| MessagePack, node = `[kind, …]` | 4 259 572 | no tags, no big ints, no sharing; ext types are opaque bytes, awkward for trees |
+| CBOR (RFC 8949), custom tags 3 B (first-come range) | 4 648 918 | standard, self-describing |
+| CBOR, tags 2 B (would need registering in 24..255) | 4 474 273 | |
+| CBOR + stringref (tags 256/25) | 1 882 391 | |
+| CBOR + stringref + value sharing (tags 28/29) | 561 826 | registered extension tags |
+| **A: tag byte per variant + varints + text back-refs** (= probe2.wap, measured in wap) | 1 052 402 | in wap 1.15 MB (one sign byte per int); unpack 26–27 ms for 424k nodes (~65 ns a node) |
+| **A + subtree back-refs** (an equal Key/List/Meta written once, then by its place) | **366 685** | fewer allocations too: shared immutable nodes |
+
+**Judgement:**
+- **pickle does not apply.** It is a Python-specific stack machine whose load runs code, which is the opposite of
+  warp's "data, no code". It is also the largest form here. Its one good idea, a memo of shared objects, is what
+  back-references give, safely.
+- **MessagePack** is CBOR with fewer features (no tags, big ints or sharing), and Node does not fit it well.
+- **CBOR** is the honest standard candidate. It maps warp well:
+  - true/false/null as simple values;
+  - int and bignum (tags 2/3), float, text, bytes, array;
+  - Symbol as tag 39 (identifier);
+  - tags for Key, List shape, Meta, Type, Error and Char.
+  It also has tooling: cbor.me diagnostic notation, and libraries in every language. Its costs:
+  - ~1.5× the bytes of A with all extensions on, 12× without;
+  - 2–3-byte custom tags unless registered;
+  - a codec that is general rather than Node-shaped: ~150–170 lines (major types, half/single/double floats,
+    bignums, stringref, sharing) plus a ~50-line Node mapping.
+- **warp's packed_nodes.warp** is form A's ancestor: shape + kind varints, text back-refs and Meta line/column. Its
+  varints carry 6 bits per byte so that the packed text stays UTF-8, which costs ~15%. It has no subtree sharing and
+  fails on class instances.
+
+**Recommendation:** form A with subtree back-refs is wap's one packed warp, for every warp value and not only the
+compiler state.
+- **Format:**
+  - one tag byte per Node variant;
+  - LEB128 varints;
+  - a sign byte or zigzag for ints, with the edge of the int range handled;
+  - float bits;
+  - texts once, then by place;
+  - a subtree seen before by its place.
+- **Why:** it is the smallest (367 KB) and the fastest to load. It runs no code on load and has no schema beyond Node
+  itself, so warp text and packed warp are one notation in two spellings.
+- **Core cost:** ~100 lines of plain wap; probe2.wap's pack and unpack are 116 lines unsquashed.
+  - Subtree sharing adds ~15 lines: write a subtree, look its bytes up in a `map<text, int>`, and on a hit roll back
+    and write the reference.
+  - The enum cases (Op, Bracket, Separator) need a code↔case table: ~10 lines, or nothing once enums get a case list.
+- **CBOR as a bridge:** where interoperability is wanted, a CBOR export/import is a library module, not core,
+  mapping packed nodes to CBOR one to one.
+- **Open:** class instances. A record packs as its Node notation `Name(field: …)`, which needs either field
+  reflection or a per-class codec the emitter writes. This gap is the same for every format.
+
 ## Comparison
 | option | core lines | other code | startup for 50k objects | compile cost | portable | risk |
 |---|---|---|---|---|---|---|
@@ -122,6 +224,8 @@ expose struct or array access anyway.
 | A: wasmtime heap image | 0 | ~300 Rust lines patch + ~30 C lines | ~0.2 ms | none | native only | rebase per wasmtime upgrade; private internals |
 | C: data segment + decoder | ~80–110 (+~10 emitter) | – | ~4 ms (+~1–2 ms map rebuild) | none | yes | low |
 | C lazy | +~20 | – | proportional to use | none | yes | low |
+| D: warp text, read at start | ~55 + a linear reader | – | 52.8 s at 336 KB without facts; the 5.9 MB with facts out of reach (code-only 59 KB: 391 ms, worse than cold 245 ms) | none | yes | dead on arrival |
+| E: packed warp (= C's bytes), measured | ~100 (+15 sharing) | – | 27 ms for the real state (424k nodes), less with sharing | none | yes | low |
 
 Build C now. Revisit A only if the ~4 ms ever shows up as a large share of a warm compile. It can be layered on later
 as a cache of the decoder's result, using the same versioning key.
