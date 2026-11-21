@@ -5,13 +5,15 @@
 # (scripts/lib/platform.sh), and waits for one when all are taken, saying so once
 set -uo pipefail
 RETRY_SECONDS=1
-INTEGRATION_TREES=/Volumes/Worktrees/integrate # its runs may take one more slot, which no other run takes, so a landing never starves
+# the integrator's landing trees, warp's and wap's: their runs may take one more slot, which no other run takes, so a
+# landing never starves (a tree whose name only starts the same, integrate2, is no landing tree)
+INTEGRATION_TREES=(/Volumes/Worktrees/integrate /Volumes/Worktrees/wap-land)
 source "$(dirname "$0")/lib/platform.sh"
 source "$(dirname "$0")/lib/slots.sh"
 [ $# -gt 0 ] || { echo "usage: job-slot.sh <command…>" >&2; exit 2; }
 command -v lockf >/dev/null || exec nice -n 19 "$@"
 slots=$(job_slots)
-[[ "$PWD $*" == *"$INTEGRATION_TREES"* ]] && slots=$((slots + 1))
+for tree in "${INTEGRATION_TREES[@]}"; do [[ " $PWD/ $*/" == *" $tree/"* ]] && { slots=$((slots + 1)); break; }; done
 waited=
 while :; do
 	slot_tried "$warp_store/job-slots" "$slots" nice -n 19 "$@"

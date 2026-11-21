@@ -112,11 +112,11 @@ COST_SINCE=f1de0e5d93  # a record before it counts no instructions of the module
 cost_watched() {
 	local record=$1 hash timing now lowest history
 	history=$state/cost-$record
-	hash=$(cut -d' ' -f1 "$TREE/lib/warp.wasm.inputs" 2>/dev/null) || return
+	hash=$(cut -d' ' -f1 "$TREE/lib/warp.wasm.inputs") || { say "build cost of $record not watched: no inputs hash in $TREE/lib"; return; }
 	timing=$warp_store/$hash/$record/time
 	now=$(awk '/instructions retired/ {print $1}' "$timing" 2>/dev/null)
-	[ -n "$now" ] || return
-	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && return
+	[ -n "$now" ] || { say "build cost of $record not watched: no instruction count in $timing"; return; }
+	grep -q '^commit .*+dirty' "$warp_store/$hash/$record/inputs.txt" 2>/dev/null && { say "build cost of $record not watched: built from a dirty tree"; return; }
 	lowest=$(cost_comparable "$history" | sort -n | head -1)
 	{ echo "$now ${tip:0:10}"; head -n $((COST_HISTORY - 1)) "$history" 2>/dev/null; true; } >"$history.new" && mv "$history.new" "$history"
 	if [ -n "${lowest:-}" ] && [ $((now * 100)) -gt $((lowest * (100 + COST_JUMP_PERCENT))) ]; then

@@ -3,12 +3,15 @@
 # 2026-11-06: lib/units.warp wrote one 35-unit list 12 times). A code line of LONG_LINE+ characters or a literal list
 # of LONG_LIST+ written again in the same file is a repeat: name it once and use the name.
 # --list <files>: every repeat in those files, one a line. Without --report or --list: exit 1 naming both lines when the tree's change (against origin/main) adds a repeat (smoke.sh);
-# repeats already on main never block. --report: every repeat of core/, extensions/ and lib/ into
+# repeats already on main never block. --report: every repeat of REPORTED into
 # data/repeated-code.txt, so each gets a card (after-push.sh)
 set -uo pipefail
 LONG_LINE=60
 LONG_LIST=40
 REPORT=data/repeated-code.txt
+# the source files checked, in warp's tree and in wap's (this script is the same in both); test/ is not checked
+SOURCES=('*.warp' '*.wap')
+REPORTED=('core/*.warp' 'extensions/*.warp' 'lib/*.warp' 'wap/*.wap')
 tree=$(cd "${1:?usage: repeated-code.sh <tree> [--report]}" && pwd) || exit 2
 cd "$tree" || exit 2
 # repeats <file>: "<line>\t<its first line>\t<text>" for each long line, else long list, met before in the file
@@ -26,7 +29,7 @@ repeats() {
 shown() { awk -F'\t' -v file="$1" '{ printf "%s:%d repeats line %d: %s\n", file, $1, $2, substr($3, 1, 100) }'; }
 if [ "${2-}" = --report ]; then
 	mkdir -p "$(dirname "$REPORT")"
-	for file in $(git ls-files 'core/*.warp' 'extensions/*.warp' 'lib/*.warp'); do repeats "$file" | shown "$file"; done >"$REPORT"
+	for file in $(git ls-files "${REPORTED[@]}"); do repeats "$file" | shown "$file"; done >"$REPORT"
 	echo "repeated-code: $(wc -l <"$REPORT" | tr -d ' ') repeats in $tree/$REPORT"
 	exit 0
 fi
@@ -38,7 +41,7 @@ fi
 base=$(git merge-base origin/main HEAD) || exit 2
 # (a test case is a program of its own, which can't name what another case writes: test/ is not checked; a hunk that
 # only deletes adds no line, where `seq 5 4` would count down)
-added=$(for file in $(git diff --name-only "$base" -- '*.warp' ':!test/'); do
+added=$(for file in $(git diff --name-only "$base" -- "${SOURCES[@]}" ':!test/'); do
 	[ -f "$file" ] || continue
 	lines=" $(git diff -U0 "$base" -- "$file" | sed -n 's/^@@ .* +\([0-9]*\)\(,\([0-9]*\)\)\{0,1\} @@.*/\1 \3/p' | while read -r start count; do [ "${count:-1}" -gt 0 ] && seq "$start" $((start + ${count:-1} - 1)); done | tr '\n' ' ')"
 	repeats "$file" | awk -F'\t' -v lines="$lines" 'index(lines, " " $1 " ") || index(lines, " " $2 " ")' | shown "$file"
