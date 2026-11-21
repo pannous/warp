@@ -331,14 +331,14 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   } else noMeasurement("road to self-build");
   if (tests.length) {
     const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
-    trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh, run ${latest.time}`,
+    trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh of all tests, run ${latest.time}`,
       lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
   } else noMeasurement("wap tests");
-  // wap compiling hello: the compiler built by warp (cold), hello by wap (warm), and their sum, the first run after a change
+  // wap compiling hello: the compiler built by warp (cold), hello by wap (warm)
   const timed = snapshots.filter(s => s.kind === "hello");
   if (timed.length) {
-    const latest = timed[timed.length - 1], first = s => [s.time, s.commit, s.build[0] + s.hello[0], s.build[1] + s.hello[1]];
-    const series = [["the wap compiler built by warp, cold", s => [s.time, s.commit, ...s.build]], ["hello by wap, warm", s => [s.time, s.commit, ...s.hello]], ["first run after a change", first]];
+    const latest = timed[timed.length - 1];
+    const series = [["the wap compiler built by warp, cold", s => [s.time, s.commit, ...s.build]], ["hello by wap, warm", s => [s.time, s.commit, ...s.hello]]];
     [[2, "G instructions", "instructions"], [3, "s", "seconds"]].forEach(([index, unit, name]) => series.forEach(([what, point]) => {
       const points = timed.map(point), value = points[points.length - 1][index];
       trendPanel(holder, { label: `${what}: ${name}`, value: `${+value.toFixed(2)} ${unit}`, note: note([latest.commit, latest.time]),

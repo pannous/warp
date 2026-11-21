@@ -72,12 +72,11 @@ WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: 
 # warp's up to the cut, the checkout's after it
 WAP_CHECKOUT = "/Users/me/dev/angles/wap"
 WAP_CUT = "ffcad762e0"
-WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap/ and the census script of wap's tip, extracted to run them: one folder per job
+WAP_TREE = os.path.join(REPO, "data/vitals/wap-tree-%s")  # wap's tip, extracted whole to run it: one folder per job
 WAP_CENSUS = "scripts/wap-census.warp"  # run on each wap/*.wap file
 # what measures wap: wap1, main's wap/ compiled by wap's seed (test/wap/compile.sh, which builds it once per state of
-# wap/ into the folder's data/ and names it), with what compile.sh reads and the census's owners table beside it
+# wap/ into the folder's data/ and names it)
 WAP_COMPILE = "test/wap/compile.sh"
-WAP_EXTRACTED = ["wap", WAP_CENSUS, WAP_COMPILE, "test/native/checks.sh", "notes/agents/wap-owner.md"]
 WAP_MEASURED_BY = "wap1"  # each snapshot says which compiler measured it: old warp ran wap's source before 2026-11-20
 WAP_CENSUS_MODULE = "wap-census.wasm"
 WAP_CENSUS_PID = os.path.join(REPO, "data/vitals/wap-census.pid")
@@ -87,7 +86,9 @@ JOB_SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job-slot.sh
 WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
-WAP_TESTS_SUMMARIES = [os.path.join(tree, "data/wap-tests/summary.txt") for tree in (REPO, "/Volumes/Worktrees/integrate")]  # written by test/wap/run.sh; the integrator runs it on each landing, so its tree has the newest
+# the summary of a run of all wap's tests, which test/wap/run.sh writes beside the summary of any run; in the wap
+# checkout or any worktree, whichever ran last
+WAP_TESTS_SUMMARIES = [os.path.join(WAP_CHECKOUT, "data/wap-tests/full-summary.txt"), "/Volumes/Worktrees/*/data/wap-tests/full-summary.txt"]
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
 CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound(?:, typed: (\w+), emitted: (\w+))?")  # a preload file has no typed/emitted: it is typed by function
 CENSUS_TOTAL = re.compile(r"(\d+) of (\d+) files typed whole, (\d+) of (\d+) functions typed")
@@ -186,15 +187,15 @@ def wap_sizes():
 
 
 def wap_extracted(kind):
-    """wap/ and the census script of wap's tip (its own repository), extracted fresh into the folder of <kind> (the census
-    job and the hello measure run apart, each in its own); its data/ is kept, where compile.sh caches wap1"""
+    """wap's tip (its own repository), extracted whole and fresh into the folder of <kind> (the census job and the hello
+    measure run apart, each in its own); its data/ is kept, where compile.sh caches wap1"""
     folder = WAP_TREE % kind
     os.makedirs(folder, exist_ok=True)
     for name in os.listdir(folder):
         if name != "data":
             path = os.path.join(folder, name)
             shutil.rmtree(path) if os.path.isdir(path) and not os.path.islink(path) else os.remove(path)
-    subprocess.run(f"git -C {WAP_CHECKOUT} archive {WAP_TIP} {' '.join(WAP_EXTRACTED)} | tar -x -C {folder}", shell=True, check=True)
+    subprocess.run(f"git -C {WAP_CHECKOUT} archive {WAP_TIP} | tar -x -C {folder}", shell=True, check=True)
     return folder
 
 
@@ -213,16 +214,15 @@ def wap_census(folder, files):
     """The census (wap's test/wap/ratchet_census.sh) of each of <files> in <folder>, each in a job slot, WAP_CENSUS_JOBS at a time, summed:
     statements, lowered, bound, files typed whole and emitted, functions typed, the files that timed out and those without
     a result, and the WAP_BLOCKERS most frequent refusals [stage, message, count]. The census is compiled once by wap1
-    and run from the folder, where it reads wap/ and notes/."""
+    and run from the folder, where it reads wap/ and notes/. Without wap1 or its census the job ends with the error and
+    records nothing: a census of no file is no measurement."""
     census = os.path.join(folder, WAP_CENSUS_MODULE)
-    wap1 = wap1_of(folder)
-    compiled = wap1 and subprocess.run([JOB_SLOT, WARP, "--no-window", wap1, WAP_CENSUS, census], capture_output=True,
-                                       text=True, cwd=folder, env={**os.environ, "WARP_WINDOW": "0"})
-    if not compiled or compiled.returncode != 0:
-        print(f"vitals: wap1 compiled no census: {(compiled.stdout + compiled.stderr).strip()[-300:] if compiled else ''}", file=sys.stderr)
+    wap1 = wap1_of(folder) or sys.exit("vitals: no census without wap1")
+    compiled = subprocess.run([JOB_SLOT, WARP, "--no-window", wap1, WAP_CENSUS, census], capture_output=True,
+                              text=True, cwd=folder, env={**os.environ, "WARP_WINDOW": "0"})
+    if compiled.returncode != 0:
+        sys.exit(f"vitals: wap1 compiled no census: {(compiled.stdout + compiled.stderr).strip()[-300:]}")
     def run(file):
-        if not compiled or compiled.returncode != 0:
-            return ""
         try:
             return subprocess.run([JOB_SLOT, WARP, "--no-window", census, file], capture_output=True, text=True,
                                   cwd=folder, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS).stdout
@@ -295,7 +295,7 @@ def wap_hello():
 
 def wap_road():
     """wap's snapshots: the newest census (taken by the detached census job, started here when due), hello by wap measured here
-    when wap/ changed since its last snapshot, and wap's tests' summary whenever test/wap/run.sh wrote a new one."""
+    when wap/ changed since its last snapshot, and the summary of each run of all wap's tests."""
     snapshots, tree = read_snapshots(WAP_SNAPSHOTS), wap_tree()
     if census_due([s for s in snapshots if s["kind"] == "census"], tree):
         with open(WAP_CENSUS_LOG, "w") as log:
@@ -306,7 +306,7 @@ def wap_road():
     if not any(s["kind"] == "hello" and s["tree"] == tree for s in snapshots) and (measured := wap_hello()):
         snapshots.append({"kind": "hello", "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
         append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
-    summary = max((path for path in WAP_TESTS_SUMMARIES if os.path.exists(path)), key=os.path.getmtime, default=None)
+    summary = max((path for pattern in WAP_TESTS_SUMMARIES for path in glob.glob(pattern)), key=os.path.getmtime, default=None)
     if summary and (match := WAP_TESTS_LINE.search(open(summary).read())):
         written = datetime.datetime.fromtimestamp(os.path.getmtime(summary)).strftime("%Y-%m-%d %H:%M")
         if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
