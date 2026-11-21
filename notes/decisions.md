@@ -274,3 +274,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - **wap-warm-state-format, measured** (2026-11-21): with the linear reader the full state as warp text (6.2 MB) reads in 11 s, packed in 27 ms, cold preparation 320 ms: packed warp is built (warp-wap-reader, after reader-linear lands), about 115 core lines as approved.
 
 - **wap-compile-inputs** (user, 2026-11-21, priority): compiling a program needs only the library signatures (mostly from the demangled export names), the type declarations (mostly from the wasm type declarations) and the rule tables; everything else is compiled to wasm exactly once and linked. The warm state shrinks to rules plus what wasm does not say. pannous/wap notes/compile_inputs.md.
+
+- **wap-generic-fallback** (user, 2026-11-21, card wap#42): each overload written with concrete types gets one compiled body; a generic word (`map(xs: list<T>, …)`) gets one general fallback body over uniform values, compiled once, with run-time dispatch where needed. Per-T speed comes only from overloads written for that type. Emit cost estimated 30–60 core lines (lead), past 45 back to the interviewer.
