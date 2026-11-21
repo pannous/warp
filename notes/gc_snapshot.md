@@ -162,6 +162,23 @@ probe2.wap, readtime.wap):
   - the reader made linear (its own card).
 - **What it is good for:** text is the readable form, for debugging the state. It is not the load path.
 
+**Re-measure plan (user decision via warp-interviewer, 2026-11-21):**
+1. warp-wap-reader first makes the reader linear (reader-quadratic, noted on card wap-parsing).
+2. Plain warp text is then timed again with the same bench, kept in data/gc_snapshot/:
+   - `probe.wap`: prepare, then dump the state as warp text;
+   - `readtime.wap`: time the reader on a file;
+   - `probe2.wap`: pack and unpack for comparison.
+3. Build and run them:
+   - compile each with the seed: `warp --no-window <wap-seed>/wap.wasm <probe>.wap <probe>.wasm`;
+   - run them with `<wap folder> <out file>` (probe), `<wap folder>` (probe2) or `<file>` (readtime).
+   - the probes `use` /Users/me/dev/angles/wap/wap/… by absolute path: point them at the worktree that holds the
+     fixed reader;
+   - data/ is git-ignored, so the files exist only on this Mac.
+4. Compare reading the full 5.9 MB dump, plus the no-facts and code-only variants, against today's ~245 ms cold
+   preparation and packed's 27 ms.
+
+Packed warp (section E) is built only if text stays far above 27 ms.
+
 ## E: one universal binary form of warp ("packed warp")
 Every warp value is a Node, so one Node-shaped binary form serves the compiler state, files, IPC and the host boundary
 alike. The same real state as above, encoded by data/gc_snapshot/formats.py:
