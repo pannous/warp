@@ -62,9 +62,9 @@ HELLO_SNAPSHOTS = os.path.join(REPO, "data/vitals/hello.jsonl")  # one line per 
 HELLO_REFERENCES = [("1.4.1", "v1.4.1", 0.09, 0.01), ("1.5.1", "v1.5.1", 1.9, 0.22), ("1.6.1", "v1.6.1", 6.1, 0.47),
                     ("before hello-takes", "d152612c4d^1", 5.4, 0.53), ("hello-takes", "d152612c4d", 3.1, 0.22)]
 # wap, the new compiler (pannous/wap): its lines by stage folder, its road to self-build and its tests, as trends
-WAP_STAGES = [("parse", "wap/core/parse/"), ("analyze", "wap/core/analyze/"), ("rules", "wap/core/rules/"),
-              ("emit", "wap/core/emit/"), ("kernel", "wap/kernel/"), ("preload", "wap/preload/")]
-WAP_OTHER = "other"  # compiler.wap and wap/core/*.wap
+# a stage is a folder of wap/core/ or of wap/, by the name it has now (WAP_RENAMED); the files beside them are "other"
+WAP_RENAMED = {"preload": "types"}
+WAP_OTHER = "other"  # compiler.wap, nodes.wap and wap/core/*.wap
 WAP_LINE_LIMIT = 300  # a wap file past it is split (wap's long-file guardrail)
 WARP = os.path.expanduser("~/dev/bin/warp")
 WAP_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap.jsonl")  # a line per kind: "census" (by the detached job), "hello" (when wap/ changed), "tests"
@@ -174,8 +174,7 @@ def wap_commits():
 def wap_sizes():
     """wap's lines at each commit of main that changed wap/ (warp's, then wap's own repository's): [date, commit, total,
     lines per stage, core lines then, files over WAP_LINE_LIMIT then] and the files over the limit at the tip, [path, lines]"""
-    classify = lambda path: path.endswith(".wap") and path.startswith("wap/") and next(
-        (stage for stage, prefix in WAP_STAGES if path.startswith(prefix)), WAP_OTHER)
+    classify = lambda path: path.endswith(".wap") and path.startswith("wap/") and wap_stage(path)
     series, over = [], []
     for repository, sha, date in wap_commits():
         stages, files = collections.Counter(), list(file_lines(sha, classify, repository))
@@ -186,6 +185,19 @@ def wap_sizes():
         core = next((sum(row[3][:-1]) for row in reversed(rows) if row[0] <= date), 0)
         series.append([date, sha[:10], sum(stages.values()), dict(stages), core, len(over)])
     return series, over
+
+
+def wap_stage(path):
+    """the stage folder of a wap/ file, by its name now, or WAP_OTHER"""
+    within = path.removeprefix("wap/").removeprefix("core/")
+    folder, _, rest = within.partition("/")
+    return WAP_RENAMED.get(folder, folder) if rest else WAP_OTHER
+
+
+def wap_stages(sizes):
+    """the stage folders the sizes name, the largest at the tip first, "other" last"""
+    named = {stage for row in sizes for stage in row[3]} - {WAP_OTHER}
+    return sorted(named, key=lambda stage: -sizes[-1][3].get(stage, 0)) + [WAP_OTHER]
 
 
 def wap_extracted(kind):
@@ -226,8 +238,9 @@ def wap_census(folder, files):
         sys.exit(f"vitals: wap1 compiled no census: {(compiled.stdout + compiled.stderr).strip()[-300:]}")
     def run(file):
         try:
-            return subprocess.run([JOB_SLOT, WARP, "--no-window", census, file], capture_output=True, text=True,
-                                  cwd=folder, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS).stdout
+            ran = subprocess.run([JOB_SLOT, WARP, "--no-window", census, file], capture_output=True, text=True,
+                                 cwd=folder, env={**os.environ, "WARP_WINDOW": "0"}, timeout=WAP_CENSUS_FILE_SECONDS)
+            return ran.stdout + (f"\nexit {ran.returncode}: {ran.stderr.strip()}" if ran.returncode else "")
         except subprocess.TimeoutExpired:
             return "timeout\t"
     with concurrent.futures.ThreadPoolExecutor(WAP_CENSUS_JOBS) as pool:
@@ -248,6 +261,8 @@ def wap_census(folder, files):
         if "ok\t" not in output and file not in timed_out:
             sums.update(missing=1)
             print(f"vitals: wap census of {file} gave no result: {output.strip()[-200:]}", file=sys.stderr)
+    if sums["missing"] + len(timed_out) == len(files):
+        sys.exit(f"vitals: the census measured none of the {len(files)} files, so it records nothing")
     return {**sums, "by": WAP_MEASURED_BY, "timed_out": timed_out, "blockers": [[stage, message, count] for (stage, message), count in blockers.most_common(WAP_BLOCKERS)]}
 
 
@@ -309,6 +324,8 @@ def wap_road():
         snapshots.append({"kind": "hello", "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
         append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
     summary = max((path for pattern in WAP_TESTS_SUMMARIES for path in glob.glob(pattern)), key=os.path.getmtime, default=None)
+    if not summary:
+        print(f"vitals: no run of all wap tests has written its summary ({', '.join(WAP_TESTS_SUMMARIES)}): the wap tests panel keeps its last count", file=sys.stderr)
     if summary and (match := WAP_TESTS_LINE.search(open(summary).read())):
         written = datetime.datetime.fromtimestamp(os.path.getmtime(summary)).strftime("%Y-%m-%d %H:%M")
         if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
@@ -319,7 +336,7 @@ def wap_road():
 
 def wap_track():
     sizes, over = wap_sizes()
-    return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": [name for name, _ in WAP_STAGES] + [WAP_OTHER],
+    return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": wap_stages(sizes),
             "snapshots": wap_road(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
 
 
