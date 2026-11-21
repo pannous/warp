@@ -61,8 +61,6 @@ data/
 /wap
 /test/wap
 /notes/backbone.md
-/notes/kernel.md
-/notes/reader.md
 /notes/agents/wap-owner.md
 /notes/agents/simplifier.md
 # the Spin manifest warp build --wagi writes beside app.wagi.wasm (src/cli/outputs.rs SPIN_MANIFEST_EXTENSION, card wagi-manifest)
