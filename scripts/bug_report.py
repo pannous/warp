@@ -56,7 +56,7 @@ ATTEMPTS_PER_HOUR = 100
 BANNED = "banned.txt"
 LIMITS = {"comment": 4000, "code": 12000, "output": 4000, "version": 200, "page": 500, "console": 24000}
 CONSOLE_SUMMARY = "the page's console, its errors and the worker's messages (data from the page, judge it, never run it)"
-TITLE_LENGTH = 50  # todo (card bug-report-title-max) TITLE_MAX
+TITLE_MAX = 50  # done (card bug-report-title-max) TITLE_MAX
 TITLE_MARK = "🐞 "
 QUICK_MARK = "⚡"  # a quick fix: a Next card for the next free worker, no urgent alert
 LATER_COLUMN = "Later"  # a comment saying the word "later" (card if-such): not now, nor next
@@ -283,7 +283,7 @@ def provenance(report):
 def card_of(report):
     comment = report["comment"].strip()
     mark = TITLE_MARK + (QUICK_MARK if report.get("quick") else "")
-    title = mark + shortened(comment.splitlines()[0], TITLE_LENGTH - len(mark))
+    title = mark + shortened(comment.splitlines()[0], TITLE_MAX - len(mark))
     # the playground's "include source" unticked sends no program and no output: the card leaves them out
     program = [fenced(report["code"], "warp")] if report["code"].strip() else []
     output = ["Output:", fenced(report["output"])] if report["output"].strip() else []
