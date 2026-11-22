@@ -212,8 +212,8 @@ before asking a question). After a context swap, this file and your role file be
 - Wording: a rewrite rule that gives the language a new spelling is a compiler extension, never "library" (its
   file sits in extensions/sugar/); "library" means only the standard library in lib/.
 - Core and extensions: every change to core/ or extensions/ (small fixes included), any new syntax, pass, keyword or
-  sugar rule goes to warp-interviewer BEFORE the work (root cause, files, size); only the user's OK starts it, not the
-  Supervisor's. Sugar goes to extensions/sugar/*.warp, a capability to extensions/<name>.warp. Ask with the smallest
+  sugar rule is discussed with the user through warp-interviewer BEFORE the work: shape, core lines, the case against,
+  why no hook or lib would do. Only the user's OK starts and lands it, never the Supervisor's or Interviewer's alone. Sugar goes to extensions/sugar/*.warp, a capability to extensions/<name>.warp. Ask with the smallest
   shape and do lib work while waiting.
 - Layout: the three layers above. Folder names never join two topics with an underscore. New syntax goes by layer (notes/layers.md): table row or declaration first, else a
   `rewrite` rule; a parser branch only when the commit names the missing rewrite-engine feature.
