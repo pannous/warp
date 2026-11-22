@@ -55,6 +55,9 @@ MEASURED_TIME = re.compile(r"\b\d+(\.\d+)? ?(ms|µs|ns|s)\b")
 TESTS_WEB_RESULTS = "test/tests-web.txt"  # tracked: status and case, one a line
 TESTS_WEB_DATA = "data/tests-web"  # work/ (the native test work folder, its runs' results written by the page), report.txt
 PAGE_COMPILER = "web/playground/warp-lib/warp.wasm"  # the page's compiler lists and judges the cases natively too
+# the words of both test-list and test-verdicts: every case, slow ones too, a verdict line each; the two must list the
+# same cases, else test-verdicts refuses the run (extensions/commands/tests.warp test_files_of)
+EACH_CASE = "--each"
 CASE_RUN_SECONDS = 30  # extensions/commands/tests.warp CASE_SECONDS: the page stops a run after it (?run_seconds)
 CASE_ANSWER_SECONDS = CASE_RUN_SECONDS + 10  # a page that finished no case in this long is stuck
 CASE_BATCH = 100  # cases the page runs in one go, its reports collected as they finish
@@ -1933,7 +1936,7 @@ def check_tests(paths, tree):
 	work = os.path.join(data, "work")
 	subprocess.run(["rm", "-rf", work])
 	os.makedirs(work)
-	compiler_said(tree, "test-list", work, *paths)
+	compiler_said(tree, "test-list", work, EACH_CASE, *paths)
 	runs = [line.split("\t") for line in open(os.path.join(work, "runs"), encoding="utf-8").read().split("\n") if line]
 	server = serve(tree)
 	page_url = f"http://127.0.0.1:{PORT}/web/playground/?run_seconds={CASE_RUN_SECONDS}"
@@ -1949,7 +1952,7 @@ def tests_judged(paths, tree):
 	`--tests-judged` judges a kept work folder again without running the page"""
 	data = os.path.join(tree, TESTS_WEB_DATA)
 	work = os.path.join(data, "work")
-	said = compiler_said(tree, "test-verdicts", work, "--each", *paths)
+	said = compiler_said(tree, "test-verdicts", work, EACH_CASE, *paths)
 	page = verdicts_of(said.split("\n"))
 	if not page:
 		sys.exit(f"error: test-verdicts gave no verdicts (the runs are kept in {work}): {said[-500:]}")
