@@ -8,6 +8,9 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - warn-rule-impossible (warp-fixer, morning 11-23): the approved `=> warn` rule can't tell `"5" + 3` from `"a" + 3`; no rule hole can see what a literal text says. (a) recommended, lib only: the run-time hint prints once per run (+2 lines in texts.wap); (b) a hole that tests a literal's content at compile time (~10–15 core + warn +4), with no other user today; (c) drop the warning (changes the user's decision). Nothing built.
 - untyped-map-any (warp-wap-lang, morning 11-23): an untyped `{}` is map<any, any> (user's m['a']=7; m[3]=4). Core: 2 tokens in analyze/data.wap + 1 changed line in letters.wap bound_as (0 added); the compiler's own source writes 4 map types. Branch untyped-map-any 1ede5b3, held for the discussion.
 
+## Shrinks landed (listed for the user, no discussion needed)
+- 11-22 simplifier: core folder_of copy −45; core batch (dead typed_file, unused parameters, min/max/sum, quoted_text → show, with_items) −160; console line editor 1594 → 1300 nodes −294 (Ctrl/Shift+arrow no longer move a character by accident); types/ −45 and −35. Total −579 nodes.
+
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 - runtime-wasm-shape (interviewer 11-22, user asked "any objections to leaving it?"): left as is, each module carries its runtime words; hello stays standalone (511 B). Revisit when compiler.wasm size (−29% possible) or multi-module programs matter.
 - export-dispatcher-size (night): the plain-name export dispatcher came in at +49 wap core lines (estimate ~10); only the plain-name export landed first.
