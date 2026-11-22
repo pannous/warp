@@ -319,7 +319,7 @@ def wap_costs(folder):
     source = os.path.join(folder, "hello.wap")
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
-    builds = [self_compiled(folder) for _ in range(HELLO_RUNS)]
+    builds = [self_compiled(folder, source) for _ in range(HELLO_RUNS)]
     first = cheapest_cost(WAP_NATIVE, [source], "Hello", 1)
     warm = first and cheapest_cost(WAP_NATIVE, [source], "Hello")
     if None in (*builds, first, warm):
@@ -329,20 +329,22 @@ def wap_costs(folder):
     return {"by": WAP_MEASURED_BY, "native_build": costed(build), "native_hello_first": costed(first), "native_hello": costed(warm)}
 
 
-def self_compiled(folder):
-    """One compile of wap's compiler by the native wap, [10^9 instructions, seconds]; None where it compiled nothing. A
-    copy made unique, so that no machine code kept from an earlier run stands in for the compile; the compile is the
-    machine code it keeps (the compiled compiler then runs from a temporary folder, beside no sources, and fails: that run
-    is part of the count, its status not). The copy and the machine code are removed after."""
-    copy = os.path.join(folder, "wap/compiler-measured.wap")
+def self_compiled(folder, hello):
+    """One compile of wap's compiler by the native wap, [10^9 instructions, seconds]; None, said, unless the compiler it
+    made compiles <hello> to a module that prints Hello. A copy made unique, so that no machine code kept from an earlier
+    run stands in for the compile (the compiled compiler then runs without arguments and refuses: that run is part of
+    the count, its status not). The copy, the machine code and hello's module are removed after."""
+    copy, module = os.path.join(folder, "wap/compiler-measured.wap"), os.path.join(folder, "hello-measured.wasm")
     with open(copy, "w") as measured:
         measured.write(open(os.path.join(folder, "wap/compiler.wap")).read() + f"# measured {datetime.datetime.now().isoformat()}\n")
     before = set(glob.glob(WAP_NATIVE_KEPT))
-    cost, kept = cheapest_cost(WAP_NATIVE, [copy], "", 1), set(glob.glob(WAP_NATIVE_KEPT)) - before
-    for path in [copy, *kept]:
+    cost = cheapest_cost(WAP_NATIVE, [copy], "", 1)
+    built = subprocess.run([WAP_NATIVE, copy, hello, module], capture_output=True, text=True, cwd=folder)
+    said = subprocess.run([WAP_NATIVE, module], capture_output=True, text=True, cwd=folder) if os.path.exists(module) else built
+    for path in [copy, *(set(glob.glob(WAP_NATIVE_KEPT)) - before), *glob.glob(module)]:
         os.remove(path)
-    if not kept:
-        print("vitals: the native wap compiled no compiler (no machine code kept)", file=sys.stderr)
+    if "Hello" not in said.stdout:
+        print(f"vitals: the compiler the native wap compiled does not compile hello: {(said.stdout + said.stderr).strip()[-300:]}", file=sys.stderr)
         return None
     return cost
 
