@@ -106,7 +106,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section id="wap-section">
     <h2>wap, the new compiler</h2>
-    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); the census measured by wap1, wap/ compiled by wap's seed (since 2026-11-20; before, old warp ran wap's source); by the native wap as people run it, no warp in between: wap compiling its own compiler (its instructions) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
+    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); the census measured by wap1, wap/ compiled by wap's seed (since 2026-11-20; before, old warp ran wap's source); by the native wap as people run it, no warp in between: wap compiling its own compiler (the cheapest of three compiles) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
     <div class="table-wrap"><table id="wap-blockers"></table></div>
   </section>
@@ -350,11 +350,10 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
     trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh of all tests, run ${latest.time}`,
       lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
   } else noMeasurement("wap tests");
-  // what wap costs by the native wap: compiling its own compiler (one run of minutes: its instructions only, the seconds
-  // swing with the load), hello (the cheapest warm run, its first run after a change in the note); a snapshot from before
-  // a measure began has no point in its series
+  // what wap costs by the native wap, each the cheapest of its runs: compiling its own compiler, hello (warm, its first
+  // run after a change in the note); a snapshot from before a measure began has no point in its series
   const timed = snapshots.filter(s => s.kind === "hello"), INSTRUCTIONS = [2, "G instructions", "instructions"], SECONDS = [3, "s", "seconds"];
-  const series = [["wap compiling its compiler", "native_build", [INSTRUCTIONS], () => ""],
+  const series = [["wap compiling its compiler", "native_build", [INSTRUCTIONS, SECONDS], () => ""],
     ["hello by the native wap, warm", "native_hello", [INSTRUCTIONS, SECONDS], s => ` · first run after the change ${+s.native_hello_first[0].toFixed(3)} G, ${+s.native_hello_first[1].toFixed(3)} s`]];
   series.forEach(([what, field, shown, first]) => {
     const measured = timed.filter(s => s[field]), points = measured.map(s => [s.time, s.commit, ...s[field]]);
