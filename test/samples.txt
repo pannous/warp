@@ -1,4 +1,4 @@
-# b352670234 2026-11-22 08:15 299/304 98.4%
+# 042a76ea59 2026-11-22 14:42 298/304 98.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -119,7 +119,6 @@ ok   samples/gpu/warp_compiled_wgsl_shader.warp
 ok   samples/graphics/color_swatches.warp
 ok   samples/graphics/ez_forest.warp
 ok   samples/graphics/finger_paint.warp
-ok   samples/graphics/fluid_25d.warp
 ok   samples/graphics/fluid_flame_mouse.warp
 ok   samples/graphics/function_fields.warp
 ok   samples/graphics/gaussian_splats.warp
@@ -299,6 +298,7 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/golf/fizz-buzz.short.warp: fizz-buzz.short.warp:1:30 outside the core: the operator * on text and bool
+TIME samples/graphics/fluid_25d.warp: used its 30 s of CPU
 FAIL samples/modules/packages.warp: mix is defined by math and sound: say which, `use math` or `use sound`
 FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
 FAIL samples/objects/sorted_leaderboard.warp: wasm trap: call stack exhausted at 12:22
