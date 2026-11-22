@@ -92,6 +92,9 @@ JOB_SLOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "job-slot.sh
 WAP_CENSUS_FILE_SECONDS = 600  # one file's census; a file past it counts as none and says so
 WAP_BLOCKERS = 8  # most frequent refusals kept per census
 WAP_HELLO_SOURCE = 'print "Hello"\n'
+# hello by the native wap as people run it (the install beside the binary, no warp in between): its first run after a
+# change apart, then the cheapest of HELLO_RUNS warm runs
+WAP_NATIVE = os.path.expanduser("~/dev/bin/wap")
 # the summary of a run of all wap's tests, which test/wap/run.sh writes beside the summary of any run; in the wap
 # checkout or any worktree, whichever ran last
 WAP_TESTS_SUMMARIES = [os.path.join(WAP_CHECKOUT, "data/wap-tests/full-summary.txt"), "/Volumes/Worktrees/*/data/wap-tests/full-summary.txt"]
@@ -326,17 +329,18 @@ def census_due(censuses, tree):
 
 
 def wap_hello(folder, wap1):
-    """What wap costs on hello, [10^9 instructions, seconds] each, None where a run failed, measured by wap1: the wap
-    compiler built, wap1 compiling wap's compiler (milestone 2's self-compile); hello, wap1 compiling hello and that run."""
-    source, module, built = (os.path.join(folder, name) for name in ("hello.wap", "hello.wasm", "wap.wasm"))
+    """What wap costs, [10^9 instructions, seconds] each, None where a run failed: the wap compiler built, wap1 compiling
+    wap's compiler (milestone 2's self-compile); hello by the native wap (WAP_NATIVE), its first run and warm."""
+    source, built = os.path.join(folder, "hello.wap"), os.path.join(folder, "wap.wasm")
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
     build = cheapest_cost(WARP, [wap1, os.path.join(folder, "wap/compiler.wap"), built], "", 1)
-    compiled, run = cheapest_cost(WARP, [wap1, source, module], ""), cheapest_cost(WARP, [module], "Hello")
-    if None in (build, compiled, run):
+    first = cheapest_cost(WAP_NATIVE, [source], "Hello", 1)
+    warm = first and cheapest_cost(WAP_NATIVE, [source], "Hello")
+    if None in (build, first, warm):
         return None
-    return {"by": WAP_MEASURED_BY, "build": [round(build[i], 2) for i in (0, 1)],
-            "hello": [round(compiled[i] + run[i], 2) for i in (0, 1)]}
+    costed = lambda cost: [round(cost[0], 3), round(cost[1], 3)]
+    return {"by": WAP_MEASURED_BY, "build": costed(build), "native_hello_first": costed(first), "native_hello": costed(warm)}
 
 
 def wap_run(arguments, folder):
