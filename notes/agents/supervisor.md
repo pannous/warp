@@ -63,6 +63,9 @@ the team, crash resume), notes/roles.md (what the other roles do).
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
 - Focus (user 2026-11-22): only wap. Warp Vitals is off: nobody runs scripts/vitals.py or republishes its page.
+- Core and extension changes (user 2026-11-22, after the extension audit notes/reviews/2026-11-22-extensions.md): no rubber
+  stamps. Each one is discussed with the user (shape, core lines, why no hook or lib would do) before it lands; an
+  Interviewer OK alone does not land it.
 
 ## Team handover (reboot, shutdown, "handover")
 1. Tell every running session (ListAgents; tmux warp-*) to push its branch, write its handover onto
