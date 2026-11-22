@@ -1,4 +1,4 @@
-# 8b620a54f8 2026-11-21 12:03 300/304 98.7%
+# 48d6f5299b 2026-11-22 02:26 298/304 98.0%
 ok   samples/acceleration/gpu_arrays.warp
 ok   samples/acceleration/gpu_f16.warp
 ok   samples/acceleration/gpu_map.warp
@@ -171,7 +171,6 @@ ok   samples/modules/ask_claude.warp
 ok   samples/modules/config_patch.warp
 ok   samples/modules/csv_report.warp
 ok   samples/modules/free_slots.warp
-ok   samples/modules/javascript.warp
 ok   samples/modules/lib.warp
 ok   samples/modules/main.warp
 ok   samples/modules/modules.warp
@@ -265,7 +264,6 @@ ok   samples/types/reflection.warp
 ok   samples/types/return_polymorphism.warp
 ok   samples/types/return_polymorphism2.warp
 ok   samples/types/types.warp
-ok   samples/wasm/component_reflection.warp
 ok   samples/wasm/import_compiled.warp
 ok   samples/wasm/shapes.warp
 ok   samples/wasm/wasm_interop.warp
@@ -300,6 +298,8 @@ SRV  samples/servers/server.warp
 SRV  samples/servers/worker.warp
 SRV  samples/storage/todo_app.warp
 FAIL samples/golf/fizz-buzz.short.warp: fizz-buzz.short.warp:1:30 outside the core: the operator * on text and bool
+FAIL samples/modules/javascript.warp: the hidden web view did not load
 FAIL samples/modules/packages.warp: mix is defined by math and sound: say which, `use math` or `use sound`
 FAIL samples/modules/test_ffi_extended.warp: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
 FAIL samples/objects/sorted_leaderboard.warp: wasm trap: call stack exhausted at 12:22
+FAIL samples/wasm/component_reflection.warp: warp: no module rust_demo.wasm beside the module importing it, /Users/me/Library/Caches/warp/compiled/rust_demo.wasm, nor at /Users/me/dev/bin/wap-seed/rust_demo.wasm
