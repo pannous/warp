@@ -95,6 +95,7 @@ WAP_HELLO_SOURCE = 'print "Hello"\n'
 # hello by the native wap as people run it (the install beside the binary, no warp in between): its first run after a
 # change apart, then the cheapest of HELLO_RUNS warm runs
 WAP_NATIVE = os.path.expanduser("~/dev/bin/wap")
+WAP_NATIVE_KEPT = os.path.expanduser("~/dev/bin/wap-seed/program-*.cwasm")  # the machine code it keeps of each program
 # the summary of a run of all wap's tests, which test/wap/run.sh writes beside the summary of any run; in the wap
 # checkout or any worktree, whichever ran last
 WAP_TESTS_SUMMARIES = [os.path.join(WAP_CHECKOUT, "data/wap-tests/full-summary.txt"), "/Volumes/Worktrees/*/data/wap-tests/full-summary.txt"]
@@ -328,19 +329,26 @@ def census_due(censuses, tree):
     return not (censuses and censuses[-1]["tree"] == tree or census_job_running())
 
 
-def wap_hello(folder, wap1):
-    """What wap costs, [10^9 instructions, seconds] each, None where a run failed: the wap compiler built, wap1 compiling
-    wap's compiler (milestone 2's self-compile); hello by the native wap (WAP_NATIVE), its first run and warm."""
-    source, built = os.path.join(folder, "hello.wap"), os.path.join(folder, "wap.wasm")
+def wap_costs(folder):
+    """What wap costs by the native wap (WAP_NATIVE), [10^9 instructions, seconds], None where a run failed: hello, its
+    first run after a change and its cheapest warm run; and wap compiling its own compiler (milestone 2's self-compile),
+    one run of minutes, of a copy made unique so that no machine code kept from an earlier run stands in for the compile
+    (the copy and the machine code it keeps are removed after; the instructions count, the seconds swing with the load)."""
+    source, compiler, copy = (os.path.join(folder, name) for name in ("hello.wap", "wap/compiler.wap", "wap/compiler-measured.wap"))
     with open(source, "w") as hello:
         hello.write(WAP_HELLO_SOURCE)
-    build = cheapest_cost(WARP, [wap1, os.path.join(folder, "wap/compiler.wap"), built], "", 1)
+    with open(copy, "w") as measured:
+        measured.write(open(compiler).read() + f"# measured {datetime.datetime.now().isoformat()}\n")
+    kept = set(glob.glob(WAP_NATIVE_KEPT))
+    build = cheapest_cost(WAP_NATIVE, [copy], "", 1)
+    for path in [copy, *set(glob.glob(WAP_NATIVE_KEPT)) - kept]:
+        os.remove(path)
     first = cheapest_cost(WAP_NATIVE, [source], "Hello", 1)
     warm = first and cheapest_cost(WAP_NATIVE, [source], "Hello")
     if None in (build, first, warm):
         return None
     costed = lambda cost: [round(cost[0], 3), round(cost[1], 3)]
-    return {"by": WAP_MEASURED_BY, "build": costed(build), "native_hello_first": costed(first), "native_hello": costed(warm)}
+    return {"by": "native wap", "native_build": costed(build), "native_hello_first": costed(first), "native_hello": costed(warm)}
 
 
 def wap_run(arguments, folder):
@@ -370,9 +378,10 @@ def wap_nodes_in(measure, folder):
     return {"nodes": dict(nodes)}
 
 
-def wap_nodes(folder, wap1):
-    """wap's nodes per layer at the tip extracted in <folder>"""
-    measure = wap_size_measure(folder, wap1)
+def wap_nodes(folder):
+    """wap's nodes per layer at the tip extracted in <folder>, measured by its wap1"""
+    wap1 = wap1_of(folder)
+    measure = wap1 and wap_size_measure(folder, wap1)
     return measure and wap_nodes_in(measure, folder)
 
 
@@ -402,11 +411,11 @@ def wap_road():
                                    stderr=subprocess.STDOUT, start_new_session=True)
         with open(WAP_CENSUS_PID, "w") as pid:
             pid.write(str(job.pid))
-    measures = {"hello": wap_hello, "size": wap_nodes}  # each measured by wap1 in one extracted tip when wap/ changed
+    measures = {"hello": wap_costs, "size": wap_nodes}  # each measured in one extracted tip when wap/ changed
     due = [kind for kind in measures if not any(s["kind"] == kind and s.get("tree") == tree for s in snapshots)]
-    wap1 = due and wap1_of(folder := wap_extracted("hello"))
-    for kind in due if wap1 else []:
-        if measured := measures[kind](folder, wap1):
+    folder = due and wap_extracted("hello")
+    for kind in due:
+        if measured := measures[kind](folder):
             snapshots.append({"kind": kind, "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
             append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
     summary = max((path for pattern in WAP_TESTS_SUMMARIES for path in glob.glob(pattern)), key=os.path.getmtime, default=None)
