@@ -106,7 +106,7 @@ scripts/promote-self.sh                   # warp.wasm -> warp-self.wasm once it 
 
 ## To-dos
 This project keeps its to-dos on the board https://github.com/users/pannous/projects/1 (columns Now/Next/Soon/Later/Done),
-agents add no cards until the board is clean (`todo add` refuses); a red test is its own to-do and never gets a card; an issue goes as `todo note` on an existing card; how cards
+a red test is its own to-do and never gets a card; an issue goes as `todo note` on an existing card; how cards
 are taken, branched and closed: "Cards" below.
 
 ### Test commands

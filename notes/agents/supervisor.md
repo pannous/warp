@@ -50,9 +50,8 @@ the team, crash resume), notes/roles.md (what the other roles do).
   warp-<old> warp-<new>` plus `~/dev/bin/rename-when-idle warp-<new>`; tell the Integrator and Interviewer.
 - Idle worker: give it its area's cards from `todo pick` (the user's "(user)" drafts first, easy before big).
 - Red tests are the work list (user 2026-11-20): every red test line is already its own to-do and needs no card. Instead
-  of picking cards, pick red tests and hand them out to workers. Agents add no cards until the board is cleaned up
-  (`todo add` refuses them). Not yet: the user's own priorities (now: wap's native binary) come before red tests.
-  The ban never stops closing: at least one worker always works through the open cards (now warp-wap-operators).
+  of picking cards, pick red tests and hand them out to workers. Not yet: the user's own priorities (now: wap's native binary) come before red tests.
+  At least one worker always works through the open cards (now warp-wap-operators).
 - wap/core and wap/kernel are semi-frozen (user 2026-11-20): every change there goes to warp-interviewer first; new
   features go into wap/extensions/. The first case is the native binary, built by wap as an extension.
 - Talk to workers by SendMessage with `notify_when_idle: true`; tmux only to look at a screen.
