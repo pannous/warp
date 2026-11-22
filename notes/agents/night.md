@@ -3,8 +3,9 @@
 How the fleet works while the user sleeps, until the user is back (usually 10:00). Read with AGENTS.md and your role file.
 
 ## Decisions
-- The Supervisor and the Interviewer decide themselves: meaning, spellings, core OKs, process. Courageous, not
-  cautious; the user reviews in the morning and keeps or undoes.
+- The Supervisor and the Interviewer decide themselves: meaning, spellings, process. Courageous, not
+  cautious; the user reviews in the morning and keeps or undoes. Core and extension growth is the exception
+  (user 2026-11-22): it waits, fully built and measured, for the morning discussion; pure shrinks land.
 - No questions to the user and no waiting on answers: the Interviewer asks nobody, workers never block on a decision.
 - Every decision goes on its card as a note, "OK <date> night via <session>: what, why, how to undo"; the morning
   review is built from those notes.
