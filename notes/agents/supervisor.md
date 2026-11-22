@@ -63,6 +63,9 @@ the team, crash resume), notes/roles.md (what the other roles do).
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
 - Focus (user 2026-11-22): only wap. Warp Vitals is off: nobody runs scripts/vitals.py or republishes its page.
+- Next fleet restart (user 2026-11-22): everything is named wap: sessions wap-<role>/wap-<card>, start.sh and the watch
+  scripts (urgent-card-watch, integrator-watch) use those names, the role files live in the wap repo and sessions start
+  there (card fleet-wap-names on the wap board).
 - Core and extension changes (user 2026-11-22, after the extension audit notes/reviews/2026-11-22-extensions.md): no rubber
   stamps. Each one is discussed with the user (shape, core lines, why no hook or lib would do) before it lands; an
   Interviewer OK alone does not land it.
