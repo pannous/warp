@@ -5,6 +5,7 @@ the user; nothing here blocks. Answers move to notes/decisions.md, work goes on 
 they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## Pending
+- warn-rule-impossible (warp-fixer, morning 11-23): the approved `=> warn` rule can't tell `"5" + 3` from `"a" + 3`; no rule hole can see what a literal text says. (a) recommended, lib only: the run-time hint prints once per run (+2 lines in texts.wap); (b) a hole that tests a literal's content at compile time (~10–15 core + warn +4), with no other user today; (c) drop the warning (changes the user's decision). Nothing built.
 - untyped-map-any (warp-wap-lang, morning 11-23): an untyped `{}` is map<any, any> (user's m['a']=7; m[3]=4). Core: 2 tokens in analyze/data.wap + 1 changed line in letters.wap bound_as (0 added); the compiler's own source writes 4 map types. Branch untyped-map-any 1ede5b3, held for the discussion.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
