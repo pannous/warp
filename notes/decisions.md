@@ -34,7 +34,7 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-21 compile-inputs (priority, wap#42): compiling needs only signatures, type declarations and rules; all bodies are compiled once (wap notes).
 - 11-21 generic-fallback (wap#42): one compiled body per typed overload; a generic word gets one general fallback with run-time dispatch.
 - 11-21 packed-library: packed warp (`pack`/`unpack`, tag byte per Node variant, back-refs) is a core library accessible everywhere 
-- 11-22 variable-retyping: `x = 1; x = "a"` makes x any with a warning; only let/const names keep their type (wiki/type.md:316).
+- 11-22 variable-retyping: `x = 1; x = "a"` makes x any with a warning; let/const and written types (`w: int = 1`) keep theirs (wiki/type.md:316).
 - 11-22 untyped-nested-maps (interviewer, follows retyping): a map value referring to itself settles as any; `out = {}; out["a"] = section` works untyped.
 - 11-22 enum-case-as-type: a parameter may be one enum case, `first_size(d: Dot) := d.size`; it narrows and reads fields by name (wiki variant.md).
 - 11-22 spaced-is-two (supersedes 11-12 spaced-data-call): `style {…}` is two items [style, {…}] with a did-you-mean; glued `style{…}` is the call.
