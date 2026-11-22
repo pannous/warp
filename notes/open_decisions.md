@@ -8,7 +8,6 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
 - runtime-wasm-shape (interviewer 11-22, user asked "any objections to leaving it?"): left as is, each module carries its runtime words; hello stays standalone (511 B). Revisit when compiler.wasm size (−29% possible) or multi-module programs matter.
-- untyped-nested-maps (interviewer 11-22, follows variable-retyping): the self-reference settles as any, out is map<text, map<text, any>>, ~4 core lines.
 - export-dispatcher-size (night): the plain-name export dispatcher came in at +49 wap core lines (estimate ~10); only the plain-name export landed first.
 - wap-wiki-from-notes (night): wiki precedence.md gained "Spacing picks an operator's fixity" and "A program's own precedence"; rule.md is a new page.
 - wap-primitive-table-dropped (night): one primitive table dropped for too little general benefit.

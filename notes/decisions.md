@@ -35,7 +35,7 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-21 generic-fallback (wap#42): one compiled body per typed overload; a generic word gets one general fallback with run-time dispatch.
 - 11-21 packed-library: packed warp (`pack`/`unpack`, tag byte per Node variant, back-refs) is a core library accessible everywhere 
 - 11-22 variable-retyping: `x = 1; x = "a"` makes x any with a warning; let/const and written types (`w: int = 1`) keep theirs (wiki/type.md:316).
-- 11-22 untyped-nested-maps (interviewer, follows retyping): a map value referring to itself settles as any; `out = {}; out["a"] = section` works untyped.
+- 11-22 any-holds-container: an any holding a list/map given to a generic word is refused with a fix-it to name its type; untyped nested maps wait (card uniform-lists).
 - 11-22 enum-case-as-type: a parameter may be one enum case, `first_size(d: Dot) := d.size`; it narrows and reads fields by name (wiki variant.md).
 - 11-22 spaced-is-two (supersedes 11-12 spaced-data-call): `style {…}` is two items [style, {…}] with a did-you-mean; glued `style{…}` is the call.
 - 11-22 list-variance: a list<Pair> may be passed where list<Node> is wanted (as built); a write breaking the caller's item type is refused when it appears.
