@@ -5,12 +5,6 @@ Put ✓ in front of every line that goes verbatim into the wiki (a program can s
 
 ## Inbox
 - [ ] declared-events: a multi-word event name is declared once, `event stop the machine`; then `on`/`emit` take the phrase as its name (card test-push).
-- [✓ ] errors-one-rule (reaffirmed 11-13): errors and failures are one kind; only an optional-typed variable holds one: `x: int? = error("bad")`.
-- [i ] loop-locals: a loop variable is always a fresh local; a function's plain assignment to another file's global is refused: `global x` or `let x` (card loop-variable-shadowing).
-- [i ] 2026-11-12 answer-or-act: a function with ! is a hint for modifying `sort!(xs: list)` returns nothing, a `!` with a result type warns (card answer-or-act).
-- [i ] 2026-11-12 mutating-needs-bang: `!` marks a changing function for readers; not enforced, functions may change their arguments (card answer-or-act).
-- [? ] 2026-11-12 spaced-data-call: `style { … }` and `f { a: flex }` with a space give the same data call as the glued `f{…}` (spaced-tag: the two spellings are one); warp-reviewer: sound. REALLY? why not parsed as [style, {}] ?
-- [i ] 2026-11-12 js-builtins-declared: JavaScript's own globals (Math, JSON, Array) get declarations so `Math.nonsense(2)` is refused at compile time like `document.nonsense()` (card js-math-nonsense).
 - [ ] 2026-11-12 user-approved: remove-alarm-rule: `remove h` drops a listener (`on alarm {1}; h = on alarm {2}; remove h; emit alarm` → 1); a listener handle shows as Listener{event, number}. Undo: revert the sugar rule.
 - [ ] 2026-11-12 user decision, supersedes 11-10 nullish-default: nullish-split: `??` replaces only ø, as in C#/JS/Swift/Kotlin (`m["a"] ?? 0` raises); the words default, otherwise, failing, except and new alias rescue give the fallback on ø or a raise; `or` stays truthiness (card nullish-split). Was: `a ?? b` / `a default b` give b when a is ø or raises (`m["a"] ?? 0` → 0); without it the error stays loud. Undo: revert 674d0ff07f.
 - [ ] 2026-11-12 user-approved: primitive-arrays: @primitive files get fixed arrays as wiki/array.md spells them (`i64[8]`); later `byte[40]` for C structs. Undo: revert.
