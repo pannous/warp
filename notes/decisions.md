@@ -28,10 +28,9 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-20 empty-bracket-keeps-bracket: `()` is ø; `[]` and `{}` are an empty list and map, falsy, typed by their place (wiki node.md).
 - 11-20 library-words-as-rules: words typing uses by name are ordinary rewrite rules in wap/sugar (`m#k = v` → set), no role annotations.
 - 11-20 set-of-to: wap's map setter is `set(key, of: m, to: v)`, read `set k of: m to: v`.
-- 11-20 export-names: an export writes its result with →, `add(a: int, b: int = 1) → int`; the plain name is the dispatcher (wasm-representation).
 - 11-20 chained-comparisons (night): `3>2>1` is `3>2 and 2>1`; `3>2 == true` stays one plain comparison (Footguns.md).
 - 11-21 cross-file-run-order: a top-level read of a global another file sets later is refused; statements run in written order.
 - 11-21 bare-kind-binds-alike: `==(a: enum, b: enum)` binds one type; two different enums are refused, an own `==(a: Side, b: Grouping)` allows.
 - 11-21 compile-inputs (priority, wap#42): compiling needs only signatures, type declarations and rules; all bodies are compiled once (wap notes).
 - 11-21 generic-fallback (wap#42): one compiled body per typed overload; a generic word gets one general fallback with run-time dispatch.
-- 11-21 packed-library: packed warp (`pack`/`unpack`, tag byte per Node variant, back-refs) is a library of its own; CBOR only a bridge.
+- 11-21 packed-library: packed warp (`pack`/`unpack`, tag byte per Node variant, back-refs) is a core library accessible everywhere 
