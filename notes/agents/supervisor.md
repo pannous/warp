@@ -63,9 +63,7 @@ the team, crash resume), notes/roles.md (what the other roles do).
   agent, a background subagent or a worker session; I keep only the quick answer from what is known and its verdict.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
-- Warp Vitals: every watch round runs `python3 scripts/vitals.py` and republishes
-  data/vitals/vitals.html to https://claude.ai/code/artifact/b988ec61-123d-4e97-833b-0dd2342cac4c; the Integrator also
-  does so after each landing (integrator.md "Watching main").
+- Focus (user 2026-11-22): only wap. Warp Vitals is off: nobody runs scripts/vitals.py or republishes its page.
 
 ## Team handover (reboot, shutdown, "handover")
 1. Tell every running session (ListAgents; tmux warp-*) to push its branch, write its handover onto

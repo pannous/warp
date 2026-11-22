@@ -88,7 +88,6 @@ done
 row+=" | $(full_suite_rate "$main/$FULL_SUITE") |"
 echo "$row" >>"$main/$RATES"
 say "$row"
-say "$(python3 "$scripts/vitals.py" 2026-10-29 "$main/data/vitals/vitals.html" 2>&1)" || say "RED: vitals.py failed, the vitals page is stale"
 
 git -C "$main" add -- "${files[@]}" &&
 	git -C "$main" commit -q -m "chore: nightly pass rates at $tip ${row#*$tip | }" -- "${files[@]}" &&
