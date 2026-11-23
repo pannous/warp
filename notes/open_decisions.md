@@ -16,6 +16,7 @@ they are applied (AGENTS.md, notes/agents/, the wiki).
 - 11-22 simplifier: core folder_of copy −45; core batch (dead typed_file, unused parameters, min/max/sum, quoted_text → show, with_items) −160; console line editor 1594 → 1300 nodes −294 (Ctrl/Shift+arrow no longer move a character by accident); types/ −45 and −35. Total −579 nodes.
 
 ## To confirm (decided on the user's behalf; built as described, keep or undo)
+- library-embedded (landing, user OK'd one copy): a compiled module names the library by the compiler folder's absolute path, so it runs only where its compiler lives (no copying modules to another machine). Core 0, compiler net −3, build scripts +12.
 - runtime-wasm-shape (interviewer 11-22, user asked "any objections to leaving it?"): left as is, each module carries its runtime words; hello stays standalone (511 B). Revisit when compiler.wasm size (−29% possible) or multi-module programs matter.
 - export-dispatcher-size (night): the plain-name export dispatcher came in at +49 wap core lines (estimate ~10); only the plain-name export landed first.
 - wap-wiki-from-notes (night): wiki precedence.md gained "Spacing picks an operator's fixity" and "A program's own precedence"; rule.md is a new page.
