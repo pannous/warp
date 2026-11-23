@@ -57,7 +57,7 @@ section { display: grid; gap: 10px; }
 .tip .subject { font-family: var(--font-text); color: var(--ink-2); margin-top: 4px; }
 .tip-row { display: flex; justify-content: space-between; gap: 14px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; font: 500 11px var(--font-data); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--rule); }
+th { text-align: left; font: 700 11px var(--font-data); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); padding: 6px 8px; border-bottom: 1px solid var(--rule); }
 td { padding: 7px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 td.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 td.sha { font-family: var(--font-data); color: var(--ink-3); white-space: nowrap; }
@@ -73,6 +73,7 @@ td.sha a:hover, td.sha a:focus-visible { text-decoration: underline; }
 .tier .empty { color: var(--ink-3); font-size: 13px; }
 .tables { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 24px; }
 .table-wrap { overflow-x: auto; }
+.side-by-side { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 0 24px; align-items: start; }
 td a { color: var(--shrink); text-decoration: none; font-family: var(--font-data); }
 td a:hover, td a:focus-visible { text-decoration: underline; }
 .card-title { color: var(--ink-2); }
@@ -106,7 +107,7 @@ footer { color: var(--ink-3); font-size: 12px; }
 
   <section id="wap-section">
     <h2>wap, the new compiler</h2>
-    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); all of it measured by the native wap as people run it, no warp in between (since 2026-11-22; before, wap1, wap/ compiled by wap's seed and run by warp, and before 2026-11-20 old warp running wap's source): wap compiling its own compiler (the cheapest of three compiles) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
+    <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); all of it measured by the native wap as people run it, no warp in between (since 2026-11-22; before, wap1, wap/ compiled by wap's seed and run by warp, and before 2026-11-20 old warp running wap's source): wap compiling its own compiler (the cheapest of three compiles) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
     <h3>Pace</h3>
     <p class="section-note" id="wap-pace-note"></p>
@@ -115,8 +116,10 @@ footer { color: var(--ink-3); font-size: 12px; }
     <h3>Cards on the board</h3>
     <p class="section-note" id="wap-cards-note"></p>
     <div class="chart" id="wap-cards-chart"></div>
-    <div class="table-wrap"><table id="wap-done"></table></div>
-    <div class="table-wrap"><table id="wap-new"></table></div>
+    <div class="side-by-side">
+      <div class="table-wrap"><table id="wap-done"></table></div>
+      <div class="table-wrap"><table id="wap-new"></table></div>
+    </div>
     <h3>Recently</h3>
     <div class="table-wrap"><table id="wap-recent"></table></div>
   </section>
@@ -272,7 +275,7 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   const x = date => L + (timeOf(date) - start) / Math.max(1, end - start) * (W - L - R);
   const y = v => T + (1 - v / top) * (H - T - B);
   const card = document.createElement("div"); card.className = "tier";
-  const legend = lines.length > 1 ? `<div class="legend">${lines.map(line => `<span><i style="background:var(${line.color})"></i>${line.name}</span>`).join("")}</div>` : "";
+  const legend = lines.length > 1 ? `<div class="legend">${lines.map(line => `<span><i style="background:var(${line.color})"></i>${line.name}${line.latest == null ? "" : " " + format(line.latest)}</span>`).join("")}</div>` : "";
   card.innerHTML = `<div class="label">${label}</div><div class="value">${value}</div><div class="change">${note}</div>${legend}`;
   const svg = element("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": label }, card);
   [0, top / 2, top].forEach(v => {
@@ -320,15 +323,15 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   const pointsOf = (list, ...fields) => list.filter(s => fields.every(f => typeof s[f] === "number")).map(s => [s.time, s.commit, ...fields.map(f => s[f])]);  // a snapshot from before a field was measured has no point
   const noMeasurement = label => { holder.insertAdjacentHTML("beforeend", `<div class="tier"><div class="label">${label}</div><div class="empty">no measurement yet</div></div>`); };
   const note = (point, extra = "") => `${point[1]} · ${point[0]}${extra}`;
-  // sizes: [date, commit, total, per stage, core, files over the limit, [code, comment or blank] lines per layer]
-  const TOTAL = 2, CORE = 4, OVER = 5, LAYERS = 6, EXTENSIONS = 7, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
+  // sizes: [date, commit, total, per stage, old core (unshown), files over the limit, [code, comment or blank] lines per layer]
+  const TOTAL = 2, OVER = 5, LAYERS = 6, EXTENSIONS = 7, STAGE_COLORS = ["--s1", "--s2", "--s3", "--s4", "--s5", "--s6", "--s7"];
   if (sizes.length) {
-    const latest = sizes[sizes.length - 1], describeSize = p => `${p[0]} · ${p[1]} · wap ${format(p[TOTAL])} lines (` + stages.map(name => `${name} ${p[3][name] || 0}`).join(", ") + `) · core ${format(p[CORE])}`;
+    const latest = sizes[sizes.length - 1], describeSize = p => `${p[0]} · ${p[1]} · wap ${format(p[TOTAL])} lines (` + stages.map(name => `${name} ${p[3][name] || 0}`).join(", ") + ")";
     const withExtensions = sizes.map(p => [...p, p[3].extensions || 0]);  // wap/extensions/ (appended, EXTENSIONS) is watched against extension sprawl
-    trendPanel(holder, { label: "wap source lines beside the core", value: `${format(latest[TOTAL])} of core's ${format(latest[CORE])}`, note: note(latest, ` · ${percent(sizes[0][TOTAL], latest[TOTAL])} since ${shortDay(sizes[0][0].slice(0, 10))}`),
-      lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3" }, { name: "core/ without extensions", points: sizes, index: CORE, color: "--s1" }, { name: "wap/extensions/", points: withExtensions, index: EXTENSIONS, color: "--s2" }], describe: describeSize });
-    const byStage = stages.map((name, i) => ({ name, points: sizes.map(p => [p[0], p[1], p[3][name] || 0]), index: 2, color: STAGE_COLORS[i % STAGE_COLORS.length] }));
-    trendPanel(holder, { label: "wap source lines by stage folder", value: `${format(latest[TOTAL])} lines`, note: note(latest, " · " + stages.map(name => `${name} ${latest[3][name] || 0}`).join(", ")), lines: byStage, describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${p[2]} lines` });
+    trendPanel(holder, { label: "wap source lines", value: `${format(latest[TOTAL])} lines`, note: note(latest, ` · ${percent(sizes[0][TOTAL], latest[TOTAL])} since ${shortDay(sizes[0][0].slice(0, 10))}`),
+      lines: [{ name: "wap/", points: sizes, index: TOTAL, color: "--s3", latest: latest[TOTAL] }, { name: "wap/extensions/", points: withExtensions, index: EXTENSIONS, color: "--s2", latest: latest[3].extensions || 0 }], describe: describeSize });
+    const byStage = stages.map((name, i) => ({ name, points: sizes.map(p => [p[0], p[1], p[3][name] || 0]), index: 2, color: STAGE_COLORS[i % STAGE_COLORS.length], latest: latest[3][name] || 0 }));
+    trendPanel(holder, { label: "wap source lines by stage folder", value: `${format(latest[TOTAL])} lines`, note: note(latest), lines: byStage, describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${p[2]} lines` });
     trendPanel(holder, { label: `wap files over ${limit} lines`, value: String(latest[OVER]), note: note(latest, over.length ? " · " + over.map(([path, n]) => `${path.replace(/^wap\//, "")} ${n}`).join(", ") : ""),
       lines: [{ name: "files", points: sizes, index: OVER, color: "--s2" }], describe: p => `${p[0]} · ${p[1]} · ${p[OVER]} files over ${limit} lines` });
   } else noMeasurement("wap source lines");
@@ -336,7 +339,7 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   // code lines and its comment or blank lines, so comments growing show on their own (user 2026-11-21)
   const layerColor = i => STAGE_COLORS[i % STAGE_COLORS.length], latestLayers = sizes.length ? sizes[sizes.length - 1][LAYERS] : {};
   const layerPanel = (label, unit, linesOf, latestOf) => trendPanel(holder, { label, value: `${format(layers.reduce((sum, name) => sum + latestOf(name), 0))} ${unit}`,
-    note: layers.map(name => `${name} ${format(latestOf(name))}`).join(", "), lines: layers.map((name, i) => ({ name, points: linesOf(name), index: 2, color: layerColor(i) })),
+    note: "", lines: layers.map((name, i) => ({ name, points: linesOf(name), index: 2, color: layerColor(i), latest: latestOf(name) })),
     describe: (p, line) => `${p[0]} · ${p[1]} · ${line.name} ${format(p[2])} ${unit}` });
   if (nodeSizes.length) {
     const latest = nodeSizes[nodeSizes.length - 1];
@@ -451,13 +454,10 @@ function columnLines(snapshots, columns, container) {
 }
 
 (function wapRecent() {
-  // wap's newest commits of work and its newest Done cards, side by side as one table of the latest news
-  const { commits, done } = DATA.wap.recent || { commits: [], done: [] };
-  const rows = [...done.map(([time, key, title, link]) => [time.slice(5), `<a href="${link}" target="_blank" rel="noopener">${escape(key)}</a> done<br><span class="card-title">${escape(title)}</span>`]),
-    ...commits.map(([sha, time, subject]) => [time, `<a href="${WAP_COMMIT_URL}${sha}" target="_blank" rel="noopener" class="sha">${sha}</a> ${escape(subject)}`])]
-    .sort((a, b) => b[0].localeCompare(a[0]));
-  document.getElementById("wap-recent").innerHTML = rows.length ? `<thead><tr><th>When</th><th>Commit or card done</th></tr></thead><tbody>` +
-    rows.map(([time, what]) => `<tr><td class="sha">${time}</td><td>${what}</td></tr>`).join("") + "</tbody>" : "";
+  // wap's newest commits of work on main
+  const commits = (DATA.wap.recent || { commits: [] }).commits;
+  document.getElementById("wap-recent").innerHTML = commits.length ? `<thead><tr><th>When</th><th>Commit</th></tr></thead><tbody>` +
+    commits.map(([sha, time, subject]) => `<tr><td class="sha">${time}</td><td><a href="${WAP_COMMIT_URL}${sha}" target="_blank" rel="noopener" class="sha">${sha}</a> ${escape(subject)}</td></tr>`).join("") + "</tbody>" : "";
 })();
 
 // a board's cards per column over time, its newest Done cards and its newest cards; ids: the elements' prefix

@@ -440,10 +440,10 @@ def wap_coverage():
 
 
 def wap_recent():
-    """What wap achieved lately: its newest commits of work on main [sha, time, subject] and its newest Done cards."""
+    """What wap achieved lately: its newest commits of work on main [sha, time, subject]."""
     commits = [line.split("\t") for line in git("log", "--no-merges", f"-{WAP_RECENT_COMMITS}", "--format=%h%x09%ad%x09%s",
                                                    "--date=format:%m-%d %H:%M", WAP_TIP, repository=WAP_CHECKOUT).splitlines()]
-    return {"commits": commits, "done": WAP_CARDS[-1].get("done", []) if WAP_CARDS else []}
+    return {"commits": commits}
 
 
 def wap_track():
