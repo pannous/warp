@@ -39,6 +39,8 @@ HEADER = re.compile(r"^# \S+ \S+ \S+ (\d+)/(\d+)")
 STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME|ERR)\s")
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
 GITHUB_REPO = "pannous/warp"
+WAP_GITHUB_REPO = "pannous/wap"
+WAP_SINCE = "2026-11-20"  # wap's own repository began
 BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
 WAP_BOARD_CARD = "https://github.com/users/pannous/projects/10?pane=issue&itemId=%s"
 RECENTLY_DONE = 8
@@ -695,19 +697,19 @@ def build_history(record, by_seed, landed):
     return sorted(leanest.values())
 
 
-def pushes_since():
-    """The pushes to main since SINCE, from GitHub's activity record of the branch, newest first: each one's local hour
+def pushes_since(github_repo=GITHUB_REPO, since=SINCE):
+    """The pushes to main since `since`, from GitHub's activity record of the branch, newest first: each one's local hour
     and the commits it brought (main's tip before and after it). git can't tell: a branch merged with main and pushed
     fast-forward puts main's own history on its second parent."""
-    pushes, url = [], f"repos/{GITHUB_REPO}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
+    pushes, url = [], f"repos/{github_repo}/activity?ref=refs/heads/main&activity_type=push&per_page=100"
     while url:
         response = subprocess.run(["gh", "api", "-i", url], capture_output=True, text=True, check=True).stdout
         head, body = response.split("\r\n\r\n" if "\r\n\r\n" in response else "\n\n", 1)
         events = [(datetime.datetime.fromisoformat(event["timestamp"].replace("Z", "+00:00")).astimezone()
                    .strftime("%Y-%m-%d %H"), event["before"], event["after"]) for event in json.loads(body)]
-        pushes += [push for push in events if push[0] >= SINCE]
+        pushes += [push for push in events if push[0] >= since]
         following = re.search(r'<https://api\.github\.com/([^>]+)>; rel="next"', head)
-        url = following.group(1) if following and events and min(push[0] for push in events) >= SINCE else None
+        url = following.group(1) if following and events and min(push[0] for push in events) >= since else None
     return pushes
 
 
@@ -721,13 +723,20 @@ def commits_brought(before, after):
     return (ANCESTORS[after] & ~ANCESTORS[before] & SINGLE_PARENTED).bit_count()
 
 
-def hourly_pace():
-    """Pushes to main and the commits they brought, per hour of the push, every hour since SINCE: both on one clock,
-    so a commit made on a branch at 10 and landed at 16 counts at 16."""
+def wap_commits_brought(before, after):
+    """commits_brought for wap's main, by git (wap's pushes are few): 0 where a tip is missing, a force push's lost one."""
+    counted = subprocess.run(["git", "-C", WAP_CHECKOUT, "rev-list", "--count", "--no-merges", f"{before}..{after}"],
+                             capture_output=True, text=True)
+    return int(counted.stdout) if counted.returncode == 0 else 0
+
+
+def hourly_pace(pushes=None, brought=commits_brought):
+    """Pushes to main and the commits they brought, per hour of the push, every hour since the first: both on one
+    clock, so a commit made on a branch at 10 and landed at 16 counts at 16."""
     pushes_per_hour, commits_per_hour = collections.Counter(), collections.Counter()
-    for hour, before, after in pushes_since():
+    for hour, before, after in pushes_since() if pushes is None else pushes:
         pushes_per_hour[hour] += 1
-        commits_per_hour[hour] += commits_brought(before, after)
+        commits_per_hour[hour] += brought(before, after)
     first = datetime.datetime.strptime(min(pushes_per_hour), "%Y-%m-%d %H")
     hours = []
     while (label := first.strftime("%Y-%m-%d %H")) <= max(pushes_per_hour):
@@ -823,7 +832,7 @@ def hello_track():
 
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
-data = {"cards": card_counts(), "hello": hello_track(), "wap": wap_track(), "pace": hourly_pace(), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
+data = {"cards": card_counts(), "hello": hello_track(), "wap": wap_track(), "pace": hourly_pace(), "wap_pace": hourly_pace(pushes_since(WAP_GITHUB_REPO, WAP_SINCE), wap_commits_brought), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
         "tip": git("log", "-1", "--format=%h%x09%s%x09%ad", "--date=format:%Y-%m-%d %H:%M", TIP).strip().split("\t"),
         "generated": datetime.datetime.now().strftime("%Y-%m-%d %H:%M")}
 os.makedirs(os.path.dirname(OUT), exist_ok=True)

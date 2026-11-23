@@ -108,6 +108,10 @@ footer { color: var(--ink-3); font-size: 12px; }
     <h2>wap, the new compiler</h2>
     <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); all of it measured by the native wap as people run it, no warp in between (since 2026-11-22; before, wap1, wap/ compiled by wap's seed and run by warp, and before 2026-11-20 old warp running wap's source): wap compiling its own compiler (the cheapest of three compiles) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
+    <h3>Pace</h3>
+    <p class="section-note" id="wap-pace-note"></p>
+    <div class="legend"><span><i style="background:var(--s7)"></i>pushes to main</span><span><i style="background:var(--rule)"></i>commits</span></div>
+    <div class="chart" id="wap-pace"></div>
     <h3>Recently</h3>
     <div class="table-wrap"><table id="wap-recent"></table></div>
   </section>
@@ -468,11 +472,11 @@ function columnLines(snapshots, columns, container) {
     done.map(([time, key, title, link]) => `<tr><td class="sha">${time.slice(5)}</td><td><a href="${link}" target="_blank" rel="noopener">${escape(key)}</a><br><span class="card-title">${escape(title)}</span></td></tr>`).join("") + "</tbody>" : "";
 })();
 
-(function pace() {
-  const hours = DATA.pace, container = document.getElementById("pace");
+// pushes to main per hour and the commits they brought, for warp's main and wap's
+function pace(hours, container, noteElement) {
   const sum = (list, i) => list.reduce((a, h) => a + h[i], 0);
   const lastDay = hours.slice(-24);
-  document.getElementById("pace-note").textContent = `Pushes to main, from GitHub's record of the branch, and the commits of work each push brought (merges left out), both by the hour of the push. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
+  noteElement.textContent = `Pushes to main, from GitHub's record of the branch, and the commits of work each push brought (merges left out), both by the hour of the push. Last 24 hours: ${sum(lastDay, 1)} pushes, ${sum(lastDay, 2)} commits; since ${shortDay(hours[0][0].slice(0, 10))}: ${format(sum(hours, 1))} pushes, ${format(sum(hours, 2))} commits. Hover a bar for its hour.`;
   const height = 200, top = Math.max(5, Math.ceil(Math.max(...hours.map(h => h[2])) / 5) * 5);
   const svg = element("svg", { viewBox: `0 0 ${WIDTH} ${height}`, role: "img", "aria-label": "landings and commits per hour" }, container);
   const plotWidth = WIDTH - PAD.left - PAD.right, plotHeight = height - PAD.top - PAD.bottom;
@@ -493,7 +497,9 @@ function columnLines(snapshots, columns, container) {
     const hit = element("rect", { x: x(i), y: PAD.top, width: slot, height: plotHeight, fill: "transparent" }, svg);
     element("title", {}, hit).textContent = `${hour}:00 · ${landings} pushes · ${commits} commits`;
   });
-})();
+}
+pace(DATA.pace, document.getElementById("pace"), document.getElementById("pace-note"));
+pace(DATA.wap_pace, document.getElementById("wap-pace"), document.getElementById("wap-pace-note"));
 
 (function builds() {
   const time = date => new Date(date.replace(" ", "T")).getTime();
