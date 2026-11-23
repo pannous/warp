@@ -1,13 +1,14 @@
 --- a/wasmtime/src/runtime/store/gc.rs
 +++ b/wasmtime/src/runtime/store/gc.rs
-@@ -1196,7 +1196,9 @@
+@@ -1196,7 +1196,10 @@
      // GC heap growth (and its space overhead), only prefer growing first if the
      // predicted GC heap utilization is greater than half the GC heap's
      // capacity.
 -    predicted_usage < gc_heap_capacity / 2
-+    // warp: a copying heap uses half its capacity at a time, so grow (doubling) once the prediction passes half
-+    // of that half, not when the half is full (it collected over and over, freeing little: 80% of a compile)
-+    predicted_usage < gc_heap_capacity / 4
++    // warp: a copying heap uses half its capacity at a time, so grow (doubling) once the prediction passes two
++    // thirds of that half, not when the half is full (it collected over and over, freeing little: 80% of a compile);
++    // at a quarter, a doubling more: wap's self-compile 2065 MB in 13.5 s, at a third 1041 MB in 16.5 s (2026-11-23)
++    predicted_usage < gc_heap_capacity / 3
  }
  
  #[cfg(test)]

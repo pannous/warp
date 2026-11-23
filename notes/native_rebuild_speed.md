@@ -44,7 +44,7 @@ test results; submit.sh --confirm forks, pushes, opens them; dry run without). w
   wasmtime_config_gc_heap_initial_size_set, C++ wrappers, and gc-copying in the C API's WASMTIME_FEATURE_LIST
   (on by default, so a default C API build's Collector::Auto is copying: the setter is then not even needed).
 - B `gc-growth-usable-capacity`: GcHeap::usable_capacity (the active semi-space for copying) in should_collect_first
-  and collect_and_maybe_grow_gc_heap: the general form of patches/copying-heap-growth.patch (same /4 for copying).
+  and collect_and_maybe_grow_gc_heap: the general form of patches/copying-heap-growth.patch (warp’s patch now /3 for copying, 2026-11-23; data/upstream’s PR B still says /4).
 The Bytecode Alliance AI tool policy wants the submitter to have reviewed every line and ideally written the PR text.
 Once both are in a release on Homebrew/APT: driver.warp's 59 `from "warp_wasmtime"` become "wasmtime" and
 warp_config_gc_heap_initial_size_set becomes wasmtime_config_gc_heap_initial_size_set; scripts/wasmtime-c-api.sh
