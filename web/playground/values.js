@@ -78,7 +78,7 @@ function guestPlain(program, value) {
 	const shown = shownText(program, value);
 	if (shown !== undefined) return plainOfShown(shown);
 	// too long to show: a list of plain ints its numbers at once (a file's bytes), a map an object of its entries, as
-	// plainOfShown reads a shown one (paint's values of a few thousand vectors, samples/graphics/gaussian_splats.warp),
+	// plainOfShown reads a shown one (paint's values of a few thousand vectors, samples/graphics/gaussian_splats.wap),
 	// any other list its items
 	const ints = program.int32s_at && guestInt32s(program, value, guestCount(program, value), "int32s_at");
 	if (ints) return Array.from(ints);

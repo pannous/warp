@@ -1,4 +1,4 @@
-# The swatch paint must compile to a shader. Source: lib/shaders.warp, samples/graphics/color_swatches.warp,
+# The swatch paint must compile to a shader. Source: lib/shaders.warp, samples/graphics/color_swatches.wap,
 # and the list read test/web/test_shader_of.pairs.warp pins (`levels#(x + 1)`). xs[i] is not that read: its
 # subscript_offset mark is quoted as `view·attribute`, and WGSL has no operator `:`. The palette is still one
 # program value, the named colors' channels. The strings below are that capture, not a looser "it returned text".

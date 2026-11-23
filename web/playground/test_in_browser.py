@@ -22,7 +22,7 @@ Besides the repository it serves /__stub__?status=…&body=… (that response, f
 src/formats/ffi_parser.rs INCLUDE_DIRS that holds it (the page sets WARP_INCLUDE=/include), nothing else of the machine."""
 import functools, glob, http.server, json, os, re, subprocess, sys, threading, time, urllib.parse, urllib.request
 
-# --samples (scripts/samples-web.sh): every samples/**/*.warp in the page, its output against the native run's
+# --samples (scripts/samples-web.sh): every samples/**/*.wap in the page, its output against the native run's
 SAMPLES_WEB_RESULTS = "test/samples-web.txt"  # tracked: status and sample, one a line, like test/samples.txt
 # a sample that fails on purpose says why on a line of its own, `# expected failure: deliberate parse errors`: EXP
 # instead of FAIL in either sweep (scripts/samples.sh EXPECTED_FAILURE); in the page ok when it fails with the native
@@ -295,7 +295,7 @@ total = 0
 for i in 1 to 400 { total += await go twice(i) }
 total"""
 MANY_TASKS_SHOWN = "160400"
-# card shader-brush: samples/graphics/shader_brush.warp colors the paper under the pointer (its $mouse), not only a corner
+# card shader-brush: samples/graphics/shader_brush.wap colors the paper under the pointer (its $mouse), not only a corner
 BRUSH = "(samples/graphics/shader_brush colors the paper under the pointer)"
 BRUSH_SAMPLE = "shader_brush"
 BRUSH_WAIT_MS = 8000  # the sample paints a frame every 16 ms; a software GPU takes far longer for its 1280×800
@@ -1796,7 +1796,7 @@ def check_samples(paths, tree):
 			status, detail = sample_verdict(report, native_output)
 			if status == "ran" and live:
 				detail = "live data, never compared (# output: live)"
-		wrong = checks_wrong(os.path.basename(path)[:-len(".warp")], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
+		wrong = checks_wrong(os.path.splitext(os.path.basename(path))[0], source) if status in ("ok", "ran") and CHECK_LINE.search(source) else []
 		if wrong:
 			status, detail = "DIFF", "; ".join(wrong)
 		if status == "FAIL" and EXPECTED_FAILURE.search(source):

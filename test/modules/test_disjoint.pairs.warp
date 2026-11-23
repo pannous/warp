@@ -10,4 +10,4 @@
 'use disjoint; DisjointSet(-1)'	error	negative count
 'use disjoint; DisjointSet(3).find(0)'	error	element below 1
 'use disjoint; DisjointSet(3).unite(1, 4)'	error	element above n
-'samples/objects/disjoint_groups.warp'	23
+'samples/objects/disjoint_groups.wap'	23

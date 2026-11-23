@@ -50,7 +50,7 @@ test is the runtime's kind test (`a is int`), so no new runtime words are needed
 - Inside a dispatcher the rows come first and the builtin is the last branch. A node holding two plain numbers pays
   the row tests, which is the same cost as today's left-class test chain.
 
-Measure before/after: `hyperfine 'warp samples/hello/hello.warp'` (today 0.15–0.18 s), the compile of
+Measure before/after: `hyperfine 'warp samples/hello/hello.wap'` (today 0.15–0.18 s), the compile of
 samples/numbers/*, and core size (scripts/vitals.py). Neither may get worse.
 
 ## Generic amounts (composition)
@@ -96,7 +96,7 @@ and url; none of those is in std_module_names. The closure in core/compiler.warp
         names
     }
 
-It builds and self-checks, but prebuilt reals breaks samples/numbers/measurements.warp: `2 * π * √(interval)` fails
+It builds and self-checks, but prebuilt reals breaks samples/numbers/measurements.wap: `2 * π * √(interval)` fails
 with "no field radicand". A linked module's operator dispatcher knows only its own classes, so real's `*` never meets
 uncertain's Interval. The per-operator tables baked across modules (Supervisor's condition 2) fix that, and
 measurements.warp with prebuilt reals is the proof. Until then, linked_libraries asks exists() first, so the page

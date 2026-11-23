@@ -21,7 +21,7 @@ paint_blue() := { xs = [[0.0, 0.0, 1.0, 1.0], [0.0, 0.0, 1.0, 1.0]] }
 paint_blue()
 $shader
 print gpu_render(s, 2, 2, {xs: xs})#1")" 4278190335
-# paint's first argument is pixels the CPU paints: a list painted so stays a list (samples/advanced/filled_circle.warp)
+# paint's first argument is pixels the CPU paints: a list painted so stays a list (samples/advanced/filled_circle.wap)
 check "a list of pixels painted stays a list" "$(WARP_WINDOW=0 "$warp" --mute --lib "$lib" 'surface = int[6]; paint(surface, 3, 2); print gpu_list_place(surface)' 2>&1 | tail -1)" -1
 # a list whose items the program reads too would show them rounded to f32: it stays a list, the slow path says so
 check "a list the program reads stays a list" "$(strict "xs = []

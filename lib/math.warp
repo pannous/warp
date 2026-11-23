@@ -180,7 +180,7 @@ magnitude(x: any) := norm(x)
 // vectors are lists of numbers: their dot product, their distance, the vector of length 1 along v, the cross product of
 // two 3-vectors and the direction i reflected at a surface of normal n. Small vectors stay a fused GC loop (exact
 // ints). From DOT_LINEAR_FEWEST up, items are copied into linear memory and multiplied as f64 there (~80× the GC
-// loop on 10^5; samples/lists/dot.warp). The emitter's linear_dotf (f64x2, no copy) still wins once auto-linear
+// loop on 10^5; samples/lists/dot.wap). The emitter's linear_dotf (f64x2, no copy) still wins once auto-linear
 // pairs float[n] by dot — that path is core, not lib (card dot-compose-fix)
 DOT_LINEAR_FEWEST = 64
 dot_cell_bytes() := 8

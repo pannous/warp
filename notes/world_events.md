@@ -113,7 +113,7 @@ needed for either.
   (`Last-Event-ID`), so nothing is lost between windows; the page has no `run` and refuses loudly.
 - lib/wikipedia.warp `changes(wiki)`, lib/polymarket.warp `markets(n)`, `market(slug)`, `price(slug)`,
   `prices(slug, every)`, `outcome_prices(m)`, lib/earthquakes.warp `quakes(magnitude, every)`.
-- samples/world/wikipedia_edits.warp, polymarket_odds.warp, strong_quakes.warp; test/world/test_world.pairs.warp
+- samples/world/wikipedia_edits.wap, polymarket_odds.warp, strong_quakes.warp; test/world/test_world.pairs.warp
   (`needs: network`, about 7 s a line: each is a live request).
 
 Spelling today: `for edit in changes("enwiki").take(5) {…}`. The endless `for edit in changes("enwiki") {…}` waits on

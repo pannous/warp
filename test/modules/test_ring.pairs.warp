@@ -16,4 +16,4 @@
 'use ring; r = Ring(2); r.pop()'	error	pop of an empty ring
 'use ring; r = Ring(2); r.peek()'	error	peek of an empty ring
 'use ring; r = Ring(2); r.latest()'	error	latest of an empty ring
-'samples/objects/ring_log.warp'	90
+'samples/objects/ring_log.wap'	90

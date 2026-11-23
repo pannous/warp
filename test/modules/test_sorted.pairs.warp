@@ -29,4 +29,4 @@
 'use sorted; [TreeMap([[2, "z"], [1, "y"]]).keys(), BTreeMap([[1, "a"]]).get(1), BTreeSet([3, 1]).at(2)]'	[[1, 2], "a", 3]
 
 # the leaderboard sample: place of the top score, the band, the gap between first and third, the lowest score
-'samples/objects/sorted_leaderboard.warp'	1940
+'samples/objects/sorted_leaderboard.wap'	1940

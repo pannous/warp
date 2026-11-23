@@ -1,67 +1,67 @@
 # from test_samples.rs: edit the Rust test, then run the script again
 
 # test_fibonacci
-'samples/functions/fibonacci.warp'	55
+'samples/functions/fibonacci.wap'	55
 
 # test_factorial
-'samples/numbers/factorial.warp'	120
+'samples/numbers/factorial.wap'	120
 
 # test_primes
-'samples/lists/primes.warp'	1
+'samples/lists/primes.wap'	1
 
 # test_gcd
-'samples/numbers/gcd.warp'	6
+'samples/numbers/gcd.wap'	6
 
 # test_sum
-'samples/numbers/sum.warp'	55
+'samples/numbers/sum.wap'	55
 
 # test_power
-'samples/numbers/power.warp'	1024
+'samples/numbers/power.wap'	1024
 
 # test_collatz
-'samples/numbers/collatz.warp'	111
+'samples/numbers/collatz.wap'	111
 
 # test_ackermann
-'samples/functions/ackermann.warp'	61
+'samples/functions/ackermann.wap'	61
 
 # test_quadratic
-'samples/numbers/quadratic.warp'	6
+'samples/numbers/quadratic.wap'	6
 
 # test_fizzbuzz
-'samples/conditions/fizzbuzz.warp'	'FizzBuzz'
+'samples/conditions/fizzbuzz.wap'	'FizzBuzz'
 
 # test_sudoku
-'samples/functions/sudoku.warp'	534
+'samples/functions/sudoku.wap'	534
 
 # test_snake
 
 # test_quicksort
-'samples/lists/quicksort.warp'	true
+'samples/lists/quicksort.wap'	true
 
 # test_game_of_life
-'samples/loops/game_of_life.warp'	3736
+'samples/loops/game_of_life.wap'	3736
 
 # test_raytracer
 
 # test_binary_tree
-'samples/objects/binary_tree.warp'	409
+'samples/objects/binary_tree.wap'	409
 
 # test_comments
-'samples/hello/comments.warp'	120
+'samples/hello/comments.wap'	120
 
 # test_sin
 
 # test_calculator
-'samples/text/calculator.warp'	39
+'samples/text/calculator.wap'	39
 
 # test_json_parser
-'samples/objects/json_parser.warp'	125.0
+'samples/objects/json_parser.wap'	125.0
 
 # test_mandelbrot
-'samples/loops/mandelbrot.warp'	17748
+'samples/loops/mandelbrot.wap'	17748
 
 # test_data_structures
-'samples/objects/data_structures.warp'	'Dave 11 20'
+'samples/objects/data_structures.wap'	'Dave 11 20'
 
 # test_y_combinator
-'samples/functions/y_combinator.warp'	6765
+'samples/functions/y_combinator.wap'	6765

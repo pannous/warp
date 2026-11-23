@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A runtime error inside a library's function names its own line in the library's file, never a line of the library
-# under the program's name (card wasm-trap: samples/sound/arrangement.warp failed "at arrangement.warp:34:56", a line
+# under the program's name (card wasm-trap: samples/sound/arrangement.wap failed "at arrangement.warp:34:56", a line
 # of lib/timers.warp; card positions-always: the place is the library's, lib/timers.warp:…). Run it with bash test/errors/test_library_trap_place.sh; the warp under test is WARP (default
 # the warp on PATH), a tree's WARP=<tree>/data/gate/warp
 warp=${WARP:-warp}

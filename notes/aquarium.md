@@ -2,7 +2,7 @@
 
 Fragment-based aquarium approximation. Not a faithful WebGPU port. No GPU frame has been shown.
 
-The picture is `samples/gpu/aquarium.warp`. The reef is that file; the fish mesh and its swim are `samples/gpu/fish_mesh.warp`, shared with `samples/gpu/fish.warp`. There is no `lib/aquarium.warp`. `test/aquarium/test_aquarium.warp` imports the sample file, which brings the functions and not the `on frame` paint.
+The picture is `samples/gpu/aquarium.wap`. The reef is that file; the fish mesh and its swim are `samples/gpu/fish_mesh.wap`, shared with `samples/gpu/fish.wap`. There is no `lib/aquarium.warp`. `test/aquarium/test_aquarium.warp` imports the sample file, which brings the functions and not the `on frame` paint.
 
 ## Reference
 
@@ -14,7 +14,7 @@ The fish are not that sim's ellipsoid school. They are the Fish Kit's low red se
 
 ## Upstream license
 
-Exact `LICENSE.md` from greggman/webgpu-aquarium at `055da77885a571e85970b2bb3807b0b504ce1a1c` (sha256 `22bf9b52b86f92408391fc504d696bc1c1604a789f7502ac59ebcbf32901379f`). Kept in this note. No separate license file was added. The header of `samples/gpu/aquarium.warp` names that revision.
+Exact `LICENSE.md` from greggman/webgpu-aquarium at `055da77885a571e85970b2bb3807b0b504ce1a1c` (sha256 `22bf9b52b86f92408391fc504d696bc1c1604a789f7502ac59ebcbf32901379f`). Kept in this note. No separate license file was added. The header of `samples/gpu/aquarium.wap` names that revision.
 
 ```
 MIT License
@@ -42,10 +42,10 @@ SOFTWARE.
 
 ## What paints
 
-`paint(aquarium_color, view_width, view_height)` is one fragment shader, the same path as `samples/gpu/sdf_scene.warp` and `samples/gpu/ocean.warp`. The sample is
+`paint(aquarium_color, view_width, view_height)` is one fragment shader, the same path as `samples/gpu/sdf_scene.wap` and `samples/gpu/ocean.wap`. The sample is
 
 ```bash
-warp samples/gpu/aquarium.warp
+warp samples/gpu/aquarium.wap
 ```
 
 With a window, `on frame` keeps swimming. Without one (`--no-window`), that frame runs once and the paint is a still (decision on-frame-headless). `view_color(x, y, t)` is the same picture at one pixel, which the tests call.

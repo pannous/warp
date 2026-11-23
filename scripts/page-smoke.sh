@@ -6,7 +6,7 @@
 # the playground it just refreshed. A host import the page lacks fails every sample here, hello first (canonical_text).
 # Prints the page sweep's line; exits 1 unless every sample prints what the native warp prints.
 set -uo pipefail
-PAGE_SMOKE=(samples/hello/hello.warp samples/web/component_totals.warp)  # hello and markup
+PAGE_SMOKE=(samples/hello/hello.wap samples/web/component_totals.wap)  # hello and markup
 built=
 [ "${1-}" = --built ] && { built=1; shift; }
 tree=$(cd "${1:?usage: page-smoke.sh [--built] <tree>}" && pwd) || exit 2

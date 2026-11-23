@@ -1587,7 +1587,7 @@ midi_milliseconds(tick, tempi, division) := {
 	round((seconds + (tick - from) * tempo / 1000000.0 / division) * 1000) as int
 }
 
-// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.warp), or of an
+// how loud each frequency band sounds at a moment of the samples (card winamp-like, samples/sound/visualizer.wap), or of an
 // audio file, spectrum(./song.mp3, seconds, bands), decoded once: the bands spaced evenly in pitch from band_low to
 // band_high Hz, each level from 0 to 1 (a full-scale sine is 1). The window Hann-weighted, each band measured by
 // Goertzel's recurrence in warp, of samples or of a file's decoded by the host

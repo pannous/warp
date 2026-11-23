@@ -269,7 +269,7 @@ cos(x: real) := if half_turns(x) then half_turns_sine(2 * x.coefficient + 1) els
 half_turns(x: real) := exact_real(x) and x.pi_power == 1 and x.radicand == 1 and (2 * x.coefficient) is int
 // sin(n·π/2): 0, 1, 0, -1 around the circle
 half_turns_sine(n: int) := [0, 1, 0, -1][((n % 4) + 4) % 4]
-// the other real functions of lib/math.warp the float's: tan(π/6), the camera's field of view in samples/gpu/ocean.warp
+// the other real functions of lib/math.warp the float's: tan(π/6), the camera's field of view in samples/gpu/ocean.wap
 tan(x: real) := tan(real_float(x) as float)
 exp(x: real) := exp(real_float(x) as float)
 

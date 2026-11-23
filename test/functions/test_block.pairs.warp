@@ -16,7 +16,7 @@
 '[[1, 2], [3, 4]].map { |p| p#1 + p#2 }'	[3, 7]
 'try { raise "no" } catch e { 7 }'	7
 
-# A parameter named `block` is a block too, untyped (wiki/block.md, samples/functions/block_arguments.warp)
+# A parameter named `block` is a block too, untyped (wiki/block.md, samples/functions/block_arguments.wap)
 
 'def repeats(n: int, block) := { for i in 1...n { block() } }; k = 0; repeats 4 { k += 1 }; k'	4
 'twice(block) := { block(); block() }; s = ""; twice { s += "a" }; s'	'aa'

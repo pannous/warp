@@ -18,7 +18,7 @@ gpu_compute / gpu_render plumbing (lib/host/native_host/gpu.warp, web/playground
   one; a list the program makes once (literal, comprehension, `float[n]`) at its main level and uses only by #, xs#i,
   xs#i = v, for, print and gpu_compute is one by itself (extensions/rules/gpu_packing.warp gpu_lists_packed,
   gpu_bound), as is a creating form written in a gpu_compute call. gpu.warp binds the cells as the storage buffer
-  and writes results back into them (array_left): samples/acceleration/gpu_million.warp went 852 + 1686 ms → 138 +
+  and writes results back into them (array_left): samples/acceleration/gpu_million.wap went 852 + 1686 ms → 138 +
   20 ms. Other list words refuse a `[f32]` list today; card f32-gpu gives reads a boxed copy (one function, which
   xs-map-gpu replaces by a kernel) and growth (a [count, capacity, cells] header, vector doubling). Linear memory is
   never freed yet (card packed-f32-memory).
@@ -125,10 +125,10 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
    dot (CPU on purpose, P214): `dot(xs, ys)` is `sum(xs .* ys)` fused into one loop.
    No GPU dot: a multiply-add is ~1 ns an item in lanes, so uploading the two arrays (16 MB at 10^6) already costs
    more than the CPU's whole dot. It pays only for data already on the GPU (a dot of two @gpu maps: kept buffers).
-   Sample: samples/lists/dot.warp.
+   Sample: samples/lists/dot.wap.
    Browser (host-gpu.js gpu_kernel): the block's cells go to the task Worker as a transferred Float32Array and
    come back as raw f32 bytes in the shared buffer, only from the first cell
-   needed (the partials of a reduction). Measured with samples/acceleration/gpu_map.warp (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
+   needed (the partials of a reduction). Measured with samples/acceleration/gpu_map.wap (headless Chrome, Apple Metal, `sin(x) * exp(x) + cos(x * 3)`,
    10^6, ms): sum GPU 8–17 / CPU 80–160, the mapped list back 12–16; the first run 86 (device + shader). Raw WebGPU for
    that kernel is ~3 ms. SwiftShader (CI): correct, sum 464 ms, sin less precise (2e-5 relative). Chrome's Tint
    refuses the f32 literal 3.4028235e38 (it rounds above the largest f32). Careful when
@@ -140,7 +140,7 @@ WGSL has no f64 and no i64 (the shader-f64 feature is native-only and missing on
    Browser: GPU jobs go to the task Worker of the last GPU job (host-gpu.js gpuTaskWorker), which keeps
    the buffers.
 
-## Painting a shader every frame (samples/gpu/gpu_visualizer.warp)
+## Painting a shader every frame (samples/gpu/gpu_visualizer.wap)
 - host-gpu.js keeps the compiled module and render pipeline per shader text (16, MOST_COMPILED): only the uniform's
   bind group is made per frame.
 - WGSL raymarching tip: a distance field over angular sectors (bars whose height differs per band) must take the
@@ -165,7 +165,7 @@ Costs nothing for a shader that doesn't mention them.
 ## $previous: a shader's own last frame
 `$previous(at)` is the color the shader left at pixel `at` (vec2f, clamped to the image) in its previous render of
 the same size, black before the first (another paper: `select(paper, $previous(at), $frame > 0)`): painting with
-memory (samples/graphics/shader_trails.warp). $last, $feedback, $before are not taken from programs; a value missing under
+memory (samples/graphics/shader_trails.wap). $last, $feedback, $before are not taken from programs; a value missing under
 them hints at $previous (host-gpu.js PREVIOUS_WORDS). Not a value but a
 function: BUILTIN_HOLES has "previous" so no values entry is made; the host rewrites `values.previous(` to
 `warp_previous(` and appends PREVIOUS_FRAME (texture_2d at @group(0) @binding(1), textureLoad). Each render draws
@@ -202,7 +202,7 @@ The plan, in warp's words, with $previous as the model:
 - **Compute passes** (an FFT over a spectrum) are maps over lists kept on the GPU (linear arrays), a later
   step; an image built from such a list (`image(list, width, height)`) joins them to the paint.
 - First step: render + reading an image in a painted function, native only, one probe rendering a gradient into an
-  image and painting it shifted. Then the browser host, then samples/gpu/ocean.warp's waves as a texture.
+  image and painting it shifted. Then the browser host, then samples/gpu/ocean.wap's waves as a texture.
 
 ## WGSL errors at their place in the program
 WGSL in `shader { … }` stays as written (no warp syntax converted into it; only `$name` holes). The block's reader
@@ -269,7 +269,7 @@ functions) runs there too.
   extensions/rules/modules/shaders.warp), the program's values f reads as its values; vectors are vec2f…vec4f; no
   adapter or paint_on_gpu = no: f of each pixel on the CPU (lib/shaders.warp paint_each). Map kernels calling user
   functions are card xs-map-gpu.
-- **Open**: the acceptance step, samples/gpu/gpu_visualizer.warp's tunnel shader written in warp giving the
+- **Open**: the acceptance step, samples/gpu/gpu_visualizer.wap's tunnel shader written in warp giving the
   same frame as the WGSL one, needs arrays as values (`levels`).
 
 ## Shaders in the browsers' playground

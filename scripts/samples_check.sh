@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/samples_check.sh [<warp binary> [<program.warp> [<port>]]]:
 # Serve a warp HTTP sample and curl its routes (historical probes/server_edits/curl_checks.sh,
-# removed with probes/). Default: installed warp + samples/servers/server.warp on an ephemeral port.
+# removed with probes/). Default: installed warp + samples/servers/server.wap on an ephemeral port.
 #
 # Under load the process can take a long time to answer, and the first reply can be empty (card
 # sh-flake). This script:
@@ -24,7 +24,7 @@
 #
 # usage:
 #   scripts/samples_check.sh
-#   scripts/samples_check.sh /path/to/warp samples/servers/server.warp 18080
+#   scripts/samples_check.sh /path/to/warp samples/servers/server.wap 18080
 #
 # exit 0 green (or known-core SKIP), 1 red (prints a FAIL line).
 set -euo pipefail
@@ -36,7 +36,7 @@ source "$scripts_dir/lib/platform.sh"
 tree=$(cd "$scripts_dir/.." && pwd)
 checkouts_linked "$tree" || exit 2
 WARP=${1:-${WARP:-$warp_binary}}
-PROGRAM=${2:-samples/servers/server.warp}
+PROGRAM=${2:-samples/servers/server.wap}
 PORT=${3:-0}
 WAIT_SECS=${WAIT_SECS:-120}
 POLL_SECS=${POLL_SECS:-0.5}
@@ -58,7 +58,7 @@ if [ "$PORT" = 0 ]; then
 	PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
 fi
 
-db_path="${PROGRAM%.warp}.database.sqlite"
+db_path="${PROGRAM%.*}.database.sqlite"
 rm -f "$db_path"
 
 log=$(mktemp)
@@ -74,7 +74,7 @@ cleanup() {
 	fi
 	rm -f "$db_path" "$log" "$err" "$run_program"
 	# Temp serve may create <run_program>.database.sqlite beside the mktemp path.
-	rm -f "${run_program%.warp}.database.sqlite"
+	rm -f "${run_program%.*}.database.sqlite"
 }
 trap cleanup EXIT
 
@@ -215,7 +215,7 @@ check() {
 	echo "ok   $method $path → $status ${preview}"
 }
 
-# Adapted from historical curl_checks.sh to samples/servers/server.warp (restored stored User demo).
+# Adapted from historical curl_checks.sh to samples/servers/server.wap (restored stored User demo).
 # Hits only paths that should answer once core-native-stored-sqlite lands. Skips:
 #   - GET /api/newest — `last 2 of users` stack-exhausts (core-last-n-of-stack)
 #   - POST /api/users with body (`curl -d Cy`) — abort/heap corruption (core-post-body-abort)

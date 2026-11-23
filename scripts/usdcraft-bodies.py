@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bake USDCraft-10K objects into the rigid bodies samples/physics/usd_collisions.warp drops.
+"""Bake USDCraft-10K objects into the rigid bodies samples/physics/usd_collisions.wap drops.
 
 usage: scripts/usdcraft-bodies.py <object dir>... > samples/physics/usdcraft.bodies
   an object dir holds meta.json and physx/model.usdc (nvidia/USDCraft-10K, Apache-2.0); needs usd-core and numpy:

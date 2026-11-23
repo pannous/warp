@@ -1,5 +1,5 @@
 // The standard library module markup (card web-ssr, notes/web_framework.md "Built sites"): `use markup` (not `html`,
-// which samples/web/html.warp would shadow). to_html(value) is the HTML of a markup value,
+// which samples/web/html.wap would shadow). to_html(value) is the HTML of a markup value,
 // `div{ class:"box" h1{"Hi"} }` → <div class="box"><h1>Hi</h1></div>, any other value as escaped text. Written in warp, so a page renders itself: the same function makes a built site's index.html at build
 // time and its updates in the browser (page·html). An element is an Html, what markup written in a markup scope makes
 // (extensions/markup_values.warp); inside it a key named after an attribute with a plain value is an attribute

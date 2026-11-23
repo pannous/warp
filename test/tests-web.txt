@@ -1,12 +1,12 @@
 # 7afcde9933 2026-11-10 05:25 14224/15593 91.2%
-ok   test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no
-ok   test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes
-ok   test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.warp\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes
-ok   test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.warp\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes
-ok   test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes
-ok   test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes
-ok   test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.warp\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes
-ok   test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.warp\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes
+ok   test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no
+ok   test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes
+ok   test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.wap\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes
+ok   test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.wap\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes
+ok   test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes
+ok   test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes
+ok   test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.wap\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes
+ok   test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.wap\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes
 ok   test/control/test_after.pairs.warp:4 "job = go { sleep(10ms); 3 }; await job or 0" 3
 ok   test/control/test_after.warp:4 "shared done = false; go { sleep(50ms); done = true }; last = after done return \"third\"; await last" "third"
 ok   test/control/test_after.warp:5 "shared n = 0; go { for i in 1 to 5 { n += 1 } }; five = after (n == 5) return n * 2; await five" 10
@@ -92,7 +92,7 @@ BOTH test/control/test_braceless_output_calls.pairs.warp:4 "for i in 1 to 5 : pu
 BOTH test/control/test_braceless_output_calls.pairs.warp:5 "x = puti 7; x + 1" 8
 ok   test/control/test_branch_assigned_variables.pairs.warp:4 "c=2; if c > 1 { n = \"ab\" } else { n = \"cd\" }; n" "ab"
 ok   test/control/test_branch_assigned_variables.pairs.warp:5 "f(c) := { if c > 1 { n = \"ab\" } else { n = \"cd\" }; n }; f(0)" "cd"
-ok   test/control/test_branch_assigned_variables.pairs.warp:6 "samples/lists/sorting_idiomatic.warp" "-3,0,1,2,5,5,6,7,8,9"
+ok   test/control/test_branch_assigned_variables.pairs.warp:6 "samples/lists/sorting_idiomatic.wap" "-3,0,1,2,5,5,6,7,8,9"
 BOTH test/control/test_broadcast.pairs.warp:4 "broadcast {text: \"hi\"} on \"test-nobody\"; 5" 5
 ok   test/control/test_call_condition_block.pairs.warp:4 "profile = \"../../AGENTS.md\"; if exists profile {1} else {2}" 1
 ok   test/control/test_call_condition_block.pairs.warp:5 "profile = \"no such file\"; if exists profile {1} else {2}" 2
@@ -1616,7 +1616,7 @@ ok   test/control/test_try_finally.pairs.warp:4 "x = 0; try { x = 1 } finally { 
 ok   test/control/test_try_finally.pairs.warp:7 "try { 1 } finally { print \"done\" }" 1
 ok   test/control/test_try_finally.pairs.warp:10 "x = 0; try { 1/0 } finally { x = 5 }; x" 5
 ok   test/control/test_try_finally.warp:4 "try:\n  1\nfinally:\n  2" 1
-ok   test/control/test_try_host_failure.pairs.warp:4 "samples/errors/try_failed_json.warp" "light"
+ok   test/control/test_try_host_failure.pairs.warp:4 "samples/errors/try_failed_json.wap" "light"
 ok   test/control/test_try_host_failure.pairs.warp:7 "try write(\"/no/such/folder/x.txt\", \"x\") else 7" 7
 ok   test/control/test_try_host_failure.warp:4 "use json\ntry parse_json(\"not json\") else 7" 7
 ok   test/control/test_try_host_failure.warp:6 "use json\ntry parse_json(\"5\") else 7" 5
@@ -5430,7 +5430,7 @@ ok   test/modules/test_disjoint.pairs.warp:9 "use disjoint; UnionFind(3).unite(3
 ok   test/modules/test_disjoint.pairs.warp:10 "use disjoint; DisjointSet(-1)" error
 ok   test/modules/test_disjoint.pairs.warp:11 "use disjoint; DisjointSet(3).find(0)" error
 ok   test/modules/test_disjoint.pairs.warp:12 "use disjoint; DisjointSet(3).unite(1, 4)" error
-ok   test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.warp" 23
+ok   test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.wap" 23
 ok   test/modules/test_disjoint_contract.pairs.warp:3 "use disjoint; DisjointSet(2.5)" error
 ok   test/modules/test_disjoint_contract.pairs.warp:4 "use disjoint; DisjointSet(1.5)" error
 ok   test/modules/test_disjoint_contract.pairs.warp:5 "use disjoint; DisjointSet(1 / 2)" error
@@ -6759,7 +6759,7 @@ ok   test/modules/test_ring.pairs.warp:15 "use ring; Ring(-3)" error
 ok   test/modules/test_ring.pairs.warp:16 "use ring; r = Ring(2); r.pop()" error
 ok   test/modules/test_ring.pairs.warp:17 "use ring; r = Ring(2); r.peek()" error
 ok   test/modules/test_ring.pairs.warp:18 "use ring; r = Ring(2); r.latest()" error
-ok   test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.warp" 90
+ok   test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.wap" 90
 BOTH test/modules/test_root_folder_marker.pairs.warp:2 "use \"•/test/fixtures/counter.warp\"; counter" 10
 BOTH test/modules/test_root_folder_marker.pairs.warp:3 "use \"@/test/fixtures/counter.warp\"; counter" 10
 ok   test/modules/test_root_folder_marker.pairs.warp:4 "use \"•/test/fixtures/no_such_file.warp\"; 1" error
@@ -6834,7 +6834,7 @@ ok   test/modules/test_sorted.pairs.warp:22 "use sorted; SortedSet().max()" erro
 ok   test/modules/test_sorted.pairs.warp:25 "use sorted; a = SortedSet([1, 2, 2, 3, 4]); b = SortedSet([3, 4, 5]); [a.values(), a.union(b).values(), a.intersection(b).values(), a.difference(b).values(), len(a)]" [[1, 2, 3, 4], [1, 2, 3, 4, 5], [3, 4], [1, 2], 4]
 ok   test/modules/test_sorted.pairs.warp:26 "use sorted; a = SortedSet([1, 2, 3]); [a.equals(SortedSet([3, 1, 2])), SortedSet([1]).is_subset(a), a.is_subset(SortedSet([1])), a.intersection(a).equals(a), a.difference(a).is_empty(), SortedSet().union(SortedSet([2, 2])).values()]" [yes, yes, no, yes, yes, [2]]
 ok   test/modules/test_sorted.pairs.warp:29 "use sorted; [TreeMap([[2, \"z\"], [1, \"y\"]]).keys(), BTreeMap([[1, \"a\"]]).get(1), BTreeSet([3, 1]).at(2)]" [[1, 2], 'a', 3]
-ok   test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.warp" 1940
+ok   test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.wap" 1940
 ok   test/modules/test_sorted_balance.warp:5 "use sorted\n\nnode_size(t) := if t == ø then 0 else t.size\nweight_ok(t) := {\n\tif t == ø { return yes }\n\tsl = node_size(t.left)\n\tsr = node_size(t.right)\n\tif t.size != sl + sr + 1 { return no }\n\tif not weight_ok(t.left) or not weight_ok(t.right) { return no }\n\tif sl + sr <= 1 { return yes }\n\tif sl > 3 * sr or sr > 3 * sl { return no }\n\tyes\n}\norder_ok(s) := {\n\txs = s.values()\n\tif count(xs) != s.size() { return no }\n\tif count(xs) > 1 { for i in 1 to count(xs) - 1 { if not (xs#i < xs#(i + 1)) { return no } } }\n\tfor i in 1 to count(xs) { if s.at(i) != xs#i { return no } }\n\tyes\n}\nwhole(s) := weight_ok(s.root) and order_ok(s)\nnums(lo, hi) := [i for i in lo to hi]\n\na = SortedSet(nums(1, 127))\nevens = a\nfor i in 1 to 63 { evens = evens.remove(i * 2) }\nprefix = a\nfor i in 1 to 60 { prefix = prefix.remove(i) }\nmixed = SortedSet()\nfor i in 1 to 80 {\n\tmixed = mixed.add(i)\n\tif i % 3 == 0 and i > 1 { mixed = mixed.remove(i - 1) }\n\tif i % 7 == 0 { mixed = mixed.remove(i / 2:int) }\n}\ndesc = SortedSet()\nfor i in 1 to 90 { desc = desc.add(91 - i) }\nright = a.intersection(SortedSet(nums(120, 127)))\nkept = a.difference(SortedSet(nums(1, 119)))\nwide = SortedSet(nums(1, 255))\ntop = wide.intersection(SortedSet(nums(250, 255)))\nrest = wide.difference(SortedSet(nums(1, 249)))\nmissed = a.intersection(SortedSet([1000]))\nm = SortedMap()\nfor i in 1 to 40 { m = m.set(i, i * 10) }\nfor i in 1 to 20 { m = m.remove(i * 2) }\nmap_ok = weight_ok(m.root) and m.keys() == [i * 2 - 1 for i in 1 to 20] and m.rank(7) == 4 and m.get(7) == 70\n[whole(a), whole(evens), whole(prefix), whole(mixed), whole(desc), whole(right), whole(kept), whole(top), whole(rest), whole(missed), right.values() == nums(120, 127), kept.values() == nums(120, 127), top.values() == nums(250, 255), rest.values() == nums(250, 255), map_ok]" [yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes]
 ok   test/modules/test_sound_effects_in_warp.pairs.warp:2 "use sound; count(delay(osc(440, 0.1s), 0.1, 0.5, 0.5))" 23105
 ok   test/modules/test_sound_effects_in_warp.pairs.warp:3 "use sound; count(lowpass(osc(C4, 0.1s), 800, 0.707))" 2205
@@ -10661,15 +10661,15 @@ ok   test/parser/test_url_literal.warp:8 "x = https://pannous.com/files/test\nx"
 ok   test/parser/test_url_literal.warp:10 "x = ipfs://cid/file.txt\nx" "ipfs://cid/file.txt"
 ok   test/parser/test_warp_format.pairs.warp:4 "x={class:\"btn\" type:\"email\"}; x.class" "btn"
 ok   test/parser/test_warp_format.pairs.warp:5 "7 div 2" 3
-ok   test/programs/test_algo_dijkstra.pairs.warp:4 "samples/objects/dijkstra.warp" "ACBDEF:13"
-ok   test/programs/test_algo_levenshtein.pairs.warp:4 "use \"../../samples/text/levenshtein.warp\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
-ok   test/programs/test_algo_levenshtein.pairs.warp:7 "use \"../../samples/text/levenshtein_idiomatic.warp\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
-ok   test/programs/test_algo_life.pairs.warp:4 "samples/loops/game_of_life.warp" 3736
-ok   test/programs/test_algo_life.pairs.warp:7 "samples/loops/life_idiomatic.warp" 131
-ok   test/programs/test_algo_queens.pairs.warp:4 "samples/functions/queens.warp" 1119
-ok   test/programs/test_algo_queens.pairs.warp:7 "samples/functions/queens_idiomatic.warp" 1119
-ok   test/programs/test_algo_sieve.pairs.warp:4 "samples/lists/sieve.warp" 1083
-ok   test/programs/test_algo_sorting.pairs.warp:4 "samples/lists/sorting.warp" "-3,0,1,2,5,5,6,7,8,9"
+ok   test/programs/test_algo_dijkstra.pairs.warp:4 "samples/objects/dijkstra.wap" "ACBDEF:13"
+ok   test/programs/test_algo_levenshtein.pairs.warp:4 "use \"../../samples/text/levenshtein.wap\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
+ok   test/programs/test_algo_levenshtein.pairs.warp:7 "use \"../../samples/text/levenshtein_idiomatic.wap\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
+ok   test/programs/test_algo_life.pairs.warp:4 "samples/loops/game_of_life.wap" 3736
+ok   test/programs/test_algo_life.pairs.warp:7 "samples/loops/life_idiomatic.wap" 131
+ok   test/programs/test_algo_queens.pairs.warp:4 "samples/functions/queens.wap" 1119
+ok   test/programs/test_algo_queens.pairs.warp:7 "samples/functions/queens_idiomatic.wap" 1119
+ok   test/programs/test_algo_sieve.pairs.warp:4 "samples/lists/sieve.wap" 1083
+ok   test/programs/test_algo_sorting.pairs.warp:4 "samples/lists/sorting.wap" "-3,0,1,2,5,5,6,7,8,9"
 ok   test/programs/test_calculator_fixes.pairs.warp:4 "s=\"ab\"; t=\"b\"; s < t" yes
 ok   test/programs/test_calculator_fixes.pairs.warp:5 "s=\"b\"; s >= \"ab\"" yes
 ok   test/programs/test_calculator_fixes.pairs.warp:6 "s = \"45\"; c = byte_slice(s, 0, 1); c >= \"0\" and c <= \"9\"" yes
@@ -10815,44 +10815,44 @@ BOTH test/programs/test_property_definitions.warp:50 "class Point{x: int; y: int
 ok   test/programs/test_property_definitions.warp:53 "class Point{x: int; y: int}\nPoint.norm() := self.x\nPoint(3, 4).norm" 3
 BOTH test/programs/test_property_definitions.warp:56 "class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum" 7
 ok   test/programs/test_property_definitions.warp:59 "class Point{x: int; y: int}\nPoint.shift(d) := self.x = self.x + d\np = Point(3, 4)\np.shift = 10\np.x" 13
-ok   test/programs/test_samples.pairs.warp:4 "samples/functions/fibonacci.warp" 55
-ok   test/programs/test_samples.pairs.warp:7 "samples/numbers/factorial.warp" 120
-ok   test/programs/test_samples.pairs.warp:10 "samples/lists/primes.warp" 1
-ok   test/programs/test_samples.pairs.warp:13 "samples/numbers/gcd.warp" 6
-ok   test/programs/test_samples.pairs.warp:16 "samples/numbers/sum.warp" 55
-ok   test/programs/test_samples.pairs.warp:19 "samples/numbers/power.warp" 1024
-ok   test/programs/test_samples.pairs.warp:22 "samples/numbers/collatz.warp" 111
-ok   test/programs/test_samples.pairs.warp:25 "samples/functions/ackermann.warp" 61
-ok   test/programs/test_samples.pairs.warp:28 "samples/numbers/quadratic.warp" 6
-ok   test/programs/test_samples.pairs.warp:31 "samples/conditions/fizzbuzz.warp" "FizzBuzz"
-ok   test/programs/test_samples.pairs.warp:34 "samples/functions/sudoku.warp" 534
+ok   test/programs/test_samples.pairs.warp:4 "samples/functions/fibonacci.wap" 55
+ok   test/programs/test_samples.pairs.warp:7 "samples/numbers/factorial.wap" 120
+ok   test/programs/test_samples.pairs.warp:10 "samples/lists/primes.wap" 1
+ok   test/programs/test_samples.pairs.warp:13 "samples/numbers/gcd.wap" 6
+ok   test/programs/test_samples.pairs.warp:16 "samples/numbers/sum.wap" 55
+ok   test/programs/test_samples.pairs.warp:19 "samples/numbers/power.wap" 1024
+ok   test/programs/test_samples.pairs.warp:22 "samples/numbers/collatz.wap" 111
+ok   test/programs/test_samples.pairs.warp:25 "samples/functions/ackermann.wap" 61
+ok   test/programs/test_samples.pairs.warp:28 "samples/numbers/quadratic.wap" 6
+ok   test/programs/test_samples.pairs.warp:31 "samples/conditions/fizzbuzz.wap" "FizzBuzz"
+ok   test/programs/test_samples.pairs.warp:34 "samples/functions/sudoku.wap" 534
 ok   test/programs/test_samples.pairs.warp:37 "samples/advanced/snake.warp" 40
-ok   test/programs/test_samples.pairs.warp:40 "samples/lists/quicksort.warp" yes
-ok   test/programs/test_samples.pairs.warp:43 "samples/loops/game_of_life.warp" 3736
+ok   test/programs/test_samples.pairs.warp:40 "samples/lists/quicksort.wap" yes
+ok   test/programs/test_samples.pairs.warp:43 "samples/loops/game_of_life.wap" 3736
 ok   test/programs/test_samples.pairs.warp:46 "samples/advanced/raytracer.warp" 8230
-ok   test/programs/test_samples.pairs.warp:49 "samples/objects/binary_tree.warp" 409
-ok   test/programs/test_samples.pairs.warp:52 "samples/hello/comments.warp" 120
-ok   test/programs/test_samples.pairs.warp:55 "samples/numbers/sin.warp" 841471
-ok   test/programs/test_samples.pairs.warp:58 "samples/text/calculator.warp" 39
-ok   test/programs/test_samples.pairs.warp:61 "samples/objects/json_parser.warp" 125
-ok   test/programs/test_samples.pairs.warp:64 "samples/loops/mandelbrot.warp" 17748
-ok   test/programs/test_samples.pairs.warp:67 "samples/objects/data_structures.warp" "Dave 11 20"
-ok   test/programs/test_samples.pairs.warp:70 "samples/functions/y_combinator.warp" 6765
+ok   test/programs/test_samples.pairs.warp:49 "samples/objects/binary_tree.wap" 409
+ok   test/programs/test_samples.pairs.warp:52 "samples/hello/comments.wap" 120
+ok   test/programs/test_samples.pairs.warp:55 "samples/numbers/sin.wap" 841471
+ok   test/programs/test_samples.pairs.warp:58 "samples/text/calculator.wap" 39
+ok   test/programs/test_samples.pairs.warp:61 "samples/objects/json_parser.wap" 125
+ok   test/programs/test_samples.pairs.warp:64 "samples/loops/mandelbrot.wap" 17748
+ok   test/programs/test_samples.pairs.warp:67 "samples/objects/data_structures.wap" "Dave 11 20"
+ok   test/programs/test_samples.pairs.warp:70 "samples/functions/y_combinator.wap" 6765
 ok   test/programs/test_shader_blocks.warp:4 "s = shader {\n\t@fragment fn main() -> @location(0) vec4f {\n\t\treturn vec4f(1.0); // a { in a comment\n\t}\n}\ns" "@fragment fn main() -> @location(0) vec4f {
 ok   test/programs/test_shader_blocks.warp:14 "shader = \"@fragment\"\nshader" "@fragment"
 ok   test/programs/test_shader_holes.warp:4 "s = shader { let x = $size * size; }\ns" "let x = values.size * size;"
 ok   test/programs/test_shader_holes.warp:6 "s = shader { let x = $1; }\ns" "let x = $1;"
-ok   test/programs/test_small_samples.pairs.warp:4 "samples/text/palindrome.warp" yes
-ok   test/programs/test_small_samples.pairs.warp:5 "samples/text/word_count.warp" 4
-ok   test/programs/test_small_samples.pairs.warp:6 "samples/text/sort_words.warp" ["brown", "fox", "quick", "the"]
-ok   test/programs/test_small_samples.pairs.warp:7 "samples/text/word_lengths.warp" ø
-ok   test/programs/test_small_samples.pairs.warp:8 "samples/text/replace_word.warp" "I like coffee"
-ok   test/programs/test_small_samples.pairs.warp:9 "samples/text/find_text.warp" yes
-ok   test/programs/test_small_samples.pairs.warp:12 "samples/errors/try_catch.warp" "cannot divide by zero"
-ok   test/programs/test_small_samples.pairs.warp:13 "samples/errors/try_else.warp" 0
-ok   test/programs/test_small_samples.pairs.warp:14 "samples/errors/parse_number.warp" -1
-ok   test/programs/test_small_samples.pairs.warp:15 "samples/errors/raise_error.warp" "no result"
-ok   test/programs/test_small_samples.pairs.warp:16 "samples/errors/assertions.warp" "all good"
+ok   test/programs/test_small_samples.pairs.warp:4 "samples/text/palindrome.wap" yes
+ok   test/programs/test_small_samples.pairs.warp:5 "samples/text/word_count.wap" 4
+ok   test/programs/test_small_samples.pairs.warp:6 "samples/text/sort_words.wap" ["brown", "fox", "quick", "the"]
+ok   test/programs/test_small_samples.pairs.warp:7 "samples/text/word_lengths.wap" ø
+ok   test/programs/test_small_samples.pairs.warp:8 "samples/text/replace_word.wap" "I like coffee"
+ok   test/programs/test_small_samples.pairs.warp:9 "samples/text/find_text.wap" yes
+ok   test/programs/test_small_samples.pairs.warp:12 "samples/errors/try_catch.wap" "cannot divide by zero"
+ok   test/programs/test_small_samples.pairs.warp:13 "samples/errors/try_else.wap" 0
+ok   test/programs/test_small_samples.pairs.warp:14 "samples/errors/parse_number.wap" -1
+ok   test/programs/test_small_samples.pairs.warp:15 "samples/errors/raise_error.wap" "no result"
+ok   test/programs/test_small_samples.pairs.warp:16 "samples/errors/assertions.wap" "all good"
 ok   test/programs/test_sound.pairs.warp:4 "def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)" 3
 ok   test/programs/test_sound.warp:4 "use sound\ncount(melody_samples([C4 [E4 G4]], 0.01))" 442
 ok   test/programs/test_sound.warp:8 "use sound\nround(note(\"A4\").hertz())" 440

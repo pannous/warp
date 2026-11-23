@@ -1,38 +1,38 @@
 # from test_algo_dijkstra.rs: edit the Rust test, then run the script again
 
 # test_dijkstra
-'samples/objects/dijkstra.warp'	'ACBDEF:13'
+'samples/objects/dijkstra.wap'	'ACBDEF:13'
 
 # from test_algo_levenshtein.rs: edit the Rust test, then run the script again
 
 # test_levenshtein: the sample prints its five distances (card bug-levenshtein-total, faf3345b4b), the test reads them
-'use "../../samples/text/levenshtein.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
+'use "../../samples/text/levenshtein.wap"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
 
 # test_levenshtein_idiomatic
-'use "../../samples/text/levenshtein_idiomatic.warp"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
+'use "../../samples/text/levenshtein_idiomatic.wap"; [levenshtein("kitten", "sitting"), levenshtein("flaw", "lawn"), levenshtein("", "abc"), levenshtein("abc", "abc"), levenshtein("saturday", "sunday")]'	[3, 2, 3, 0, 3]
 
 # from test_algo_life.rs: edit the Rust test, then run the script again
 
 # test_life
-'samples/loops/game_of_life.warp'	3736
+'samples/loops/game_of_life.wap'	3736
 
 # test_life_idiomatic
-'samples/loops/life_idiomatic.warp'	131
+'samples/loops/life_idiomatic.wap'	131
 
 # from test_algo_queens.rs: edit the Rust test, then run the script again
 
 # test_queens
-'samples/functions/queens.warp'	1119
+'samples/functions/queens.wap'	1119
 
 # test_queens_idiomatic
-'samples/functions/queens_idiomatic.warp'	1119
+'samples/functions/queens_idiomatic.wap'	1119
 
 # from test_algo_sieve.rs: edit the Rust test, then run the script again
 
 # test_sieve
-'samples/lists/sieve.warp'	1083
+'samples/lists/sieve.wap'	1083
 
 # from test_algo_sorting.rs: edit the Rust test, then run the script again
 
 # test_sorting
-'samples/lists/sorting.warp'	'-3,0,1,2,5,5,6,7,8,9'
+'samples/lists/sorting.wap'	'-3,0,1,2,5,5,6,7,8,9'

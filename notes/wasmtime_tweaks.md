@@ -12,7 +12,7 @@ and ranks the remaining changes.
   instructions retired (`/usr/bin/time -l`), the lower of two warm runs. Cycles are given where the two disagree.
 - The stage 3 command is `warp --lib <clone> rebuild self`. Typical programs: `print 1`; a number loop
   (`s = s + i % 7`, 150 M); text iteration (`for c in t`, 4 M chars); closures (`sum(map(xs, x => x*k % 3))`, 1 M);
-  samples/gpu/julia.warp; the console fed 300 lines.
+  samples/gpu/julia.wap; the console fed 300 lines.
 
 ## Where wasmtime's own code costs time
 

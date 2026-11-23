@@ -47,7 +47,7 @@ const RUNNING = "running…"; // the status while a run goes on
 const DEFAULT_EXAMPLE = "hello";
 const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 const SHORT_COMMIT = 9;
-// terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.warp): clearing the screen or moving the cursor
+// terminal codes in printed text (`print "\e[H"`, samples/loops/game_of_life.wap): clearing the screen or moving the cursor
 // home starts the text anew, with the line end clear()'s print gives it, the other codes (colors, cursor moves) are dropped
 const TERMINAL_RESTART = /(?:\x1b\[(?:2J|H|1;1H))+\n?/g;
 const TERMINAL_CODE = /\x1b\[[0-9;?]*[A-Za-z]/g;
@@ -1018,7 +1018,7 @@ function showReport(report) {
 	setStatus(report.crashed ? "the compiler crashed; reloaded" : `${Math.round(report.milliseconds ?? 0)} ms`, report.crashed);
 }
 
-// "… at samples/gpu/sdf_scene.warp:54:2": the place in the chosen sample an error message names (card clickable-error-jump)
+// "… at samples/gpu/sdf_scene.wap:54:2": the place in the chosen sample an error message names (card clickable-error-jump)
 const FILE_PLACE = /([\w.\/-]+\.warp):(\d+):(\d+)/g;
 function placeInProgram(message) {
 	const file = programFile();

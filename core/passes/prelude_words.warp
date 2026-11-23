@@ -1282,7 +1282,7 @@ with_used_modules(program: Node, folder: text) as Node := {
 }
 # [the sources of the standard modules the statements use, each after those it uses, the module names seen, the
 # slices of the linked ones (signature.warp), whose text is never read]; a file in the program's folder takes a use of
-# the program's own, never a standard module's (`within_module`): samples/web/html.warp is no lib/html for markup's `use html`
+# the program's own, never a standard module's (`within_module`): samples/web/html.wap is no lib/html for markup's `use html`
 used_module_sources(statements: any, folder: text, seen: any, within_module: bool = no) as list := {
 	sources = []
 	linked = []

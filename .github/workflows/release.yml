@@ -77,7 +77,7 @@ jobs:
     - name: self test
       run: |
         "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" rebuild self
-        "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" samples/hello/hello.warp | grep Hello
+        "$RUNNER_TEMP/bootstrap/warp" --lib "$PWD/lib" samples/hello/hello.wap | grep Hello
     - name: the native warp's C, for Windows
       # no warp runs on Windows yet to build the native warp there: its C is made here (card windows-build)
       run: cd core/native && "$RUNNER_TEMP/bootstrap/warp" --lib "$GITHUB_WORKSPACE/lib" build native --c warp.warp
@@ -229,7 +229,7 @@ jobs:
       # scripts/smoke.sh's checks of a built warp: hello, and the native host module answering
       run: |
         lib/warp.exe --version
-        lib/warp.exe samples/hello/hello.warp | grep Hello
+        lib/warp.exe samples/hello/hello.wap | grep Hello
         [ "$(lib/warp.exe 'window_possible()')" = no ]
         # warp test's slots, children and files: the cases started anew by posix_spawnp, as Windows has no fork
         lib/warp.exe test test/modules/test_exec_sh_runs.pairs.warp
@@ -239,7 +239,7 @@ jobs:
     - name: a native build
       # warp build native on Windows: wasm2c and clang from the PATH, the program's C functions and WASI by lib/native
       run: |
-        lib/warp.exe build native samples/native/files.warp
+        lib/warp.exe build native samples/native/files.wap
         cd samples/native && [ "$(./files)" = "Hello from a file" ]
     - name: the release folder, gated, zipped
       run: |
@@ -268,7 +268,7 @@ jobs:
         $manifest | ConvertTo-Json -Depth 5 | Set-Content local-warp.json
         scoop install .\local-warp.json
         Remove-Item Env:HOME -ErrorAction Ignore
-        $hello = warp samples/hello/hello.warp
+        $hello = warp samples/hello/hello.wap
         $hello
         if ("$hello" -notmatch "Hello") { exit 1 }
     - name: upload

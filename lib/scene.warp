@@ -8,7 +8,7 @@
 // - things stand side by side along x, 2 m apart, the row centred on x = 0, each facing +z; `position` is the centre
 //   of a thing's footprint on the ground
 // - a thing's shape is a few boxes, each given in fractions of its size (`shapes`): what the renderer draws is a
-//   triangle list, `scene_triangles`, three corners [x, y, z] a triangle, the form samples/gpu/scene_3d.warp ray casts
+//   triangle list, `scene_triangles`, three corners [x, y, z] a triangle, the form samples/gpu/scene_3d.wap ray casts
 // - an unknown thing is refused, never guessed
 use random
 
