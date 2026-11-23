@@ -1,10 +1,9 @@
-# f3cf7a0a24 2026-11-23 09:42 299/304 98.4%
+# 94606524d2 2026-11-23 19:51 275/304 90.5%
 ok   samples/acceleration/gpu_arrays.wap
 ok   samples/acceleration/gpu_f16.wap
 ok   samples/acceleration/gpu_map.wap
 ok   samples/acceleration/gpu_million.wap
 ok   samples/advanced/ascii_raytracer.wap
-ok   samples/advanced/ascii_snake.wap
 ok   samples/advanced/circle.wap
 ok   samples/advanced/filled_circle.wap
 ok   samples/advanced/mandelbrot_canvas.wap
@@ -13,23 +12,8 @@ ok   samples/advanced/particles.wap
 ok   samples/advanced/reals.wap
 ok   samples/advanced/self_parser.wap
 ok   samples/algorithms/swap_sort.wap
-ok   samples/apps/checksum_inventory.wap
 ok   samples/apps/comment_board.wap
-ok   samples/apps/config_validator.wap
-ok   samples/apps/deadlines.wap
-ok   samples/apps/dependency_resolver.wap
-ok   samples/apps/inventory_report.wap
-ok   samples/apps/invoice_report.wap
-ok   samples/apps/log_analyzer.wap
-ok   samples/apps/mail_merge.wap
 ok   samples/apps/meeting_planner.wap
-ok   samples/apps/name_matcher.wap
-ok   samples/apps/open_hours.wap
-ok   samples/apps/recipe_scaler.wap
-ok   samples/apps/settings_cli.wap
-ok   samples/apps/site_generator.wap
-ok   samples/apps/todo_cli.wap
-ok   samples/apps/url_report.wap
 ok   samples/clustering/emeans.wap
 ok   samples/conditions/control_flow.wap
 ok   samples/conditions/fizzbuzz.wap
@@ -96,8 +80,8 @@ ok   samples/golf/quine.short.wap
 ok   samples/golf/quine.wap
 ok   samples/golf/rot13.short.wap
 ok   samples/golf/rot13.wap
-ok   samples/golf/sierpiński-triangle.short.warp
-ok   samples/golf/sierpiński-triangle.warp
+ok   samples/golf/sierpiński-triangle.short.wap
+ok   samples/golf/sierpiński-triangle.wap
 ok   samples/gpu/aquarium.wap
 ok   samples/gpu/fish.wap
 ok   samples/gpu/fish_mesh.wap
@@ -168,13 +152,9 @@ ok   samples/matching/pattern_values.wap
 ok   samples/matching/text_patterns.wap
 ok   samples/matching/tree_patterns.wap
 ok   samples/modules/ask_claude.wap
-ok   samples/modules/config_patch.wap
-ok   samples/modules/csv_report.wap
-ok   samples/modules/free_slots.wap
 ok   samples/modules/javascript.wap
 ok   samples/modules/lib.wap
 ok   samples/modules/main.wap
-ok   samples/modules/modules.wap
 ok   samples/modules/rust_crates.wap
 ok   samples/modules/slug_paths.wap
 ok   samples/modules/square.wap
@@ -203,16 +183,13 @@ ok   samples/numbers/simple.wap
 ok   samples/numbers/sin.wap
 ok   samples/numbers/sine.wap
 ok   samples/numbers/sum.wap
-ok   samples/numbers/units_dynamic.wap
 ok   samples/numbers/versions.wap
 ok   samples/objects/binary_tree.wap
 ok   samples/objects/data_structures.wap
 ok   samples/objects/dijkstra.wap
-ok   samples/objects/disjoint_groups.wap
 ok   samples/objects/json_parser.wap
 ok   samples/objects/mixins.wap
 ok   samples/objects/references.wap
-ok   samples/objects/ring_log.wap
 ok   samples/physics/usd_bodies.wap
 ok   samples/physics/usd_collisions.wap
 ok   samples/python/numpy_matrix.wap
@@ -265,7 +242,6 @@ ok   samples/types/reflection.wap
 ok   samples/types/return_polymorphism.wap
 ok   samples/types/return_polymorphism2.wap
 ok   samples/types/types.wap
-ok   samples/wasm/import_compiled.wap
 ok   samples/wasm/shapes.wap
 ok   samples/wasm/wasm_interop.wap
 ok   samples/web/collatz_bars.wap
@@ -298,8 +274,32 @@ SRV  samples/servers/route_headers.wap
 SRV  samples/servers/server.wap
 SRV  samples/servers/worker.wap
 SRV  samples/storage/todo_app.wap
-FAIL samples/golf/fizz-buzz.short.wap: fizz-buzz.short.warp:1:30 outside the core: the operator * on text and bool
+FAIL samples/advanced/ascii_snake.wap: no module, library or package named terminal: no terminal.warp beside the program, in lib/ or as packages/terminal/terminal.warp of the project or of warp's registry (scripts/link-packages.sh)
+FAIL samples/apps/checksum_inventory.wap: checksum_inventory.wap:22:7 no function entry; fix: did you mean yaml_is_entry?
+FAIL samples/apps/config_validator.wap: config_validator.wap:1:1 outside the core: report giving a mixed
+FAIL samples/apps/deadlines.wap: deadlines.wap:1:8 no function days; fix: did you mean days_from_civil, time_days, civil_from_days, civil_from_days?
+FAIL samples/apps/dependency_resolver.wap: dependency_resolver.wap:47:41 outside the core: the unknown name from
+FAIL samples/apps/inventory_report.wap: extended list unlisted at 72:60
+FAIL samples/apps/invoice_report.wap: invoice_report.wap:37:37 outside the core: the call fraction(…)
+FAIL samples/apps/log_analyzer.wap: log_analyzer.wap:32:74 outside the core: an assignment to `… : …`
+FAIL samples/apps/mail_merge.wap: extended list unlisted at 72:60
+FAIL samples/apps/name_matcher.wap: extended list unlisted at 72:60
+FAIL samples/apps/open_hours.wap: open_hours.wap:10:27 no function day_time; fix: did you mean days_from_civil, operator_times, operator_times, operator_times?
+FAIL samples/apps/recipe_scaler.wap: recipe_scaler.wap:1:21 outside the core: the call fraction(…)
+FAIL samples/apps/settings_cli.wap: settings_cli.wap:20:8 no function parsed; fix: define parsed or check its spelling
+FAIL samples/apps/site_generator.wap: site_generator.wap:26:12 no function split_page; fix: did you mean split_at, dot_page_bytes, dot_memory_pages, dot_grown_pages?
+FAIL samples/apps/todo_cli.wap: todo_cli.wap:18:8 no function parsed; fix: define parsed or check its spelling
+FAIL samples/apps/url_report.wap: url_report.wap:39:2 text of node
+FAIL samples/golf/fizz-buzz.short.wap: fizz-buzz.short.wap:1:30 outside the core: the operator * on text and bool
+FAIL samples/modules/config_patch.wap: config_patch.wap:6:17 outside the core: the unknown name any
+FAIL samples/modules/csv_report.wap: csv_report.wap:12:61 outside the core: the unknown name markdown
+FAIL samples/modules/free_slots.wap: free_slots.wap:8:24 not a number
+FAIL samples/modules/modules.wap: no module, library or package named lib: no lib.warp beside the program, in lib/ or as packages/lib/lib.warp of the project or of warp's registry (scripts/link-packages.sh)
 FAIL samples/modules/packages.wap: mix is defined by math and sound: say which, `use math` or `use sound`
-FAIL samples/modules/test_ffi_extended.wap: test_ffi_extended.warp:20:1 outside the core: the operator else with nothing after it
-FAIL samples/objects/sorted_leaderboard.wap: wasm trap: call stack exhausted at 12:22
+FAIL samples/modules/test_ffi_extended.wap: test_ffi_extended.wap:20:1 outside the core: the operator else with nothing after it
+FAIL samples/numbers/units_dynamic.wap: extended list unlisted at 58:66
+FAIL samples/objects/disjoint_groups.wap: disjoint_groups.wap:5:23 no function disjoint_set; fix: did you mean foreign_settled, frozenset, variables_set, setenv?
+FAIL samples/objects/ring_log.wap: ring_log.wap:5:12 no function Ring; fix: define Ring or check its spelling
+FAIL samples/objects/sorted_leaderboard.wap: sorted_leaderboard.wap:5:22 no function sorted_map; fix: did you mean sorted_by_key, sorted_in_order, is_map_value, fits_map?
 FAIL samples/wasm/component_reflection.wap: warp: no module rust_demo.wasm beside the module importing it, /Users/me/Library/Caches/warp/compiled/rust_demo.wasm, nor at /Users/me/dev/bin/wap-seed/rust_demo.wasm
+FAIL samples/wasm/import_compiled.wap: import_compiled.wap:12:10 no field y
