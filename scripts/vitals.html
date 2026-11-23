@@ -108,7 +108,8 @@ footer { color: var(--ink-3); font-size: 12px; }
     <h2>wap, the new compiler</h2>
     <p class="section-note">wap's lines per stage folder at each commit of main that touched wap/, beside the core's at the time; each layer (a folder of wap/) by its nodes (comments count none), its code lines and its comment or blank lines; then the road to self-build, measured by scripts/wap-census.warp on each wap file (files emitted, the most frequent refusals; the front's refusals show among them), a census taken by a detached job whenever wap/ changed (its time is shown beside the numbers); wap's tests (test/wap/run.sh, as last run); all of it measured by the native wap as people run it, no warp in between (since 2026-11-22; before, wap1, wap/ compiled by wap's seed and run by warp, and before 2026-11-20 old warp running wap's source): wap compiling its own compiler (the cheapest of three compiles) and hello (its cheapest warm run, the first run after a change in its note); and the files over the line limit. Hover a dot for its numbers, click it to open the commit.</p>
     <div class="tiers" id="wap"></div>
-    <div class="table-wrap"><table id="wap-blockers"></table></div>
+    <h3>Recently</h3>
+    <div class="table-wrap"><table id="wap-recent"></table></div>
   </section>
 
   <section>
@@ -165,7 +166,6 @@ const COMMIT_URL = "https://github.com/pannous/warp/commit/";
 // a commit of wap's own repository (pannous/wap, since wap left warp) links there, any other to warp
 const WAP_COMMIT_URL = "https://github.com/pannous/wap/commit/";
 const commitUrl = sha => (DATA.wap.own_commits.includes(sha) ? WAP_COMMIT_URL : COMMIT_URL) + sha;
-const BLOCKER_SHOWN = 200;  // characters of a refusal shown; the census quotes whole function bodies, the rest is on hover
 const GROUP_COLORS = ["--s1","--s2","--s3","--s4","--s5","--s6","--s7"];
 const WIDTH = 940, PAD = { left: 52, right: 12, top: 12, bottom: 26 };
 const rows = DATA.rows.map(([date, sha, subject, groups, delta, extensionsDelta, lib, test]) => ({ date, sha, subject, groups, delta, extensionsDelta, lib, test, core: groups.slice(0, -1).reduce((a, b) => a + b, 0), extensions: groups[groups.length - 1] }));
@@ -342,8 +342,6 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
     const describeCensus = p => `${p[0]} · ${p[1]} · ${p.slice(2).join(" / ")}`;
     trendPanel(holder, { label: "road to self-build: files", value: `${latest.emitted} emitted`, note: note([latest.commit, latest.time], ` · of ${latest.files} program files${latest.timed_out && latest.timed_out.length ? `, timed out: ${latest.timed_out.join(", ")}` : ""}${latest.missing ? `, ${latest.missing} without a result` : ""}`),
       lines: [{ name: "emitted", points: census("emitted"), index: 2, color: "--s3" }], describe: describeCensus });
-    document.getElementById("wap-blockers").innerHTML = latest.blockers.length ? `<thead><tr><th>Stage</th><th>Top blockers of the census at ${latest.commit}</th><th style="text-align:right">Count</th></tr></thead><tbody>` +
-      latest.blockers.map(([stage, message, count]) => `<tr><td>${stage}</td><td title="${escape(message)}">${escape(message.length > BLOCKER_SHOWN ? message.slice(0, BLOCKER_SHOWN) + " …" : message)}</td><td class="num">${count}</td></tr>`).join("") + "</tbody>" : "";
   } else noMeasurement("road to self-build");
   if (tests.length) {
     const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
@@ -442,6 +440,16 @@ function columnLines(snapshots, columns, container) {
     element("text", { x: WIDTH - right + 6, y: last[1] + 4, fill: `var(${colors[c]})` }, svg).textContent = `${c} ${format(last[2])}`;
   });
 }
+
+(function wapRecent() {
+  // wap's newest commits of work and its newest Done cards, side by side as one table of the latest news
+  const { commits, done } = DATA.wap.recent || { commits: [], done: [] };
+  const rows = [...done.map(([time, key, title, link]) => [time.slice(5), `<a href="${link}" target="_blank" rel="noopener">${escape(key)}</a> done<br><span class="card-title">${escape(title)}</span>`]),
+    ...commits.map(([sha, time, subject]) => [time, `<a href="${WAP_COMMIT_URL}${sha}" target="_blank" rel="noopener" class="sha">${sha}</a> ${escape(subject)}`])]
+    .sort((a, b) => b[0].localeCompare(a[0]));
+  document.getElementById("wap-recent").innerHTML = rows.length ? `<thead><tr><th>When</th><th>Commit or card done</th></tr></thead><tbody>` +
+    rows.map(([time, what]) => `<tr><td class="sha">${time}</td><td>${what}</td></tr>`).join("") + "</tbody>" : "";
+})();
 
 (function cards() {
   // Open: every card not Done, the curve of the work still ahead

@@ -40,9 +40,12 @@ STATUS = re.compile(r"^(ok|SRV|ran|✓|FAIL|✗|BOTH|PAGE|EXP|NONE|WIN|DIFF|TIME
 PASSING = ("ok", "SRV", "ran", "✓")  # ran: a sample without an expected output that ran without error
 GITHUB_REPO = "pannous/warp"
 BOARD_CARD = "https://github.com/users/pannous/projects/1?pane=issue&itemId=%s"
+WAP_BOARD_CARD = "https://github.com/users/pannous/projects/10?pane=issue&itemId=%s"
 RECENTLY_DONE = 8
 FLIPS_SHOWN = 8  # named tests per lane that started or stopped passing
 CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/cards.jsonl")  # one line per snapshot of the board's columns
+WAP_CARD_SNAPSHOTS = os.path.join(REPO, "data/vitals/wap-cards.jsonl")  # the same of wap's board
+WAP_RECENT_COMMITS = 12  # wap's newest commits of work shown under "Recently"
 # each commit's change against its first parent per component, kept between runs (a commit never changes): diffing
 # main's 4000 merges again took 27 s a run (card vitals-py-slow)
 CHANGES_CACHE = os.path.join(REPO, "data/vitals/changes.json")
@@ -434,10 +437,18 @@ def wap_coverage():
     return {"kind": "coverage", "time": match[6], "commit": match[5], "modules": modules, "module_count": module_count, "samples": samples, "sample_count": sample_count}
 
 
+def wap_recent():
+    """What wap achieved lately: its newest commits of work on main [sha, time, subject] and its newest Done cards."""
+    commits = [line.split("\t") for line in git("log", "--no-merges", f"-{WAP_RECENT_COMMITS}", "--format=%h%x09%ad%x09%s",
+                                                   "--date=format:%m-%d %H:%M", WAP_TIP, repository=WAP_CHECKOUT).splitlines()]
+    cards = card_counts(WAP_CARD_SNAPSHOTS, WAP_CHECKOUT, WAP_BOARD_CARD)
+    return {"commits": commits, "done": cards[-1].get("done", []) if cards else []}
+
+
 def wap_track():
     sizes, over = wap_sizes()
     return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": wap_folders(sizes, 3), "layers": wap_folders(sizes, 6, sum),
-            "snapshots": wap_road(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
+            "snapshots": wap_road(), "recent": wap_recent(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
 
 
 if CENSUS_JOB:
@@ -725,7 +736,7 @@ def hourly_pace():
     return hours
 
 
-def recently_done(cards):
+def recently_done(cards, board_card):
     """The RECENTLY_DONE newest Done cards: when, key, title and their link on the board."""
     done = sorted((c for c in cards if c["column"] == "Done"), key=lambda c: c["column_since"])[-RECENTLY_DONE:][::-1]
     ids = json.dumps([card["id"] for card in done])
@@ -733,22 +744,23 @@ def recently_done(cards):
                                        "ProjectV2Item { databaseId } } }" % ids], capture_output=True, text=True,
                                       check=True).stdout)["data"]["nodes"]
     local = lambda t: datetime.datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
-    return [[local(card["column_since"]), card["key"], card["title"], BOARD_CARD % node["databaseId"]]
+    return [[local(card["column_since"]), card["key"], card["title"], board_card % node["databaseId"]]
             for card, node in zip(done, nodes)]
 
 
-def card_counts():
-    """The board's cards per column, one snapshot an hour kept in CARD_SNAPSHOTS (todo list costs GraphQL quota)."""
-    snapshots = read_snapshots(CARD_SNAPSHOTS)
+def card_counts(snapshots_path=CARD_SNAPSHOTS, repository=REPO, board_card=BOARD_CARD):
+    """A board's cards per column, one snapshot an hour kept in snapshots_path (todo list costs GraphQL quota); the
+    board is the one of repository's todo setup."""
+    snapshots = read_snapshots(snapshots_path)
     now = datetime.datetime.now()
     if not snapshots or now - datetime.datetime.fromisoformat(snapshots[-1]["time"]) > datetime.timedelta(hours=1):
-        listing = subprocess.run(["todo", "list", "--json"], capture_output=True, text=True, cwd=REPO)
+        listing = subprocess.run(["todo", "list", "--json"], capture_output=True, text=True, cwd=repository)
         if listing.returncode == 0:
             cards = json.loads(listing.stdout)
             counts = collections.Counter(card["column"] for card in cards)
             snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts),
-                              "done": recently_done(cards)})
-            append_snapshot(CARD_SNAPSHOTS, snapshots[-1])
+                              "done": recently_done(cards, board_card)})
+            append_snapshot(snapshots_path, snapshots[-1])
         else:
             print("vitals: todo list failed, cards from the last snapshot: " + listing.stderr.strip()[-200:], file=sys.stderr)
     return snapshots
