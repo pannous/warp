@@ -426,7 +426,7 @@ def wap_tests_run():
 
 def wap_coverage():
     """the newest coverage of the library and the samples (WAP_COVERAGE); None, said, when there is none"""
-    match = os.path.exists(WAP_COVERAGE) and WAP_COVERAGE_LINE.search(open(WAP_COVERAGE).read())
+    match = os.path.exists(WAP_COVERAGE) and WAP_COVERAGE_LINE.search(open(WAP_COVERAGE, errors="replace").read())
     if not match:
         print(f"vitals: no coverage summary in {WAP_COVERAGE} (wap's scripts/coverage.sh): the coverage panels keep their last counts", file=sys.stderr)
         return None
