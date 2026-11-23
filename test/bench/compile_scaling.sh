@@ -13,7 +13,7 @@ FLAT_PERCENT=5
 TINY=100 SHORT=1000 LONG=2000
 LINEAR_SLACK=1.3
 checkout=$(cd "$(dirname "$0")/../.." && pwd)
-hello=$checkout/samples/hello/hello.warp
+hello=$checkout/samples/hello/hello.wap
 lib=${1:-$(dirname "$(realpath "$(command -v warp)")")}
 work=$(mktemp -d "$checkout/data/compile-scaling.XXXXXX")
 trap 'rm -rf "$work"' EXIT

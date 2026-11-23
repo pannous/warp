@@ -348,7 +348,7 @@ least 50 ms of slack and never bound a count from above by a few milliseconds.
    page_window_run and timers' tick tables (timers_ticked, TIMER_TICK) go. Files: lib/frames.warp, lib/keys.warp,
    lib/markup.warp, lib/timers.warp, lib/host/native_host/window.warp and webview.warp. Test: test/native/
    test_events.sh `on frame { print "frame" }; on every 100 ms { print "tick"; exit(0) }` prints frame, then tick
-   (headless; with a window the user's try line `/Users/me/dev/bin/warp samples/events/ticks.warp` with a frame
+   (headless; with a window the user's try line `/Users/me/dev/bin/warp samples/events/ticks.wap` with a frame
    added ticks while the window shows).
 7. **routes-in-loop** (lib, careful). The server's listening socket is a watched descriptor; a request is answered
    in a turn, so timers and channels run beside it. File lib/web.warp. Test, in test/native/test_server_builds.sh's

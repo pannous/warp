@@ -1,7 +1,7 @@
 # Importing a module warp compiled
 
 `import shapes` (or `use shapes`) beside a shapes.wasm that warp built links it as a standard module is linked
-(decision samples-modules-wasm). Sample: samples/wasm/import_compiled.warp, its module test/fixtures/compiled/shapes.warp.
+(decision samples-modules-wasm). Sample: samples/wasm/import_compiled.wap, its module test/fixtures/compiled/shapes.warp.
 
 ## Build
 `warp build --module shapes.warp` writes shapes.wasm: the file compiled as lib/'s modules are (compiler.warp

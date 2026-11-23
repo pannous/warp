@@ -1,6 +1,6 @@
 #!/bin/bash
 # Builds web/playground: the self-hosted compiler for the browser (warp.wasm with the lib/ it compiles with, copied from
-# the installed warp beside ~/dev/bin/warp into warp-lib/, driver.js runs it), samples.js (samples/<chapter>/*.warp for
+# the installed warp beside ~/dev/bin/warp into warp-lib/, driver.js runs it), samples.js (samples/<chapter>/*.wap for
 # the example menu), keywords.js (the editor's hard and soft keywords) and version.js (the commit built, shown in the ⋯
 # menu). Serve the repository root and open the page:
 #   web/playground/build.sh && python3 -m http.server 8000   →   http://localhost:8000/web/playground/
@@ -101,8 +101,8 @@ build_compiler() {
 pack_package_libraries() {
 	local manifest clone library
 	# a fresh worktree has no packages/ (git ignores it): linked first, else the page lacks uniscript_c.wasm and
-	# samples/text/uniscript_text.warp fails "uniscript_c.uniscript_error is not available in the browser"; the served
-	# list, written after, then holds the packages samples use by path (samples/modules/packages.warp)
+	# samples/text/uniscript_text.wap fails "uniscript_c.uniscript_error is not available in the browser"; the served
+	# list, written after, then holds the packages samples use by path (samples/modules/packages.wap)
 	compgen -G "packages/*/package.warp" > /dev/null || "$repository/scripts/link-packages.sh" "$repository"
 	for manifest in packages/*/package.warp; do
 		[ -f "$manifest" ] || continue
@@ -242,7 +242,7 @@ collect_site() {
 	for part in $(grep -o '"host-[a-z]*\.js"' "$page/host.js" | tr -d '"'); do
 		[ -f "$site/$part" ] || { echo "::error::$part missing from the site" >&2; exit 1; }
 	done
-	# the samples' neighbours at their repository paths, as natively: `play "tune.mp3"` beside samples/sound/play_mp3.warp
+	# the samples' neighbours at their repository paths, as natively: `play "tune.mp3"` beside samples/sound/play_mp3.wap
 	# (card open-mozart; tune.mp3 is our own half-second C-E-G, mozart.mp3 left for its unclear copyright), the files a sample reads, writes over or includes; the regular ones, not the links
 	# (samples/tests, samples/wasm/shapes.wasm)
 	shipped_tracked "$site" samples
@@ -282,7 +282,7 @@ case "${1:-all}" in
 	*) echo "usage: $0 [compiler|served [<site>]|site <site>]" >&2; exit 2 ;;
 esac
 
-# the compiled modules of test/fixtures/compiled (samples/wasm/import_compiled.warp links shapes.wasm, a link to it),
+# the compiled modules of test/fixtures/compiled (samples/wasm/import_compiled.wap links shapes.wasm, a link to it),
 # built behind the page's runtime.wasm, as scripts/samples.sh builds them natively
 for fixture in test/fixtures/compiled/*.warp; do
 	warp --lib "$INSTALLED_LIBRARY" build --module "$fixture" || echo "warning: no ${fixture%.warp}.wasm: the samples and tests importing it fail in the page" >&2
@@ -290,7 +290,7 @@ done
 write_repository_served_files
 
 # a folder per guide chapter (notes/samples.md); golf/ and wit/ hold no menu samples, native/ only natively built ones
-python3 - "$page/samples.js" $(ls samples/*/*.warp | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
+python3 - "$page/samples.js" $(ls samples/*/*.wap samples/*/*.warp 2>/dev/null | grep -v '^samples/\(golf\|wit\|native\)/') <<'PYTHON'
 import collections, glob, json, os, re, sys
 # a sample a browser cannot run says so on a line of its own, `# host: native: <why>` (or none), and stays out of the
 # menu (test_in_browser.py HOST_LINE)
@@ -314,20 +314,20 @@ def shown(source):
 		if before or not note: kept.append(before)
 	return "\n".join(kept) + "\n"
 files = collections.defaultdict(list)
-for path in sys.argv[2:]: files[os.path.basename(path)[:-len(".warp")]].append(path)
+for path in sys.argv[2:]: files[os.path.splitext(os.path.basename(path))[0]].append(path)
 # the menu and the address (#fizzbuzz) name a sample by its file name: one name, one file
 twins = {name: paths for name, paths in files.items() if len(paths) > 1}
 if twins: sys.exit(f"samples sharing a name: {twins}")
 names = {name: paths[0] for name, paths in sorted(files.items()) if not NOT_IN_PAGE.search(open(paths[0], encoding="utf-8").read())}
 samples = {name: shown(open(path, encoding="utf-8").read()) for name, path in names.items()}
 with open(sys.argv[1], "w", encoding="utf-8") as script:
-	script.write("// made by build.sh from samples/<chapter>/*.warp\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
+	script.write("// made by build.sh from samples/<chapter>/*.wap\nconst SAMPLES = " + json.dumps(samples, ensure_ascii=False, indent="\t") + ";\n")
 	script.write("// each sample's file, which its runs name their neighbours beside (playground.js programFile)\n")
 	script.write("const SAMPLE_FILES = " + json.dumps(names, indent="\t") + ";\n")
 	# a sample's <name>.args beside it, one argument a line, as `use os; args` gives them natively in the tests
 	# (tests/common arguments_beside) and scripts/samples.sh, by its file: a song visualizer plays its first seconds
 	# only (card playground-browser), a golf sample gets its inputs though the menu leaves it out
-	arguments = {file[:-len(".args")] + ".warp": open(file, encoding="utf-8").read().splitlines() for file in sorted(glob.glob("samples/*/*.args"))}
+	arguments = {sample: open(file, encoding="utf-8").read().splitlines() for file in sorted(glob.glob("samples/*/*.args")) for sample in glob.glob(file[:-len(".args")] + ".wa*p")}
 	script.write("const SAMPLE_ARGUMENTS = " + json.dumps(arguments, ensure_ascii=False) + ";\n")
 PYTHON
 echo "built $page/samples.js"

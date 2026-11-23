@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/samples.sh [<tree>, default this checkout] [samples/….warp…]: given samples, only their runs, each one's line
 # and its output in data/samples/out/ (the page smoke's native side, never stale; no results file). Else: how many of the tree's samples/ run, the gap to 2.0 (decision
-# release-1-5-tonight). Each samples/**/*.warp runs from its own folder through the installed warp (--no-window, --mute,
+# release-1-5-tonight). Each samples/**/*.wap (or .warp) runs from its own folder through the installed warp (--no-window, --mute,
 # CPU_SECONDS of CPU each); one fails when the native warp exits other than 0, its error the first line it wrote to
 # stderr, and one that hits a limit is TIME, not FAIL. Writes test/samples.txt, tracked (status, sample and a failure's
 # reason, its positions and quoted texts left out, one a line: after-push commits it when it changed, so git diff and
@@ -53,7 +53,7 @@ mkdir -p "$results/out"
 "$tree/scripts/sample-assets.sh" fetch >/dev/null || echo "samples: no assets fetched: ez_forest and tree_study fail" >&2
 # the compiled modules samples import, built from their sources beside them (wasm/import_compiled imports shapes), and
 # those of test/fixtures/compiled the tests import, built behind this runtime.wasm
-for module in "$tree"/samples/wasm/shapes.warp "$tree"/test/fixtures/compiled/*.warp; do
+for module in "$tree"/samples/wasm/shapes.wap "$tree"/test/fixtures/compiled/*.warp; do
 	(cd "$tree" && "$WARP" build --module "${module#"$tree"/}" >/dev/null) || echo "samples: no ${module%.warp}.wasm: the samples and tests importing it fail" >&2
 done
 
@@ -80,16 +80,16 @@ one() {
 	wall=$(wall_seconds)
 	# its arguments: its <name>.args beside it, one a line, as the page and warp test give them
 	local arguments=() argument
-	[ -f "$tree/${1%.warp}.args" ] && while IFS= read -r argument; do arguments+=("$argument"); done <"$tree/${1%.warp}.args"
+	[ -f "$tree/${1%.*}.args" ] && while IFS= read -r argument; do arguments+=("$argument"); done <"$tree/${1%.*}.args"
 	# what a sample keeps (lib/storage.warp, <sample>.database.sqlite beside it) starts anew each run, as the page's
 	# storage does: a counter prints its first run's value, not the sweep count's
-	rm -f "$tree/${1%.warp}.database.sqlite"
+	rm -f "$tree/${1%.*}.database.sqlite"
 	# from its own folder, as a shell runs it (./photo.jpg beside it); the files the run leaves there move to data/, since one left
 	# untracked blocked after-push's checkout once someone committed it (native/files' greeting.txt, 11-09)
 	local folder left
 	folder=$tree/$(dirname "$1")
 	left=$(untracked_in "$folder")
-	trap 'written_moved "$folder" "$left" "$results/left/${1%.warp}"; trap - RETURN' RETURN
+	trap 'written_moved "$folder" "$left" "$results/left/${1%.*}"; trap - RETURN' RETURN
 	(cd "$folder" && ulimit -t "$CPU_SECONDS" && WARP_WINDOW=0 WARP_SOUND=0 timeout "$wall" "$WARP" --events-for $EVENTS_MILLISECONDS "$tree/$1" "${arguments[@]}" </dev/null >"$out.txt" 2>"$out.err")
 	local status=$? first verdict=FAIL
 	[ $status -eq 124 ] && grep -aq "$SERVING" "$out.txt" && { echo "SRV  $1"; return; }
@@ -123,7 +123,7 @@ if [ $# -gt 0 ]; then
 fi
 
 report=$results/report.txt
-(cd "$tree" && find -H samples -name '*.warp' | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | LC_ALL=C sort -k2 >"$report"
+(cd "$tree" && find -H samples \( -name '*.wap' -o -name '*.warp' \) | sort) | xargs -P"$PARALLEL" -I{} bash -c 'one "$@"' _ {} | LC_ALL=C sort -k2 >"$report"
 # a reason without its position and quoted texts: one cause reads alike in every sample and from run to run
 sed 's/"[^"]*"/"…"/g; s/ ([0-9]*)//g; s/ at samples\/[^ ]*//; s/ (no owner)//' "$report" >"$tree/test/samples.txt"
 # a window, a server or a failure on purpose is an outcome as planned, no failure (user 11-08)

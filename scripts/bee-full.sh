@@ -7,8 +7,8 @@
 # This file keeps every Gaussian, in the SOG's order.
 #
 #   scripts/bee-full.sh
-#   warp samples/graphics/gaussian_splats.warp --full
-#   warp samples/graphics/gaussian_splats.warp --times data/splat-speed/bee-full.splat
+#   warp samples/graphics/gaussian_splats.wap --full
+#   warp samples/graphics/gaussian_splats.wap --times data/splat-speed/bee-full.splat
 #
 # Needs curl, python3 and Node (npx). splat-transform 2.5.2 reads the SOG and writes a binary PLY
 # (log scale, spherical-harmonic DC, logit opacity, rot_0 = w). It does not write .splat, so the python

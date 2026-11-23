@@ -56,7 +56,7 @@ global down_y = 0.0
 global frames = 0
 global frames_since_title = 0
 global title_ns = 0
-# samples/graphics/gaussian_splats.warp --times sets this. The upload and the draw then print their milliseconds
+# samples/graphics/gaussian_splats.wap --times sets this. The upload and the draw then print their milliseconds
 global paint_timing = no
 // the blocks SDL fills: an event, a rectangle, the window's two sides
 global event = 0

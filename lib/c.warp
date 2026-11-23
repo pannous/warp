@@ -11,10 +11,10 @@
 //   void              no result
 
 // Sorted 2026-11-06 (card c-entries-sort). Nothing here is warp's own way of doing a thing: every line is the C
-// function as C has it, for programs that call C on purpose (samples/native/c_calls.warp, samples/system/c_lines.warp,
+// function as C has it, for programs that call C on purpose (samples/native/c_calls.wap, samples/system/c_lines.wap,
 // test/ffi/); where warp has the word itself, the warp word is the one to use. One line per C function: libm's f64
 // functions are lib/math.warp's lines (`import sqrt from 'm'` reads them there), puts is the prelude's, isalpha and
-// isspace its aliases. Any other C function is one line in the program itself (samples/system/c_lines.warp).
+// isspace its aliases. Any other C function is one line in the program itself (samples/system/c_lines.wap).
 
 // texts (warp: count, compare, find, uppercase …)
 strlen(s: text): i64 from 'c'

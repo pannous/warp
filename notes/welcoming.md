@@ -76,7 +76,7 @@ error "pi is a constant; fix: another name" (it never silently stays π). A fiel
 else `pi` stays the constant. errors.data constant_assignment, test/welcoming/test_constant_shadowing.pairs.warp.
 
 ## Control flow as other languages write it
-(samples/conditions/control_flow.warp, test/control/test_match_guards_and_finally.warp)
+(samples/conditions/control_flow.wap, test/control/test_match_guards_and_finally.warp)
 - match guards (Rust, Scala): `n if n < 0 => "negative"` binds n to the subject and holds when the condition does;
   a list pattern takes a guard too (`[a, b] if a > b => …`).
 - an assigned match `d = match v {k => …, _ => …}` parses as `match (v {…})`; welcome_forms turns its arrow cases into
@@ -84,7 +84,7 @@ else `pi` stays the constant. errors.data constant_assignment, test/welcoming/te
 - `try … catch/else/except … finally {Z}` (Java, Python): `(finally·N = try…; Z; finally·N)`, Z runs either way and
   the value stays the try's or the catch's. parser.warp with_finally.
 - `global a, b` (Python) declares both; several `global` lines in a block are no duplicate key.
-- English operator words are aliases (samples/hello/natural.warp, wiki/operator.md): `plus`, `minus`, `divided by`,
+- English operator words are aliases (samples/hello/natural.wap, wiki/operator.md): `plus`, `minus`, `divided by`,
   `equals`, `is greater than`, `greater than`, `is less than`, `less than`, `is at least`, `is at most`, `through`
   (= `to`), `is in` (= `in`), `for each x in xs`; a word operator needs a blank after it, so `plus(a, b)` stays a call.
   Number words count too (`one plus two` is 3). `10 down to 1` is `reverse(1 to 10)`; letters make ranges

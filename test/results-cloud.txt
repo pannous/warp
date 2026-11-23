@@ -1766,7 +1766,7 @@ bootstrap: release warp-v1.8.0 linux x86_64 + seed-2026-11-06-4fa8d9b1; native s
 ✓ test/modules/test_collections_structures.pairs.warp:32 "use collections; Queue([]); a = Set([1, 2, 3]); b = Set([3, 5]); a.union(b).equals(b.union(a)) and a.intersection(b).equals(b.intersection(a))" yes
 ✓ test/modules/test_collections_structures.pairs.warp:33 "use collections; Queue([]); a = Set([1, 2, 3]); [Set([2, 3]).is_subset(a), a.is_subset(Set([2, 3])), a.is_superset(Set([1])), a.is_subset(a), a.has(2), a.has(7)]" [yes, no, yes, yes, yes, no]
 ✓ test/modules/test_collections_structures.pairs.warp:34 "use collections; Queue([]); a = Set([1, 2]); a.intersection(Set([3])).is_empty() and a.difference(a).size() == 0" yes
-✓ test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.warp" 23
+✓ test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.wap" 23
 ✓ test/modules/test_disjoint.pairs.warp:2 "use disjoint; d = DisjointSet(6); d.unite(1, 2); d.unite(2, 3); d.unite(1, 3); [d.components(), d.size_of(3), d.connected(1, 3), d.connected(1, 4)]" [4, 3, yes, no]
 ✓ test/modules/test_disjoint.pairs.warp:3 "use disjoint; DisjointSet(0).is_empty()" yes
 ✓ test/modules/test_disjoint.pairs.warp:4 "use disjoint; d = DisjointSet(1); [d.unite(1, 1), d.components(), d.size_of(1), d.connected(1, 1)]" [no, 1, 1, yes]
@@ -1797,7 +1797,7 @@ bootstrap: release warp-v1.8.0 linux x86_64 + seed-2026-11-06-4fa8d9b1; native s
 ✓ test/modules/test_regex_malformed.pairs.warp:9 "use regex; try { find_all_groups(\"abc\", \"*a\") } catch e { e.message }" "regex *a: Invalid preceding regular expression"
 ✓ test/modules/test_ring.pairs.warp:10 "use ring; rb = RingBuffer(2); rb.push(7); rb.to_list()" [7]
 ✓ test/modules/test_ring.pairs.warp:11 "use ring; c = CircularBuffer(2); c.push(1); c.push(2); c.push(3); c.to_list()" [2, 3]
-✓ test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.warp" 90
+✓ test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.wap" 90
 ✓ test/modules/test_ring.pairs.warp:2 "use ring; r = Ring(3); r.push(10); r.push(20); r.push(30); [r.is_full(), r.push(40), r.to_list(), r.peek(), r.latest()]" [yes, 10, [20, 30, 40], 20, 40]
 ✓ test/modules/test_ring.pairs.warp:3 "use ring; r = Ring(3); r.push(10); r.push(20); r.push(30); r.push(40); [r.pop(), r.to_list(), r.size()]" [20, [30, 40], 2]
 ✓ test/modules/test_ring.pairs.warp:4 "use ring; r = Ring(1); r.push(\"a\"); [r.push(\"b\"), r.to_list(), r.pop(), r.is_empty()]" ['a', ['b'], 'b', yes]
@@ -1816,7 +1816,7 @@ bootstrap: release warp-v1.8.0 linux x86_64 + seed-2026-11-06-4fa8d9b1; native s
 ✓ test/modules/test_sorted.pairs.warp:25 "use sorted; a = SortedSet([1, 2, 2, 3, 4]); b = SortedSet([3, 4, 5]); [a.values(), a.union(b).values(), a.intersection(b).values(), a.difference(b).values(), len(a)]" [[1, 2, 3, 4], [1, 2, 3, 4, 5], [3, 4], [1, 2], 4]
 ✓ test/modules/test_sorted.pairs.warp:26 "use sorted; a = SortedSet([1, 2, 3]); [a.equals(SortedSet([3, 1, 2])), SortedSet([1]).is_subset(a), a.is_subset(SortedSet([1])), a.intersection(a).equals(a), a.difference(a).is_empty(), SortedSet().union(SortedSet([2, 2])).values()]" [yes, yes, no, yes, yes, [2]]
 ✓ test/modules/test_sorted.pairs.warp:29 "use sorted; [TreeMap([[2, \"z\"], [1, \"y\"]]).keys(), BTreeMap([[1, \"a\"]]).get(1), BTreeSet([3, 1]).at(2)]" [[1, 2], 'a', 3]
-✓ test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.warp" 1940
+✓ test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.wap" 1940
 ✓ test/modules/test_sorted.pairs.warp:4 "use sorted; m = SortedMap(); for i in 1 to 31 { m = m.set(32 - i, i) }; m.keys() == [i for i in 1 to 31] and m.size() == 31 and m.height() <= 12" yes
 ✓ test/modules/test_sorted.pairs.warp:5 "use sorted; m = SortedMap(); for i in 1 to 31 { m = m.set(i, i * 10) }; odds = m; for i in 1 to 15 { odds = odds.remove(i * 2) }; odds.keys() == [i * 2 - 1 for i in 1 to 16] and odds.get(3) == 30 and odds.height() <= 12" yes
 ✓ test/modules/test_sorted.pairs.warp:8 "use sorted; m = SortedMap([[5, \"e\"], [1, \"a\"], [3, \"c\"]]); [m.min(), m.max(), m.rank(3), m.rank(4), m.at(2), m.get(5), m.has(2)]" [1, 5, 2, 0, 3, 'e', no]

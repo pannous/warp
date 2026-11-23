@@ -9,7 +9,7 @@ stage=$(mktemp -d) || exit 1
 trap 'rm -rf "$stage"' EXIT
 
 
-cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.warp" "$stage/"
+cp "$checkout"/core/native/*.warp "$checkout/samples/hello/hello.wap" "$stage/"
 (cd "$stage" && "$warp" build native warp.warp >"$stage/build.log" 2>&1)
 if [ -x "$stage/warp" ]; then
 	native() { (cd "$stage" && ./warp --lib "$library" "$@" 2>&1); }

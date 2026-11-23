@@ -1,4 +1,4 @@
-# Filled-circle pixels of radius 50. Source: samples/advanced/circle.warp
+# Filled-circle pixels of radius 50. Source: samples/advanced/circle.wap
 # (the same comprehension the sample paints). The count is near π·50² (~7854);
 # the center is ink and a corner is paper.
 

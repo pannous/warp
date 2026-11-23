@@ -30,7 +30,7 @@ native arguments $'one\ntwo words' one "two words"
 native files "Hello from a file"
 GREETING="Hi there" native c_calls $'Hi there\n8\n5'
 check "c_calls by warp" "$(cd "$stage" && GREETING="Hi there" "$warp" c_calls.warp 2>&1)" $'Hi there\n8\n5'
-cp "$checkout/samples/native/doubling.warp" "$stage/"
+cp "$checkout/samples/native/doubling.wap" "$stage/"
 native uses $'42\n7'
 
 # the native runner core/native/driver.warp (notes/primitive.md "Driver"): a sample's module run through wasmtime's C API,

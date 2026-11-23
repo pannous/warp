@@ -94,7 +94,7 @@ test_listed(work: text, words: list) := {
 	write(work + "/" + LISTED, places_of(cases))
 }
 # a case runs in its test file's folder; a file case whose path names a file only from the tree root, where
-# `warp test` runs (`'samples/lists/sorting.warp'`), runs there
+# `warp test` runs (`'samples/lists/sorting.wap'`), runs there
 case_folder(case: TestCase) as text := {
 	folder = folder_of(case.file) or "."
 	if case.code.ends_with(".warp") and not exists(folder + "/" + case.code) and exists(case.code) { return "." }

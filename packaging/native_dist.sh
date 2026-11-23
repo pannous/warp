@@ -21,7 +21,7 @@ cp "$native_warp" "$dist/$(basename "$native_warp")"
 # `warp build crate` runs it from beside the binary (extensions/commands/build.warp CRATE_TOOL_PLACES)
 cp scripts/warp-crate "$dist/warp-crate"
 
-cp samples/hello/hello.warp "$dist/hello.warp"
+cp samples/hello/hello.wap "$dist/hello.warp"
 in_dist './warp "$PWD/hello.warp"' | grep -q "$EXPECTED"
 in_dist 'rm -f hello hello.*wasm && ./warp build "$PWD/hello.warp" >/dev/null && ./hello' | grep -q "$EXPECTED"
 [ -x "$dist/data/native/driver" ] || { echo "native_dist: warp build put no driver in $dist/data/native (card native-install-paths)" >&2; exit 1; }

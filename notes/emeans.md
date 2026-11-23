@@ -25,7 +25,7 @@ embedding datasets (10-45× GPU speed-ups), and dead-cluster revival keeps every
 
 ## In warp
 lib/clustering.warp (`use clustering`): kmeans, emeans (a Clustering: centroids, labels, error), and kmeans_steps /
-emeans_steps, the centroids after each step for animations. Test: test/clustering. Sample: samples/clustering/emeans.warp,
+emeans_steps, the centroids after each step for animations. Test: test/clustering. Sample: samples/clustering/emeans.wap,
 the two side by side for the same 3 epochs.
 
 On 600 2-D points in 8 blobs, k = 8, 3 epochs each, e-means had the lower error in 20 of 20 seeds (Lloyd after 3

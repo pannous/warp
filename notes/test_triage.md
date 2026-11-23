@@ -719,7 +719,7 @@ No wiki page or sample shows the form, or it is esoteric; removed from the test 
 - test/parser/test_parameter_scope.warp: `# a_definitions_parameter_scope_ends_with_it ⏎ is! 'show(p) := p ⏎ def g(show) { show + 1 } ⏎ x = show /tmp ⏎ x' '/tmp'` — odd phrasing show /tmp
 - test/programs/test_display_names.pairs.warp: `'display.diagonal > 1 inch and display.diagonal < 1000 inch'	true	needs: display` — needs a physical display, platform
 - test/programs/test_display_names.pairs.warp: `'display.size == [display.width, display.height] px'	true` — needs a physical display, platform
-- test/programs/test_samples.pairs.warp: `'samples/numbers/sin.warp'	841471` — float precision platform quirk
+- test/programs/test_samples.pairs.warp: `'samples/numbers/sin.wap'	841471` — float precision platform quirk
 - test/programs/test_samples.pairs.warp: `'samples/advanced/raytracer.warp'	8230` — sample file no longer exists
 - test/programs/test_samples.pairs.warp: `'samples/advanced/snake.warp'	40` — sample file no longer exists
 - test/programs/test_sound.warp: `# a_melody_is_its_notes_one_after_another ⏎ is! 'use sound ⏎ count(melody_samples([C4 [E4 G4]], 0.01))' 442` — sample count intermediate, off by one
@@ -847,7 +847,7 @@ No wiki page or sample shows the form, or it is esoteric; removed from the test 
 
 No wiki page or sample shows the form, or it is esoteric; removed from the test file.
 
-- test/aquarium/test_madai.warp: `is! 'use "../../samples/gpu/aquarium.warp" ⏎ use math ⏎ mesh = fish_mesh(read("../../samples/gpu/madai.fish")) ⏎ posed = fish_pose(mesh, 0.4) ⏎ fish_show(posed.` — internal fish geometry check, intermediate values
+- test/aquarium/test_madai.warp: `is! 'use "../../samples/gpu/aquarium.wap" ⏎ use math ⏎ mesh = fish_mesh(read("../../samples/gpu/madai.fish")) ⏎ posed = fish_pose(mesh, 0.4) ⏎ fish_show(posed.` — internal fish geometry check, intermediate values
 - test/ffi/test_browser_dollar_names.pairs.warp: `'$Math.floor(2.7)'	2` — browser-only globals, platform quirk
 - test/ffi/test_browser_dollar_names.pairs.warp: `'document.title'	'warp tests in the browser'` — browser-only globals, platform quirk
 - test/ffi/test_c_enums.pairs.warp: `'enum KeyboardKey { KEY_NULL = 0, KEY_A = 65 }; GetKeyPressed(): KeyboardKey from "raylib"; "" + GetKeyPressed()'	"KEY_NULL"	needs: raylib` — raylib library absent, platform dependent

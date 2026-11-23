@@ -44,30 +44,30 @@
 ⊘ test/web/test_uniscript.warp: 1 cases skipped, need uniscript
 ⊘ test/web/test_webview.pairs.warp: 2 cases skipped, need js
 ⊘ test/world/test_world.pairs.warp: 6 cases skipped, need network
-✓ test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no
-⏱ test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no: 5.376 s
-✓ test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes
-⏱ test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes: 5.066 s
-✓ test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.warp\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes
-⏱ test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.warp\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes: 5.583 s
-✓ test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.warp\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes
-⏱ test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.warp\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes: 5.226 s
-✓ test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes
-⏱ test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes: 5.423 s
-✓ test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes
-⏱ test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.warp\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes: 5.586 s
-✓ test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.warp\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes
-⏱ test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.warp\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes: 5.421 s
-✓ test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.warp\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes
-⏱ test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.warp\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes: 5.745 s
-✓ test/aquarium/test_fish.warp:5 "use \"../../samples/gpu/fish.warp\"\nuse math\nmesh = fish_mesh(\"swim 0.2 0.4 1 1.6 0.7 0 0 0.25\nv 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv -0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv 0.1 -0.02 0.06 0 0 1 4 1 0 0.1 0 0.02 0 1 0 1 0\nv 0.22 -0.02 0 0 1 0 8 1 0 0 0 0 1 1 0 1 0\nv 0.12 0 0.02 0 0 1 7 0.02 0 0 0 0 0 0 1 1 0\nv 0.23 -0.01 0 0 1 0 9 1 0 0 0 0 1 1 1 1 0\nf 1 2 3\")\ntail = fish_point(mesh, 2, 0.15625)\nstill = fish_point(mesh, 2, 0)\nfin = fish_point(mesh, 3, 0)\njaw = fish_point(mesh, 4, 0.3465)\nshut = fish_point(mesh, 4, -0.2785)\ngill = fish_point(mesh, 5, 0.625)\nupper = fish_point(mesh, 6, 0.3465)\n#mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001" yes
-⏱ test/aquarium/test_fish.warp:5 "use \"../../samples/gpu/fish.warp\"\nuse math\nmesh = fish_mesh(\"swim 0.2 0.4 1 1.6 0.7 0 0 0.25\nv 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv -0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv 0.1 -0.02 0.06 0 0 1 4 1 0 0.1 0 0.02 0 1 0 1 0\nv 0.22 -0.02 0 0 1 0 8 1 0 0 0 0 1 1 0 1 0\nv 0.12 0 0.02 0 0 1 7 0.02 0 0 0 0 0 0 1 1 0\nv 0.23 -0.01 0 0 1 0 9 1 0 0 0 0 1 1 1 1 0\nf 1 2 3\")\ntail = fish_point(mesh, 2, 0.15625)\nstill = fish_point(mesh, 2, 0)\nfin = fish_point(mesh, 3, 0)\njaw = fish_point(mesh, 4, 0.3465)\nshut = fish_point(mesh, 4, -0.2785)\ngill = fish_point(mesh, 5, 0.625)\nupper = fish_point(mesh, 6, 0.3465)\n#mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001" yes: 2.774 s
-✓ test/aquarium/test_fish.warp:25 "use \"../../samples/gpu/fish.warp\"\nuse math\nmesh = fish_mesh(read(\"../../samples/gpu/madai.fish\"))\ntail = 1\nlip = 1\nfin = 1\neye = 1\ngill = 1\nfor i in 1 to #mesh.positions {\n\tif mesh.positions#i#1 < mesh.positions#tail#1 { tail = i }\n\tif mesh.jaws#i > 0.5 { lip = i }\n\tif mesh.parts#i == PECTORAL and mesh.weights#i > mesh.weights#fin { fin = i }\n\tif mesh.parts#i == EYE { eye = i }\n\tif mesh.parts#i == GILL { gill = i }\n}\nswung = abs(fish_point(mesh, tail, 0)#3 - fish_point(mesh, tail, 0.15625)#3)\nopened = fish_point(mesh, lip, 0.3465)\nclosed = fish_point(mesh, lip, -0.2785)\n#mesh.positions == 408 and #mesh.triangles == 722 and mesh.reach ~ 0.45 and swung > 0.005 and opened#2 < closed#2 - 0.004 and norm(fish_point(mesh, fin, 0) .- fish_point(mesh, fin, 0.3)) > 0.001 and norm(fish_point(mesh, eye, 0.4) .- mesh.positions#eye) > 0.0005 and abs(fish_point(mesh, gill, 0.625)#3) > abs(mesh.positions#gill#3) + 0.002" yes
-⏱ test/aquarium/test_fish.warp:25 "use \"../../samples/gpu/fish.warp\"\nuse math\nmesh = fish_mesh(read(\"../../samples/gpu/madai.fish\"))\ntail = 1\nlip = 1\nfin = 1\neye = 1\ngill = 1\nfor i in 1 to #mesh.positions {\n\tif mesh.positions#i#1 < mesh.positions#tail#1 { tail = i }\n\tif mesh.jaws#i > 0.5 { lip = i }\n\tif mesh.parts#i == PECTORAL and mesh.weights#i > mesh.weights#fin { fin = i }\n\tif mesh.parts#i == EYE { eye = i }\n\tif mesh.parts#i == GILL { gill = i }\n}\nswung = abs(fish_point(mesh, tail, 0)#3 - fish_point(mesh, tail, 0.15625)#3)\nopened = fish_point(mesh, lip, 0.3465)\nclosed = fish_point(mesh, lip, -0.2785)\n#mesh.positions == 408 and #mesh.triangles == 722 and mesh.reach ~ 0.45 and swung > 0.005 and opened#2 < closed#2 - 0.004 and norm(fish_point(mesh, fin, 0) .- fish_point(mesh, fin, 0.3)) > 0.001 and norm(fish_point(mesh, eye, 0.4) .- mesh.positions#eye) > 0.0005 and abs(fish_point(mesh, gill, 0.625)#3) > abs(mesh.positions#gill#3) + 0.002" yes: 2.673 s
-✓ test/aquarium/test_madai.warp:6 "use \"../../samples/gpu/aquarium.warp\"\nsame = no\nfor i in 0..fish_count {\n\tfor j in 0..i {\n\t\tif fish_scale(i) == fish_scale(j) { same = yes }\n\t}\n}\nfish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2" yes
-⏱ test/aquarium/test_madai.warp:6 "use \"../../samples/gpu/aquarium.warp\"\nsame = no\nfor i in 0..fish_count {\n\tfor j in 0..i {\n\t\tif fish_scale(i) == fish_scale(j) { same = yes }\n\t}\n}\nfish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2" yes: 5.48 s
-✓ test/aquarium/test_madai.warp:17 "use \"../../samples/gpu/aquarium.warp\"\nuse math\ntri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]\nfish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)\nsingle = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)\nhit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])\ntint = fish_tint(hit)\nsingle ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001" yes
-⏱ test/aquarium/test_madai.warp:17 "use \"../../samples/gpu/aquarium.warp\"\nuse math\ntri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]\nfish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)\nsingle = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)\nhit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])\ntint = fish_tint(hit)\nsingle ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001" yes: 6.041 s
+✓ test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no
+⏱ test/aquarium/test_aquarium.warp:7 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nsame = no\nzero = no\nfor i in 0..wave_count {\n\tif norm(wave_lattice(i)) < 0.1 { zero = yes }\n\tfor j in 0..i {\n\t\tif norm(wave_lattice(i) .- wave_lattice(j)) < 0.1 { same = yes }\n\t}\n}\nsame or zero" no: 5.376 s
+✓ test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes
+⏱ test/aquarium/test_aquarium.warp:20 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nh = wave_height([1.2, -0.4], 0.7)\nmoved = abs(h - wave_height([1.2, -0.4], 2.0))\nh > -0.2 and h < 0.2 and moved > 0.0001" yes: 5.066 s
+✓ test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.wap\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes
+⏱ test/aquarium/test_aquarium.warp:27 "use \"../../samples/gpu/aquarium.wap\"\ntop = sun_at_depth(surface_y)\ndeep = sun_at_depth(surface_y - 8)\n(deep.x / top.x) < (deep.z / top.z)" yes: 5.583 s
+✓ test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.wap\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes
+⏱ test/aquarium/test_aquarium.warp:32 "use \"../../samples/gpu/aquarium.wap\"\nnear = water_transmittance(1)\nfar = water_transmittance(12)\nfar.x < near.x and far.x < far.z" yes: 5.226 s
+✓ test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes
+⏱ test/aquarium/test_aquarium.warp:38 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nc = caustic_color([0.4, 1.1], 0.8)\nc.x > 0 and c.y > 0 and c.z > 0 and abs(c.x - c.z) > 0.0001" yes: 5.423 s
+✓ test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes
+⏱ test/aquarium/test_aquarium.warp:44 "use \"../../samples/gpu/aquarium.wap\"\nuse math\nmoved = norm(school_leader(0, 0) .- school_leader(0, 3))\nbeside = norm(fish_place(2, 1.2) .- school_leader(0, 1.2))\nmoved > 0.2 and beside > 0.05 and beside < 4" yes: 5.586 s
+✓ test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.wap\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes
+⏱ test/aquarium/test_aquarium.warp:51 "use \"../../samples/gpu/aquarium.wap\"\nplace = fish_place(0, 0.5)\nfish_distance(0, place, 0.5) < 0 and fish_distance(0, place .+ [0, 3, 0], 0.5) > 0" yes: 5.421 s
+✓ test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.wap\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes
+⏱ test/aquarium/test_aquarium.warp:56 "use \"../../samples/gpu/aquarium.wap\"\nuse math\na = view_color(view_width / 2, view_height / 2, 0.2)\nb = view_color(view_width / 2, view_height / 2, 2.4)\nheld = a.x >= 0 and a.x <= 1 and a.y >= 0 and a.y <= 1 and a.z >= 0 and a.z <= 1\nlit = a.x + a.y + a.z > 0.02\nheld and lit and norm(a .- b) > 0.002" yes: 5.745 s
+✓ test/aquarium/test_fish.warp:5 "use \"../../samples/gpu/fish.wap\"\nuse math\nmesh = fish_mesh(\"swim 0.2 0.4 1 1.6 0.7 0 0 0.25\nv 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv -0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv 0.1 -0.02 0.06 0 0 1 4 1 0 0.1 0 0.02 0 1 0 1 0\nv 0.22 -0.02 0 0 1 0 8 1 0 0 0 0 1 1 0 1 0\nv 0.12 0 0.02 0 0 1 7 0.02 0 0 0 0 0 0 1 1 0\nv 0.23 -0.01 0 0 1 0 9 1 0 0 0 0 1 1 1 1 0\nf 1 2 3\")\ntail = fish_point(mesh, 2, 0.15625)\nstill = fish_point(mesh, 2, 0)\nfin = fish_point(mesh, 3, 0)\njaw = fish_point(mesh, 4, 0.3465)\nshut = fish_point(mesh, 4, -0.2785)\ngill = fish_point(mesh, 5, 0.625)\nupper = fish_point(mesh, 6, 0.3465)\n#mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001" yes
+⏱ test/aquarium/test_fish.warp:5 "use \"../../samples/gpu/fish.wap\"\nuse math\nmesh = fish_mesh(\"swim 0.2 0.4 1 1.6 0.7 0 0 0.25\nv 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv -0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0\nv 0.1 -0.02 0.06 0 0 1 4 1 0 0.1 0 0.02 0 1 0 1 0\nv 0.22 -0.02 0 0 1 0 8 1 0 0 0 0 1 1 0 1 0\nv 0.12 0 0.02 0 0 1 7 0.02 0 0 0 0 0 0 1 1 0\nv 0.23 -0.01 0 0 1 0 9 1 0 0 0 0 1 1 1 1 0\nf 1 2 3\")\ntail = fish_point(mesh, 2, 0.15625)\nstill = fish_point(mesh, 2, 0)\nfin = fish_point(mesh, 3, 0)\njaw = fish_point(mesh, 4, 0.3465)\nshut = fish_point(mesh, 4, -0.2785)\ngill = fish_point(mesh, 5, 0.625)\nupper = fish_point(mesh, 6, 0.3465)\n#mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001" yes: 2.774 s
+✓ test/aquarium/test_fish.warp:25 "use \"../../samples/gpu/fish.wap\"\nuse math\nmesh = fish_mesh(read(\"../../samples/gpu/madai.fish\"))\ntail = 1\nlip = 1\nfin = 1\neye = 1\ngill = 1\nfor i in 1 to #mesh.positions {\n\tif mesh.positions#i#1 < mesh.positions#tail#1 { tail = i }\n\tif mesh.jaws#i > 0.5 { lip = i }\n\tif mesh.parts#i == PECTORAL and mesh.weights#i > mesh.weights#fin { fin = i }\n\tif mesh.parts#i == EYE { eye = i }\n\tif mesh.parts#i == GILL { gill = i }\n}\nswung = abs(fish_point(mesh, tail, 0)#3 - fish_point(mesh, tail, 0.15625)#3)\nopened = fish_point(mesh, lip, 0.3465)\nclosed = fish_point(mesh, lip, -0.2785)\n#mesh.positions == 408 and #mesh.triangles == 722 and mesh.reach ~ 0.45 and swung > 0.005 and opened#2 < closed#2 - 0.004 and norm(fish_point(mesh, fin, 0) .- fish_point(mesh, fin, 0.3)) > 0.001 and norm(fish_point(mesh, eye, 0.4) .- mesh.positions#eye) > 0.0005 and abs(fish_point(mesh, gill, 0.625)#3) > abs(mesh.positions#gill#3) + 0.002" yes
+⏱ test/aquarium/test_fish.warp:25 "use \"../../samples/gpu/fish.wap\"\nuse math\nmesh = fish_mesh(read(\"../../samples/gpu/madai.fish\"))\ntail = 1\nlip = 1\nfin = 1\neye = 1\ngill = 1\nfor i in 1 to #mesh.positions {\n\tif mesh.positions#i#1 < mesh.positions#tail#1 { tail = i }\n\tif mesh.jaws#i > 0.5 { lip = i }\n\tif mesh.parts#i == PECTORAL and mesh.weights#i > mesh.weights#fin { fin = i }\n\tif mesh.parts#i == EYE { eye = i }\n\tif mesh.parts#i == GILL { gill = i }\n}\nswung = abs(fish_point(mesh, tail, 0)#3 - fish_point(mesh, tail, 0.15625)#3)\nopened = fish_point(mesh, lip, 0.3465)\nclosed = fish_point(mesh, lip, -0.2785)\n#mesh.positions == 408 and #mesh.triangles == 722 and mesh.reach ~ 0.45 and swung > 0.005 and opened#2 < closed#2 - 0.004 and norm(fish_point(mesh, fin, 0) .- fish_point(mesh, fin, 0.3)) > 0.001 and norm(fish_point(mesh, eye, 0.4) .- mesh.positions#eye) > 0.0005 and abs(fish_point(mesh, gill, 0.625)#3) > abs(mesh.positions#gill#3) + 0.002" yes: 2.673 s
+✓ test/aquarium/test_madai.warp:6 "use \"../../samples/gpu/aquarium.wap\"\nsame = no\nfor i in 0..fish_count {\n\tfor j in 0..i {\n\t\tif fish_scale(i) == fish_scale(j) { same = yes }\n\t}\n}\nfish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2" yes
+⏱ test/aquarium/test_madai.warp:6 "use \"../../samples/gpu/aquarium.wap\"\nsame = no\nfor i in 0..fish_count {\n\tfor j in 0..i {\n\t\tif fish_scale(i) == fish_scale(j) { same = yes }\n\t}\n}\nfish_count >= 5 and fish_count <= 12 and same == no and fish_scale(fish_count - 1) > fish_scale(0) * 2" yes: 5.48 s
+✓ test/aquarium/test_madai.warp:17 "use \"../../samples/gpu/aquarium.wap\"\nuse math\ntri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]\nfish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)\nsingle = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)\nhit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])\ntint = fish_tint(hit)\nsingle ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001" yes
+⏱ test/aquarium/test_madai.warp:17 "use \"../../samples/gpu/aquarium.wap\"\nuse math\ntri = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]\nfish_show(tri + tri, [[0.8, 0.2, 0.1]], [[100.0, 0.0, 0.0, 1.0], [1.0, 0.0, 0.0, 0.0], [3.0, 1.0, 0.0, 2.0], [0.0, 0.0, 1.0, 1.0]], 3.0)\nsingle = triangle_hit([0.25, 0.25, 2.0], [0.0, 0.0, -1.0], tri#1, tri#2, tri#3)\nhit = fish_nearest([-1.0, 1.5, 0.5], [1.0, 0.0, 0.0])\ntint = fish_tint(hit)\nsingle ~ 2 and hit#2 == 1 and abs(hit#1 - single * 2) < 0.001 and abs(tint#1 - 0.8) < 0.001 and abs(tint#2 - 0.2) < 0.001 and abs(tint#3 - 0.1) < 0.001" yes: 6.041 s
 ✓ test/clustering/test_clustering.pairs.warp:4 "use clustering; use random; seed(1); c = emeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort(c.centroids, by: p => p#1), c.error]" [[[1, 1], [11, 11]], 2]
 ✓ test/clustering/test_clustering.pairs.warp:5 "use clustering; use random; seed(1); c = kmeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2); [sort(c.centroids, by: p => p#1), c.error]" [[[1, 1], [11, 11]], 2]
 ✓ test/clustering/test_clustering.pairs.warp:8 "use clustering; use random; seed(2); l = emeans([[0, 0], [0, 2], [2, 0], [2, 2], [10, 10], [10, 12], [12, 10], [12, 12]], 2).labels; [l#1 == l#2, l#1 == l#4, l#5 == l#8, l#1 != l#5]" [yes, yes, yes, yes]
@@ -161,7 +161,7 @@
 ✓ test/control/test_braceless_call_in_branch.warp:4 "f(xs, n) := { if n == 0 then count xs else f(xs, n - 1) }; f([1,2], 2)" 2
 ✓ test/control/test_branch_assigned_variables.pairs.warp:4 "c=2; if c > 1 { n = \"ab\" } else { n = \"cd\" }; n" "ab"
 ✓ test/control/test_branch_assigned_variables.pairs.warp:5 "f(c) := { if c > 1 { n = \"ab\" } else { n = \"cd\" }; n }; f(0)" "cd"
-✓ test/control/test_branch_assigned_variables.pairs.warp:6 "samples/lists/sorting_idiomatic.warp" "-3,0,1,2,5,5,6,7,8,9"
+✓ test/control/test_branch_assigned_variables.pairs.warp:6 "samples/lists/sorting_idiomatic.wap" "-3,0,1,2,5,5,6,7,8,9"
 ✓ test/control/test_call_condition_block.pairs.warp:4 "profile = \"../../AGENTS.md\"; if exists profile {1} else {2}" 1
 ✓ test/control/test_call_condition_block.pairs.warp:5 "profile = \"no such file\"; if exists profile {1} else {2}" 2
 ✓ test/control/test_call_condition_block.pairs.warp:6 "f(x) := x > 1; y = 3; while f y {y -= 1}; y" 1
@@ -1704,7 +1704,7 @@ methods: "
 ✓ test/control/test_try_finally.pairs.warp:7 "try { 1 } finally { print \"done\" }" 1
 ✓ test/control/test_try_finally.pairs.warp:10 "x = 0; try { 1/0 } finally { x = 5 }; x" 5
 ✓ test/control/test_try_finally.warp:4 "try:\n  1\nfinally:\n  2" 1
-✓ test/control/test_try_host_failure.pairs.warp:4 "samples/errors/try_failed_json.warp" "light"
+✓ test/control/test_try_host_failure.pairs.warp:4 "samples/errors/try_failed_json.wap" "light"
 ✓ test/control/test_try_host_failure.pairs.warp:7 "try write(\"/dev/null/x.txt\", \"x\") else 7" 7
 ✓ test/control/test_try_host_failure.warp:4 "use json\ntry parse_json(\"not json\") else 7" 7
 ✓ test/control/test_try_host_failure.warp:6 "use json\ntry parse_json(\"5\") else 7" 5
@@ -5766,7 +5766,7 @@ break", 'b']]
 ✓ test/modules/test_disjoint.pairs.warp:10 "use disjoint; DisjointSet(-1)" error
 ✓ test/modules/test_disjoint.pairs.warp:11 "use disjoint; DisjointSet(3).find(0)" error
 ✓ test/modules/test_disjoint.pairs.warp:12 "use disjoint; DisjointSet(3).unite(1, 4)" error
-✓ test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.warp" 23
+✓ test/modules/test_disjoint.pairs.warp:13 "samples/objects/disjoint_groups.wap" 23
 ✓ test/modules/test_disjoint_contract.pairs.warp:3 "use disjoint; DisjointSet(2.5)" error
 ✓ test/modules/test_disjoint_contract.pairs.warp:4 "use disjoint; DisjointSet(1.5)" error
 ✓ test/modules/test_disjoint_contract.pairs.warp:5 "use disjoint; DisjointSet(1 / 2)" error
@@ -7068,7 +7068,7 @@ y = q
 ✓ test/modules/test_ring.pairs.warp:16 "use ring; r = Ring(2); r.pop()" error
 ✓ test/modules/test_ring.pairs.warp:17 "use ring; r = Ring(2); r.peek()" error
 ✓ test/modules/test_ring.pairs.warp:18 "use ring; r = Ring(2); r.latest()" error
-✓ test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.warp" 90
+✓ test/modules/test_ring.pairs.warp:19 "samples/objects/ring_log.wap" 90
 ✓ test/modules/test_root_folder_marker.pairs.warp:2 "use \"•/test/fixtures/counter.warp\"; counter" 10
 ✓ test/modules/test_root_folder_marker.pairs.warp:3 "use \"@/test/fixtures/counter.warp\"; counter" 10
 ✓ test/modules/test_root_folder_marker.pairs.warp:4 "use \"•/test/fixtures/no_such_file.warp\"; 1" error
@@ -7145,7 +7145,7 @@ y = q
 ✗ test/modules/test_sorted.pairs.warp:25 "use sorted; a = SortedSet([1, 2, 2, 3, 4]); b = SortedSet([3, 4, 5]); [a.values(), a.union(b).values(), a.intersection(b).values(), a.difference(b).values(), len(a)]" [[1, 2, 3, 4], [1, 2, 3, 4, 5], [3, 4], [1, 2], 4]: got Error("wasm trap: call stack exhausted at 12:22")
 ✗ test/modules/test_sorted.pairs.warp:26 "use sorted; a = SortedSet([1, 2, 3]); [a.equals(SortedSet([3, 1, 2])), SortedSet([1]).is_subset(a), a.is_subset(SortedSet([1])), a.intersection(a).equals(a), a.difference(a).is_empty(), SortedSet().union(SortedSet([2, 2])).values()]" [yes, yes, no, yes, yes, [2]]: got Error("wasm trap: call stack exhausted at 12:22")
 ✗ test/modules/test_sorted.pairs.warp:29 "use sorted; [TreeMap([[2, \"z\"], [1, \"y\"]]).keys(), BTreeMap([[1, \"a\"]]).get(1), BTreeSet([3, 1]).at(2)]" [[1, 2], 'a', 3]: got Error("wasm trap: call stack exhausted at 12:22")
-✗ test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.warp" 1940: got Error("wasm trap: call stack exhausted at 12:22")
+✗ test/modules/test_sorted.pairs.warp:32 "samples/objects/sorted_leaderboard.wap" 1940: got Error("wasm trap: call stack exhausted at 12:22")
 ✗ test/modules/test_sorted_balance.warp:5 "use sorted; use \"sorted_weight.warp\"\n\na = SortedSet(nums(1, 127))\nevens = a\nfor i in 1 to 63 { evens = evens.remove(i * 2) }\nprefix = a\nfor i in 1 to 60 { prefix = prefix.remove(i) }\nmixed = SortedSet()\nfor i in 1 to 80 {\n\tmixed = mixed.add(i)\n\tif i % 3 == 0 and i > 1 { mixed = mixed.remove(i - 1) }\n\tif i % 7 == 0 { mixed = mixed.remove(i / 2:int) }\n}\ndesc = SortedSet()\nfor i in 1 to 90 { desc = desc.add(91 - i) }\nright = a.intersection(SortedSet(nums(120, 127)))\nkept = a.difference(SortedSet(nums(1, 119)))\nwide = SortedSet(nums(1, 255))\ntop = wide.intersection(SortedSet(nums(250, 255)))\nrest = wide.difference(SortedSet(nums(1, 249)))\nmissed = a.intersection(SortedSet([1000]))\nm = SortedMap()\nfor i in 1 to 40 { m = m.set(i, i * 10) }\nfor i in 1 to 20 { m = m.remove(i * 2) }\nmap_ok = weight_ok(m.root) and m.keys() == [i * 2 - 1 for i in 1 to 20] and m.rank(7) == 4 and m.get(7) == 70\n[whole(a), whole(evens), whole(prefix), whole(mixed), whole(desc), whole(right), whole(kept), whole(top), whole(rest), whole(missed), right.values() == nums(120, 127), kept.values() == nums(120, 127), top.values() == nums(250, 255), rest.values() == nums(250, 255), map_ok]" [yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes, yes]: got Error("wasm trap: call stack exhausted at 12:22")
 ✗ test/modules/test_sorted_balance.warp:34 "use sorted; use \"sorted_weight.warp\"\n\nbig = SortedSet(nums(1, 1000))\nfew = SortedSet([0, 7, 500, 999, 1001, 5000])\nside = SortedSet(nums(1001, 1010))\nevens = SortedSet([i * 2 for i in 1 to 500])\ninner = [7, 500, 999]\nresults = [big.union(few), few.union(big), big.intersection(few), few.intersection(big), big.difference(few), few.difference(big), big.union(side), side.union(big), big.difference(evens), evens.intersection(big), big.difference(big), big.intersection(SortedSet())]\nexpected = [[0] + nums(1, 1001) + [5000], [0] + nums(1, 1001) + [5000], inner, inner, [i for i in 1 to 1000 if not inner.has(i)], [0, 1001, 5000], nums(1, 1010), nums(1, 1010), [i * 2 - 1 for i in 1 to 500], [i * 2 for i in 1 to 500], [], []]\n[[r for r in results if not whole(r)] == [], [r.values() for r in results] == expected]" [yes, yes]: got Error("wasm trap: call stack exhausted at 12:22")
 ✓ test/modules/test_sound.pairs.warp:2 "use sound; count(delay(osc(440, 0.1s), 0.1, 0.5, 0.5))" 23105
@@ -11300,24 +11300,24 @@ at"
 ✓ test/parser/test_url_literal.warp:10 "x = ipfs://cid/file.txt\nx" "ipfs://cid/file.txt"
 ✓ test/parser/test_warp_format.pairs.warp:4 "x={class:\"btn\" type:\"email\"}; x.class" "btn"
 ✓ test/parser/test_warp_format.pairs.warp:5 "7 div 2" 3
-✓ test/physics/test_usd_collisions.warp:5 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nbox = bodies.filter(b => b.name == \"jewelry_box_with_drawer\")#1\nbell = bodies.filter(b => b.name == \"hex_dumbbell\")#1\n[#bodies, round(bell.mass * 100), #box.joints, #box.spheres % 4]" [7, 1584, 2, 0]
-⏱ test/physics/test_usd_collisions.warp:5 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nbox = bodies.filter(b => b.name == \"jewelry_box_with_drawer\")#1\nbell = bodies.filter(b => b.name == \"hex_dumbbell\")#1\n[#bodies, round(bell.mass * 100), #box.joints, #box.spheres % 4]" [7, 1584, 2, 0]: 4.436 s
-✓ test/physics/test_usd_collisions.warp:13 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\ncrate = bodies_read(read(\"../../samples/physics/usdcraft.bodies\")).filter(b => b.name == \"small_fruit_crate\")\nw = simulated(world_of(crate, [0.0, 0.0, 0.125], [[1.0, 0.0, 0.0, 0.0]]), 0.6)\nabs(w.pos#3 - 0.075) < 0.002 and abs(w.quat#1) > 0.999 and kinetic_energy(w) < 0.000001" yes
-⏱ test/physics/test_usd_collisions.warp:13 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\ncrate = bodies_read(read(\"../../samples/physics/usdcraft.bodies\")).filter(b => b.name == \"small_fruit_crate\")\nw = simulated(world_of(crate, [0.0, 0.0, 0.125], [[1.0, 0.0, 0.0, 0.0]]), 0.6)\nabs(w.pos#3 - 0.075) < 0.002 and abs(w.quat#1) > 0.999 and kinetic_energy(w) < 0.000001" yes: 4.209 s
-✓ test/physics/test_usd_collisions.warp:20 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"standard_330_ml_can\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, 0.0, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.6)\ncan_bottom = w.pos#6 - 0.0607\ncan_bottom > 0.145 and can_bottom < 0.155 and abs(w.pos#4) < 0.01" yes
-⏱ test/physics/test_usd_collisions.warp:20 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"standard_330_ml_can\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, 0.0, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.6)\ncan_bottom = w.pos#6 - 0.0607\ncan_bottom > 0.145 and can_bottom < 0.155 and abs(w.pos#4) < 0.01" yes: 4.15 s
-✓ test/physics/test_usd_collisions.warp:30 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"hex_dumbbell\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, -0.17, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.4)\nw.pos#1 > 0.01" yes
-⏱ test/physics/test_usd_collisions.warp:30 "use \"../../samples/physics/usd_bodies.warp\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"hex_dumbbell\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, -0.17, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.4)\nw.pos#1 > 0.01" yes: 4.602 s
-✓ test/programs/test_algo.pairs.warp:4 "samples/objects/dijkstra.warp" "ACBDEF:13"
-✓ test/programs/test_algo.pairs.warp:9 "use \"../../samples/text/levenshtein.warp\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
-✓ test/programs/test_algo.pairs.warp:12 "use \"../../samples/text/levenshtein_idiomatic.warp\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
-✓ test/programs/test_algo.pairs.warp:17 "samples/loops/game_of_life.warp" 3736
-⏱ test/programs/test_algo.pairs.warp:17 "samples/loops/game_of_life.warp" 3736: 4.3 s
-✓ test/programs/test_algo.pairs.warp:20 "samples/loops/life_idiomatic.warp" 131
-✓ test/programs/test_algo.pairs.warp:25 "samples/functions/queens.warp" 1119
-✓ test/programs/test_algo.pairs.warp:28 "samples/functions/queens_idiomatic.warp" 1119
-✓ test/programs/test_algo.pairs.warp:33 "samples/lists/sieve.warp" 1083
-✓ test/programs/test_algo.pairs.warp:38 "samples/lists/sorting.warp" "-3,0,1,2,5,5,6,7,8,9"
+✓ test/physics/test_usd_collisions.warp:5 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nbox = bodies.filter(b => b.name == \"jewelry_box_with_drawer\")#1\nbell = bodies.filter(b => b.name == \"hex_dumbbell\")#1\n[#bodies, round(bell.mass * 100), #box.joints, #box.spheres % 4]" [7, 1584, 2, 0]
+⏱ test/physics/test_usd_collisions.warp:5 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nbox = bodies.filter(b => b.name == \"jewelry_box_with_drawer\")#1\nbell = bodies.filter(b => b.name == \"hex_dumbbell\")#1\n[#bodies, round(bell.mass * 100), #box.joints, #box.spheres % 4]" [7, 1584, 2, 0]: 4.436 s
+✓ test/physics/test_usd_collisions.warp:13 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\ncrate = bodies_read(read(\"../../samples/physics/usdcraft.bodies\")).filter(b => b.name == \"small_fruit_crate\")\nw = simulated(world_of(crate, [0.0, 0.0, 0.125], [[1.0, 0.0, 0.0, 0.0]]), 0.6)\nabs(w.pos#3 - 0.075) < 0.002 and abs(w.quat#1) > 0.999 and kinetic_energy(w) < 0.000001" yes
+⏱ test/physics/test_usd_collisions.warp:13 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\ncrate = bodies_read(read(\"../../samples/physics/usdcraft.bodies\")).filter(b => b.name == \"small_fruit_crate\")\nw = simulated(world_of(crate, [0.0, 0.0, 0.125], [[1.0, 0.0, 0.0, 0.0]]), 0.6)\nabs(w.pos#3 - 0.075) < 0.002 and abs(w.quat#1) > 0.999 and kinetic_energy(w) < 0.000001" yes: 4.209 s
+✓ test/physics/test_usd_collisions.warp:20 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"standard_330_ml_can\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, 0.0, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.6)\ncan_bottom = w.pos#6 - 0.0607\ncan_bottom > 0.145 and can_bottom < 0.155 and abs(w.pos#4) < 0.01" yes
+⏱ test/physics/test_usd_collisions.warp:20 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"standard_330_ml_can\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, 0.0, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.6)\ncan_bottom = w.pos#6 - 0.0607\ncan_bottom > 0.145 and can_bottom < 0.155 and abs(w.pos#4) < 0.01" yes: 4.15 s
+✓ test/physics/test_usd_collisions.warp:30 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"hex_dumbbell\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, -0.17, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.4)\nw.pos#1 > 0.01" yes
+⏱ test/physics/test_usd_collisions.warp:30 "use \"../../samples/physics/usd_bodies.wap\"\nuse file\nbodies = bodies_read(read(\"../../samples/physics/usdcraft.bodies\"))\nnamed(name) := bodies.filter(b => b.name == name)#1\ntwo = [named(\"small_fruit_crate\"), named(\"hex_dumbbell\")]\nw = simulated(world_of(two, [0.0, 0.0, 0.076, -0.17, 0.0, 0.3], [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]), 0.4)\nw.pos#1 > 0.01" yes: 4.602 s
+✓ test/programs/test_algo.pairs.warp:4 "samples/objects/dijkstra.wap" "ACBDEF:13"
+✓ test/programs/test_algo.pairs.warp:9 "use \"../../samples/text/levenshtein.wap\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
+✓ test/programs/test_algo.pairs.warp:12 "use \"../../samples/text/levenshtein_idiomatic.wap\"; [levenshtein(\"kitten\", \"sitting\"), levenshtein(\"flaw\", \"lawn\"), levenshtein(\"\", \"abc\"), levenshtein(\"abc\", \"abc\"), levenshtein(\"saturday\", \"sunday\")]" [3, 2, 3, 0, 3]
+✓ test/programs/test_algo.pairs.warp:17 "samples/loops/game_of_life.wap" 3736
+⏱ test/programs/test_algo.pairs.warp:17 "samples/loops/game_of_life.wap" 3736: 4.3 s
+✓ test/programs/test_algo.pairs.warp:20 "samples/loops/life_idiomatic.wap" 131
+✓ test/programs/test_algo.pairs.warp:25 "samples/functions/queens.wap" 1119
+✓ test/programs/test_algo.pairs.warp:28 "samples/functions/queens_idiomatic.wap" 1119
+✓ test/programs/test_algo.pairs.warp:33 "samples/lists/sieve.wap" 1083
+✓ test/programs/test_algo.pairs.warp:38 "samples/lists/sorting.wap" "-3,0,1,2,5,5,6,7,8,9"
 ✓ test/programs/test_calculator_fixes.pairs.warp:4 "s=\"ab\"; t=\"b\"; s < t" yes
 ✓ test/programs/test_calculator_fixes.pairs.warp:5 "s=\"b\"; s >= \"ab\"" yes
 ✓ test/programs/test_calculator_fixes.pairs.warp:6 "s = \"45\"; c = byte_slice(s, 0, 1); c >= \"0\" and c <= \"9\"" yes
@@ -11472,27 +11472,27 @@ at"
 ✓ test/programs/test_property_definitions.warp:53 "class Point{x: int; y: int}\nPoint.norm() := self.x\nPoint(3, 4).norm" 3
 ✓ test/programs/test_property_definitions.warp:56 "class Point{x: int; y: int}\nPoint.sum := this.x + this.y\nPoint(3, 4).sum" 7
 ✓ test/programs/test_property_definitions.warp:59 "class Point{x: int; y: int}\nPoint.shift(d) := self.x = self.x + d\np = Point(3, 4)\np.shift = 10\np.x" 13
-✓ test/programs/test_samples.pairs.warp:4 "samples/functions/fibonacci.warp" 55
-✓ test/programs/test_samples.pairs.warp:7 "samples/numbers/factorial.warp" 120
-✓ test/programs/test_samples.pairs.warp:10 "samples/lists/primes.warp" 1
-✓ test/programs/test_samples.pairs.warp:13 "samples/numbers/gcd.warp" 6
-✓ test/programs/test_samples.pairs.warp:16 "samples/numbers/sum.warp" 55
-✓ test/programs/test_samples.pairs.warp:19 "samples/numbers/power.warp" 1024
-✓ test/programs/test_samples.pairs.warp:22 "samples/numbers/collatz.warp" 111
-✓ test/programs/test_samples.pairs.warp:25 "samples/functions/ackermann.warp" 61
-✓ test/programs/test_samples.pairs.warp:28 "samples/numbers/quadratic.warp" 6
-✓ test/programs/test_samples.pairs.warp:31 "samples/conditions/fizzbuzz.warp" "FizzBuzz"
-✓ test/programs/test_samples.pairs.warp:34 "samples/functions/sudoku.warp" 534
-✓ test/programs/test_samples.pairs.warp:39 "samples/lists/quicksort.warp" yes
-✓ test/programs/test_samples.pairs.warp:42 "samples/loops/game_of_life.warp" 3736
-⏱ test/programs/test_samples.pairs.warp:42 "samples/loops/game_of_life.warp" 3736: 4.126 s
-✓ test/programs/test_samples.pairs.warp:47 "samples/objects/binary_tree.warp" 409
-✓ test/programs/test_samples.pairs.warp:50 "samples/hello/comments.warp" 120
-✓ test/programs/test_samples.pairs.warp:55 "samples/text/calculator.warp" 39
-✓ test/programs/test_samples.pairs.warp:58 "samples/objects/json_parser.warp" 125
-✓ test/programs/test_samples.pairs.warp:61 "samples/loops/mandelbrot.warp" 17748
-✓ test/programs/test_samples.pairs.warp:64 "samples/objects/data_structures.warp" "Dave 11 20"
-✓ test/programs/test_samples.pairs.warp:67 "samples/functions/y_combinator.warp" 6765
+✓ test/programs/test_samples.pairs.warp:4 "samples/functions/fibonacci.wap" 55
+✓ test/programs/test_samples.pairs.warp:7 "samples/numbers/factorial.wap" 120
+✓ test/programs/test_samples.pairs.warp:10 "samples/lists/primes.wap" 1
+✓ test/programs/test_samples.pairs.warp:13 "samples/numbers/gcd.wap" 6
+✓ test/programs/test_samples.pairs.warp:16 "samples/numbers/sum.wap" 55
+✓ test/programs/test_samples.pairs.warp:19 "samples/numbers/power.wap" 1024
+✓ test/programs/test_samples.pairs.warp:22 "samples/numbers/collatz.wap" 111
+✓ test/programs/test_samples.pairs.warp:25 "samples/functions/ackermann.wap" 61
+✓ test/programs/test_samples.pairs.warp:28 "samples/numbers/quadratic.wap" 6
+✓ test/programs/test_samples.pairs.warp:31 "samples/conditions/fizzbuzz.wap" "FizzBuzz"
+✓ test/programs/test_samples.pairs.warp:34 "samples/functions/sudoku.wap" 534
+✓ test/programs/test_samples.pairs.warp:39 "samples/lists/quicksort.wap" yes
+✓ test/programs/test_samples.pairs.warp:42 "samples/loops/game_of_life.wap" 3736
+⏱ test/programs/test_samples.pairs.warp:42 "samples/loops/game_of_life.wap" 3736: 4.126 s
+✓ test/programs/test_samples.pairs.warp:47 "samples/objects/binary_tree.wap" 409
+✓ test/programs/test_samples.pairs.warp:50 "samples/hello/comments.wap" 120
+✓ test/programs/test_samples.pairs.warp:55 "samples/text/calculator.wap" 39
+✓ test/programs/test_samples.pairs.warp:58 "samples/objects/json_parser.wap" 125
+✓ test/programs/test_samples.pairs.warp:61 "samples/loops/mandelbrot.wap" 17748
+✓ test/programs/test_samples.pairs.warp:64 "samples/objects/data_structures.wap" "Dave 11 20"
+✓ test/programs/test_samples.pairs.warp:67 "samples/functions/y_combinator.wap" 6765
 ✓ test/programs/test_shader_blocks.warp:4 "s = shader {\n\t@fragment fn main() -> @location(0) vec4f {\n\t\treturn vec4f(1.0); // a { in a comment\n\t}\n}\ns" "@fragment fn main() -> @location(0) vec4f {
 	return vec4f(1.0); // a { in a comment
 }"
@@ -11505,17 +11505,17 @@ at"
 }"
 ✗ test/programs/test_shader_holes.warp:12 "s = shader { let x = $mouse_x; }\ns" "let x = values.mouse.x;": got "@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f { let x = values.mouse.x;
 }"
-✓ test/programs/test_small_samples.pairs.warp:4 "samples/text/palindrome.warp" yes
-✓ test/programs/test_small_samples.pairs.warp:5 "samples/text/word_count.warp" 4
-✓ test/programs/test_small_samples.pairs.warp:6 "samples/text/sort_words.warp" ["brown", "fox", "quick", "the"]
-✓ test/programs/test_small_samples.pairs.warp:7 "samples/text/word_lengths.warp" ø
-✓ test/programs/test_small_samples.pairs.warp:8 "samples/text/replace_word.warp" "I like coffee"
-✓ test/programs/test_small_samples.pairs.warp:9 "samples/text/find_text.warp" yes
-✓ test/programs/test_small_samples.pairs.warp:12 "samples/errors/try_catch.warp" "cannot divide by zero"
-✓ test/programs/test_small_samples.pairs.warp:13 "samples/errors/try_else.warp" 0
-✓ test/programs/test_small_samples.pairs.warp:14 "samples/errors/parse_number.warp" -1
-✓ test/programs/test_small_samples.pairs.warp:15 "samples/errors/raise_error.warp" "no result"
-✓ test/programs/test_small_samples.pairs.warp:16 "samples/errors/assertions.warp" "all good"
+✓ test/programs/test_small_samples.pairs.warp:4 "samples/text/palindrome.wap" yes
+✓ test/programs/test_small_samples.pairs.warp:5 "samples/text/word_count.wap" 4
+✓ test/programs/test_small_samples.pairs.warp:6 "samples/text/sort_words.wap" ["brown", "fox", "quick", "the"]
+✓ test/programs/test_small_samples.pairs.warp:7 "samples/text/word_lengths.wap" ø
+✓ test/programs/test_small_samples.pairs.warp:8 "samples/text/replace_word.wap" "I like coffee"
+✓ test/programs/test_small_samples.pairs.warp:9 "samples/text/find_text.wap" yes
+✓ test/programs/test_small_samples.pairs.warp:12 "samples/errors/try_catch.wap" "cannot divide by zero"
+✓ test/programs/test_small_samples.pairs.warp:13 "samples/errors/try_else.wap" 0
+✓ test/programs/test_small_samples.pairs.warp:14 "samples/errors/parse_number.wap" -1
+✓ test/programs/test_small_samples.pairs.warp:15 "samples/errors/raise_error.wap" "no result"
+✓ test/programs/test_small_samples.pairs.warp:16 "samples/errors/assertions.wap" "all good"
 ✓ test/programs/test_sound.pairs.warp:4 "def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)" 3
 ⏱ test/programs/test_sound.pairs.warp:4 "def h(value) { play(440Hz, 0.05s); value + 1 }; h(2)" 3: 2.281 s
 ✓ test/programs/test_sound.pairs.warp:8 "play(440Hz, 5ms); wait(sound); 7" 7

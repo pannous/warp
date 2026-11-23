@@ -1,8 +1,8 @@
-# samples/gpu/fish.warp, the red sea bream (notes/fish.md). The swim is the Fish Kit's part-id motion,
+# samples/gpu/fish.wap, the red sea bream (notes/fish.md). The swim is the Fish Kit's part-id motion,
 # re-expressed. These check the parser and one posed vertex of each motion. They do not paint.
 
 # a tail at a quarter beat sits on the wave, a pectoral leaves its rest, a jaw drops, a gill swings out, an upper jaw slides
-is! 'use "../../samples/gpu/fish.warp"
+is! 'use "../../samples/gpu/fish.wap"
 use math
 mesh = fish_mesh("swim 0.2 0.4 1 1.6 0.7 0 0 0.25
 v 0.2 0 0 0 1 0 0 0 0 0 0 0 1 0 0 1 0
@@ -22,7 +22,7 @@ upper = fish_point(mesh, 6, 0.3465)
 #mesh.positions == 6 and mesh.parts#4 == JAW and abs(still#3) < 0.0005 and abs(tail#3 + 0.02) < 0.0005 and norm(fin .- mesh.positions#3) > 0.001 and jaw#2 < shut#2 - 0.004 and gill#3 > mesh.positions#5#3 + 0.003 and upper#1 > mesh.positions#6#1 + 0.001' yes
 
 # the baked bream: the counts the baker wrote, and the tail, lip, pectoral, eye and gill each move
-is! 'use "../../samples/gpu/fish.warp"
+is! 'use "../../samples/gpu/fish.wap"
 use math
 mesh = fish_mesh(read("../../samples/gpu/madai.fish"))
 tail = 1

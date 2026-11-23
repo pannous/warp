@@ -1,7 +1,7 @@
 # A million trees
 
-Library `lib/forest.warp`, tests `test/graphics/test_forest.pairs.warp`. Two samples: `samples/graphics/million_trees.warp`,
-the billboard forest that runs anywhere (the page too), and `samples/graphics/ez_forest.warp`, the same woods with EZ
+Library `lib/forest.warp`, tests `test/graphics/test_forest.pairs.warp`. Two samples: `samples/graphics/million_trees.wap`,
+the billboard forest that runs anywhere (the page too), and `samples/graphics/ez_forest.wap`, the same woods with EZ
 Tree meshes near the eye, which needs the large assets in `samples/graphics/ez_trees` that git does not keep (their
 NOTICE.md says how to regenerate them; without them `read_tree_mesh` refuses, naming the scripts).
 Neither is named `forest.warp`: that name is what `use forest` loads.
@@ -12,7 +12,7 @@ in order: pine, oak, birch, autumn). ez_forest's horizon view uses `forest_horiz
 budget lasts. A crown that does not fit is the baked impostor of that species' finest mesh when
 atlas entry 4 is present, and otherwise the shaded crown and the dark pine. The meshed trees sample the near atlas (full-size leaves, id 3 in `ez_trees/atlas.bin`). A fresh bin
 (zlib RGBA8) is uploaded in one read; a missing or stale stamp rebuilds the `.rgba` beside it
-(sources and licences: `ez_trees/NOTICE.md`). `samples/graphics/tree_study.warp` draws the medium presets
+(sources and licences: `ez_trees/NOTICE.md`). `samples/graphics/tree_study.wap` draws the medium presets
 full size, the trees the EZ Tree demo opens on.
 
 ## Scene
@@ -59,7 +59,7 @@ ez_forest prints `[total, candidate, submitted, scenery, meshed, triangles]` for
 `submitted` is still the budget's tree count and includes the trees that were then drawn as meshes.
 `meshed` is how many of those became meshes, and `triangles` is the mesh triangles actually drawn.
 It paints when a window can open, and also when the program argument is `still`
-(`warp samples/graphics/ez_forest.warp still`), which is the headless picture at 240×135.
+(`warp samples/graphics/ez_forest.wap still`), which is the headless picture at 240×135.
 `still large` is the same view at 1280×720. With no window and no `still`, the frame selects the view
 and does not paint: a paint with no GPU faults.
 The library's opening view (x 80, z -12, yaw 0.15, pitch -0.18, aspect 240/135, the full million,

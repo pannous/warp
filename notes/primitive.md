@@ -7,7 +7,7 @@ extensions/primitive.warp, an emitter of plain MVP wasm of its own: no GC types,
 - **A primitive file**: its leading header (the `#!` line, comments and blank lines before the code) holds `@primitive`; the mark below the code is an error. The whole file is lowered by the usual
   passes without the prelude (its words are GC code) and built by primitive.warp: each definition an exported function
   under its written name, the other statements `main`, plus `memory` and the arena global. wasm2c and cc make it a
-  native program: test/native/test_native.sh (samples/native/fib.warp, structs.warp). `warp file` runs it too; the
+  native program: test/native/test_native.sh (samples/native/fib.wap, structs.warp). `warp file` runs it too; the
   harness prints main's raw number.
 - **A primitive function in a GC program**: `@primitive sq(x: i32): i32 := x * x`. plain_node notes the names an
   extension's attribute marks (walk.warp read_attributes, marked_names) before it drops the layer;
@@ -62,7 +62,7 @@ function by name in the process (lib/native/foreign.c native_function, dlsym; a 
 linked with -l) and passes the values as C takes them: a text a NUL-terminated copy (freed after the call), a text
 result copied into the arena (exported as global `arena`), `pointer` an address of the module's memory, `handle` a C
 pointer as an i64 id (fopen's FILE *). out, bytes, length and owned_text are refused at the import's line. Sample:
-samples/native/c_calls.warp. Under wasmtime (`warp c_calls.warp`) the native driver calls them the same way (decision
+samples/native/c_calls.wap. Under wasmtime (`warp c_calls.warp`) the native driver calls them the same way (decision
 primitive-c-in-driver): the module lists them in its section warp.primitive_c_functions (primitive.warp
 c_function_line, the fields of a GC module's warp.c_functions), a text crossing as `pair`, a pointer as `address`, a
 handle as the i64 it is (driver.warp pair_c_text, guest_pair, primitive_arena_taken).

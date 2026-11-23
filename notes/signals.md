@@ -82,7 +82,7 @@ Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: test/control
 - Field and item writes `p.age = 2`, `xs#1 = 9` are writes of their variable. Field signals are named by their path
   `p.age`: `watch(p) := on change p.age {…}` subscribes to that field; the object literal assigned to a variable
   passed there keeps a cell in the field, and a variable kept in it (`person = {age: a}`) escapes
-  (test/control/test_signal_fields.warp, samples/signals/signal_fields.warp). Open: a field signal of an object built
+  (test/control/test_signal_fields.warp, samples/signals/signal_fields.wap). Open: a field signal of an object built
   anywhere but a main-level literal.
 - Lists of signals: a function subscribing to the loop variable of `for s in xs {…}` over its parameter xs takes a
   list of signals; a list literal of variables passed there holds the signals themselves (the one place a list keeps
@@ -124,6 +124,6 @@ Ported cases of Svelte, Vue, Solid, RxJS, C#, Node, Qt and the DOM: test/control
   tour example `events`).
 - An emit no handler receives, in a program compiled for a page, is `dispatch_event(name, data)` (lib/signals.warp): a
   `CustomEvent(name, {detail})` on the document (markup.js dispatchToPage; a Worker posts it to its page)
-  (test/web/test_page.pairs.warp, samples/web/page_custom_event.warp). A handler body inside an element
+  (test/web/test_page.pairs.warp, samples/web/page_custom_event.wap). A handler body inside an element
   stays code.
 - `broadcast` / channel listeners: natively (wiki/signal.md); the stdlib side is open.

@@ -1,6 +1,6 @@
 # Meshlets
 
-Library `lib/meshlets.warp`, sample `samples/graphics/meshlet_grid.warp`, tests `test/graphics/test_meshlets.pairs.warp`.
+Library `lib/meshlets.warp`, sample `samples/graphics/meshlet_grid.wap`, tests `test/graphics/test_meshlets.pairs.warp`.
 The sample is not named `meshlets.warp`: a file of that name is what `use meshlets` loads, so the sample would import itself.
 
 This is a CPU picture of clustered triangles. It is not Unreal Nanite, and it is not a port of three.js.
@@ -121,7 +121,7 @@ its first triangle in the level.
 
 ## Sample value
 
-`samples/graphics/meshlet_grid.warp` returns, in order: flat fine triangles, flat coarse triangles, the two flat
+`samples/graphics/meshlet_grid.wap` returns, in order: flat fine triangles, flat coarse triangles, the two flat
 cluster sizes, the peak's coarse error, peak triangles kept at the fine level and at the coarse level, flat
 cluster counts in front, behind, and outside one plane, then the oak: level count, fine triangles, coarse
 triangles, fine clusters, coarse clusters, the level at distance 2 and at distance 40 (one pixel, cot 1,

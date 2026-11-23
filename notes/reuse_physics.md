@@ -1,6 +1,6 @@
 # Reusing a physics engine (card reuse-physics, user policy reuse-giants)
 
-What we build ourselves today: nothing general. samples/advanced/particles.warp integrates gravity and bounces
+What we build ourselves today: nothing general. samples/advanced/particles.wap integrates gravity and bounces
 by hand (Euler steps, wall checks); there is no rigid body, collision shape, joint or broad phase anywhere in lib/.
 So this review picks what a `use physics` library would bind, before anyone starts writing a solver in warp.
 

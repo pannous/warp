@@ -1,6 +1,6 @@
 # Module manager: the sketch (card module-manager)
 
-The module system sketched below is input for card module-manager (samples/modules/modules.warp shows the forms that
+The module system sketched below is input for card module-manager (samples/modules/modules.wap shows the forms that
 work). Working: `use math`, `use { sin, cos } from math`, `use math as m; m.sqrt(16)`. Missing:
 - `module name { … }` blocks, nested ones, and `graphics.colors.red` into them (`module colors { red = 1 };
   colors.red` is "outside the core: the unknown name module").

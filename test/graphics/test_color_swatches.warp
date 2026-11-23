@@ -1,4 +1,4 @@
-# Named-color bands. Source: lib/color.warp named_colors, painted by samples/graphics/color_swatches.warp
+# Named-color bands. Source: lib/color.warp named_colors, painted by samples/graphics/color_swatches.wap
 # (the same band_at / band_color selection). Palette order and every band edge, including the column just past the strip.
 
 is! 'use color; named_colors.map(pair => pair[1])' ["black", "white", "gray", "red", "green", "blue", "yellow", "orange", "purple"]

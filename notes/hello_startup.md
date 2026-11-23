@@ -1,6 +1,6 @@
 # What starting the compiler costs (card version-retires)
 
-`warp samples/hello/hello.warp` is a compile and a run behind one startup: the native warp loads wasmtime, warp.wasm's
+`warp samples/hello/hello.wap` is a compile and a run behind one startup: the native warp loads wasmtime, warp.wasm's
 machine code and starts the compiler before any compile. `warp version` goes the same way (it runs the compiler's own
 `version` command), so it is the startup alone. scripts/vitals.py measures both per install, and the Vitals page shows
 the difference as its own line: **the compile alone**, hello's instructions minus `warp version`'s (about 1.42 G of

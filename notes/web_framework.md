@@ -7,11 +7,11 @@ signals, the server is the same program. The steps are the web-* cards on the bo
 each builds on, and how each works. Defaults marked so are undoable.
 
 ## Foundations
-- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/web/html.warp, html_dsl.warp; repeated
+- **Markup as data**: `html{ body{ h1: "Hi" ul{ li: "a" li: "b" } } }` parses (samples/web/html.wap, html_dsl.warp; repeated
   keys like `li li li`) and renders as DOM in the page, as HTML natively (lib/markup.warp, step 1 below).
 - **Signals** (notes/signals.md): every variable is a signal once something listens; `:=` derives one and knows what it
   reads; `whenever`, `on change`, page-wide `on click` / `on key` in the playground
-  and in `warp app` (`on key { exit }` closes it, samples/web/hello_div.warp).
+  and in `warp app` (`on key { exit }` closes it, samples/web/hello_div.wap).
 - **Page plumbing** (notes/web_playground.md): the compiler runs in a worker, host words reach the page
   (host.js), paint draws pixels, `use draw` shapes (lib/draw.warp), fetch, channels, components, threads.
 
@@ -43,7 +43,7 @@ Each step is useful on its own and is what the next ones stand on.
 - **Routes**: `serve 8080 { get "/api/users" { users } post "/api/users" { … } }`. A route's block value is the response:
   a text as text/plain, any other value as JSON. `request` holds method, path, query and body (the
   body parsed when it is JSON); `status 418` sets the status and `header "name" "value"` adds a header (card
-  web-route-header; samples/servers/route_headers.warp). lib/web.warp serves the routes of lib/router.warp over the
+  web-route-header; samples/servers/route_headers.wap). lib/web.warp serves the routes of lib/router.warp over the
   process's C sockets, answering as a WAGI build does.
   A WAGI build (`warp build wagi app.warp`, card site-wagi-build) has no host: there they are lib/wagi.warp wagi_header calls,
   which globals collect for the CGI answer; a set Content-Type replaces the answer's own, a failing route answers 500
@@ -61,7 +61,7 @@ Each step is useful on its own and is what the next ones stand on.
 - In warp: extensions/fetch_signals.warp lowers it to lib/net.warp fetch_into, whose reply sets `users` or its error.
 - Live regions (card web-a11y-live): the outermost element whose own content reads a fetched value gets
   aria-live="polite", so a screen reader announces it when it arrives; an element setting aria-live keeps its own.
-  Sample samples/web/live_region.warp.
+  Sample samples/web/live_region.wap.
 - Cancel on navigation: card fetch-cancel.
 
 ## Defaults for step 1 (web-dom), undoable
@@ -88,15 +88,15 @@ Each step is useful on its own and is what the next ones stand on.
 - `form{ on submit { … event.fields.name … } }` (card web-submit): `submit` is a page event; the page sends
   {fields}, the form's named fields (a number field's a number, a checkbox's checked), and keeps a form with the
   handler on the page (markup-forms.js, a part a built site ships only when its module has `on·submit`); a form without
-  one still goes to its route. Sample samples/web/form_submit.warp.
+  one still goes to its route. Sample samples/web/form_submit.wap.
 - `select{ bind: choice }` (card web-bind-select): lib/markup.warp hands a select's value to its options (html_render's
   `chosen`), and the option whose value, else text, equals it is `selected`, from the first render on; later the page
-  sets select.value (morphElement). Sample samples/web/select_binding.warp.
+  sets select.value (morphElement). Sample samples/web/select_binding.wap.
 - Options from a list (card select-shorthand): lib/markup.warp renders what a select holds besides elements as its
   options (html_options), one `<option>` per value (`select{ bind: fruit; ["apple" "pear"] }`, a list variable
   `select{ fruits }`, plain `select{ "apple" "pear" }`), a pair `"s": "small"` the option `value="s"` labelled small.
   No compiler pass (decision markup-plain-library).
-- Samples samples/web/component_binding.warp, samples/web/typed_form.warp.
+- Samples samples/web/component_binding.wap, samples/web/typed_form.wap.
 
 ## Built sites (`warp build --site`, extensions/commands/site.warp, cards blockcompiler-entries, build-site)
 - `warp build --site app.warp` (`--site=<folder>`) writes site/ beside the program: app.wasm is the program's whole
@@ -151,7 +151,7 @@ Each step is useful on its own and is what the next ones stand on.
   (`@fragment fn main(@builtin(position) at: vec4f) -> @location(0) vec4f`, `at.xy` the pixel's center) over a
   width×height image and gives its pixels as paint takes them, 0xFFRRGGBB row by row (alpha dropped).
   warp appends the vertex stage (warp_full_image: one triangle covering the image) after the shader, so compile errors
-  keep the user's line numbers. samples/graphics/webgpu.warp animates rings (a frame per loop step: paint + sleep).
+  keep the user's line numbers. samples/graphics/webgpu.wap animates rings (a frame per loop step: paint + sleep).
 - Values (uniforms): `gpu_render(shader, w, h, {frame: 3, size: [128, 128]})`: the shader reads the map as `values.frame`
   (f32), `values.size` (vec2f; lists of 2–4 numbers are vec2f…vec4f). warp appends `struct WarpValues {…}` and
   `@group(0) @binding(0) var<uniform> values` after the shader (gpu.warp / host-gpu.js uniform_layout: WGSL alignment, 4 /
