@@ -96,11 +96,16 @@ WAP_NATIVE = os.path.expanduser("~/dev/bin/wap")
 # the warm state wap/compiler.wap embeds, a built file (wap's scripts/lib/wap-beside.sh WAP_WARM): empty in an extracted
 # tip, as test/wap/compile.sh starts it, so the compiler's source reads its sources instead
 WAP_WARM = "wap/warm.packed"
+# the library compiled once that wap/compiler.wap embeds (wap's scripts/lib/wap-beside.sh WAP_LIBRARY_MODULE), a built
+# file: empty in an extracted tip, as test/wap/compile.sh starts it, so the compiler's source compiles without one
+WAP_LIBRARY_MODULE = "wap/types.wasm"
 WAP_NATIVE_KEPT = os.path.expanduser("~/dev/bin/wap-seed/program-*.cwasm")  # the machine code it keeps of each program
-# the summary of a run of all wap's tests, which test/wap/run.sh writes beside the summary of any run; in the wap
-# checkout or any worktree, whichever ran last
-WAP_TESTS_SUMMARIES = [os.path.join(WAP_CHECKOUT, "data/wap-tests/full-summary.txt"), "/Volumes/Worktrees/*/data/wap-tests/full-summary.txt"]
+# the run of all wap's tests, which only the cloud routine makes (user), its lines and summary last committed to main
+WAP_TESTS_RESULTS = "test/results.txt"
 WAP_TESTS_LINE = re.compile(r"(\d+) ✓, (\d+) ✗")
+# how much of the library and the samples the native wap takes, wap's scripts/coverage.sh, run hourly by cron
+WAP_COVERAGE = os.path.join(WAP_CHECKOUT, "data/wap-tests/coverage.txt")
+WAP_COVERAGE_LINE = re.compile(r"^coverage: lib modules (\d+)/(\d+), samples (\d+)/(\d+) at (\w+) (.+)$", re.MULTILINE)
 CENSUS_LINE = re.compile(r"(\d+) statements, (\d+) lowered, (\d+) bound(?:, typed: (\w+), emitted: (\w+))?")  # a preload file has no typed/emitted: it is typed by function
 CENSUS_TOTAL = re.compile(r"(\d+) of (\d+) files typed whole, (\d+) of (\d+) functions typed")
 REFUSAL_POSITION = re.compile(r"^\S+ line \d+:\d+: ")  # the file and place a refusal names, which differ per use
@@ -245,7 +250,8 @@ def wap_extracted(kind):
             path = os.path.join(folder, name)
             shutil.rmtree(path) if os.path.isdir(path) and not os.path.islink(path) else os.remove(path)
     subprocess.run(f"git -C {WAP_CHECKOUT} archive {WAP_TIP} | tar -x -C {folder}", shell=True, check=True)
-    open(os.path.join(folder, WAP_WARM), "w").close()
+    for built in (WAP_WARM, WAP_LIBRARY_MODULE):
+        open(os.path.join(folder, built), "w").close()
     return folder
 
 
@@ -400,15 +406,32 @@ def wap_road():
         if measured := measures[kind](folder):
             snapshots.append({"kind": kind, "time": commit_date(WAP_TIP, WAP_CHECKOUT), "commit": WAP_TIP[:10], "tree": tree, **measured})
             append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
-    summary = max((path for pattern in WAP_TESTS_SUMMARIES for path in glob.glob(pattern)), key=os.path.getmtime, default=None)
-    if not summary:
-        print(f"vitals: no run of all wap tests has written its summary ({', '.join(WAP_TESTS_SUMMARIES)}): the wap tests panel keeps its last count", file=sys.stderr)
-    if summary and (match := WAP_TESTS_LINE.search(open(summary).read())):
-        written = datetime.datetime.fromtimestamp(os.path.getmtime(summary)).strftime("%Y-%m-%d %H:%M")
-        if not any(s["kind"] == "tests" and s["time"] == written for s in snapshots):
-            snapshots.append({"kind": "tests", "time": written, "passed": int(match[1]), "failed": int(match[2])})
-            append_snapshot(WAP_SNAPSHOTS, snapshots[-1])
+    for snapshot in (wap_tests_run(), wap_coverage()):
+        if snapshot and not any(s["kind"] == snapshot["kind"] and s["time"] == snapshot["time"] for s in snapshots):
+            snapshots.append(snapshot)
+            append_snapshot(WAP_SNAPSHOTS, snapshot)
     return snapshots
+
+
+def wap_tests_run():
+    """the newest run of all wap's tests, from main's WAP_TESTS_RESULTS: its counts, at the commit that wrote them;
+    None, said, when main holds no summary"""
+    commit = git("log", "-1", "--format=%h", "--abbrev=10", WAP_TIP, "--", WAP_TESTS_RESULTS, repository=WAP_CHECKOUT).strip()
+    lines = git("show", f"{WAP_TIP}:{WAP_TESTS_RESULTS}", repository=WAP_CHECKOUT).splitlines() if commit else []
+    if not (lines and (match := WAP_TESTS_LINE.search(lines[-1]))):
+        print(f"vitals: wap's main holds no summary of a run of all tests in {WAP_TESTS_RESULTS}: the wap tests panel keeps its last count", file=sys.stderr)
+        return None
+    return {"kind": "tests", "time": commit_date(commit, WAP_CHECKOUT), "commit": commit, "passed": int(match[1]), "failed": int(match[2])}
+
+
+def wap_coverage():
+    """the newest coverage of the library and the samples (WAP_COVERAGE); None, said, when there is none"""
+    match = os.path.exists(WAP_COVERAGE) and WAP_COVERAGE_LINE.search(open(WAP_COVERAGE).read())
+    if not match:
+        print(f"vitals: no coverage summary in {WAP_COVERAGE} (wap's scripts/coverage.sh): the coverage panels keep their last counts", file=sys.stderr)
+        return None
+    modules, module_count, samples, sample_count = map(int, match.groups()[:4])
+    return {"kind": "coverage", "time": match[6], "commit": match[5], "modules": modules, "module_count": module_count, "samples": samples, "sample_count": sample_count}
 
 
 def wap_track():

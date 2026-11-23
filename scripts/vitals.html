@@ -347,9 +347,17 @@ function trendPanel(holder, { label, value, note, lines, extraDots = [], describ
   } else noMeasurement("road to self-build");
   if (tests.length) {
     const latest = tests[tests.length - 1], point = s => [s.time, null, s.passed, s.failed];
-    trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: `test/wap/run.sh of all tests, run ${latest.time}`,
+    trendPanel(holder, { label: "wap tests", value: `${latest.passed} ✓ · ${latest.failed} ✗`, note: latest.commit ? note([latest.time, latest.commit], " · the cloud's run of all tests") : `test/wap/run.sh of all tests, run ${latest.time}`,
       lines: [{ name: "passed", points: tests.map(point), index: 2, color: "--s3" }], describe: p => `${p[0]} · ${p[2]} passed, ${p[3]} failed` });
   } else noMeasurement("wap tests");
+  // how much of the library and the samples the native wap takes (wap's scripts/coverage.sh, hourly), one panel each
+  const coverages = snapshots.filter(s => s.kind === "coverage");
+  [["lib modules", "modules", "module_count", "a program using each module runs"], ["samples", "samples", "sample_count", "run to their end"]].forEach(([label, field, count, how]) => {
+    if (!coverages.length) return noMeasurement(label);
+    const latest = coverages[coverages.length - 1];
+    trendPanel(holder, { label, value: `${latest[field]} / ${latest[count]}`, note: note([latest.time, latest.commit], ` · ${how}`),
+      lines: [{ name: field, points: coverages.map(s => [s.time, s.commit, s[field], s[count]]), index: 2, color: "--s3" }], describe: p => `${p[0]} · ${p[2]} of ${p[3]}` });
+  });
   // what wap costs by the native wap, each the cheapest of its runs: compiling its own compiler, hello (warm, its first
   // run after a change in the note); a snapshot from before a measure began has no point in its series
   const timed = snapshots.filter(s => s.kind === "hello"), INSTRUCTIONS = [2, "G instructions", "instructions"], SECONDS = [3, "s", "seconds"];
