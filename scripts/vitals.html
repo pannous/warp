@@ -112,6 +112,11 @@ footer { color: var(--ink-3); font-size: 12px; }
     <p class="section-note" id="wap-pace-note"></p>
     <div class="legend"><span><i style="background:var(--s7)"></i>pushes to main</span><span><i style="background:var(--rule)"></i>commits</span></div>
     <div class="chart" id="wap-pace"></div>
+    <h3>Cards on the board</h3>
+    <p class="section-note" id="wap-cards-note"></p>
+    <div class="chart" id="wap-cards-chart"></div>
+    <div class="table-wrap"><table id="wap-done"></table></div>
+    <div class="table-wrap"><table id="wap-new"></table></div>
     <h3>Recently</h3>
     <div class="table-wrap"><table id="wap-recent"></table></div>
   </section>
@@ -455,22 +460,27 @@ function columnLines(snapshots, columns, container) {
     rows.map(([time, what]) => `<tr><td class="sha">${time}</td><td>${what}</td></tr>`).join("") + "</tbody>" : "";
 })();
 
-(function cards() {
+// a board's cards per column over time, its newest Done cards and its newest cards; ids: the elements' prefix
+function cards(boardSnapshots, prefix) {
+  const byId = name => document.getElementById(prefix + name);
   // Open: every card not Done, the curve of the work still ahead
   const open = columns => Object.entries(columns).reduce((sum, [column, count]) => column === "Done" ? sum : sum + count, 0);
-  const snapshots = DATA.cards.map(s => ({ ...s, columns: { ...s.columns, Open: open(s.columns) } }));
-  if (!snapshots.length) { document.getElementById("cards-note").textContent = "No snapshot of the board yet."; return; }
+  const snapshots = boardSnapshots.map(s => ({ ...s, columns: { ...s.columns, Open: open(s.columns) } }));
+  if (!snapshots.length) { byId("cards-note").textContent = "No snapshot of the board yet."; return; }
   const latest = snapshots[snapshots.length - 1], oldest = snapshots[0];
   const columns = ["Open", "Now", "Next", "Soon", "Later", "Done", "Roadmaps"].filter(c => c in latest.columns || c in oldest.columns);
   const since = new Date(oldest.time).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  document.getElementById("cards-note").textContent = `Cards per column of the project board since ${since}, last counted ${latest.time.replace("T", " ")}, on a log scale; Open is every card not Done. Done holds only the last day's cards: older ones are archived. Hover a line for its counts.`;
-  const chart = document.getElementById("cards-chart"), draw = () => columnLines(snapshots, columns, chart);
+  byId("cards-note").textContent = `Cards per column of the project board since ${since}, last counted ${latest.time.replace("T", " ")}, on a log scale; Open is every card not Done. Done holds only the last day's cards: older ones are archived. Hover a line for its counts.`;
+  const chart = byId("cards-chart"), draw = () => columnLines(snapshots, columns, chart);
   draw();
   addEventListener("resize", draw);
-  const done = latest.done || [];
-  document.getElementById("done").innerHTML = done.length ? `<thead><tr><th>Done</th><th>Card</th></tr></thead><tbody>` +
-    done.map(([time, key, title, link]) => `<tr><td class="sha">${time.slice(5)}</td><td><a href="${link}" target="_blank" rel="noopener">${escape(key)}</a><br><span class="card-title">${escape(title)}</span></td></tr>`).join("") + "</tbody>" : "";
-})();
+  const table = (name, heading, list, column) => byId(name).innerHTML = list.length ? `<thead><tr><th>${heading}</th><th>Card</th></tr></thead><tbody>` +
+    list.map(([time, key, title, link, where]) => `<tr><td class="sha">${time.slice(5)}</td><td><a href="${link}" target="_blank" rel="noopener">${escape(key)}</a>${column && where ? ` · ${escape(where)}` : ""}<br><span class="card-title">${escape(title)}</span></td></tr>`).join("") + "</tbody>" : "";
+  table("done", "Done", latest.done || [], false);
+  if (byId("new")) table("new", "New", latest.new || [], true);
+}
+cards(DATA.cards, "");
+cards(DATA.wap.cards || [], "wap-");
 
 // pushes to main per hour and the commits they brought, for warp's main and wap's
 function pace(hours, container, noteElement) {

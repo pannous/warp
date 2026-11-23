@@ -443,14 +443,13 @@ def wap_recent():
     """What wap achieved lately: its newest commits of work on main [sha, time, subject] and its newest Done cards."""
     commits = [line.split("\t") for line in git("log", "--no-merges", f"-{WAP_RECENT_COMMITS}", "--format=%h%x09%ad%x09%s",
                                                    "--date=format:%m-%d %H:%M", WAP_TIP, repository=WAP_CHECKOUT).splitlines()]
-    cards = card_counts(WAP_CARD_SNAPSHOTS, WAP_CHECKOUT, WAP_BOARD_CARD)
-    return {"commits": commits, "done": cards[-1].get("done", []) if cards else []}
+    return {"commits": commits, "done": WAP_CARDS[-1].get("done", []) if WAP_CARDS else []}
 
 
 def wap_track():
     sizes, over = wap_sizes()
     return {"sizes": sizes, "over": over, "limit": WAP_LINE_LIMIT, "stages": wap_folders(sizes, 3), "layers": wap_folders(sizes, 6, sum),
-            "snapshots": wap_road(), "recent": wap_recent(), "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
+            "snapshots": wap_road(), "recent": wap_recent(), "cards": WAP_CARDS, "own_commits": git("log", "--format=%h", "--abbrev=10", WAP_TIP, repository=WAP_CHECKOUT).split()}
 
 
 if CENSUS_JOB:
@@ -745,16 +744,26 @@ def hourly_pace(pushes=None, brought=commits_brought):
     return hours
 
 
-def recently_done(cards, board_card):
-    """The RECENTLY_DONE newest Done cards: when, key, title and their link on the board."""
-    done = sorted((c for c in cards if c["column"] == "Done"), key=lambda c: c["column_since"])[-RECENTLY_DONE:][::-1]
-    ids = json.dumps([card["id"] for card in done])
-    nodes = json.loads(subprocess.run(["gh", "api", "graphql", "-f", "query=query { nodes(ids: %s) { ... on "
-                                       "ProjectV2Item { databaseId } } }" % ids], capture_output=True, text=True,
-                                      check=True).stdout)["data"]["nodes"]
+GRAPHQL_NODES = 100  # ids GitHub's nodes query takes at once
+
+
+def board_news(cards, board_card):
+    """The board's news: the RECENTLY_DONE newest Done cards and the RECENTLY_DONE newest cards not done, each [when,
+    key, title, link on the board, column]; when is the move to Done, or the card's creation."""
+    items = {}
+    for start in range(0, len(cards), GRAPHQL_NODES):
+        ids = json.dumps([card["id"] for card in cards[start:start + GRAPHQL_NODES]])
+        items.update((node["id"], node) for node in json.loads(subprocess.run(
+            ["gh", "api", "graphql", "-f", "query=query { nodes(ids: %s) { ... on ProjectV2Item { id databaseId "
+             "createdAt } } }" % ids], capture_output=True, text=True, check=True).stdout)["data"]["nodes"] if node)
     local = lambda t: datetime.datetime.fromisoformat(t.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d %H:%M")
-    return [[local(card["column_since"]), card["key"], card["title"], board_card % node["databaseId"]]
-            for card, node in zip(done, nodes)]
+    news = lambda chosen, when: [[local(when(card)), card["key"], card["title"], board_card % items[card["id"]]["databaseId"],
+                                  card["column"]] for card in chosen]
+    newest = lambda chosen, when: sorted(chosen, key=when)[-RECENTLY_DONE:][::-1]
+    known = [card for card in cards if card["id"] in items]
+    created = lambda card: items[card["id"]]["createdAt"]
+    return {"done": news(newest([c for c in known if c["column"] == "Done"], lambda c: c["column_since"]), lambda c: c["column_since"]),
+            "new": news(newest([c for c in known if c["column"] != "Done"], created), created)}
 
 
 def card_counts(snapshots_path=CARD_SNAPSHOTS, repository=REPO, board_card=BOARD_CARD):
@@ -768,7 +777,7 @@ def card_counts(snapshots_path=CARD_SNAPSHOTS, repository=REPO, board_card=BOARD
             cards = json.loads(listing.stdout)
             counts = collections.Counter(card["column"] for card in cards)
             snapshots.append({"time": now.isoformat(timespec="minutes"), "columns": dict(counts),
-                              "done": recently_done(cards, board_card)})
+                              **board_news(cards, board_card)})
             append_snapshot(snapshots_path, snapshots[-1])
         else:
             print("vitals: todo list failed, cards from the last snapshot: " + listing.stderr.strip()[-200:], file=sys.stderr)
@@ -830,6 +839,7 @@ def hello_track():
     return {"series": series, "references": references}
 
 
+WAP_CARDS = card_counts(WAP_CARD_SNAPSHOTS, WAP_CHECKOUT, WAP_BOARD_CARD)
 landed = {line.split()[0]: line.split()[1][:16].replace("T", " ") for line in
           git("log", "--format=%H %ad", "--date=iso-strict", "--since=" + SINCE, TIP).splitlines()}
 data = {"cards": card_counts(), "hello": hello_track(), "wap": wap_track(), "pace": hourly_pace(), "wap_pace": hourly_pace(pushes_since(WAP_GITHUB_REPO, WAP_SINCE), wap_commits_brought), "builds": [[name, record, build_history(record, by_seed, landed)] for name, record, by_seed in BUILDS], "build_times": build_times(landed), "tiers": [[name, path, tier_history(path), latest_flips(path)] for name, path in TIERS], "groups": [name for name, _ in CORE_GROUPS] + [EXTENSIONS], "base": base[:10], "rows": rows,
