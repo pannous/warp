@@ -62,7 +62,9 @@ the team, crash resume), notes/roles.md (what the other roles do).
   agent, a background subagent or a worker session; I keep only the quick answer from what is known and its verdict.
 - Never assign @copilot. Releases (version bump, tag, tap formula) need no approval; nothing waits for brew.
 
-- Focus (user 2026-11-22): only wap. Warp Vitals is off: nobody runs scripts/vitals.py or republishes its page.
+- Focus (user 2026-11-22): only wap. Warp Vitals is off, wap Vitals stays (user 11-23): every watch round and each wap
+  landing run `python3 scripts/vitals.py` and republish only data/vitals/wap-vitals.html to
+  https://claude.ai/code/artifact/8b33d965-01c9-4a3b-9f75-d4597da4804e.
 - Next fleet restart (user 2026-11-22): everything is named wap: sessions wap-<role>/wap-<card>, start.sh and the watch
   scripts (urgent-card-watch, integrator-watch) use those names, the role files live in the wap repo and sessions start
   there (card fleet-wap-names on the wap board).
