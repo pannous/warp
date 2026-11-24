@@ -10,9 +10,11 @@ edition = "2024"
 rust-version = "1.97"
 publish = false
 
+# the static library too, which a standalone build links into one file (wap's build.sh --standalone); a linker given
+# both by -lwarp_wasmtime takes the shared one
 [lib]
 name = "warp_wasmtime"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
 wasmtime-c-api = { version = "=50.0.0", package = "wasmtime-c-api-impl", default-features = false, features = ["wasi", "cache", "parallel-compilation", "gc", "gc-drc", "gc-copying", "cranelift"] }

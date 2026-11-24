@@ -75,6 +75,7 @@ case $(uname -s) in
   *) suffix=dll; prefix=""; windows=1 ;;
 esac
 wasmtime_library=${prefix}warp_wasmtime.$suffix
+static_library=libwarp_wasmtime.a
 gpu_library=${prefix}wgpu_native.$suffix
 
 # wgpu-native's release for this machine, fetched once at its pinned version and checked: its shared library is what
@@ -120,6 +121,8 @@ for folder in "$@"; do
   # (Windows links a DLL through its import library, which -lwarp_wasmtime finds by MinGW's name for it)
   import_library=$CARGO_TARGET_DIR/release/$wasmtime_library.lib
   if [ -f "$import_library" ]; then installed "$import_library" "$folder" "lib$wasmtime_library.a"; fi
+  # (the static library, for an executable that carries wasmtime inside it)
+  if [ -f "$CARGO_TARGET_DIR/release/$static_library" ]; then installed "$CARGO_TARGET_DIR/release/$static_library" "$folder"; fi
   # (a platform wgpu-native ships no release for gets none: its programs paint on the CPU)
   if [ -n "$gpu_built" ]; then installed "$gpu_built" "$folder"; fi
   if [ -n "$sdl_built" ]; then installed "$sdl_built" "$folder"; fi
