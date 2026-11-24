@@ -1,4 +1,4 @@
-# 94606524d2 2026-11-23 19:51 275/304 90.5%
+# 0c9aa77ef4 2026-11-24 15:43 275/304 90.5%
 ok   samples/acceleration/gpu_arrays.wap
 ok   samples/acceleration/gpu_f16.wap
 ok   samples/acceleration/gpu_map.wap
