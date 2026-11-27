@@ -1,4 +1,4 @@
-# 0c9aa77ef4 2026-11-24 15:43 275/304 90.5%
+# eff56f8f0f 2026-11-27 20:16 276/306 90.2%
 ok   samples/acceleration/gpu_arrays.wap
 ok   samples/acceleration/gpu_f16.wap
 ok   samples/acceleration/gpu_map.wap
@@ -151,6 +151,7 @@ ok   samples/matching/pattern_clauses.wap
 ok   samples/matching/pattern_values.wap
 ok   samples/matching/text_patterns.wap
 ok   samples/matching/tree_patterns.wap
+ok   samples/math/common.wap
 ok   samples/modules/ask_claude.wap
 ok   samples/modules/javascript.wap
 ok   samples/modules/lib.wap
@@ -291,6 +292,7 @@ FAIL samples/apps/site_generator.wap: site_generator.wap:26:12 no function split
 FAIL samples/apps/todo_cli.wap: todo_cli.wap:18:8 no function parsed; fix: define parsed or check its spelling
 FAIL samples/apps/url_report.wap: url_report.wap:39:2 text of node
 FAIL samples/golf/fizz-buzz.short.wap: fizz-buzz.short.wap:1:30 outside the core: the operator * on text and bool
+FAIL samples/math/graph.wap: graph.wap:1:1 no function graph; fix: define graph or check its spelling
 FAIL samples/modules/config_patch.wap: config_patch.wap:6:17 outside the core: the unknown name any
 FAIL samples/modules/csv_report.wap: csv_report.wap:12:61 outside the core: the unknown name markdown
 FAIL samples/modules/free_slots.wap: free_slots.wap:8:24 not a number
