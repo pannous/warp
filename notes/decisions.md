@@ -43,3 +43,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-22 map-holds-anything: an untyped `{}` is map<any, any>: `m['a'] = 7; m[3] = 4` both work; uniform key types are a later optimization.
 - 11-22 typed-operator-heads: `infix operator ⇔(a: bool, b: bool): bool := …` declares; an undeclared glyph `⊕(a: int) := a` is a plain name.
 - 11-27 turnstile-aliases: `⊢` spells a law's parameter form inline (`law w: a ≤ b ⊢ a ≤ b + 1`); `⊨` `⊣` come too; ASCII spellings open. After T, with the sugar.
+- 11-27 wap-verify-only: law.md and cli.md lose Lean and `wap types`; laws are checked by wap's own kernel through `wap verify` (wiki 596e330).
+- 11-27 compiler-ints-fast: the compiler's own ints stay exact int in its source and build with `wap fast` (i64 storage), 0 source lines; replaces "the source writes i64".
