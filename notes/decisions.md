@@ -42,3 +42,4 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-22 any-takes-concrete: where the value is known, an any name takes the concrete type it holds: `c: any = "z"; c is text` → yes, as without any.
 - 11-22 map-holds-anything: an untyped `{}` is map<any, any>: `m['a'] = 7; m[3] = 4` both work; uniform key types are a later optimization.
 - 11-22 typed-operator-heads: `infix operator ⇔(a: bool, b: bool): bool := …` declares; an undeclared glyph `⊕(a: int) := a` is a plain name.
+- 11-27 turnstile-aliases: `⊢` spells a law's parameter form inline (`law w: a ≤ b ⊢ a ≤ b + 1`); `⊨` `⊣` come too; ASCII spellings open. After T, with the sugar.
