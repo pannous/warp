@@ -45,3 +45,5 @@ Grep a key or topic, never read it whole. Open questions: notes/open_decisions.m
 - 11-27 turnstile-aliases: `⊢` spells a law's parameter form inline (`law w: a ≤ b ⊢ a ≤ b + 1`); `⊨` `⊣` come too; ASCII spellings open. After T, with the sugar.
 - 11-27 wap-verify-only: law.md and cli.md lose Lean and `wap types`; laws are checked by wap's own kernel through `wap verify` (wiki 596e330).
 - 11-27 compiler-ints-fast: the compiler's own ints stay exact int in its source and build with `wap fast` (i64 storage), 0 source lines; replaces "the source writes i64".
+- 11-27 fast-flow-contagion: in T8c a value of a fast type (i32, i64, byte: declared, a field, a result declared fast) stays fast through untyped locals, globals and loops; plain int stays exact; fast mixed with plain never silently becomes fast (warp's 24!); laws over fast values speak of wrapping arithmetic (notes/fast_types_contagious.md).
+- 11-27 int-lean-shape: int = natural(n: count) | negative(n: count), negative(n) = −(n+1), Lean's Int, so imported Int theorems bind with no bridge; replaces zero | positive | negative; count = zero | successor(count) stays, with predecessor and next/previous.
